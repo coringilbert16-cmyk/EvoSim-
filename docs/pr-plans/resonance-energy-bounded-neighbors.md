@@ -1,102 +1,73 @@
-# Resonance Energy-Bounded Spatial Neighbor Discovery
+# Resonance movement resolution-bounded neighbor discovery
 
 ## Purpose
 
-Reduce the cost of environmental resonance movement by discovering only spatial interactions that can still affect the physical result. The optimization must use the existing harmonics/resonance signal and its established propagation physics; it must not introduce a new energy source, arbitrary radius, or numerical cutoff.
+Reduce environmental resonance movement cost by discovering only material pairs whose existing interaction can produce a meaningful per-pair movement response.
 
-This work depends on the source-shape geometry foundation tracked separately in PR #378. The geometry PR supplies the physical boundary representation; this PR owns propagation-to-movement integration, effective support, spatial candidate discovery, and performance validation.
+This PR changes only environmental movement candidate discovery. It does not implement the source-perimeter geometry foundation in PR #378, change the resonance propagation field, add a new energy source/store, or alter energy settlement.
 
-## Physical model and constraints
+## Existing movement law
 
-- A whole physical material (element or molecule) is the emitter. Its aura originates from the complete exposed perimeter of that material, not its centroid, bounding circle, or independently emitting constituents.
-- Aura amplitude attenuates continuously with distance: `A(d) = A0 / (1 + d)`.
-- Propagated energy is amplitude squared: `E(d) = E0 / (1 + d)^2`.
-- The aura carries the same harmonics/resonance energy already represented by the existing simulation. It is not a new source, a second field, or a second energy store.
-- The energy no longer carried by propagation becomes environmental heat exactly once. Receiver count and overlapping observations must not multiply the same propagation loss.
-- Energy is allocated linearly over the complete exposed source perimeter: `dE = E_source × dℓ / L_source`. Receiver-visible portions use the complete source-global perimeter as the denominator; they are never renormalized to each receiver's visible subset.
-- The aura extends outward from the complete source boundary by at most one radius of the emitting material. This is a source-specific physical maximum, not a world-wide interaction radius. Energy attenuation remains continuous inside that support; an energy-derived tighter support may reduce the candidate region but may never exceed this material-relative maximum.
-- Do not add a global interaction radius, guessed energy threshold, machine-epsilon cutoff, floating-point-underflow rule, or independent decay coefficient.
-- Preserve frequency, harmonic, phase, attraction/repulsion, equal-and-opposite interaction, deterministic accumulation, and movement/placement semantics unless an explicit physical-model decision authorizes a change.
+For an unordered pair, the current movement calculation:
 
-## Current reference profile
+1. Compares matching frequency components while retaining their relative phase.
+2. Calculates signed cross-energy from the phase-aware spectra.
+3. Applies each material's existing mass scale.
+4. Applies the existing continuous inverse-square attenuation:
+   `strength(d) = N_ab / (1 + d)^2`,
+   where `N_ab = abs(cross_energy_ab) * mass_scale_a * mass_scale_b`.
+5. Accumulates equal-and-opposite pair contributions and applies the existing bounded movement response.
 
-The detailed movement profile recorded approximately 822,403 unordered emitter pairs per tick at 1,283 emitters. Median pair-loop time was approximately 210.92 ms/tick; the complete resonance movement phase was approximately 289.8 ms/tick. These are profiling observations, not guaranteed targets.
+The propagation/attenuation law itself remains continuous. The optimization defines a finite resolution for whether an individual pair is worth evaluating; it does not claim the underlying field becomes physically zero at that distance.
 
-The current live movement path is centroid-based and evaluates every unordered noncoincident pair. It computes signed same-frequency phase-aware cross-energy, applies mass scales and continuous inverse-square distance attenuation, accumulates pair forces in canonical order, and then applies the existing nonlinear movement response.
+## Explicit movement-resolution choice
 
-The geometry-aware aura reception API is not yet the live movement-force authority. It must not be treated as proof that live movement already follows the complete source shape.
+The minimum meaningful displacement from one isolated pair is **0.001 world units**. Hydrogen's constituent width is 0.1 world units, so this is 1% of that reference feature.
 
-## Required source and energy audit
+The existing response is:
 
-Before migrating live movement:
+`r = 0.1 s / (1 + 0.1 s)`
 
-1. Trace the existing harmonics/resonance signal from material response through propagation, reception, pair interaction, and environmental heat settlement.
-2. Preserve the distinction between source-backed world-tone incident/retained energy, normalized material-response spectra used by movement emitters, and signed pairwise cross-energy.
-3. Establish how the same existing signal is attributed to a physical material and propagated without creating a second source or debiting the shared environment reservoir once per emitter.
-4. Preserve tick causality. Movement currently runs before world-tone settlement; simply moving settlement earlier or consuming the shared reservoir later changes physical semantics and requires an explicit model decision.
-5. Account propagation loss independently of receiver count. Signed pair cross-energy is an interaction term, not a nonnegative heat packet.
-6. Establish the complete deterministic movement accumulation rule used to define physical effective zero. A per-pair epsilon or a bound that ignores contributions from other pairs is insufficient.
+For `r_min = 0.001`, the minimum pair interaction strength is:
 
-If the existing transaction cannot provide a conservative, source-attributed propagation path without changing physical semantics, stop and document the missing ownership relation rather than inventing one.
+`s_min = r_min / (0.1 (1 - r_min))`
 
-## Implementation phases
+The pair's maximum center separation at that resolution is:
 
-### Phase A — integrate the established source geometry
+`d_max = sqrt(N_ab / s_min) - 1`
 
-- Consume the complete exposed source perimeter supplied by PR #378.
-- Ensure receiver visibility is derived from the source surface, not selected first from a centroid.
-- Preserve exact straight and curved boundary measures; do not replace the source with a centroid, bounding circle, or tessellated approximation.
-- Keep unsupported or ambiguous geometry fail-closed.
+If `d_max` is negative, the pair never reaches the configured per-pair resolution, even at zero separation.
 
-### Phase B — connect the existing signal conservatively
+This is an explicit model-resolution parameter, not a mathematically derived zero and not a floating-point epsilon. It is intentionally applied per pair. Multiple individually sub-threshold contributions that would otherwise add in the same direction are omitted; the matched experiment must determine whether this resolution choice has an acceptable effect on behavior.
 
-- Carry the same frequency-resolved, phase-aware harmonics/resonance signal through shape-based propagation.
-- Allocate the finite source signal linearly over the source-global perimeter.
-- Account the difference between incoming and outgoing propagated energy as environmental heat once, independent of receiver count.
-- Preserve existing source totals and ledger invariants. Do not create a persistent second reservoir or count the same signal as both aura energy and a separate pair-energy source.
+## Efficient candidate discovery
 
-### Phase C — establish source-specific support
+Each emitter carries a conservative amplitude-norm bound including its existing mass scale. Cauchy-Schwarz provides a conservative maximum pair-strength bound for the x-axis sweep. Each broadphase candidate then receives an exact frequency- and phase-aware support check using its actual cross-energy and mass scales.
 
-- Define each material's conservative radius from its movement center to the outermost realized constituent surface, including constituent shape extent.
-- The aura may extend no farther than one additional source-material radius beyond that source boundary.
-- For source radii `Ra` and `Rb`, a conservative center-distance candidate bound is `d <= max(2*Ra + Rb, 2*Rb + Ra)`. This includes either direction of source-to-receiver influence and uses no global radius.
-- The current broadphase uses this maximum support. A tighter energy-derived bound is a later refinement only if it can be derived from the existing energy and movement model without an arbitrary threshold.
+The candidate set is canonical and contains each eligible unordered pair once. The exhaustive reference enumerates all unordered pairs and applies the identical support predicate. Both paths use the same force evaluator and can be run sequentially for a matched comparison.
 
-### Phase D — spatial candidate discovery
+## Scope boundaries
 
-- Use a stable x-axis sweep-and-prune over the source-specific bounds; only pairs within the conservative pair bound become candidates.
-- Use realized constituent shapes to derive conservative material extents; do not use a single global simulation radius.
-- The candidate path retains parallel force evaluation for large candidate sets and reduces forces in canonical pair order. Set `EVOSIM_PROFILE_MOVEMENT=1` to profile the optimized candidate path; set `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1` to run the original all-pairs reference path.
-- Generate every eligible unordered pair exactly once and sort by stable `(a, b)` identity before force accumulation.
-- Handle moving sources, world boundaries/wrapping, source extents, and degenerate/coincident positions.
-- Keep the all-pairs implementation as a reference oracle. It must enumerate every unordered pair, apply the same source-specific support predicate, and preserve canonical accumulation. Validate candidate discovery against this exhaustive reference.
+- Preserve the existing frequency matching, harmonics, phase, mass scaling, inverse-square attenuation, signed pair force, and bounded movement response for retained pairs.
+- Do not add a global interaction radius, source-radius extension, separate decay coefficient, resonance field, energy reservoir, or energy source.
+- Do not change propagation-energy debit, heat settlement, chemistry, or organism movement.
+- Keep PR #378 source-geometry work separate. This PR does not claim movement already uses exact source-perimeter reception.
+- Do not change the independent resonance-field architecture.
 
-### Phase E — validation and performance
+## Validation
 
-- Compare the candidate set against an exhaustive source-specific support oracle, then compare candidate forces and ordered accumulation against the same all-pairs reference filtered by that support rule.
-- Test sparse and dense arrangements, varied source sizes, multiple harmonics, near-equal frequencies, occlusion, boundary cases, moving sources, and coincident positions.
-- Verify deterministic output, no missed meaningful interactions, no duplicate pairs, and conservative energy/heat settlement.
-- Run full tests, formatting, and Clippy.
-- Run the standard 60-second, seed-42 chemistry experiment with no tick cap. Report possible pairs, discovered candidates, evaluated pairs, discovery time, pair-loop time, total movement time, throughput, object/constituent counts, and energy residual.
-- Compare equivalent baseline and candidate runs; candidate-count reduction alone is not a performance result.
+Focused tests cover:
+- Conversion from the configured displacement floor to minimum interaction strength.
+- The exact inverse-square support boundary and just-outside rejection.
+- Pair-specific amplitude, mass, frequency, and phase dependence.
+- Sweep-and-prune equivalence to exhaustive same-cutoff discovery.
+- Sequential/parallel force ordering and identical retained-pair force results.
+
+The PR workflow compares spatial discovery with exhaustive discovery using the same code, same cutoff, same sequential force evaluator, and the standard 60-second, seed-42, 1,280-material workload. Report candidate counts, discovery and pair-evaluation time, throughput, final material/constituent counts, and energy residual. The comparison validates the optimization against the same cutoff; it does not compare the new resolution choice against the former one-radius model.
 
 ## Current status
 
-- The movement bottleneck has been profiled.
-- The exhaustive all-pairs reference remains available behind `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1`; it enumerates every pair and applies the same source-specific support predicate before force evaluation.
-- The normal live path now derives conservative source radii from realized constituent shapes and uses source-specific x-axis sweep-and-prune; large candidate sets retain deterministic parallel force evaluation.
-- `EVOSIM_PROFILE_MOVEMENT=1` profiles the optimized path rather than silently reverting the simulation to all-pairs behavior.
-- PR #378 contains the reusable exact source-geometry foundation; this PR's bounding radii are a broadphase only and do not replace exact source-perimeter reception.
-- The current broadphase uses the full conservative one-source-radius maximum. A tighter energy-derived support bound and propagation heat settlement remain unimplemented.
-- The independent resonance-field architecture is future work and is documented separately in `docs/design/resonance-field-architecture.md`.
-
-## Acceptance criteria
-
-- The same existing harmonics/resonance signal is used; no second source or store is introduced.
-- Source-shape propagation and source-global perimeter allocation are respected.
-- Propagation loss is accounted exactly once and the energy ledger remains conservative.
-- Effective support is physically justified and proven against the complete movement calculation.
-- No meaningful interaction is omitted and no unordered pair is duplicated.
-- Deterministic accumulation and movement behavior are preserved or explicitly revalidated.
-- The optimized path agrees with the reference calculation.
-- Full CI passes and controlled experiments demonstrate a meaningful end-to-end movement improvement without chemistry or energy regressions.
+- The provisional one-source-radius limit and its geometry-radius dependency have been removed from the movement candidate path.
+- The explicit 0.001-unit per-pair movement-resolution threshold is implemented.
+- The exhaustive same-cutoff reference and matched benchmark workflow are updated.
+- Full CI and the matched 60-second comparison remain required before acceptance.
