@@ -256,10 +256,13 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
                 new_families += 1
             else:
                 repeated_products += 1
+        new_reaction_patterns = 0
         for event in events.values():
             if start < event["tick"] <= finish:
                 signature = event["signature"]
-                reaction_first_seen.setdefault(signature, event["tick"])
+                if signature not in reaction_first_seen:
+                    reaction_first_seen[signature] = event["tick"]
+                    new_reaction_patterns += 1
         active_products = [row for row in active if row["is_product"]]
         active_metrics = [row["metrics"] for row in active_products]
         created_metrics = [row["metrics"] for row in product_rows]
@@ -268,22 +271,17 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         components = strongly_connected_components(nodes_so_far, edges_so_far) if nodes_so_far else []
         cyclic_components = [component for component in components
                              if len(component) > 1 or (component and (component[0], component[0]) in edges_so_far)]
-        event_signatures_so_far = {
-            event["signature"] for event in events.values() if event["tick"] <= finish
-        }
         temporal_rows.append({
             "window": index + 1, "start_tick_exclusive": start,
             "end_tick_inclusive": finish,
-            "created_molecule_identities": len(created_here),
             "created_reaction_products": len(product_rows),
-            "created_initial_identities": 0,
             "active_molecule_identities": len(active),
             "active_reaction_products": len(active_products),
             "new_structural_fingerprints": new_families,
             "cumulative_structural_fingerprints": len(family_first_seen),
             "repeated_product_identities": repeated_products,
-            "cumulative_reaction_patterns": len(event_signatures_so_far),
-            "new_reaction_patterns_cumulative": len(reaction_first_seen),
+            "new_reaction_patterns": new_reaction_patterns,
+            "cumulative_reaction_patterns": len(reaction_first_seen),
             "active_product_mean_constituents": _mean([m["constituents"] for m in active_metrics]),
             "active_product_max_constituents": max((m["constituents"] for m in active_metrics), default=0),
             "active_product_mean_bonds": _mean([m["bonds"] for m in active_metrics]),
