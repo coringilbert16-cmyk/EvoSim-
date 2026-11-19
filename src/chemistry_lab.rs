@@ -802,6 +802,50 @@ mod tests {
     }
 
     #[test]
+    fn laboratory_energy_sources_use_the_existing_world_and_hotspot_models() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        assert!(!laboratory.snapshot().world_tone_enabled);
+        assert!(!laboratory.snapshot().hotspot_enabled);
+        laboratory
+            .place_element("Carbon", 72.0, 27.5)
+            .expect("place source-exposed carbon");
+        laboratory
+            .configure_energy_sources(true, true)
+            .expect("enable existing sources");
+        assert!(laboratory.snapshot().world_tone_enabled);
+        assert!(laboratory.snapshot().hotspot_enabled);
+        assert!(laboratory.simulation.world_tone.is_some());
+        assert!(laboratory.simulation.world_tone_cycle.is_some());
+        assert!(laboratory.simulation.hotspot.is_some());
+        laboratory.step(1).expect("settle one tick of source input");
+        assert!(
+            laboratory
+                .simulation
+                .energy_inventory_snapshot()
+                .is_balanced_without_creation(1e-8),
+            "external source capture must reconcile through the existing ledger"
+        );
+    }
+
+    #[test]
+    fn laboratory_can_disable_energy_sources_during_a_live_run() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        laboratory
+            .configure_energy_sources(true, true)
+            .expect("enable sources");
+        laboratory.simulation.running = true;
+        laboratory
+            .configure_energy_sources(false, false)
+            .expect("disable sources while running");
+        assert!(laboratory.simulation.world_tone.is_none());
+        assert!(laboratory.simulation.world_tone_cycle.is_none());
+        assert!(laboratory.simulation.hotspot.is_none());
+        assert!(laboratory.simulation.running);
+    }
+
+    #[test]
     fn laboratory_rejects_invalid_flow_without_changing_the_current_field() {
         let mut laboratory =
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
