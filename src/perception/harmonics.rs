@@ -5470,6 +5470,83 @@ mod environmental_movement_spatial_candidate_tests {
     }
 
     #[test]
+    fn spatial_sweep_matches_exhaustive_for_adversarial_emitter_distributions() {
+        fn next_unit(state: &mut u64) -> f64 {
+            *state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            ((*state >> 11) as f64) / ((1_u64 << 53) as f64)
+        }
+
+        let mut state = 0x5eed_cafe_d00d_u64;
+        let mut emitters = Vec::new();
+        for index in 0..128 {
+            let component_count = 1 + (index % MAX_SPECTRAL_COMPONENTS);
+            let mut components = Vec::with_capacity(component_count);
+            for component_index in 0..component_count {
+                // Dense near-frequency matches exercise the maximum
+                // component-multiplicity bound; occasional distinct bands
+                // exercise the exact frequency filter.
+                let band = if index % 5 == 0 { 2_000.0 } else { 440.0 };
+                let frequency_offset = if index % 3 == 0 {
+                    component_index as f64 * 2.0e-10
+                } else {
+                    component_index as f64 * 2.0e-8
+                };
+                components.push(ToneComponent {
+                    frequency_cycles_per_day: band + frequency_offset,
+                    amplitude: 0.02 + next_unit(&mut state) * 0.78,
+                    phase_radians: next_unit(&mut state) * std::f64::consts::TAU,
+                });
+            }
+            let spectrum = ToneSpectrum { components };
+            let (phase_components, phase_component_count) =
+                environmental_movement_phase_components(&spectrum).unwrap();
+            let mass_scale = 0.05 + next_unit(&mut state) * 4.0;
+            let spectral_norm = spectrum
+                .components
+                .iter()
+                .map(|component| component.amplitude * component.amplitude)
+                .sum::<f64>()
+                .sqrt();
+
+            // Mix exact x-coordinate ties, dense local clusters, and
+            // isolated emitters spread across a much larger domain.
+            let (x, y) = match index % 4 {
+                0 => ((index / 4) as f64 * 0.5, next_unit(&mut state) * 0.2),
+                1 => ((index / 4) as f64 * 0.5, 10_000.0 + next_unit(&mut state)),
+                2 => (next_unit(&mut state) * 3.0, next_unit(&mut state) * 3.0),
+                _ => (next_unit(&mut state) * 50_000.0, next_unit(&mut state) * 50_000.0),
+            };
+            emitters.push(EnvironmentalMovementEmitter {
+                x,
+                y,
+                strength_bound: mass_scale * spectral_norm,
+                mass_scale,
+                spectrum,
+                phase_components,
+                phase_component_count,
+            });
+        }
+
+        let actual = environmental_movement_spatial_candidate_pairs(&emitters).unwrap();
+        let mut expected = Vec::new();
+        for a in 0..emitters.len() {
+            for b in (a + 1)..emitters.len() {
+                let reach =
+                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b])
+                        .unwrap();
+                let dx = emitters[b].x - emitters[a].x;
+                let dy = emitters[b].y - emitters[a].y;
+                if reach >= 0.0 && dx.hypot(dy) <= reach {
+                    expected.push((a, b));
+                }
+            }
+        }
+
+        assert_eq!(actual, expected);
+        assert!(actual.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
     fn candidate_forces_match_filtered_all_pairs_reference_and_parallel_order() {
         let emitters = vec![
             emitter(0.0, 0.0, 0.5, 0.1),
