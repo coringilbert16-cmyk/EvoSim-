@@ -57,9 +57,7 @@ impl LaboratoryFlowConfig {
         if !self.strength.is_finite() || !(0.0..=1.0).contains(&self.strength) {
             return Err("flow strength must be in [0, 1]");
         }
-        if !self.vortex_strength.is_finite()
-            || !(0.0..=2.0).contains(&self.vortex_strength)
-        {
+        if !self.vortex_strength.is_finite() || !(0.0..=2.0).contains(&self.vortex_strength) {
             return Err("local vortex strength must be in [0, 2]");
         }
         Ok(())
@@ -686,10 +684,7 @@ mod tests {
             .configure_flow(flow)
             .expect("valid live flow change");
         assert_eq!(laboratory.snapshot().flow, flow);
-        assert_eq!(
-            laboratory.simulation.flow_field,
-            flow.engine_config()
-        );
+        assert_eq!(laboratory.simulation.flow_field, flow.engine_config());
         assert!(laboratory.simulation.running);
     }
 
