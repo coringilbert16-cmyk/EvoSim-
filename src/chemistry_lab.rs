@@ -86,8 +86,6 @@ pub struct LaboratoryConfig {
     pub world_tone_enabled: bool,
     #[serde(default)]
     pub hotspot_enabled: bool,
-    pub reaction_history: Vec<ReactionEventSnapshot>,
-    pub energy: EnergyLedgerSnapshot,
 }
 
 impl Default for LaboratoryConfig {
@@ -666,6 +664,8 @@ pub struct LaboratorySnapshot {
     pub flow: LaboratoryFlowConfig,
     pub world_tone_enabled: bool,
     pub hotspot_enabled: bool,
+    pub reaction_history: Vec<ReactionEventSnapshot>,
+    pub energy: EnergyLedgerSnapshot,
 }
 
 #[derive(Serialize)]
