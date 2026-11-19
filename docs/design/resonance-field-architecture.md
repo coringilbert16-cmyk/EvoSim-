@@ -1,6 +1,6 @@
 # Resonance Field Architecture — Future Design
 
-**Status:** Architecture direction agreed; implementation deferred until the current movement-optimization work is complete.
+**Status:** Architecture direction approved; implementation not yet complete. The controlling, phased implementation plan is [Resonance Field — Formal Implementation Roadmap](resonance-field-implementation-roadmap.md). Read that roadmap before every resonance-field task.
 
 ## Purpose
 
@@ -59,9 +59,7 @@ The independent representation must preserve the established model:
 
 1. Resonance originates from the actual exposed perimeter of the complete physical material, not its centroid or an arbitrary point.
 2. Source energy is allocated linearly across the complete exposed source perimeter.
-3. Propagation attenuates continuously with distance under the approved law:
-   - Amplitude: `A(d) = A0 / (1 + d)`
-   - Corresponding signal energy: `E(d) = E0 / (1 + d)^2`
+3. Propagation uses a physically specified finite-speed wave model. The existing distance law (amplitude `A(d) = A0 / (1 + d)` and signal energy `E(d) = E0 / (1 + d)^2`) is legacy/reference behavior; it must not be assumed to be the governing wave equation. The roadmap requires attenuation, geometric spreading, and dissipative loss to be distinguished and derived.
 4. Propagation loss is accounted for as environmental heat exactly once, not once per receiver.
 5. Occlusion remains physically meaningful and is derived from physical geometry.
 6. No arbitrary interaction radius, fixed distance cap, or numerical-epsilon cutoff may silently remove a physically meaningful interaction.
@@ -86,12 +84,9 @@ A field rebuilt globally every tick is not inherently an optimization. The inten
 
 Any approximate or hierarchical method must be compared against a conservative exact reference and must not omit a physically meaningful interaction.
 
-## Future implementation stages
+## Implementation roadmap
 
-1. **Architecture and interfaces:** Define field state, source registration, receiver sampling, geometry snapshots/revisions, and energy-transfer contracts. No change to physical laws.
-2. **Reference prototype:** Evaluate the existing resonance physics through the independent layer and compare received spectra, forces, movement, and energy accounting against the current implementation.
-3. **Incremental computation:** Add caching, invalidation, spatial acceleration, and adaptive representation while preserving the reference results.
-4. **Integration:** Replace the current coupled calculation only after equivalence, determinism, energy conservation, and measured performance improvements are demonstrated.
+The controlling implementation sequence is maintained in [resonance-field-implementation-roadmap.md](resonance-field-implementation-roadmap.md). It defines the approved continuous, persistent, multi-frequency, finite-speed wave architecture; the physics decisions that must be resolved; energy and geometry invariants; the phased path from baseline audit through production migration; validation gates; and the performance target. The reference solver must demonstrate actual wave propagation, phase, finite travel time, and interference. A diffusion approximation or instantaneous redistribution is not acceptable. Correct physics takes priority; after profiling and optimization, performance should at least break even with the existing implementation.
 
 ## Explicitly out of scope for PR #377
 
