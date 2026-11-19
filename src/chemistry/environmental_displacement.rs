@@ -2902,7 +2902,11 @@ mod tests {
             .iter()
             .filter(|resource| resource.name != "Water")
             .collect::<Vec<_>>();
-        assert_eq!(resources.len(), 6, "chemistry matrix covers the six chemical resources");
+        assert_eq!(
+            resources.len(),
+            6,
+            "chemistry matrix covers the six chemical resources"
+        );
         let baseline = catalog_reactivity_baseline();
         let mut cases = 0usize;
         let mut stronger = 0usize;
@@ -2979,8 +2983,7 @@ mod tests {
     #[test]
     fn displacement_trial_control_exercises_builder_and_atomic_commit() {
         let catalog = default_catalog();
-        let (mut source, old_bond, candidate, investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let trial = build_displacement_trial(
             &source,
             0,
@@ -3005,21 +3008,15 @@ mod tests {
             ..Default::default()
         };
         let mut available_energy = required_input;
-        let products = commit_displacement_trial(
-            &mut source,
-            trial,
-            &mut ledger,
-            &mut available_energy,
-        )
-        .expect("funded real trial must commit atomically");
+        let products =
+            commit_displacement_trial(&mut source, trial, &mut ledger, &mut available_energy)
+                .expect("funded real trial must commit atomically");
 
         assert_eq!(source.bonds.len(), 1);
         assert_eq!(products.len(), 2);
         assert!(available_energy.is_finite() && available_energy >= 0.0);
         assert!(available_energy < required_input);
-        assert!(
-            (ledger.total_structural_energy_held + source.bonds[0].bond_energy).abs() <= 1e-9
-        );
+        assert!((ledger.total_structural_energy_held + source.bonds[0].bond_energy).abs() <= 1e-9);
         println!(
             "DISPLACEMENT_TRIAL_CONTROL|anchor=Carbon|displaced=Hydrogen|incoming=Oxygen|builder=accepted|commit=accepted|required_input={required_input:.9}"
         );
