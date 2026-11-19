@@ -430,7 +430,7 @@ async fn step(
 pub async fn run() {
     let laboratory =
         Laboratory::new(LaboratoryConfig::default()).expect("default lab config valid");
-    let state = LabState(Arc::new(Mutex::new(laboratory)));
+    let app_state = LabState(Arc::new(Mutex::new(laboratory)));
     let app = Router::new()
         .route("/", get(index))
         .route("/api/state", get(state))
@@ -440,7 +440,7 @@ pub async fn run() {
         .route("/api/run", post(start))
         .route("/api/pause", post(pause))
         .route("/api/step", post(step))
-        .with_state(state);
+        .with_state(app_state);
     let address = std::env::var("EVOSIM_LAB_ADDRESS")
         .unwrap_or_else(|_| "127.0.0.1:3030".into())
         .parse::<SocketAddr>()
