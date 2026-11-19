@@ -1911,7 +1911,7 @@ mod tests {
     #[test]
     fn only_legacy_fluid_fixtures_can_take_context_fitting_geometry() {
         let catalog = crate::resources::legacy_fluid_test_catalog();
-        let mut water = StructuralUnit::new(
+        let mut fluid = StructuralUnit::new(
             "LegacyFluidFixture",
             Placement {
                 x: 0.0,
@@ -1919,7 +1919,7 @@ mod tests {
                 rotation_radians: 0.0,
             },
         );
-        assert!(water.realize_default_geometry(&catalog));
+        assert!(fluid.realize_default_geometry(&catalog));
         let fitted = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
                 nominal_area: crate::resources::NOMINAL_UNIT_AREA,
@@ -1928,10 +1928,10 @@ mod tests {
                 multi_contact_boundary: None,
             },
         };
-        assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
-        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
+        assert!(fluid.realize_fluid_geometry(fitted.clone(), &catalog));
+        assert_eq!(fluid.geometry.as_ref().unwrap().shape(), &fitted);
 
-        let mut bulk_water = StructuralUnit::from_material(
+        let mut bulk_fluid = StructuralUnit::from_material(
             Material::free_base("LegacyFluidFixture", 4.0),
             Placement {
                 x: 0.0,
@@ -1948,10 +1948,10 @@ mod tests {
                 multi_contact_boundary: None,
             },
         };
-        assert!(!water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
-        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
-        assert!(bulk_water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
-        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &bulk_fitted);
+        assert!(!fluid.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
+        assert_eq!(fluid.geometry.as_ref().unwrap().shape(), &fitted);
+        assert!(bulk_fluid.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
+        assert_eq!(bulk_fluid.geometry.as_ref().unwrap().shape(), &bulk_fitted);
 
         let half = 2.0_f64.sqrt() / 2.0;
         let multi_contact = crate::resources::Shape {
@@ -1996,9 +1996,9 @@ mod tests {
                 ),
             },
         };
-        assert!(bulk_water.realize_fluid_geometry(multi_contact.clone(), &catalog));
+        assert!(bulk_fluid.realize_fluid_geometry(multi_contact.clone(), &catalog));
         assert_eq!(
-            bulk_water.geometry.as_ref().unwrap().shape(),
+            bulk_fluid.geometry.as_ref().unwrap().shape(),
             &multi_contact
         );
 
