@@ -51,11 +51,18 @@ molecular-organization reports. A final aggregate artifact combines:
 - Structural-family recurrence across independent seeds and family transitions.
 - Exact formed and broken bond counts for all 21 unordered active-element pairs, separated by BREAK, COMBINE, and DISPLACEMENT.
 - Elemental material incorporated into reaction-created compounds.
+- Time-resolved chemical complexity across twelve equal-duration windows: molecular size and topology, structural novelty and recurrence, reaction-pattern novelty, and candidate cycles in the family-transition network.
 - Energy-balance residuals and per-seed validation.
 
 Per-seed artifacts are retained for 30 days; the combined report is retained
 for 90 days. Routine Rust CI remains separate and keeps its short 60-second
 seed-42 chemistry smoke baseline and focused correctness/feasibility tests.
+
+## Time-resolved complexity analysis
+
+The aggregate workflow also runs `tools/temporal_chemical_complexity_analyzer.py` over the per-seed chemistry reports. It divides each run into twelve equal-duration windows and reports newly observed structural fingerprints, cumulative fingerprint diversity, repeated product identities, active-product size and topology, reaction-pattern diversity, and strongly connected components in the cumulative family-transition graph. The analysis is offline and does not change simulation behavior.
+
+Structural fingerprints use iterative Weisfeiler-Lehman refinement with composition and degree summaries. They are scalable descriptors, not exact graph-isomorphism proofs. A directed cycle in the family-transition graph is a candidate network cycle, not evidence by itself of autocatalysis, energy coupling, or self-sustainability. The report includes these limitations explicitly.
 
 ## Interpretation
 
