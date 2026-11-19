@@ -1564,13 +1564,11 @@ fn material_aura_receptions_with_geometry(
         let (normal_y, normal_x) = midpoint_angle.sin_cos();
         let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
         let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
-        let Some(source_surface) =
-            crate::source_exposure::nearest_visible_material_perimeter_point(
-                (receiver_x, receiver_y),
-                &source_bodies,
-                0,
-            )
-        else {
+        let Some(source_surface) = crate::source_exposure::nearest_visible_material_perimeter_point(
+            (receiver_x, receiver_y),
+            &source_bodies,
+            0,
+        ) else {
             continue;
         };
         let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
