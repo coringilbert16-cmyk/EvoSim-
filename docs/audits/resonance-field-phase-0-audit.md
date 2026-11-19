@@ -78,7 +78,8 @@ Current source parameters include:
 
 Important implementation distinction:
 
-- The production tick path currently uses the uniform material-recipient snapshot: one normalized unit of source width per atomic material constituent.
+- The production tick path currently uses the uniform material-recipient snapshot: one normalized unit of source width per atomic material constituent. Every eligible constituent receives the same incident-energy allowance, so total input scales with the number of atomic constituents.
+- Although the rotating source sample contains world-space source coordinates and an orbital phase, the active uniform-recipient settlement uses the energy intensity and normalized width; it does not use source position to calculate distance, direction, visibility, or spatial exposure. The configured orbit is therefore not yet driving spatially varying reception in this active path.
 - The geometry-based `WorldToneOccluderSnapshot` and its ray/exposure frame exist, but its `settle_living_organism_inputs` path is not the production call used by the current tick. It must not be mistaken for the active source-settlement implementation.
 - Material response and damping divide incident input into retained resonant energy, heat, and energy that escapes.
 - The current uniform path does not maintain an in-world propagating wave. Its unabsorbed portion escapes rather than continuing through neighboring space and interacting with later receivers.
