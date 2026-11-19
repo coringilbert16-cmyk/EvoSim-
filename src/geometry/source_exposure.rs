@@ -4740,6 +4740,34 @@ fn angle_on_global_arc(angle: f64, start: f64, sweep: f64) -> Option<f64> {
     (relative <= sweep + 1e-10).then_some((relative/sweep).clamp(0.0,1.0))
 }
 
+fn segment_arc_intersections(
+    start: (f64,f64), end: (f64,f64), center: (f64,f64), radius: f64,
+    arc_start: f64, arc_sweep: f64,
+) -> Option<Vec<(f64,f64)>> {
+    let dx=end.0-start.0; let dy=end.1-start.1;
+    let ox=start.0-center.0; let oy=start.1-center.1;
+    let aa=dx*dx+dy*dy;
+    if aa<=f64::EPSILON { return None; }
+    let bb=2.0*(ox*dx+oy*dy);
+    let cc=ox*ox+oy*oy-radius*radius;
+    let disc=bb*bb-4.0*aa*cc;
+    if !disc.is_finite() { return None; }
+    if disc < -1e-10 { return Some(Vec::new()); }
+    let root=disc.max(0.0).sqrt();
+    let mut hits=Vec::new();
+    for t in [(-bb-root)/(2.0*aa),(-bb+root)/(2.0*aa)] {
+        if (-1e-10..=1.0+1e-10).contains(&t) {
+            let point=(start.0+dx*t,start.1+dy*t);
+            let angle=(point.1-center.1).atan2(point.0-center.0);
+            if let Some(u)=angle_on_global_arc(angle,arc_start,arc_sweep) {
+                hits.push((t.clamp(0.0,1.0),u));
+            }
+        }
+        if disc.abs()<=1e-10 { break; }
+    }
+    Some(hits)
+}
+
 fn add_global_intersection_cuts(a: &mut GlobalBoundaryPiece, b: &mut GlobalBoundaryPiece) -> Option<()> {
     match (a,b) {
         (GlobalBoundaryPiece::Segment{part_index:pa,start:a0,end:a1,cuts:ca,..},
@@ -4764,37 +4792,22 @@ fn add_global_intersection_cuts(a: &mut GlobalBoundaryPiece, b: &mut GlobalBound
                 ca.push(t.clamp(0.0,1.0)); cb.push(u.clamp(0.0,1.0));
             }
         }
-        (GlobalBoundaryPiece::Segment{part_index:ps,start,end,cuts,..},
-         GlobalBoundaryPiece::Arc{part_index:pa,center,radius,start:arc_start,sweep,..}) |
-        (GlobalBoundaryPiece::Arc{part_index:pa,center,radius,start:arc_start,sweep,..},
-         GlobalBoundaryPiece::Segment{part_index:ps,start,end,cuts,..}) => {
+        (GlobalBoundaryPiece::Segment{part_index:ps,start,end,cuts:cs,..},
+         GlobalBoundaryPiece::Arc{part_index:pa,center,radius,start:sa,sweep:wa,cuts:ca,..}) => {
             if ps==pa { return Some(()); }
-            let dx=end.0-start.0; let dy=end.1-start.1;
-            let ox=start.0-center.0; let oy=start.1-center.1;
-            let aa=dx*dx+dy*dy;
-            let bb=2.0*(ox*dx+oy*dy);
-            let cc=ox*ox+oy*oy-radius*radius;
-            let disc=bb*bb-4.0*aa*cc;
-            if disc < -1e-10 { return Some(()); }
-            let root=disc.max(0.0).sqrt();
-            for t in [(-bb-root)/(2.0*aa),(-bb+root)/(2.0*aa)] {
-                if (-1e-10..=1.0+1e-10).contains(&t) {
-                    let point=(start.0+dx*t,start.1+dy*t);
-                    let angle=(point.1-center.1).atan2(point.0-center.0);
-                    if let Some(u)=angle_on_global_arc(angle,*arc_start,*sweep) {
-                        cuts.push(t.clamp(0.0,1.0));
-                        // The opposite primitive receives the same event below
-                        // after the match arm is normalized by variant.
-                        if let GlobalBoundaryPiece::Arc{cuts:arc_cuts,..}=if matches!(a,GlobalBoundaryPiece::Arc{..}) { a } else { b } {
-                            arc_cuts.push(u);
-                        }
-                    }
-                }
-                if disc.abs()<=1e-10 { break; }
+            for (t,u) in segment_arc_intersections(*start,*end,*center,*radius,*sa,*wa)? {
+                cs.push(t); ca.push(u);
             }
         }
-        (GlobalBoundaryPiece::Arc{part_index:pa,center:ca,radius:ra,start:sa,sweep:wa,cuts:xa},
-         GlobalBoundaryPiece::Arc{part_index:pb,center:cb,radius:rb,start:sb,sweep:wb,cuts:xb}) => {
+        (GlobalBoundaryPiece::Arc{part_index:pa,center,radius,start:sa,sweep:wa,cuts:ca,..},
+         GlobalBoundaryPiece::Segment{part_index:ps,start,end,cuts:cs,..}) => {
+            if ps==pa { return Some(()); }
+            for (t,u) in segment_arc_intersections(*start,*end,*center,*radius,*sa,*wa)? {
+                ca.push(u); cs.push(t);
+            }
+        }
+        (GlobalBoundaryPiece::Arc{part_index:pa,center:ca,radius:ra,start:sa,sweep:wa,cuts:xa,..},
+         GlobalBoundaryPiece::Arc{part_index:pb,center:cb,radius:rb,start:sb,sweep:wb,cuts:xb,..}) => {
             if pa==pb { return Some(()); }
             let dx=cb.0-ca.0; let dy=cb.1-ca.1; let d=dx.hypot(dy);
             if d<=1e-12 && (ra-rb).abs()<=1e-10 { return None; }
@@ -4960,8 +4973,8 @@ mod source_global_perimeter_tests {
         // intersections. The circle's 120-degree interior arc is hidden.
         let expected=8.0-3.0_f64.sqrt()+4.0*std::f64::consts::PI/3.0;
         assert!((length-expected).abs()<1e-9);
-        assert_eq!(perimeter.straight.len(),3);
-        assert_eq!(perimeter.curved.len(),1);
+        assert_eq!(perimeter.straight.len(),5);
+        assert_eq!(perimeter.curved.len(),2);
     }
     #[test]
     fn source_global_perimeter_rejects_unsupported_fluid_boundary_instead_of_approximating() {
