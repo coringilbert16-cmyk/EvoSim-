@@ -961,6 +961,31 @@ pub fn default_catalog() -> Vec<BaseResource> {
     ]
 }
 
+/// Test-only catalog extension for exercising preserved legacy finite-fluid
+/// geometry. It is never part of the active resource catalog or simulation.
+#[cfg(test)]
+pub(crate) fn legacy_fluid_test_catalog() -> Vec<BaseResource> {
+    let mut catalog = default_catalog();
+    catalog.push(BaseResource {
+        name: "LegacyFluidFixture".into(),
+        adhesion: AdhesionDescriptors::default(),
+        properties: ResourceProperties {
+            mass: 1.0,
+            potential_energy: 0.0,
+            reactivity: 0.0,
+            chemical_position: None,
+            cohesion: 0.0,
+        },
+        physical_state: PhysicalState::Fluid,
+        shape: Shape {
+            form: Form::Circle {
+                radius: (NOMINAL_UNIT_AREA / std::f64::consts::PI).sqrt(),
+            },
+        },
+    });
+    catalog
+}
+
 pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
     if !is_whole_count(amount) {
         return f64::NAN;
