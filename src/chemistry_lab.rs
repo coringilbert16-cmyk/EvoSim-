@@ -569,10 +569,7 @@ impl Laboratory {
             world_tone_enabled: self.config.world_tone_enabled,
             hotspot_enabled: self.config.hotspot_enabled,
             reaction_history: self.reaction_history.clone(),
-            molecular_network: molecular_network_snapshot(
-                &self.simulation,
-                &self.reaction_history,
-            ),
+            molecular_network: molecular_network_snapshot(&self.simulation, &self.reaction_history),
             energy: EnergyLedgerSnapshot {
                 external_input: self.simulation.energy_ledger.total_external_energy_input,
                 usable_energy_gained: self.simulation.energy_ledger.total_usable_energy_gained,
@@ -672,7 +669,10 @@ fn molecular_network_snapshot(
         family_count,
         largest_family_size,
         reaction_types: reaction_types.into_iter().collect(),
-        edges: edges.into_iter().map(|(parent, child)| [parent, child]).collect(),
+        edges: edges
+            .into_iter()
+            .map(|(parent, child)| [parent, child])
+            .collect(),
     }
 }
 
