@@ -565,14 +565,14 @@ mod tests {
 
     #[test]
     fn realized_fluid_shape_area_scales_with_material_amount() {
-        let catalog = crate::resources::default_catalog();
-        let water = catalog
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let unit_area = match &water.shape.form {
+        let unit_area = match &legacy fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default legacy fluid shape should have a measurable area"),
         };
         let merged_area = 2.0 * unit_area;
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
@@ -591,7 +591,7 @@ mod tests {
             },
         };
         let physical = PhysicalMaterial {
-            material: Material::free_base("Water", 2.0),
+            material: Material::free_base("LegacyFluidFixture", 2.0),
             placements: Some(vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -621,7 +621,7 @@ mod tests {
             },
         };
         let underfilled = PhysicalMaterial {
-            material: Material::free_base("Water", 2.0),
+            material: Material::free_base("LegacyFluidFixture", 2.0),
             placements: Some(vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -637,14 +637,14 @@ mod tests {
 
     #[test]
     fn aggregate_fluid_requires_and_preserves_an_authoritative_shape() {
-        let catalog = crate::resources::default_catalog();
-        let water = catalog
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let unit_area = match &water.shape.form {
+        let unit_area = match &legacy fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default legacy fluid shape should have a measurable area"),
         };
         let merged_area = 2.0 * unit_area;
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
@@ -662,7 +662,7 @@ mod tests {
                 multi_contact_boundary: None,
             },
         };
-        let material = Material::free_base("Water", 2.0);
+        let material = Material::free_base("LegacyFluidFixture", 2.0);
         let placement = Placement {
             x: 0.0,
             y: 0.0,
