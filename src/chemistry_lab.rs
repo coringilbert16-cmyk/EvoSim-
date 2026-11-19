@@ -743,7 +743,10 @@ pub async fn run() {
     let app = Router::new()
         .route("/", get(index))
         .route("/api/state", get(state))
-        .route("/api/experiment", get(export_experiment).post(import_experiment))
+        .route(
+            "/api/experiment",
+            get(export_experiment).post(import_experiment),
+        )
         .route("/api/reset", post(reset))
         .route("/api/place", post(place))
         .route("/api/molecule", post(molecule))
