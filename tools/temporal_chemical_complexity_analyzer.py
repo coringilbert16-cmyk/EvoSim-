@@ -214,8 +214,6 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         row["fingerprint"]: 0 for row in rows if not row["is_product"]
     }
     reaction_first_seen: dict[str, int] = {}
-    transition_edges: set[tuple[str, str]] = set()
-    transition_nodes: set[str] = set()
     transition_events: list[tuple[int, str, str, str]] = []
     events: dict[str, dict[str, Any]] = {}
     for edge in history.get("lineage_edges", []):
@@ -230,12 +228,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         parent_families = sorted({by_id[i]["fingerprint"] for i in event["parents"] if i in by_id})
         child_families = sorted({by_id[i]["fingerprint"] for i in event["children"] if i in by_id})
         for parent in parent_families:
-            transition_nodes.add(parent)
-        for child in child_families:
-            transition_nodes.add(child)
-        for parent in parent_families:
             for child in child_families:
-                transition_edges.add((parent, child))
                 transition_events.append((event["tick"], parent, child, event["reaction"]))
         signature = _stable((event["reaction"], parent_families, child_families))
         event["signature"] = hashlib.sha256(signature.encode()).hexdigest()
@@ -248,7 +241,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
                   (row["destroyed_tick"] is None or row["destroyed_tick"] > finish)]
         new_families = 0
         repeated_products = 0
-        product_rows = [row for row in created_here if row["is_product"]]
+        product_rows = created_here
         for row in created_here:
             fingerprint = row["fingerprint"]
             if fingerprint not in family_first_seen:
@@ -382,9 +375,10 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
         lines.append(
             f"| {row['window']} | {row['new_structural_fingerprints_mean_across_seeds']:.2f} | "
             f"{row['cumulative_structural_fingerprints_mean_across_seeds']:.2f} | "
+            f"{row['new_reaction_patterns_mean_across_seeds']:.2f} | "
+            f"{row['cumulative_reaction_patterns_mean_across_seeds']:.2f} | "
             f"{row['active_product_mean_constituents_mean_across_seeds']:.2f} | "
             f"{row['active_product_max_constituents_mean_across_seeds']:.2f} | "
-            f"{row['cumulative_reaction_patterns_mean_across_seeds']:.2f} | "
             f"{row['reaction_network_edges_cumulative_mean_across_seeds']:.2f} | "
             f"{row['reaction_network_cyclic_scc_count_mean_across_seeds']:.2f} |"
         )
