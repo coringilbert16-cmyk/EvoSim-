@@ -1359,6 +1359,14 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 mod tests {
     use super::*;
 
+    type PhysicalPairFixture = (
+        PhysicalMaterial,
+        OrganismStructure,
+        Vec<usize>,
+        Vec<usize>,
+        SelectedContact,
+    );
+
     /// Multi-tick physical COMBINE feasibility matrix for the six non-Water resources.
     ///
     /// This deliberately does not force activation or alter chemistry thresholds.
@@ -1449,13 +1457,7 @@ mod tests {
                 )
                 .expect("each canonical resource must realize as a physical object");
 
-                let mut fixture: Option<(
-                    PhysicalMaterial,
-                    OrganismStructure,
-                    Vec<usize>,
-                    Vec<usize>,
-                    SelectedContact,
-                )> = None;
+                let mut fixture: Option<PhysicalPairFixture> = None;
                 for step in 1..=80 {
                     let distance = step as f64 * 0.05;
                     for rotation_step in 0..12 {
