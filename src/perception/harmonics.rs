@@ -5472,7 +5472,9 @@ mod environmental_movement_spatial_candidate_tests {
     #[test]
     fn spatial_sweep_matches_exhaustive_for_adversarial_emitter_distributions() {
         fn next_unit(state: &mut u64) -> f64 {
-            *state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            *state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
             ((*state >> 11) as f64) / ((1_u64 << 53) as f64)
         }
 
@@ -5514,7 +5516,10 @@ mod environmental_movement_spatial_candidate_tests {
                 0 => ((index / 4) as f64 * 0.5, next_unit(&mut state) * 0.2),
                 1 => ((index / 4) as f64 * 0.5, 10_000.0 + next_unit(&mut state)),
                 2 => (next_unit(&mut state) * 3.0, next_unit(&mut state) * 3.0),
-                _ => (next_unit(&mut state) * 50_000.0, next_unit(&mut state) * 50_000.0),
+                _ => (
+                    next_unit(&mut state) * 50_000.0,
+                    next_unit(&mut state) * 50_000.0,
+                ),
             };
             emitters.push(EnvironmentalMovementEmitter {
                 x,
@@ -5532,8 +5537,7 @@ mod environmental_movement_spatial_candidate_tests {
         for a in 0..emitters.len() {
             for b in (a + 1)..emitters.len() {
                 let reach =
-                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b])
-                        .unwrap();
+                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b]).unwrap();
                 let dx = emitters[b].x - emitters[a].x;
                 let dy = emitters[b].y - emitters[a].y;
                 if reach >= 0.0 && dx.hypot(dy) <= reach {
