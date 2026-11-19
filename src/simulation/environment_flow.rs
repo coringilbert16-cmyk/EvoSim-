@@ -251,11 +251,16 @@ fn background_velocity_with_config(
     let width_scale = (height * 0.16).max(1.0);
     let envelope = (-0.5 * (vertical_delta / width_scale).powi(2)).exp();
     let tangent = Velocity { x: 1.0, y: slope }.normalized();
-    let curved = tangent.scale(0.12 + 0.88 * envelope);
     let direction = config.direction_degrees.to_radians();
+    let (sin_direction, cos_direction) = direction.sin_cos();
+    let rotated_tangent = Velocity {
+        x: tangent.x * cos_direction - tangent.y * sin_direction,
+        y: tangent.x * sin_direction + tangent.y * cos_direction,
+    };
+    let curved = rotated_tangent.scale(0.12 + 0.88 * envelope);
     let uniform = Velocity {
-        x: direction.cos(),
-        y: direction.sin(),
+        x: cos_direction,
+        y: sin_direction,
     };
     let mut velocity = uniform
         .scale(1.0 - config.strength)
@@ -275,9 +280,13 @@ fn background_velocity_with_config(
             * 1.2
             * config.vortex_strength
             * config.strength;
-        velocity = velocity.add(Velocity {
+        let vortex = Velocity {
             x: -dy / vortex_radius * weight,
             y: dx / vortex_radius * weight,
+        };
+        velocity = velocity.add(Velocity {
+            x: vortex.x * cos_direction - vortex.y * sin_direction,
+            y: vortex.x * sin_direction + vortex.y * cos_direction,
         });
     }
     velocity.scale(config.speed)
@@ -884,6 +893,29 @@ mod tests {
         let velocity = background_velocity_with_config(20.0, 30.0, 100.0, 80.0, config);
         assert!(velocity.x.abs() < 1e-12);
         assert!((velocity.y - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn direction_rotates_the_complete_curved_and_vortex_field() {
+        let base = background_velocity_with_config(
+            23.0,
+            31.0,
+            100.0,
+            80.0,
+            FlowFieldConfig::default(),
+        );
+        let rotated = background_velocity_with_config(
+            23.0,
+            31.0,
+            100.0,
+            80.0,
+            FlowFieldConfig {
+                direction_degrees: 90.0,
+                ..FlowFieldConfig::default()
+            },
+        );
+        assert!((rotated.x + base.y).abs() < 1e-12);
+        assert!((rotated.y - base.x).abs() < 1e-12);
     }
 
     #[test]
