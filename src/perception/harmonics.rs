@@ -4504,7 +4504,7 @@ mod tests {
             .find(|resource| resource.name == "Hydrogen")
             .unwrap()
             .properties
-            .cohesion = 7.0 / 6.0;
+            .cohesion = 6.0 / 5.0;
         let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
@@ -4677,7 +4677,7 @@ mod tests {
             .iter_mut()
             .find(|resource| resource.name == "Hydrogen")
             .expect("default catalog contains Hydrogen");
-        hydrogen.properties.cohesion = 7.0 / 6.0;
+        hydrogen.properties.cohesion = 6.0 / 5.0;
 
         let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
