@@ -2243,16 +2243,16 @@ mod tests {
         use crate::structure::{Bond, BondEndpoint, StructuralUnit};
 
         let mut catalog = crate::resources::legacy_fluid_test_catalog();
-        let water = resource(&catalog, "LegacyFluidFixture").unwrap().clone();
+        let fluid = resource(&catalog, "LegacyFluidFixture").unwrap().clone();
         let carbon = resource(&catalog, "Carbon").unwrap().clone();
-        let area = match &water.shape.form {
+        let area = match &fluid.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
             _ => panic!("legacy fluid must expose a conserved fluid area"),
         };
-        let family = crate::capillary_geometry::solve_water_against_solid(
+        let family = crate::capillary_geometry::solve_fluid_against_solid(
             area,
-            water.properties.cohesion,
+            fluid.properties.cohesion,
             carbon.properties.cohesion,
         )
         .expect("default legacy fluid and Carbon should have an equilibrium contact family");
@@ -2307,7 +2307,7 @@ mod tests {
             .expect("bonded two-piece line parent should map into Bob's canonical frame");
         assert_eq!(live_parent.formation.constituents.len(), 2);
         let generated =
-            generate_collinear_multi_contact_formations(&live_parent.formation, &water, &catalog);
+            generate_collinear_multi_contact_formations(&live_parent.formation, &fluid, &catalog);
         let record = generated
             .into_iter()
             .find(|candidate| candidate.contact_constraints.len() == 2)
@@ -2354,7 +2354,7 @@ mod tests {
             &library,
             &live_parent,
             left_id,
-            &water,
+            &fluid,
             Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2398,7 +2398,7 @@ mod tests {
         // Continue the exact reopened-record path into the same staged bond
         // transaction used by construction. The pre-existing rigid bond is
         // retained, while both fluid-to-rigid contacts must commit together.
-        let water_material = crate::physical_material::PhysicalMaterial::realized(
+        let fluid_material = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
@@ -2413,7 +2413,7 @@ mod tests {
         let mut trial = live.clone();
         let fluid_index = crate::material_restoration::restore_material(
             &mut trial,
-            &water_material,
+            &fluid_material,
             origin,
             &catalog,
         )
@@ -2495,7 +2495,7 @@ mod tests {
     #[test]
     fn multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge() {
         use crate::capillary_geometry::{
-            solve_water_against_collinear_contacts, CapillaryContactFamily,
+            solve_fluid_against_collinear_contacts, CapillaryContactFamily,
         };
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
         use crate::structure::StructuralUnit;
@@ -2514,7 +2514,7 @@ mod tests {
             ((-third, 0.0), (third, 0.0)),
             ((third, 0.0), (family.contact_length * 0.5, 0.0)),
         ];
-        let boundary = solve_water_against_collinear_contacts(area, angle, &segments)
+        let boundary = solve_fluid_against_collinear_contacts(area, angle, &segments)
             .expect("three collinear segments should form one conserved boundary");
         let shape = crate::resources::Shape {
             form: Form::Fluid {
@@ -2681,7 +2681,7 @@ mod tests {
     #[test]
     fn multi_contact_fluid_commits_all_three_rigid_bonds_together() {
         use crate::capillary_geometry::{
-            solve_water_against_collinear_contacts, CapillaryContactFamily,
+            solve_fluid_against_collinear_contacts, CapillaryContactFamily,
         };
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
         use crate::structure::StructuralUnit;
@@ -2705,7 +2705,7 @@ mod tests {
             ((-third, 0.0), (third, 0.0)),
             ((third, 0.0), (family.contact_length * 0.5, 0.0)),
         ];
-        let boundary = solve_water_against_collinear_contacts(area, angle, &segments)
+        let boundary = solve_fluid_against_collinear_contacts(area, angle, &segments)
             .expect("the three collinear contacts should form one conserved boundary");
         let shape = crate::resources::Shape {
             form: Form::Fluid {
