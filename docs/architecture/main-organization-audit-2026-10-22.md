@@ -39,7 +39,7 @@ Audited the current `main` commit `8c84978cd003738d94a74eef9114b711689c3804` (po
 
 **Finding:** Bob's library, source exposure, construction runtime, and capillary geometry are much larger than the rest of the source tree.
 
-**Action:** Use the separate [large-module boundary audit](architecture/large-module-boundaries.md) for the three modules it covers. Add a similar dependency/caller audit for `src/construction/runtime.rs` before considering any extraction. Preserve module visibility and colocated tests; don't combine refactoring with behavior changes or Clippy suppression.
+**Action:** Use the separate [large-module boundary audit](large-module-boundaries.md) for the three modules it covers. Add a similar dependency/caller audit for `src/construction/runtime.rs` before considering any extraction. Preserve module visibility and colocated tests; don't combine refactoring with behavior changes or Clippy suppression.
 
 ### P2 — Preserve the experiment workflow until its branch lifecycle is resolved
 
