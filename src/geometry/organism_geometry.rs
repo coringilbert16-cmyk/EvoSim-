@@ -419,6 +419,330 @@ pub(crate) fn visible_source_facing_points(
     visible
 }
 
+/// Find the nearest exposed point on a complete material's physical perimeter
+/// as seen from an external receiver position.
+///
+/// The material is treated as one union of realized constituent shapes. Each
+/// constituent contributes its source-facing boundary candidate, but candidates
+/// hidden behind another constituent are rejected by the shared exact blocker
+/// query. The nearest surviving point is therefore on the externally exposed
+/// perimeter, not at a centroid or constituent center.
+///
+/// This is a geometric distance query only. It does not distribute emitted
+/// energy over the perimeter or account for propagation loss.
+#[allow(dead_code)] // Staged closest-point primitive; source-perimeter integration follows.
+fn nearest_part_boundary_point(
+    receiver_local: (f64, f64),
+    form: &Form,
+) -> Option<(f64, f64, f64, f64)> {
+    if !receiver_local.0.is_finite() || !receiver_local.1.is_finite() {
+        return None;
+    }
+
+    match form {
+        Form::Circle { radius } => {
+            nearest_circle_boundary_point(receiver_local, (0.0, 0.0), *radius)
+        }
+        Form::Line { length } => {
+            nearest_segment_point(receiver_local, (-length * 0.5, 0.0), (length * 0.5, 0.0))
+        }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let vertices = form.polygon_vertices()?;
+            nearest_polygon_boundary_point(receiver_local, &vertices)
+        }
+        Form::Fluid {
+            nominal_area,
+            boundary,
+            arc_boundary,
+            multi_contact_boundary,
+        } => {
+            if let Some(vertices) = boundary {
+                nearest_polygon_boundary_point(receiver_local, vertices)
+            } else if let Some(arc) = arc_boundary {
+                nearest_arc_segment_boundary_point(receiver_local, arc)
+            } else if let Some(multi) = multi_contact_boundary {
+                nearest_multi_contact_boundary_point(receiver_local, multi)
+            } else {
+                let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                nearest_circle_boundary_point(receiver_local, (0.0, 0.0), radius)
+            }
+        }
+    }
+}
+
+fn nearest_circle_boundary_point(
+    receiver: (f64, f64),
+    center: (f64, f64),
+    radius: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let dx = receiver.0 - center.0;
+    let dy = receiver.1 - center.1;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() || distance <= f64::EPSILON || !radius.is_finite() || radius <= 0.0 {
+        return None;
+    }
+    let normal = (dx / distance, dy / distance);
+    Some((
+        center.0 + radius * normal.0,
+        center.1 + radius * normal.1,
+        normal.0,
+        normal.1,
+    ))
+}
+
+fn nearest_segment_point(
+    receiver: (f64, f64),
+    start: (f64, f64),
+    end: (f64, f64),
+) -> Option<(f64, f64, f64, f64)> {
+    let edge = (end.0 - start.0, end.1 - start.1);
+    let length_squared = edge.0 * edge.0 + edge.1 * edge.1;
+    if !length_squared.is_finite() || length_squared <= f64::EPSILON {
+        return None;
+    }
+    let projection = (((receiver.0 - start.0) * edge.0 + (receiver.1 - start.1) * edge.1)
+        / length_squared)
+        .clamp(0.0, 1.0);
+    let point = (start.0 + projection * edge.0, start.1 + projection * edge.1);
+    let offset = (receiver.0 - point.0, receiver.1 - point.1);
+    let distance = offset.0.hypot(offset.1);
+    if !distance.is_finite() || distance <= f64::EPSILON {
+        return None;
+    }
+    Some((point.0, point.1, offset.0 / distance, offset.1 / distance))
+}
+
+fn nearest_arc_segment_boundary_point(
+    receiver: (f64, f64),
+    arc: &crate::capillary_geometry::CircularArcBoundary,
+) -> Option<(f64, f64, f64, f64)> {
+    let mut nearest = None;
+    if let Some((x, y)) = arc.closest_point(receiver.0, receiver.1) {
+        let normal_x = (x - arc.center_x) / arc.radius;
+        let normal_y = (y - arc.center_y) / arc.radius;
+        consider_boundary_candidate(&mut nearest, receiver, (x, y), (normal_x, normal_y));
+    }
+    // The finite arc closes against its contact chord; include that physical
+    // boundary rather than treating the free interface as an open curve.
+    consider_segment_candidate(&mut nearest, receiver, arc.end_point(), arc.start_point());
+    nearest.map(|(_, x, y, nx, ny)| (x, y, nx, ny))
+}
+
+fn nearest_multi_contact_boundary_point(
+    receiver: (f64, f64),
+    boundary: &crate::capillary_geometry::MultiContactFluidBoundary,
+) -> Option<(f64, f64, f64, f64)> {
+    if !boundary.is_valid() {
+        return None;
+    }
+    let mut nearest = None;
+    for piece in &boundary.pieces {
+        match piece {
+            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                ..
+            } => consider_segment_candidate(
+                &mut nearest,
+                receiver,
+                (*start_x, *start_y),
+                (*end_x, *end_y),
+            ),
+            crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
+                if let Some((x, y)) = arc.closest_point(receiver.0, receiver.1) {
+                    let normal = (
+                        (x - arc.center_x) / arc.radius,
+                        (y - arc.center_y) / arc.radius,
+                    );
+                    consider_boundary_candidate(&mut nearest, receiver, (x, y), normal);
+                }
+            }
+        }
+    }
+    nearest.map(|(_, x, y, nx, ny)| (x, y, nx, ny))
+}
+
+fn consider_segment_candidate(
+    nearest: &mut Option<(f64, f64, f64, f64, f64)>,
+    receiver: (f64, f64),
+    start: (f64, f64),
+    end: (f64, f64),
+) {
+    let edge = (end.0 - start.0, end.1 - start.1);
+    let length = edge.0.hypot(edge.1);
+    if !length.is_finite() || length <= f64::EPSILON {
+        return;
+    }
+    let projection = (((receiver.0 - start.0) * edge.0 + (receiver.1 - start.1) * edge.1)
+        / (length * length))
+        .clamp(0.0, 1.0);
+    let point = (start.0 + projection * edge.0, start.1 + projection * edge.1);
+    // Boundary pieces are stored in positive-area order, so the outward
+    // normal is the right-hand normal of each directed straight segment.
+    let normal = (edge.1 / length, -edge.0 / length);
+    consider_boundary_candidate(nearest, receiver, point, normal);
+}
+
+fn consider_boundary_candidate(
+    nearest: &mut Option<(f64, f64, f64, f64, f64)>,
+    receiver: (f64, f64),
+    point: (f64, f64),
+    normal: (f64, f64),
+) {
+    let offset = (receiver.0 - point.0, receiver.1 - point.1);
+    let distance = offset.0.hypot(offset.1);
+    let facing = normal.0 * offset.0 + normal.1 * offset.1;
+    if !distance.is_finite() || facing <= 0.0 {
+        return;
+    }
+    let candidate = (distance, point.0, point.1, normal.0, normal.1);
+    if nearest.is_none_or(|current| candidate.0.total_cmp(&current.0).is_lt()) {
+        *nearest = Some(candidate);
+    }
+}
+
+fn nearest_polygon_boundary_point(
+    receiver: (f64, f64),
+    vertices: &[(f64, f64)],
+) -> Option<(f64, f64, f64, f64)> {
+    if vertices.len() < 3
+        || !receiver.0.is_finite()
+        || !receiver.1.is_finite()
+        || vertices
+            .iter()
+            .any(|(x, y)| !x.is_finite() || !y.is_finite())
+    {
+        return None;
+    }
+    let signed_area_twice = (0..vertices.len())
+        .map(|index| {
+            let a = vertices[index];
+            let b = vertices[(index + 1) % vertices.len()];
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum::<f64>();
+    if !signed_area_twice.is_finite() || signed_area_twice.abs() <= f64::EPSILON {
+        return None;
+    }
+
+    let mut nearest: Option<(f64, f64, f64, f64, f64)> = None;
+    for index in 0..vertices.len() {
+        let start = vertices[index];
+        let end = vertices[(index + 1) % vertices.len()];
+        let edge = (end.0 - start.0, end.1 - start.1);
+        let length_squared = edge.0 * edge.0 + edge.1 * edge.1;
+        if !length_squared.is_finite() || length_squared <= f64::EPSILON {
+            continue;
+        }
+        let projection = (((receiver.0 - start.0) * edge.0 + (receiver.1 - start.1) * edge.1)
+            / length_squared)
+            .clamp(0.0, 1.0);
+        let point = (start.0 + projection * edge.0, start.1 + projection * edge.1);
+        let distance = (receiver.0 - point.0).hypot(receiver.1 - point.1);
+        let edge_length = length_squared.sqrt();
+        let normal = if signed_area_twice > 0.0 {
+            (edge.1 / edge_length, -edge.0 / edge_length)
+        } else {
+            (-edge.1 / edge_length, edge.0 / edge_length)
+        };
+        let facing = normal.0 * (receiver.0 - point.0) + normal.1 * (receiver.1 - point.1);
+        if !distance.is_finite() || facing <= 0.0 {
+            continue;
+        }
+        let candidate = (distance, point.0, point.1, normal.0, normal.1);
+        if nearest.is_none_or(|current| candidate.0.total_cmp(&current.0).is_lt()) {
+            nearest = Some(candidate);
+        }
+    }
+    nearest.map(|(_, x, y, normal_x, normal_y)| (x, y, normal_x, normal_y))
+}
+
+/// Find the nearest exposed point on a complete material's physical perimeter
+/// as seen from an external receiver position. Exact closest-point geometry is
+/// used for circles and polygonal constituents; other curved forms retain the
+/// existing source-facing boundary query until their closest-point solutions
+/// are represented by the shared surface geometry module.
+#[allow(dead_code)] // Staged source-perimeter query; aura integration follows.
+pub(crate) fn nearest_visible_material_perimeter_point(
+    receiver: (f64, f64),
+    source_geometry: &OrganismBodyGeometry,
+) -> Option<SourceFacingSurfacePoint> {
+    if !receiver.0.is_finite()
+        || !receiver.1.is_finite()
+        || source_geometry.parts.is_empty()
+        || source_geometry.contains_point(receiver.0, receiver.1)
+    {
+        return None;
+    }
+
+    let mut nearest: Option<SourceFacingSurfacePoint> = None;
+    for part in &source_geometry.parts {
+        let dx = receiver.0 - part.x;
+        let dy = receiver.1 - part.y;
+        let (sin, cos) = part.rotation_radians.sin_cos();
+        let receiver_local = (dx * cos + dy * sin, -dx * sin + dy * cos);
+        let Some((local_x, local_y, local_normal_x, local_normal_y)) =
+            nearest_part_boundary_point(receiver_local, &part.form)
+        else {
+            continue;
+        };
+        let point = (
+            part.x + local_x * cos - local_y * sin,
+            part.y + local_x * sin + local_y * cos,
+        );
+        let normal = (
+            local_normal_x * cos - local_normal_y * sin,
+            local_normal_x * sin + local_normal_y * cos,
+        );
+        if normal.0 * (receiver.0 - point.0) + normal.1 * (receiver.1 - point.1) <= 0.0
+            || source_path_blocked(
+                receiver,
+                point,
+                std::slice::from_ref(source_geometry),
+                0,
+                part.unit_index,
+            )
+        {
+            continue;
+        }
+        let candidate = SourceFacingSurfacePoint {
+            body_index: 0,
+            unit_index: part.unit_index,
+            x: point.0,
+            y: point.1,
+            normal_x: normal.0,
+            normal_y: normal.1,
+        };
+        let candidate_distance = (candidate.x - receiver.0).hypot(candidate.y - receiver.1);
+        let replace = nearest.as_ref().is_none_or(|current| {
+            candidate_distance
+                .total_cmp(&(current.x - receiver.0).hypot(current.y - receiver.1))
+                .then_with(|| candidate.unit_index.cmp(&current.unit_index))
+                .is_lt()
+        });
+        if replace {
+            nearest = Some(candidate);
+        }
+    }
+
+    if nearest.is_some() {
+        nearest
+    } else {
+        // Preserve support for non-polygonal curved forms without pretending
+        // their radial boundary probe is an exact closest-point solution.
+        visible_source_facing_points(receiver, std::slice::from_ref(source_geometry))
+            .into_iter()
+            .min_by(|left, right| {
+                (left.x - receiver.0)
+                    .hypot(left.y - receiver.1)
+                    .total_cmp(&(right.x - receiver.0).hypot(right.y - receiver.1))
+                    .then_with(|| left.unit_index.cmp(&right.unit_index))
+            })
+    }
+}
+
 /// Return whether the open segment from the source to a candidate surface point
 /// crosses any realized material before reaching that point. Geometry is tested
 /// in each constituent's local frame; no raster sampling or cell-size heuristic
@@ -757,6 +1081,146 @@ mod tests {
             min_y: -10.0,
             max_y: 10.0,
         }
+    }
+
+    #[test]
+    fn nearest_material_perimeter_point_uses_surface_not_centroid() {
+        let geometry = body(Form::Circle { radius: 1.0 });
+        let point = nearest_visible_material_perimeter_point((5.0, 0.0), &geometry)
+            .expect("external receiver should see the circle perimeter");
+        assert!((point.x - 1.0).abs() < 1e-10);
+        assert!(point.y.abs() < 1e-10);
+        assert!(point.x.abs() > 0.9);
+    }
+
+    #[test]
+    fn nearest_material_perimeter_uses_closest_polygon_edge_not_radial_center_ray() {
+        let geometry = body(Form::Rectangle {
+            width: 2.0,
+            height: 4.0,
+        });
+        let point = nearest_visible_material_perimeter_point((3.0, 1.0), &geometry)
+            .expect("external receiver should see the nearest rectangle edge");
+        assert!((point.x - 1.0).abs() < 1e-10);
+        assert!((point.y - 1.0).abs() < 1e-10);
+        let nearest_distance = (point.x - 3.0).hypot(point.y - 1.0);
+        let radial_probe_distance = (1.0_f64 - 3.0).hypot(1.0 / 3.0 - 1.0);
+        assert!(nearest_distance < radial_probe_distance);
+        assert!(point.normal_x > 0.99);
+        assert!(point.normal_y.abs() < 1e-10);
+    }
+
+    #[test]
+    fn nearest_material_perimeter_uses_exact_finite_fluid_arc() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let geometry = body(Form::Fluid {
+            nominal_area: family.area,
+            boundary: None,
+            arc_boundary: Some(arc),
+            multi_contact_boundary: None,
+        });
+        let point = nearest_visible_material_perimeter_point((0.0, 2.0), &geometry)
+            .expect("receiver above the fluid should see its exact free arc");
+        assert!(point.x.abs() < 1e-10);
+        assert!((point.y - arc.radius).abs() < 1e-10);
+        assert!(point.normal_y > 0.99);
+        assert!(point.normal_x.abs() < 1e-10);
+    }
+
+    #[test]
+    fn nearest_material_perimeter_uses_multi_contact_lines_and_arcs() {
+        let family = crate::capillary_geometry::CapillaryContactFamily::solve(
+            0.5,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .unwrap();
+        let arc =
+            crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family).unwrap();
+        let start = arc.start_point();
+        let end = arc.end_point();
+        let boundary = crate::capillary_geometry::MultiContactFluidBoundary {
+            nominal_area: family.area,
+            pieces: vec![
+                crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc),
+                crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                    start_x: end.0,
+                    start_y: end.1,
+                    end_x: start.0,
+                    end_y: start.1,
+                    contact_angle_radians: family.contact_angle_radians,
+                },
+            ],
+        };
+        assert!(boundary.is_valid());
+        let geometry = body(Form::Fluid {
+            nominal_area: family.area,
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: Some(boundary),
+        });
+        let arc_point = nearest_visible_material_perimeter_point((0.0, 2.0), &geometry)
+            .expect("upper receiver should see the free arc");
+        assert!(arc_point.y > 0.0);
+        assert!(arc_point.normal_y > 0.99);
+
+        let chord_point = nearest_visible_material_perimeter_point((0.0, -2.0), &geometry)
+            .expect("lower receiver should see the contact chord");
+        assert!(chord_point.y.abs() < 1e-10);
+        assert!(chord_point.normal_y < -0.99);
+    }
+
+    #[test]
+    fn nearest_material_perimeter_supports_legacy_area_only_fluid_and_lines() {
+        let fluid = body(Form::Fluid {
+            nominal_area: std::f64::consts::PI,
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: None,
+        });
+        let fluid_point = nearest_visible_material_perimeter_point((2.0, 0.0), &fluid)
+            .expect("area-only fluid uses its defined equivalent circular geometry");
+        assert!((fluid_point.x - 1.0).abs() < 1e-10);
+        assert!(fluid_point.y.abs() < 1e-10);
+
+        let line = body(Form::Line { length: 2.0 });
+        let line_point = nearest_visible_material_perimeter_point((0.0, 2.0), &line)
+            .expect("line receiver should resolve to the exact segment");
+        assert!(line_point.x.abs() < 1e-10);
+        assert!(line_point.y.abs() < 1e-10);
+        assert!(line_point.normal_y > 0.99);
+    }
+
+    #[test]
+    fn nearest_material_perimeter_excludes_constituent_surfaces_hidden_inside_union() {
+        let mut geometry = body(Form::Circle { radius: 1.0 });
+        geometry.parts.push(PlacedForm {
+            unit_index: 1,
+            form: Form::Circle { radius: 1.0 },
+            x: 1.5,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        geometry.min_x = -1.0;
+        geometry.max_x = 2.5;
+        geometry.min_y = -1.0;
+        geometry.max_y = 1.0;
+
+        let point = nearest_visible_material_perimeter_point((5.0, 0.0), &geometry)
+            .expect("union should expose its rightmost perimeter");
+        assert_eq!(point.unit_index, 1);
+        assert!((point.x - 2.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn nearest_material_perimeter_rejects_receiver_inside_source_material() {
+        let geometry = body(Form::Circle { radius: 1.0 });
+        assert!(nearest_visible_material_perimeter_point((0.0, 0.0), &geometry).is_none());
     }
 
     #[test]
