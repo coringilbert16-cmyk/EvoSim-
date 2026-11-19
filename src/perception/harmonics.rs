@@ -4278,8 +4278,8 @@ mod tests {
     }
 
     #[test]
-    fn circular_water_boundary_contributes_to_pair_reception() {
-        let catalog = crate::resources::default_catalog();
+    fn circular_legacy fluid_boundary_contributes_to_pair_reception() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
@@ -4291,7 +4291,7 @@ mod tests {
         )
         .expect("carbon should have a valid realized physical shape");
         let receiver = crate::physical_material::PhysicalMaterial::realized(
-            crate::resources::Material::free_base("Water", 1.0),
+            crate::resources::Material::free_base("LegacyFluidFixture", 1.0),
             vec![crate::structure::Placement {
                 x: 0.0,
                 y: 0.0,
@@ -4299,7 +4299,7 @@ mod tests {
             }],
             &catalog,
         )
-        .expect("water should have a valid realized circular physical shape");
+        .expect("legacy fluid should have a valid realized circular physical shape");
 
         let receptions = material_aura_receptions(&source, &receiver, &catalog, 0)
             .expect("circular receiver should support aura reception");
@@ -4311,7 +4311,7 @@ mod tests {
             !sample.incident_spectrum.components.is_empty()
                 && sample.spectrum.components.is_empty()
                 && sample.magnitude == 0.0
-        }), "zero-cohesion Water should retain geometric incident samples without inventing a material response");
+        }), "zero-cohesion LegacyFluidFixture should retain geometric incident samples without inventing a material response");
         assert!(receptions.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
