@@ -746,17 +746,17 @@ fn point_in_form(
 }
 
 #[cfg(test)]
-mod fitted_water_tests {
+mod fitted_legacy_fluid_tests {
     use super::*;
     use crate::resources::{default_catalog, Form, Shape, NOMINAL_UNIT_AREA};
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     #[test]
-    fn fitted_water_boundary_is_part_of_field_integration() {
-        let catalog = default_catalog();
+    fn fitted_legacy_fluid_boundary_is_part_of_field_integration() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let mut structure = OrganismStructure::new();
         let mut water = StructuralUnit::new(
-            "Water",
+            "LegacyFluidFixture",
             Placement {
                 x: 0.0,
                 y: 0.0,
@@ -764,8 +764,8 @@ mod fitted_water_tests {
             },
         );
         assert!(water.realize_default_geometry(&catalog));
-        // Keep the fitted boundary consistent with one Water unit's nominal
-        // area instead of assigning four square units to half a unit of Water.
+        // Keep the fitted boundary consistent with one legacy fluid unit's nominal
+        // area instead of assigning four square units to half a unit of legacy fluid.
         let half_side = NOMINAL_UNIT_AREA.sqrt() / 2.0;
         let fitted = Shape {
             form: Form::Fluid {
@@ -896,7 +896,7 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             ("Sulfur", 0.0),
             ("Hydrogen", 0.0),
             ("Oxygen", 0.0),
-            ("Water", 0.0),
+            ("LegacyFluidFixture", 0.0),
         ]
         .into_iter()
         .map(
