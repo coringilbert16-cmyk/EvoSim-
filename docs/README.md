@@ -1,44 +1,47 @@
 # Documentation
 
-This directory contains the technical documentation for EvoSim. The root [README](../README.md) is the only general project and getting-started guide.
+The root [README](../README.md) is the project entry point and getting-started guide. This index is the map to technical material; documents are grouped by purpose rather than accumulated in one directory.
 
 ## Architecture and design
 
-- [Repository organization](architecture/repository-organization.md) — repository boundaries and ownership.
+- [Repository organization](architecture/repository-organization.md) — source boundaries, ownership, and integration policy.
 - [Large-module boundaries](architecture/large-module-boundaries.md) — audited Rust module responsibilities.
 - [Construction runtime boundaries](architecture/construction-runtime-boundaries.md) — construction subsystem responsibilities.
 - [Resonance-field architecture](design/resonance-field-architecture.md) — high-level field model.
 - [Resonance-field implementation roadmap](design/resonance-field-implementation-roadmap.md) — controlling detailed roadmap; read before any resonance-field work.
-- [Material and chemistry model](material-chemistry-model-spec.md) — material descriptors and intended chemical interaction behavior.
-- [Chemistry unification contract](CHEMISTRY_UNIFICATION_CONTRACT.md) — chemistry, ownership, and energy invariants.
 
-## Chemistry and experiments
+## Chemistry and physical models
 
-- [Chemistry audit and unification plan](chemistry-audit-unification-plan.md) — extensive historical and technical audit record; use the current README and source to establish present status.
-- [Current chemistry handoff](chemistry-audit-current-handoff.md) — dated checkpoint; verify all PR and CI status against GitHub before relying on it.
-- [Chemistry organization analysis](chemistry-organization-analysis.md) — analysis of chemical organization.
-- [Reaction energy semantics](reaction-energy-semantics-plan.md) — energy-settlement design.
+- [Material and chemistry model](chemistry/material-chemistry-model-spec.md) — material descriptors and intended chemical interaction behavior.
+- [Chemistry unification contract](chemistry/CHEMISTRY_UNIFICATION_CONTRACT.md) — chemistry, ownership, and energy invariants.
+- [Chemistry audit and unification plan](chemistry/chemistry-audit-unification-plan.md) — historical and technical audit register; use current source and CI for implementation status.
+- [Current chemistry handoff](chemistry/chemistry-audit-current-handoff.md) — dated checkpoint; verify PR and CI status against GitHub.
+- [Chemistry organization analysis](chemistry/chemistry-organization-analysis.md) — analysis of chemical organization.
+- [Reaction energy semantics](chemistry/reaction-energy-semantics-plan.md) — energy-settlement design.
+- [Fluid coalescence transaction](chemistry/fluid-coalescence-transaction.md) — transaction and restoration notes.
 - [Experiment instructions](../experiments/README.md) — how to request and interpret environmental chemistry runs.
 
 ## Audits and implementation investigations
 
-- `audits/` — focused subsystem and optimization audits.
-- [Local viewer implementation audit](LOCAL_VIEWER_IMPLEMENTATION_AUDIT.md) — viewer and runner architecture audit.
-- [Repository stabilization audit](repository-stabilization-audit.md) — dated repository audit; check its current-state section first.
+- [Local viewer implementation audit](audits/LOCAL_VIEWER_IMPLEMENTATION_AUDIT.md) — viewer and runner architecture.
+- [Repository stabilization audit](audits/repository-stabilization-audit.md) — dated repository audit; validate its current-state section against the live repository.
 - [Main organization audit](architecture/main-organization-audit-2026-10-22.md) — previous repository inventory.
-- [Bob geometry audits](bob-geometry-storage-audit.md), [integration audit](bob-geometry-storage-integration-audit.md), and [regeneration audit](bob-regeneration-pipeline-audit.md).
+- [Bob geometry storage audit](audits/bob-geometry-storage-audit.md), [integration audit](audits/bob-geometry-storage-integration-audit.md), and [regeneration audit](audits/bob-regeneration-pipeline-audit.md).
+- [Constructor/library dependency audit](audits/constructor-library-dependency-audit.md).
+- [Phase 3 authority audit](audits/PHASE3_AUTHORITY_AUDIT.md).
+- [PR audit consolidation](audits/pr-audit-consolidation-2026-10-13.md) — historical cross-PR record.
+- Additional focused audits live in `audits/`.
 
 ## Plans and phase records
 
-- `plans/` — subsystem implementation plans.
-- `pr-plans/` — historical or scoped pull-request implementation plans. These are not automatically active work.
-- Phase records: [Phase 3](PHASE3_AUTHORITY_AUDIT.md), [Phase 4](PHASE4_PLAN.md), [Phase 5](PHASE5_PLAN.md), and [Phase 6](PHASE6_PLAN.md).
+- [Phase 4](plans/PHASE4_PLAN.md), [Phase 5](plans/PHASE5_PLAN.md), and [Phase 6](plans/PHASE6_PLAN.md).
+- [Phase 6 blueprint specification](plans/PHASE6_BLUEPRINT_SPEC.md).
+- [World-tone material response](plans/world-tone-material-response.md).
+- [Scoped PR plans](pr-plans/) — historical or scoped implementation plans; presence here does not mean work is currently approved or active.
 
 ## Project operating guidance
 
-- [Agent protocol](AGENT_PROTOCOL.md) — repository-specific constraints for automated coding agents.
-- [Fluid coalescence transaction](fluid-coalescence-transaction.md) — transaction and restoration notes.
-- [PR audit consolidation](pr-audit-consolidation-2026-10-13.md) — historical cross-PR audit; validate current status independently.
+- [Agent protocol](operations/AGENT_PROTOCOL.md) — repository-specific constraints for automated coding agents.
 
 ## Historical archive
 
@@ -50,4 +53,4 @@ This directory contains the technical documentation for EvoSim. The root [README
 2. Prefer source code and exact-head CI for claims about implemented behavior.
 3. Treat specifications and roadmaps as design intent, not proof of implementation.
 4. Treat dated audits, handoffs, and PR plans as historical unless independently revalidated.
-5. If two documents conflict, follow the applicable current design authority and explicit user-approved decisions; do not silently revive older assumptions.
+5. If documents conflict, follow the applicable current design authority and explicit user-approved decisions; do not silently revive older assumptions.
