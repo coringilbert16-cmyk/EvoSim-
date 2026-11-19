@@ -2670,9 +2670,9 @@ pub(crate) fn environmental_resonance_displacements(
         .collect::<Option<Vec<_>>>()?;
     let emitter_ns = emitter_started.elapsed().as_nanos();
 
-    // The profiled path remains the exhaustive reference. Normal execution
-    // uses the conservative amplitude bound plus exact pair-specific energy
-    // support to omit interactions below the configured movement resolution.
+    // Normal execution uses the conservative amplitude bound plus exact
+    // pair-specific energy support. The explicit reference flag enumerates all
+    // pairs and applies the same support predicate for matched validation.
     let worker_count = environmental_movement_worker_count();
     let pair_count = environmental_movement_pair_count(emitters.len())?;
     if !reference_all_pairs {
@@ -5378,6 +5378,31 @@ mod environmental_movement_spatial_candidate_tests {
             }
         }
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn spatial_candidates_include_the_cutoff_boundary_but_not_beyond_it() {
+        let a = emitter(0.0, 0.0, 0.5, 0.0);
+        let b_at_boundary = emitter(0.0, 0.0, 0.5, 0.0);
+        let reach = environmental_movement_pair_support_radius(&a, &b_at_boundary).unwrap();
+        assert!(reach > 0.0);
+
+        let at_boundary = vec![
+            emitter(0.0, 0.0, 0.5, 0.0),
+            emitter(reach, 0.0, 0.5, 0.0),
+        ];
+        assert_eq!(
+            environmental_movement_spatial_candidate_pairs(&at_boundary).unwrap(),
+            vec![(0, 1)]
+        );
+
+        let beyond_boundary = vec![
+            emitter(0.0, 0.0, 0.5, 0.0),
+            emitter(reach + 1e-6, 0.0, 0.5, 0.0),
+        ];
+        assert!(environmental_movement_spatial_candidate_pairs(&beyond_boundary)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
