@@ -74,7 +74,7 @@ jobs:
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
       # PR #377: compare spatial discovery with exhaustive discovery using
-      # the same energy-derived cutoff and the same physical implementation.
+      # the same response-resolution cutoff and the same physical implementation.
       - name: Prepare matched resonance movement worktree
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
         env:
