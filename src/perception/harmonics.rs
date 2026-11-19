@@ -5479,7 +5479,7 @@ mod environmental_movement_spatial_candidate_tests {
         let mut state = 0x5eed_cafe_d00d_u64;
         let mut emitters = Vec::new();
         for index in 0..128 {
-            let component_count = 1 + (index % MAX_SPECTRAL_COMPONENTS);
+            let component_count = 1 + (index % super::MAX_SPECTRAL_COMPONENTS);
             let mut components = Vec::with_capacity(component_count);
             for component_index in 0..component_count {
                 // Dense near-frequency matches exercise the maximum
