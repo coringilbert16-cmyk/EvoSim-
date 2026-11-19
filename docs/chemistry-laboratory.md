@@ -15,6 +15,7 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Set world width and height, then reset the experiment.
 - Set the deterministic random seed for a reset.
 - Configure ambient flow direction, speed, S-field strength, and local vortex intensity; changes apply immediately while paused or running, and the renderer displays the configured vector field.
+- Enable or disable the existing 440-cycle/day world tone and 880-cycle/day localized hotspot. Both are off by default and use the simulator's existing source settlement and energy ledger.
 - Place catalog elements by selecting an element and tapping the field (initial placement is restricted to paused tick zero).
 - Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
@@ -32,6 +33,7 @@ Molecule placement is validated by the existing `PhysicalMaterial::realized` geo
 - `POST /api/pause` — pause real-time stepping.
 - `POST /api/step` — step a bounded number of ticks. Body: `{"count":1}`.
 - `POST /api/flow` — change the live ambient field. Body: `{"direction_degrees":90,"speed":2,"strength":0.5,"vortex_strength":1}`. Direction is measured clockwise from right; speed is a multiplier, strength blends uniform flow (0) with the S-shaped field (1), and vortex strength ranges from 0 to 2.
+- `POST /api/sources` — enable or disable the established external sources. Body: `{"world_tone_enabled":true,"hotspot_enabled":true}`. Source capture is determined by existing physical material response and is settled through the authoritative energy ledger; enabling a source does not grant energy directly.
 
 ## Scope of this milestone
 
