@@ -1036,9 +1036,7 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
-        crate::environment_flow::transport_field_with_config::<
-            REUSE_SINGLETON_CENTER_VELOCITY,
-        >(
+        crate::environment_flow::transport_field_with_config::<REUSE_SINGLETON_CENTER_VELOCITY>(
             &mut self.environment.field,
             &self.environment.catalog,
             self.environment.width,
