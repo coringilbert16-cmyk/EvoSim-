@@ -43,7 +43,7 @@ impl Laboratory {
   LaboratorySnapshot{tick:self.simulation.tick,width:self.config.width,height:self.config.height,material_count:self.simulation.environment.field.cells.iter().map(|c|c.physical_materials.len()).sum(),materials,chemistry_usable_energy:self.simulation.environment.chemistry_usable_energy,resonant_energy:self.simulation.environment.resonant_energy.total_energy(),organisms:self.simulation.organisms.len()}
  }
 }
-#[derive(Serialize)] pub struct LaboratorySnapshot{pub tick:u64,pub width:f64,pub height:f64,pub material_count:usize,pub materials:Vec<MaterialSnapshot>,pub chemistry_usable_energy:f64,pub resonant_energy:f64,pub organisms:usize}
+#[derive(Serialize)] pub struct LaboratorySnapshot{pub tick:u64,pub width:f64,pub height:f64,pub material_count:usize,pub materials:Vec<MaterialSnapshot>,pub chemistry_usable_energy:f64,pub resonant_energy:Option<f64>,pub organisms:usize}
 #[derive(Serialize)] pub struct MaterialSnapshot{pub identity:u64,pub parts:Vec<(String,f64)>,pub placements:Vec<[f64;3]>,pub bond_count:usize}
 #[derive(Clone)] struct LabState(Arc<Mutex<Laboratory>>);
 #[derive(Deserialize)] struct PlaceRequest{resource:String,x:f64,y:f64}
@@ -69,3 +69,49 @@ document.querySelector('#step').onclick=async()=>{await fetch('/api/step',{metho
 document.querySelector('#step100').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":100}'});await refresh()};
 (async()=>{const names=['Carbon','Oxygen','Hydrogen','Water','Nitrogen','Phosphorus','Sulfur'];document.querySelector('#element').innerHTML=names.map(n=>'<option>'+n+'</option>').join('');await refresh();new ResizeObserver(resize).observe(canvas)})();
 </script></body></html>"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn laboratory_starts_empty_and_without_organisms() {
+        let lab = Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        let snapshot = lab.snapshot();
+        assert_eq!(snapshot.tick, 0);
+        assert_eq!(snapshot.material_count, 0);
+        assert_eq!(snapshot.organisms, 0);
+        assert!(snapshot.materials.is_empty());
+    }
+
+    #[test]
+    fn placed_elements_receive_stable_physical_identity() {
+        let mut lab = Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        let identity = lab.place_element("Carbon", 20.0, 30.0).expect("carbon placement");
+        assert_ne!(identity, 0);
+        let snapshot = lab.snapshot();
+        assert_eq!(snapshot.material_count, 1);
+        assert_eq!(snapshot.materials[0].identity, identity);
+        assert_eq!(snapshot.materials[0].parts, vec![("Carbon".to_string(), 1.0)]);
+    }
+
+    #[test]
+    fn laboratory_rejects_invalid_dimensions_and_out_of_bounds_placement() {
+        let mut invalid = LaboratoryConfig::default();
+        invalid.width = f64::NAN;
+        assert!(Laboratory::new(invalid).is_err());
+
+        let mut lab = Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        assert!(lab.place_element("Carbon", 100.0, 10.0).is_err());
+        assert!(lab.place_element("Unobtainium", 10.0, 10.0).is_err());
+    }
+
+    #[test]
+    fn laboratory_steps_the_shared_simulation_without_creating_an_organism() {
+        let mut lab = Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        lab.step(3).expect("three physics steps");
+        let snapshot = lab.snapshot();
+        assert_eq!(snapshot.tick, 3);
+        assert_eq!(snapshot.organisms, 0);
+    }
+}
