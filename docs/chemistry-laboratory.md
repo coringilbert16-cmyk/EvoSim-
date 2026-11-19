@@ -20,7 +20,8 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
 - Select and inspect individual molecules by tapping them; inspect stable identity, constituent composition, exact coordinates, rotations, and bond graph.
-- Observe bounded environmental reaction history, outcomes, work requirements, products, and molecular creation/parent lineage. History is collected from the shared engine's committed/rejected event records; no reaction is forced for display.
+- Observe bounded environmental reaction history, outcomes, work requirements, products, and molecular creation/parent lineage.
+- Inspect the authoritative energy-ledger counters for external input, usable/resonant/structural holdings, pair potential, work, heat, and world-tone unabsorbed/escaped energy. History is collected from the shared engine's committed/rejected event records; no reaction is forced for display.
 - Zoom with the mouse wheel/pinch and pan by dragging the field.
 - Export or import a reproducible experiment setup, including world dimensions, seed, flow/source settings, and all tick-zero element/molecule placements. Import rebuilds the initial state through the engine's normal geometry and validation path.
 
@@ -37,7 +38,7 @@ Molecule placement is validated by the existing `PhysicalMaterial::realized` geo
 - `POST /api/step` — step a bounded number of ticks. Body: `{"count":1}`.
 - `POST /api/flow` — change the live ambient field. Body: `{"direction_degrees":90,"speed":2,"strength":0.5,"vortex_strength":1}`. Direction is measured clockwise from right; speed is a multiplier, strength blends uniform flow (0) with the S-shaped field (1), and vortex strength ranges from 0 to 2.
 - `POST /api/sources` — enable or disable the established external sources. Body: `{"world_tone_enabled":true,"hotspot_enabled":true}`. Source capture is determined by existing physical material response and is settled through the authoritative energy ledger; enabling a source does not grant energy directly.
-- `GET /api/state` also returns the latest 2,000 reaction events in `reaction_history`, including source materials, work, outcomes, products, and lifecycle parent IDs.
+- `GET /api/state` also returns the latest 2,000 reaction events in `reaction_history`, including source materials, work, outcomes, products, and lifecycle parent IDs. The same response includes the current energy-ledger counters in `energy`.
 - `GET /api/experiment` — export the reproducible tick-zero setup document.
 - `POST /api/experiment` — validate and load a setup document. Invalid dimensions, placements, material names, or molecular geometry reject the entire import without replacing the current experiment.
 
