@@ -5130,10 +5130,13 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 sweep,
                 mut cuts,
             } => {
-                if sweep >= std::f64::consts::TAU - 1e-10 {
-                    // Keep full-circle arc intervals split at the antipode,
-                    // matching the point-view visibility solver's stable
-                    // half-turn partition for circular boundaries.
+                if sweep >= std::f64::consts::TAU - 1e-10
+                    && cuts.len() > 2
+                    && !cuts.iter().any(|cut| (*cut - 0.5).abs() <= 1e-10)
+                {
+                    // Split a wrapped exposed arc at the antipode only when
+                    // intersections already partition this circle. An
+                    // isolated full circle remains one interval.
                     cuts.push(0.5);
                 }
                 cuts.sort_by(f64::total_cmp);
