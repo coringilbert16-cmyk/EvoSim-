@@ -2044,7 +2044,7 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn live_intra_organism_combine_invalidates_structure_derived_caches() {
+    fn dormant_fluid_fixture_cannot_enter_live_intra_organism_combine() {
         let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
         structure.bonds.clear();
 
