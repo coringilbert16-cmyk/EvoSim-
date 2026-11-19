@@ -2432,9 +2432,14 @@ fn environmental_movement_spatial_candidate_pairs(
     let mut candidates = Vec::new();
     for left_position in 0..x_order.len() {
         let a = x_order[left_position];
-        // |cross_energy| <= 2 * ||spectrum_a|| * ||spectrum_b||.
-        // strength_bound already includes each emitter's mass scale.
-        let maximum_pair_strength = 2.0 * emitters[a].strength_bound * maximum_strength_bound;
+        // Each of at most MAX_SPECTRAL_COMPONENTS components can match
+        // every component on the other emitter within the frequency tolerance.
+        // The L1/L2 bound therefore uses the maximum component count as a
+        // conservative multiplicity factor. strength_bound includes mass scale.
+        let maximum_pair_strength = 2.0
+            * MAX_SPECTRAL_COMPONENTS as f64
+            * emitters[a].strength_bound
+            * maximum_strength_bound;
         if !maximum_pair_strength.is_finite() {
             return None;
         }
