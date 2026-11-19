@@ -2079,14 +2079,14 @@ fn environmental_movement_emitter(
         && strength_bound.is_finite()
         && strength_bound >= 0.0)
         .then_some(EnvironmentalMovementEmitter {
-        x,
-        y,
-        strength_bound,
-        mass_scale,
-        spectrum,
-        phase_components,
-        phase_component_count,
-    })
+            x,
+            y,
+            strength_bound,
+            mass_scale,
+            spectrum,
+            phase_components,
+            phase_component_count,
+        })
 }
 
 /// Evaluate one symmetric radial pair contribution from cached material
@@ -2434,13 +2434,11 @@ fn environmental_movement_spatial_candidate_pairs(
         let a = x_order[left_position];
         // |cross_energy| <= 2 * ||spectrum_a|| * ||spectrum_b||.
         // strength_bound already includes each emitter's mass scale.
-        let maximum_pair_strength =
-            2.0 * emitters[a].strength_bound * maximum_strength_bound;
+        let maximum_pair_strength = 2.0 * emitters[a].strength_bound * maximum_strength_bound;
         if !maximum_pair_strength.is_finite() {
             return None;
         }
-        let maximum_distance =
-            (maximum_pair_strength / MIN_RESONANCE_PAIR_STRENGTH).sqrt() - 1.0;
+        let maximum_distance = (maximum_pair_strength / MIN_RESONANCE_PAIR_STRENGTH).sqrt() - 1.0;
         if !maximum_distance.is_finite() {
             return None;
         }
@@ -5315,14 +5313,12 @@ mod environmental_movement_parallel_tests {
 mod environmental_movement_spatial_candidate_tests {
     use super::{
         environmental_movement_displacements_from_spatial_candidate_pair_forces,
-        environmental_movement_pair_force,
-        environmental_movement_pair_support_radius,
+        environmental_movement_pair_force, environmental_movement_pair_support_radius,
         environmental_movement_parallel_spatial_candidate_pair_forces,
         environmental_movement_phase_components,
         environmental_movement_spatial_candidate_pair_forces,
         environmental_movement_spatial_candidate_pairs, EnvironmentalMovementEmitter,
-        ToneComponent, ToneSpectrum, MIN_RESONANCE_PAIR_DISPLACEMENT,
-        MIN_RESONANCE_PAIR_STRENGTH,
+        ToneComponent, ToneSpectrum, MIN_RESONANCE_PAIR_DISPLACEMENT, MIN_RESONANCE_PAIR_STRENGTH,
     };
 
     fn emitter(x: f64, y: f64, amplitude: f64, phase: f64) -> EnvironmentalMovementEmitter {
@@ -5348,8 +5344,8 @@ mod environmental_movement_spatial_candidate_tests {
 
     #[test]
     fn cutoff_is_derived_from_the_configured_minimum_pair_displacement() {
-        let expected_strength = MIN_RESONANCE_PAIR_DISPLACEMENT
-            / (0.1 * (1.0 - MIN_RESONANCE_PAIR_DISPLACEMENT));
+        let expected_strength =
+            MIN_RESONANCE_PAIR_DISPLACEMENT / (0.1 * (1.0 - MIN_RESONANCE_PAIR_DISPLACEMENT));
         assert!((MIN_RESONANCE_PAIR_STRENGTH - expected_strength).abs() < 1e-12);
 
         let a = emitter(0.0, 0.0, 0.5, 0.0);
@@ -5375,8 +5371,7 @@ mod environmental_movement_spatial_candidate_tests {
             for b in (a + 1)..emitters.len() {
                 let reach =
                     environmental_movement_pair_support_radius(&emitters[a], &emitters[b]).unwrap();
-                let distance =
-                    (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
+                let distance = (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
                 if reach >= 0.0 && distance <= reach {
                     expected.push((a, b));
                 }
@@ -5401,8 +5396,7 @@ mod environmental_movement_spatial_candidate_tests {
             for b in (a + 1)..emitters.len() {
                 let reach =
                     environmental_movement_pair_support_radius(&emitters[a], &emitters[b]).unwrap();
-                let distance =
-                    (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
+                let distance = (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
                 if reach >= 0.0 && distance <= reach {
                     expected.push((a, b));
                 }
@@ -5439,8 +5433,7 @@ mod environmental_movement_spatial_candidate_tests {
         for a in 0..emitters.len() {
             for b in (a + 1)..emitters.len() {
                 let reach =
-                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b])
-                        .unwrap();
+                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b]).unwrap();
                 let dx = emitters[b].x - emitters[a].x;
                 let dy = emitters[b].y - emitters[a].y;
                 let distance = dx.hypot(dy);
