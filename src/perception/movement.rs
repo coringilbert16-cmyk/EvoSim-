@@ -1008,11 +1008,11 @@ mod tests {
         state
     }
 
-    fn realized_water_boundary_unit(
+    fn realized_legacy_fluid_boundary_unit(
         catalog: &[crate::resources::BaseResource],
         placement: Placement,
     ) -> crate::structure::StructuralUnit {
-        let mut water = crate::structure::StructuralUnit::new("Water", placement);
+        let mut water = crate::structure::StructuralUnit::new("LegacyFluidFixture", placement);
         let half_width = 1.0;
         let half_height = 0.125;
         let shape = crate::resources::Shape {
@@ -1030,7 +1030,7 @@ mod tests {
         };
         assert!(
             water.realize_fluid_geometry(shape, catalog),
-            "test Water must have an explicit, area-conserving fluid boundary"
+            "test fluid must have an explicit, area-conserving fluid boundary"
         );
         water
     }
@@ -1038,8 +1038,9 @@ mod tests {
     #[test]
     fn fluid_boundary_is_contact_geometry_without_becoming_a_wall() {
         let simulation = Simulation::new(42, 1.0);
-        let environment = simulation.environment.clone();
-        let water_unit = realized_water_boundary_unit(
+        let mut environment = simulation.environment.clone();
+        environment.catalog = crate::resources::legacy_fluid_test_catalog();
+        let fluid_unit = realized_legacy_fluid_boundary_unit(
             &environment.catalog,
             Placement {
                 x: 10.0,
@@ -1047,7 +1048,7 @@ mod tests {
                 rotation_radians: 0.0,
             },
         );
-        let water = water_unit.shape(&environment.catalog).expect("water shape");
+        let water = fluid_unit.shape(&environment.catalog).expect("legacy fluid shape");
         let boundary_vertex = match &water.form {
             crate::resources::Form::Fluid {
                 boundary: Some(vertices),
@@ -1056,13 +1057,13 @@ mod tests {
                 .get(1)
                 .copied()
                 .expect("water boundary should have a right-side vertex"),
-            _ => panic!("test Water must retain its realized boundary geometry"),
+            _ => panic!("test fluid must retain its realized boundary geometry"),
         };
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: water_unit.placement.x + boundary_vertex.0,
-                y: water_unit.placement.y + boundary_vertex.1,
+                x: fluid_unit.placement.x + boundary_vertex.0,
+                y: fluid_unit.placement.y + boundary_vertex.1,
                 rotation_radians: 0.0,
             }],
             &environment.catalog,
@@ -1072,18 +1073,18 @@ mod tests {
             .into_iter()
             .next()
             .expect("carbon geometry");
-        let water_part = PlacedMaterialPart {
+        let fluid_part = PlacedMaterialPart {
             part_index: 0,
             form: water.form.clone(),
-            placement: water_unit.placement,
+            placement: fluid_unit.placement,
         };
         assert!(crate::material_geometry::placed_forms_boundary_contact(
-            &water_part,
+            &fluid_part,
             &carbon_part,
             0.0
         ));
         assert!(!crate::material_geometry::placed_forms_penetrate(
-            &water_part,
+            &fluid_part,
             &carbon_part,
             0.0
         ));
