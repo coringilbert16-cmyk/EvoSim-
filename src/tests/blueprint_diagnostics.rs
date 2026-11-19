@@ -145,7 +145,7 @@ mod tests {
             .find(|r| r.name == "LegacyFluidFixture")
             .unwrap();
         let Form::Circle { radius } = fluid.shape.form else {
-            panic!("water diagnostic requires circular default geometry")
+            panic!("fluid diagnostic requires circular default geometry")
         };
         let d = 2.0 * radius;
         let h = d * (3.0_f64).sqrt() / 2.0;
