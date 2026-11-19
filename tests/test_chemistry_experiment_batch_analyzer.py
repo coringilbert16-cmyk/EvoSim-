@@ -6,7 +6,7 @@ from pathlib import Path
 from tools.chemistry_experiment_batch_analyzer import ACTIVE_ELEMENTS, build_report
 
 
-def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
+def write_run(root: Path, seed: int) -> None:
     chemistry = {
         "input": {
             "seed": seed,
@@ -18,8 +18,8 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
             "initial_constituent_count": 1360,
         },
         "resource_coverage": {
-            "excluded_resources": ["Water"] if water_excluded else [],
-            "required_resources": list(ACTIVE_ELEMENTS) if water_excluded else [*ACTIVE_ELEMENTS, "Water"],
+            "excluded_resources": [],
+            "required_resources": list(ACTIVE_ELEMENTS),
             "all_required_present_at_start": True,
             "snapshots_missing_resources": [],
         },
@@ -126,7 +126,7 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
     def test_rejects_water_in_the_active_chemistry_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            write_run(root, 42, water_excluded=False)
+            write_run(root, 42, six_elements_only=False)
             with self.assertRaisesRegex(ValueError, "exclude Water"):
                 build_report(root, [42], 300)
 
