@@ -261,6 +261,8 @@ impl Laboratory {
             .collect();
         LaboratorySnapshot {
             tick: self.simulation.tick,
+            running: self.simulation.running,
+            resources: self.simulation.environment.catalog.iter().map(|resource| resource.name.clone()).collect(),
             width: self.config.width,
             height: self.config.height,
             material_count: self
@@ -282,6 +284,8 @@ impl Laboratory {
 #[derive(Serialize)]
 pub struct LaboratorySnapshot {
     pub tick: u64,
+    pub running: bool,
+    pub resources: Vec<String>,
     pub width: f64,
     pub height: f64,
     pub material_count: usize,
@@ -452,7 +456,7 @@ const INDEX_HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="
 const canvas=document.querySelector('#world'),ctx=canvas.getContext('2d');let state=null;const palette={Carbon:'#9aa5ae',Oxygen:'#e04444',Hydrogen:'#dce8ee',Water:'#328ed0',Nitrogen:'#9b7045',Phosphorus:'#e3a34c',Sulfur:'#e2d34b'};
 function resize(){const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;draw()}
 function draw(){if(!state)return;const sx=canvas.width/state.width,sy=canvas.height/state.height;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle='#17465d';ctx.lineWidth=1;for(let x=0;x<=state.width;x+=10){ctx.beginPath();ctx.moveTo(x*sx,0);ctx.lineTo(x*sx,canvas.height);ctx.stroke()}for(let y=0;y<=state.height;y+=10){ctx.beginPath();ctx.moveTo(0,y*sy);ctx.lineTo(canvas.width,y*sy);ctx.stroke()}for(const m of state.materials){ctx.strokeStyle='#a7d8ed';ctx.lineWidth=Math.max(1,Math.min(sx,sy)*.12);for(const bond of m.bonds){const a=m.placements[bond[0]],b=m.placements[bond[1]];if(!a||!b)continue;ctx.beginPath();ctx.moveTo(a[0]*sx,a[1]*sy);ctx.lineTo(b[0]*sx,b[1]*sy);ctx.stroke()}for(let i=0;i<m.parts.length;i++){const p=m.placements[i];if(!p)continue;ctx.beginPath();ctx.arc(p[0]*sx,p[1]*sy,Math.max(3,Math.min(sx,sy)*.65),0,Math.PI*2);ctx.fillStyle=palette[m.parts[i][0]]||'#ddd';ctx.fill();ctx.strokeStyle='#071521';ctx.stroke()}}}
-async function refresh(){state=await(await fetch('/api/state')).json();document.querySelector('#summary').textContent='Tick: '+state.tick+' · Materials: '+state.material_count+' · Organisms: '+state.organisms;document.querySelector('#materials').textContent=state.materials.map(m=>'#'+m.identity+' '+m.parts.map(p=>p[0]).join('–')+' · bonds '+m.bond_count).join('\n')||'No materials placed';document.querySelector('#status').textContent='Ready';draw()}
+async function refresh(){state=await(await fetch('/api/state')).json();document.querySelector('#summary').textContent='Tick: '+state.tick+' · '+(state.running?'Running':'Paused')+' · Materials: '+state.material_count+' · Organisms: '+state.organisms;document.querySelector('#materials').textContent=state.materials.map(m=>'#'+m.identity+' '+m.parts.map(p=>p[0]).join('–')+' · bonds '+m.bond_count).join('\n')||'No materials placed';document.querySelector('#status').textContent='Ready';draw()}
 canvas.addEventListener('click',async e=>{const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*state.width,y=(e.clientY-r.top)/r.height*state.height;const response=await fetch('/api/place',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({resource:document.querySelector('#element').value,x,y})});if(!response.ok){document.querySelector('#status').textContent=await response.text();return}await refresh()});
 document.querySelector('#placeMolecule').onclick=async()=>{try{const payload=JSON.parse(document.querySelector('#molecule').value);const response=await fetch('/api/molecule',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});if(!response.ok){document.querySelector('#status').textContent=await response.text();return}await refresh()}catch(error){document.querySelector('#status').textContent='Invalid molecule JSON: '+error.message}};
 document.querySelector('#reset').onclick=async()=>{const payload={width:Number(document.querySelector('#width').value),height:Number(document.querySelector('#height').value),cell_size:5,ticks_per_second:20,seed:Number(document.querySelector('#seed').value)};const response=await fetch('/api/reset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});if(!response.ok){document.querySelector('#status').textContent=await response.text();return}await refresh()};
@@ -460,7 +464,7 @@ document.querySelector('#run').onclick=async()=>{await fetch('/api/run',{method:
 document.querySelector('#pause').onclick=async()=>{await fetch('/api/pause',{method:'POST'});await refresh()};
 document.querySelector('#step').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":1}'});await refresh()};
 document.querySelector('#step100').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":100}'});await refresh()};
-(async()=>{const names=['Carbon','Oxygen','Hydrogen','Water','Nitrogen','Phosphorus','Sulfur'];document.querySelector('#element').innerHTML=names.map(n=>'<option>'+n+'</option>').join('');await refresh();new ResizeObserver(resize).observe(canvas)})();
+(async()=>{await refresh();document.querySelector('#element').innerHTML=state.resources.map(n=>'<option>'+n+'</option>').join('');new ResizeObserver(resize).observe(canvas)})();
 </script></body></html>"#;
 
 #[cfg(test)]
