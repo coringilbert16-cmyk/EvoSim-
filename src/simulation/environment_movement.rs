@@ -103,7 +103,9 @@ mod tests {
             .expect("carbon should be a valid realized material")
         };
         assert!(field.deposit_physical(40.0, 50.0, make_carbon(40.0), &catalog));
-        assert!(field.deposit_physical(50.0, 50.0, make_carbon(50.0), &catalog));
+        // Carbon has a unit physical radius; 2.5 units of center separation
+        // lies within the source-specific one-radius aura support.
+        assert!(field.deposit_physical(42.5, 50.0, make_carbon(42.5), &catalog));
         field.assign_missing_material_identities();
 
         let before = field
