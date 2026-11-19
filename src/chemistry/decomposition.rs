@@ -196,7 +196,7 @@ mod tests {
             .unwrap();
         let unit_area = match &legacy_fluid_resource.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default fluid shape should have a measurable area"),
         };
         let merged_area = 2.0 * unit_area;
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
