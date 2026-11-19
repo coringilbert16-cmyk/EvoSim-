@@ -1047,7 +1047,6 @@ pub fn solve_collinear_multi_contact_formation(
     catalog: &[BaseResource],
 ) -> Option<GeometryFluidFormation> {
     if !validate_formation(parent, catalog)
-        || fluid_resource.name != "Water"
         || fluid_resource.physical_state != crate::resources::PhysicalState::Fluid
         || constraints.len() < 2
         || constraints.len() != ordered_segments.len()
@@ -1205,8 +1204,7 @@ pub fn generate_collinear_multi_contact_formations(
     fluid_resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<GeometryFluidFormation> {
-    if fluid_resource.name != "Water"
-        || fluid_resource.physical_state != crate::resources::PhysicalState::Fluid
+    if fluid_resource.physical_state != crate::resources::PhysicalState::Fluid
         || !validate_formation(parent, catalog)
     {
         return Vec::new();
