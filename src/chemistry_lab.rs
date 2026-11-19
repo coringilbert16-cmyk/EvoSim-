@@ -66,6 +66,7 @@ impl LaboratoryConfig {
 pub struct Laboratory {
     pub config: LaboratoryConfig,
     simulation: Simulation,
+    run_generation: u64,
 }
 
 impl Laboratory {
@@ -105,7 +106,11 @@ impl Laboratory {
             record_local_resonance_diagnostics: false,
             record_environmental_molecular_history: true,
         };
-        Ok(Self { config, simulation })
+        Ok(Self {
+            config,
+            simulation,
+            run_generation: 0,
+        })
     }
 
     pub fn place_element(&mut self, resource: &str, x: f64, y: f64) -> Result<u64, &'static str> {
@@ -366,29 +371,34 @@ async fn molecule(
 }
 
 async fn start(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
-    let should_start = {
+    let generation = {
         let mut laboratory = state.0.lock().await;
         if laboratory.simulation.running {
-            false
+            None
         } else {
             laboratory.simulation.running = true;
-            true
+            laboratory.run_generation = laboratory.run_generation.wrapping_add(1);
+            Some(laboratory.run_generation)
         }
     };
-    if should_start {
+    if let Some(generation) = generation {
         let shared = state.0.clone();
         tokio::spawn(async move {
             loop {
                 let interval = {
                     let laboratory = shared.lock().await;
-                    if !laboratory.simulation.running {
+                    if !laboratory.simulation.running
+                        || laboratory.run_generation != generation
+                    {
                         break;
                     }
                     std::time::Duration::from_secs_f64(1.0 / laboratory.config.ticks_per_second)
                 };
                 tokio::time::sleep(interval).await;
                 let mut laboratory = shared.lock().await;
-                if !laboratory.simulation.running {
+                if !laboratory.simulation.running
+                    || laboratory.run_generation != generation
+                {
                     break;
                 }
                 laboratory.simulation.step();
@@ -401,6 +411,7 @@ async fn start(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
 async fn pause(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
     let mut laboratory = state.0.lock().await;
     laboratory.simulation.running = false;
+    laboratory.run_generation = laboratory.run_generation.wrapping_add(1);
     Json(laboratory.snapshot())
 }
 
