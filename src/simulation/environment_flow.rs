@@ -897,13 +897,8 @@ mod tests {
 
     #[test]
     fn direction_rotates_the_complete_curved_and_vortex_field() {
-        let base = background_velocity_with_config(
-            23.0,
-            31.0,
-            100.0,
-            80.0,
-            FlowFieldConfig::default(),
-        );
+        let base =
+            background_velocity_with_config(23.0, 31.0, 100.0, 80.0, FlowFieldConfig::default());
         let rotated = background_velocity_with_config(
             23.0,
             31.0,
