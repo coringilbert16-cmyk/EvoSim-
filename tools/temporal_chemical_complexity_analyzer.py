@@ -151,17 +151,18 @@ def strongly_connected_components(nodes: set[str], edges: set[tuple[str, str]]) 
         if root in visited:
             continue
         visited.add(root)
-        stack: list[tuple[str, bool]] = [(root, False)]
+        stack = [(root, iter(adjacency.get(root, [])))]
         while stack:
-            node, expanded = stack.pop()
-            if expanded:
+            node, neighbors = stack[-1]
+            try:
+                neighbor = next(neighbors)
+            except StopIteration:
+                stack.pop()
                 finish_order.append(node)
                 continue
-            stack.append((node, True))
-            for neighbor in adjacency.get(node, []):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    stack.append((neighbor, False))
+            if neighbor not in visited:
+                visited.add(neighbor)
+                stack.append((neighbor, iter(adjacency.get(neighbor, []))))
     assigned: set[str] = set()
     result: list[list[str]] = []
     for root in reversed(finish_order):
