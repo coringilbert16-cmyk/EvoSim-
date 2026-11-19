@@ -128,7 +128,8 @@ impl LaboratoryConfig {
             return Err("world-tone source is invalid for these dimensions");
         }
         if self.hotspot_enabled
-            && crate::hotspot::RadialHotspot::right_bend_for_world(self.width, self.height).is_none()
+            && crate::hotspot::RadialHotspot::right_bend_for_world(self.width, self.height)
+                .is_none()
         {
             return Err("hotspot source is invalid for these dimensions");
         }
