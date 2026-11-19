@@ -65,5 +65,20 @@ class TemporalChemicalComplexityTests(unittest.TestCase):
         self.assertIn(["D"], components)
 
 
+    def test_large_network_scc_does_not_depend_on_recursion(self):
+        nodes = {str(index) for index in range(1500)}
+        edges = {(str(index), str(index + 1)) for index in range(1499)}
+        edges.add(("1499", "0"))
+        components = strongly_connected_components(nodes, edges)
+        self.assertEqual(len(components), 1)
+        self.assertEqual(len(components[0]), 1500)
+
+    def test_large_molecule_uses_bounded_diameter_estimate(self):
+        parts = [["C", 1] for _ in range(129)]
+        bonds = [{"part_a": index, "part_b": index + 1} for index in range(128)]
+        metrics = graph_metrics({"material": {"parts": parts, "internal_bonds": bonds}})
+        self.assertEqual(metrics["graph_diameter"], 128)
+        self.assertFalse(metrics["graph_diameter_exact"])
+
 if __name__ == "__main__":
     unittest.main()
