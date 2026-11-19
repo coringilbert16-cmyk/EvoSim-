@@ -157,6 +157,12 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 
 The project's design authority is **Master Technical Specification v2.4** (`EVOSIM-MASTER-2.4`, recall phrase “Master Spec 2.4”). This README is the repository's current implementation map and status record; it must reflect the specification and explicit later decisions, while dated handoffs remain historical evidence. If an implementation checkpoint and a design decision conflict, resolve the conflict explicitly rather than silently treating old notes as current.
 
+## Resonance field — approved architecture and roadmap
+
+The approved target is an independent, persistent, continuous-in-space, multi-frequency **wave-propagation field** with finite travel time, phase, interference, and energy-conserving coupling through exposed physical perimeters. It is not an instantaneous field redistribution or diffusion model. PR #377 and PR #378 are merged; the latter supplies shape-aware geometry, not a completed wave field. The existing resonance path remains authoritative until staged migration gates pass.
+
+**Required reference for every resonance-field task:** [Formal implementation roadmap](docs/design/resonance-field-implementation-roadmap.md). This roadmap defines the physics decisions, phases, invariants, test gates, standard benchmark, and the performance target (break-even after optimization; no physics shortcuts). The high-level architecture is in [resonance-field-architecture.md](docs/design/resonance-field-architecture.md).
+
 ## Environmental discovery experiments — PR #335
 
 This section records the measured outcomes of the isolated environmental-discovery research extracted from PR #321. These experiments did not change production reaction execution. BREAK, COMBINE, and DISPLACEMENT remain on their original sequential paths.
