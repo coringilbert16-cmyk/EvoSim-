@@ -524,7 +524,7 @@ impl Laboratory {
             .flat_map(|cell| cell.physical_materials.iter())
             .map(|material| {
                 let shapes = (0..material.material.parts.len())
-                    .filter_map(|part_index| {
+                    .map(|part_index| {
                         material
                             .realized_shape_for_part(
                                 part_index,
@@ -778,7 +778,7 @@ pub struct MaterialSnapshot {
     pub parts: Vec<(String, f64)>,
     pub placements: Vec<[f64; 3]>,
     /// Authoritative realized shape for each constituent, serialized from the engine.
-    pub shapes: Vec<crate::resources::Form>,
+    pub shapes: Vec<Option<crate::resources::Form>>,
     pub bond_count: usize,
     pub bonds: Vec<[usize; 2]>,
 }
@@ -1000,8 +1000,10 @@ function drawPart(form,x,y,rotation,color,selected){
  else if(kind==='RegularPolygon'){const n=Math.max(3,data.sides|0);for(let i=0;i<n;i++){const a=i*Math.PI*2/n;const px=Math.cos(a)*data.radius,py=Math.sin(a)*data.radius;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath()}
  else if(kind==='Polygon'){const v=data.vertices||[];v.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()}
  else if(kind==='Fluid'){
-   const v=data.boundary;
+   const v=data.boundary,arc=data.arc_boundary,multi=data.multi_contact_boundary;
    if(v&&v.length>=3){v.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()}
+   else if(arc){const sx=arc.center_x+arc.radius*Math.cos(arc.start_angle_radians),sy=arc.center_y+arc.radius*Math.sin(arc.start_angle_radians);ctx.moveTo(sx,sy);ctx.arc(arc.center_x,arc.center_y,arc.radius,arc.start_angle_radians,arc.start_angle_radians+arc.sweep_radians,arc.sweep_radians<0);ctx.closePath()}
+   else if(multi?.pieces?.length){const pieces=multi.pieces;let started=false;for(const piece of pieces){const key=Object.keys(piece)[0],p=piece[key];if(key==='SolidContact'){if(!started){ctx.moveTo(p.start_x,p.start_y);started=true}ctx.lineTo(p.end_x,p.end_y)}else if(key==='FreeArc'){const a=p,sx=a.center_x+a.radius*Math.cos(a.start_angle_radians),sy=a.center_y+a.radius*Math.sin(a.start_angle_radians);if(!started){ctx.moveTo(sx,sy);started=true}ctx.arc(a.center_x,a.center_y,a.radius,a.start_angle_radians,a.start_angle_radians+a.sweep_radians,a.sweep_radians<0)}}ctx.closePath()}
    else {const radius=Math.sqrt(Math.max(data.nominal_area||1,.001)/Math.PI);ctx.arc(0,0,radius,0,Math.PI*2)}
  } else {ctx.restore();return}
  if(fill){ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#071521';ctx.lineWidth=.09;ctx.stroke()}
