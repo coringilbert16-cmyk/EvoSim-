@@ -1177,7 +1177,21 @@ fn environmental_material_resonance(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<(f64, f64, f64, ToneSpectrum)> {
-    if !physical.material.is_valid() || physical.material.is_empty() {
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    environmental_material_resonance_with_baselines(physical, catalog, tick, baselines)
+        .map(|(x, y, extent, spectrum, _)| (x, y, extent, spectrum))
+}
+
+/// Movement prepares catalog-wide baselines once per tick and reuses them for
+/// every material. Return the already-computed mass as well so emitter setup
+/// does not traverse the material composition a second time.
+fn environmental_material_resonance_with_baselines(
+    physical: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    baselines: ResourceBaselines,
+) -> Option<(f64, f64, f64, ToneSpectrum, f64)> {
+    if !physical.material.is_valid_for_catalog(catalog) || physical.material.is_empty() {
         return None;
     }
     let placements = physical.placements.as_ref()?;
@@ -1195,9 +1209,9 @@ fn environmental_material_resonance(
     source_x /= count;
     source_y /= count;
 
-    let baselines = ResourceBaselines::from_catalog(catalog);
+    let properties = physical.material.weighted_properties_after_catalog_validation(catalog);
     let spectrum = material_response(
-        physical.material.weighted_properties(catalog),
+        properties,
         baselines,
         phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
     );
@@ -1205,7 +1219,7 @@ fn environmental_material_resonance(
         .iter()
         .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
         .fold(0.0_f64, f64::max);
-    Some((source_x, source_y, extent, spectrum))
+    Some((source_x, source_y, extent, spectrum, properties.mass))
 }
 
 /// Calculate one directional environmental contribution at one realized
@@ -2076,11 +2090,20 @@ fn environmental_movement_emitter(
     baseline_mass: f64,
     tick: u64,
 ) -> Option<EnvironmentalMovementEmitter> {
-    let (x, y, _, spectrum) = environmental_material_resonance(physical, catalog, tick)?;
+    let (x, y, _, spectrum, material_mass) =
+        environmental_material_resonance_with_baselines(
+            physical,
+            catalog,
+            tick,
+            ResourceBaselines {
+                mass: baseline_mass,
+                ..ResourceBaselines::from_catalog(catalog)
+            },
+        )?;
     let source_radius = environmental_material_source_radius(physical, catalog, x, y)?;
     let (phase_components, phase_component_count) =
         environmental_movement_phase_components(&spectrum)?;
-    let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baseline_mass);
+    let mass_scale = environmental_mass_scale(material_mass, baseline_mass);
     (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
         x,
         y,
@@ -2430,18 +2453,20 @@ fn environmental_movement_spatial_candidate_pairs(
             .then_with(|| left.cmp(right))
     });
 
-    // No pair can be farther apart in x than three times the largest material
-    // radius under the source-specific one-radius aura bound.
-    let global_x_bound = 3.0 * maximum_radius;
-    if !global_x_bound.is_finite() {
-        return None;
-    }
     let mut candidates = Vec::new();
     for left_position in 0..x_order.len() {
         let a = x_order[left_position];
+        // For any later emitter b, its radius cannot exceed maximum_radius.
+        // Therefore max(2*Ra + Rb, 2*Rb + Ra) is bounded by
+        // 2*maximum_radius + Ra. This tighter per-source sweep limit avoids
+        // scanning the full global 3*maximum_radius window for small sources.
+        let source_x_bound = 2.0 * maximum_radius + emitters[a].source_radius;
+        if !source_x_bound.is_finite() {
+            return None;
+        }
         for &b in &x_order[left_position + 1..] {
             let dx = emitters[b].x - emitters[a].x;
-            if dx > global_x_bound {
+            if dx > source_x_bound {
                 break;
             }
             let reach = environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
