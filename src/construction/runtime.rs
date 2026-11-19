@@ -2243,19 +2243,19 @@ mod tests {
         use crate::structure::{Bond, BondEndpoint, StructuralUnit};
 
         let mut catalog = crate::resources::default_catalog();
-        let water = resource(&catalog, "Water").unwrap().clone();
+        let water = resource(&catalog, "LegacyFluidFixture").unwrap().clone();
         let carbon = resource(&catalog, "Carbon").unwrap().clone();
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water must expose a conserved fluid area"),
+            _ => panic!("legacy fluid must expose a conserved fluid area"),
         };
         let family = crate::capillary_geometry::solve_water_against_solid(
             area,
             water.properties.cohesion,
             carbon.properties.cohesion,
         )
-        .expect("default Water and Carbon should have an equilibrium contact family");
+        .expect("default legacy fluid and Carbon should have an equilibrium contact family");
         let wall_length = family.contact_length * 0.5;
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
@@ -2311,7 +2311,7 @@ mod tests {
         let record = generated
             .into_iter()
             .find(|candidate| candidate.contact_constraints.len() == 2)
-            .expect("two-piece parent should yield a two-contact Water record");
+            .expect("two-piece parent should yield a two-contact legacy fluid record");
         // The fluid's origin is offset from the rigid parent's center by its
         // solved contact geometry. Compute both valid bulge orientations in
         // canonical coordinates, then transform them into the live frame.
@@ -2399,7 +2399,7 @@ mod tests {
         // transaction used by construction. The pre-existing rigid bond is
         // retained, while both fluid-to-rigid contacts must commit together.
         let water_material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2525,7 +2525,7 @@ mod tests {
             },
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2716,7 +2716,7 @@ mod tests {
             },
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2992,7 +2992,7 @@ mod tests {
             },
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
