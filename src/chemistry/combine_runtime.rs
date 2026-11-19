@@ -1950,10 +1950,16 @@ mod fluid_coalescence_transaction_tests {
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let mut upper =
-            StructuralUnit::from_material(Material::free_base("LegacyFluidFixture", 1.0), placement_a).unwrap();
-        let mut lower =
-            StructuralUnit::from_material(Material::free_base("LegacyFluidFixture", 1.0), placement_b).unwrap();
+        let mut upper = StructuralUnit::from_material(
+            Material::free_base("LegacyFluidFixture", 1.0),
+            placement_a,
+        )
+        .unwrap();
+        let mut lower = StructuralUnit::from_material(
+            Material::free_base("LegacyFluidFixture", 1.0),
+            placement_b,
+        )
+        .unwrap();
         assert!(upper.realize_fluid_geometry(semicircle_shape(radius, true), &catalog));
         assert!(lower.realize_fluid_geometry(semicircle_shape(radius, false), &catalog));
 
