@@ -2981,7 +2981,7 @@ mod tests {
         let catalog = default_catalog();
         let (mut source, old_bond, candidate, investment) =
             three_participant_fixture(&catalog);
-        let mut trial = build_displacement_trial(
+        let trial = build_displacement_trial(
             &source,
             0,
             1,
