@@ -108,12 +108,7 @@ impl Laboratory {
         Ok(Self { config, simulation })
     }
 
-    pub fn place_element(
-        &mut self,
-        resource: &str,
-        x: f64,
-        y: f64,
-    ) -> Result<u64, &'static str> {
+    pub fn place_element(&mut self, resource: &str, x: f64, y: f64) -> Result<u64, &'static str> {
         if !x.is_finite()
             || !y.is_finite()
             || x < 0.0
@@ -211,7 +206,9 @@ impl Laboratory {
             return Err("environment rejected material");
         }
         field.assign_missing_material_identities();
-        let index = field.index_for_position(x, y).ok_or("invalid destination")?;
+        let index = field
+            .index_for_position(x, y)
+            .ok_or("invalid destination")?;
         field.cells[index]
             .physical_materials
             .last()
@@ -253,10 +250,7 @@ impl Laboratory {
                         ]
                     })
                     .collect(),
-                bond_count: material
-                    .internal_connections
-                    .as_ref()
-                    .map_or(0, Vec::len),
+                bond_count: material.internal_connections.as_ref().map_or(0, Vec::len),
                 bonds: material
                     .material
                     .internal_bonds
@@ -449,9 +443,7 @@ pub async fn run() {
         .await
         .expect("lab listener binds");
     println!("EvoSim Chemical Laboratory: http://{address}");
-    axum::serve(listener, app)
-        .await
-        .expect("lab server failed");
+    axum::serve(listener, app).await.expect("lab server failed");
 }
 
 const INDEX_HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EvoSim Chemical Laboratory</title><style>
@@ -477,8 +469,7 @@ mod tests {
 
     #[test]
     fn laboratory_starts_empty_and_without_organisms() {
-        let laboratory =
-            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        let laboratory = Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
         let snapshot = laboratory.snapshot();
         assert_eq!(snapshot.tick, 0);
         assert_eq!(snapshot.material_count, 0);
@@ -512,9 +503,7 @@ mod tests {
         let mut laboratory =
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
         assert!(laboratory.place_element("Carbon", 100.0, 10.0).is_err());
-        assert!(laboratory
-            .place_element("Unobtainium", 10.0, 10.0)
-            .is_err());
+        assert!(laboratory.place_element("Unobtainium", 10.0, 10.0).is_err());
     }
 
     #[test]
