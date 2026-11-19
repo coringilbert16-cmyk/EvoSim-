@@ -869,9 +869,9 @@ mod integration_tests {
             crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
                 .expect("initial seed should expose accessible topology");
         assert!(!regions.is_empty());
-        assert!(catalog.iter().all(|resource| {
-            resource.physical_state == crate::resources::PhysicalState::Rigid
-        }));
+        assert!(catalog
+            .iter()
+            .all(|resource| { resource.physical_state == crate::resources::PhysicalState::Rigid }));
         assert!(structure.units.iter().all(|unit| {
             unit.material
                 .parts
