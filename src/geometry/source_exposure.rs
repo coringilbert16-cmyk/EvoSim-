@@ -4729,144 +4729,177 @@ mod linear_perimeter_energy_tests {
 /// would double-count internal boundaries. No receiver position or visibility
 /// query participates in this source-global result.
 #[allow(dead_code)] // Staged source-global perimeter; arrangement support follows.
+#[derive(Clone)]
+enum GlobalBoundaryPiece {
+    Segment { part_index: usize, unit_index: usize, start: (f64,f64), end: (f64,f64), normal: (f64,f64), cuts: Vec<f64> },
+    Arc { part_index: usize, unit_index: usize, center: (f64,f64), radius: f64, start: f64, sweep: f64, cuts: Vec<f64> },
+}
+
+fn angle_on_global_arc(angle: f64, start: f64, sweep: f64) -> Option<f64> {
+    let relative=(angle-start).rem_euclid(std::f64::consts::TAU);
+    (relative <= sweep + 1e-10).then_some((relative/sweep).clamp(0.0,1.0))
+}
+
+fn add_global_intersection_cuts(a: &mut GlobalBoundaryPiece, b: &mut GlobalBoundaryPiece) -> Option<()> {
+    match (a,b) {
+        (GlobalBoundaryPiece::Segment{part_index:pa,start:a0,end:a1,cuts:ca,..},
+         GlobalBoundaryPiece::Segment{part_index:pb,start:b0,end:b1,cuts:cb,..}) => {
+            if pa==pb { return Some(()); }
+            let r=(a1.0-a0.0,a1.1-a0.1); let s=(b1.0-b0.0,b1.1-b0.1);
+            let q=(b0.0-a0.0,b0.1-a0.1);
+            let cross=r.0*s.1-r.1*s.0;
+            let qcross=q.0*r.1-q.1*r.0;
+            if cross.abs()<=1e-12 {
+                if qcross.abs()<=1e-10 {
+                    let rr=r.0*r.0+r.1*r.1;
+                    let t0=(q.0*r.0+q.1*r.1)/rr;
+                    let t1=t0+(s.0*r.0+s.1*r.1)/rr;
+                    if t0.max(t1)>=0.0 && t0.min(t1)<=1.0 { return None; }
+                }
+                return Some(());
+            }
+            let t=(q.0*s.1-q.1*s.0)/cross;
+            let u=(q.0*r.1-q.1*r.0)/cross;
+            if (-1e-10..=1.0+1e-10).contains(&t) && (-1e-10..=1.0+1e-10).contains(&u) {
+                ca.push(t.clamp(0.0,1.0)); cb.push(u.clamp(0.0,1.0));
+            }
+        }
+        (GlobalBoundaryPiece::Segment{part_index:ps,start,end,cuts,..},
+         GlobalBoundaryPiece::Arc{part_index:pa,center,radius,start:arc_start,sweep,..}) |
+        (GlobalBoundaryPiece::Arc{part_index:pa,center,radius,start:arc_start,sweep,..},
+         GlobalBoundaryPiece::Segment{part_index:ps,start,end,cuts,..}) => {
+            if ps==pa { return Some(()); }
+            let dx=end.0-start.0; let dy=end.1-start.1;
+            let ox=start.0-center.0; let oy=start.1-center.1;
+            let aa=dx*dx+dy*dy;
+            let bb=2.0*(ox*dx+oy*dy);
+            let cc=ox*ox+oy*oy-radius*radius;
+            let disc=bb*bb-4.0*aa*cc;
+            if disc < -1e-10 { return Some(()); }
+            let root=disc.max(0.0).sqrt();
+            for t in [(-bb-root)/(2.0*aa),(-bb+root)/(2.0*aa)] {
+                if (-1e-10..=1.0+1e-10).contains(&t) {
+                    let point=(start.0+dx*t,start.1+dy*t);
+                    let angle=(point.1-center.1).atan2(point.0-center.0);
+                    if let Some(u)=angle_on_global_arc(angle,*arc_start,*sweep) {
+                        cuts.push(t.clamp(0.0,1.0));
+                        // The opposite primitive receives the same event below
+                        // after the match arm is normalized by variant.
+                        if let GlobalBoundaryPiece::Arc{cuts:arc_cuts,..}=if matches!(a,GlobalBoundaryPiece::Arc{..}) { a } else { b } {
+                            arc_cuts.push(u);
+                        }
+                    }
+                }
+                if disc.abs()<=1e-10 { break; }
+            }
+        }
+        (GlobalBoundaryPiece::Arc{part_index:pa,center:ca,radius:ra,start:sa,sweep:wa,cuts:xa},
+         GlobalBoundaryPiece::Arc{part_index:pb,center:cb,radius:rb,start:sb,sweep:wb,cuts:xb}) => {
+            if pa==pb { return Some(()); }
+            let dx=cb.0-ca.0; let dy=cb.1-ca.1; let d=dx.hypot(dy);
+            if d<=1e-12 && (ra-rb).abs()<=1e-10 { return None; }
+            if d>ra+rb+1e-10 || d<(ra-rb).abs()-1e-10 || d<=1e-12 { return Some(()); }
+            let along=(ra*ra-rb*rb+d*d)/(2.0*d);
+            let height2=ra*ra-along*along;
+            if height2 < -1e-10 { return Some(()); }
+            let height=height2.max(0.0).sqrt();
+            let base=(ca.0+along*dx/d,ca.1+along*dy/d);
+            for sign in [-1.0,1.0] {
+                let point=(base.0-sign*dy*height/d,base.1+sign*dx*height/d);
+                let aa=(point.1-ca.1).atan2(point.0-ca.0);
+                let ab=(point.1-cb.1).atan2(point.0-cb.0);
+                if let (Some(ta),Some(tb))=(angle_on_global_arc(aa,*sa,*wa),angle_on_global_arc(ab,*sb,*wb)) {
+                    xa.push(ta); xb.push(tb);
+                }
+                if height<=1e-10 { break; }
+            }
+        }
+    }
+    Some(())
+}
+
 pub(crate) fn disjoint_source_global_material_perimeter(
     body: &crate::organism_geometry::OrganismBodyGeometry,
     body_index: usize,
 ) -> Option<VisibleMaterialPerimeter> {
     use crate::resources::Form;
-
-    if body.parts.is_empty() {
-        return None;
-    }
-
-    let mut seen_units = Vec::with_capacity(body.parts.len());
-    let mut bounds = Vec::with_capacity(body.parts.len());
-    let mut straight = Vec::new();
-    let mut curved = Vec::new();
-
-    for part in &body.parts {
-        if seen_units.contains(&part.unit_index)
-            || !part.x.is_finite()
-            || !part.y.is_finite()
-            || !part.rotation_radians.is_finite()
-        {
-            return None;
-        }
-        seen_units.push(part.unit_index);
-
+    if body.parts.is_empty() { return None; }
+    let mut seen=Vec::new();
+    let mut pieces=Vec::<GlobalBoundaryPiece>::new();
+    for (part_index,part) in body.parts.iter().enumerate() {
+        if seen.contains(&part.unit_index) || !part.x.is_finite() || !part.y.is_finite() || !part.rotation_radians.is_finite() { return None; }
+        seen.push(part.unit_index);
         match &part.form {
-            Form::Circle { radius } => {
-                if !radius.is_finite() || *radius <= 0.0 {
-                    return None;
-                }
-                bounds.push((
-                    part.x - radius,
-                    part.x + radius,
-                    part.y - radius,
-                    part.y + radius,
-                ));
-                for arc in realized_circle_arcs(body_index, part)? {
-                    curved.push(ExposedCircularArcInterval {
-                        body_index,
-                        unit_index: part.unit_index,
-                        arc: crate::capillary_geometry::CircularArcBoundary {
-                            center_x: arc.center.0,
-                            center_y: arc.center.1,
-                            radius: arc.radius,
-                            start_angle_radians: arc.start,
-                            sweep_radians: arc.sweep,
-                        },
-                    });
+            Form::Circle{radius} => {
+                if !radius.is_finite() || *radius<=0.0 { return None; }
+                pieces.push(GlobalBoundaryPiece::Arc{part_index,unit_index:part.unit_index,center:(part.x,part.y),radius:*radius,start:0.0,sweep:std::f64::consts::TAU,cuts:vec![0.0,1.0]});
+            }
+            Form::Rectangle{..}|Form::RegularPolygon{..}|Form::Polygon{..} => {
+                let local=part.form.polygon_vertices()?;
+                if !polygon_is_convex(&local) { return None; }
+                let (sin,cos)=part.rotation_radians.sin_cos();
+                let vertices:Vec<_>=local.into_iter().map(|(x,y)|(part.x+x*cos-y*sin,part.y+x*sin+y*cos)).collect();
+                let area2:f64=vertices.iter().enumerate().map(|(i,&p)|{let q=vertices[(i+1)%vertices.len()];p.0*q.1-q.0*p.1}).sum();
+                if !area2.is_finite() || area2==0.0 { return None; }
+                let winding=area2.signum();
+                for i in 0..vertices.len() {
+                    let a=vertices[i]; let b=vertices[(i+1)%vertices.len()];
+                    let dx=b.0-a.0; let dy=b.1-a.1; let len=dx.hypot(dy);
+                    if !len.is_finite() || len<=0.0 { return None; }
+                    pieces.push(GlobalBoundaryPiece::Segment{part_index,unit_index:part.unit_index,start:a,end:b,normal:(winding*dy/len,-winding*dx/len),cuts:vec![0.0,1.0]});
                 }
             }
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-                let local = part.form.polygon_vertices()?;
-                if !polygon_is_convex(&local) {
-                    return None;
-                }
-                let (sin, cos) = part.rotation_radians.sin_cos();
-                let vertices: Vec<_> = local
-                    .into_iter()
-                    .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
-                    .collect();
-                if vertices
-                    .iter()
-                    .any(|(x, y)| !x.is_finite() || !y.is_finite())
-                {
-                    return None;
-                }
-                let min_x = vertices
-                    .iter()
-                    .map(|point| point.0)
-                    .fold(f64::INFINITY, f64::min);
-                let max_x = vertices
-                    .iter()
-                    .map(|point| point.0)
-                    .fold(f64::NEG_INFINITY, f64::max);
-                let min_y = vertices
-                    .iter()
-                    .map(|point| point.1)
-                    .fold(f64::INFINITY, f64::min);
-                let max_y = vertices
-                    .iter()
-                    .map(|point| point.1)
-                    .fold(f64::NEG_INFINITY, f64::max);
-                bounds.push((min_x, max_x, min_y, max_y));
-
-                let area2: f64 = vertices
-                    .iter()
-                    .enumerate()
-                    .map(|(index, &(x1, y1))| {
-                        let (x2, y2) = vertices[(index + 1) % vertices.len()];
-                        x1 * y2 - x2 * y1
-                    })
-                    .sum();
-                if !area2.is_finite() || area2 == 0.0 {
-                    return None;
-                }
-                let winding = area2.signum();
-                for index in 0..vertices.len() {
-                    let start = vertices[index];
-                    let end = vertices[(index + 1) % vertices.len()];
-                    let dx = end.0 - start.0;
-                    let dy = end.1 - start.1;
-                    let length = dx.hypot(dy);
-                    if !length.is_finite() || length == 0.0 {
-                        return None;
-                    }
-                    straight.push(ExposedBoundaryInterval {
-                        body_index,
-                        unit_index: part.unit_index,
-                        start,
-                        end,
-                        outward_normal: (winding * dy / length, -winding * dx / length),
-                    });
-                }
-            }
-            // A line has no enclosed material area. Fluid forms can contain
-            // polygon, chord/arc, or multi-contact boundaries and are deferred
-            // until those representations share the exact union arrangement.
-            Form::Line { .. } | Form::Fluid { .. } => return None,
+            // Fluid boundaries and zero-area line forms need their own exact
+            // multi-piece union rules. Keep them fail-closed rather than
+            // silently replacing them with circles or polygon samples.
+            Form::Line{..}|Form::Fluid{..} => return None,
         }
     }
-
-    // Without boundary intersections, disjoint bounds are a sufficient proof
-    // that constituent surfaces do not overlap. Treat touching bounds as
-    // ambiguous too: coincident contact edges must be split and deduplicated
-    // by the full arrangement implementation rather than counted twice.
-    for first in 0..bounds.len() {
-        for second in (first + 1)..bounds.len() {
-            let a = bounds[first];
-            let b = bounds[second];
-            if a.0 <= b.1 && b.0 <= a.1 && a.2 <= b.3 && b.2 <= a.3 {
-                return None;
+    for i in 0..pieces.len() {
+        for j in (i+1)..pieces.len() {
+            let (left,right)=pieces.split_at_mut(j);
+            add_global_intersection_cuts(&mut left[i],&mut right[0])?;
+        }
+    }
+    let mut straight=Vec::new(); let mut curved=Vec::new();
+    for piece in pieces {
+        match piece {
+            GlobalBoundaryPiece::Segment{part_index,unit_index,start,end,normal,cuts} => {
+                let part=&body.parts[part_index];
+                let mut cuts=cuts;
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a,b|(*a-*b).abs()<=1e-10);
+                for pair in cuts.windows(2) {
+                    let (t0,t1)=(pair[0],pair[1]);
+                    if t1-t0<=1e-12 { continue; }
+                    let mid=(t0+t1)*0.5;
+                    let point=(start.0+(end.0-start.0)*mid,start.1+(end.1-start.1)*mid);
+                    let hidden=body.parts.iter().enumerate().any(|(other_index,other)|other_index!=part_index && crate::organism_geometry::form_contains_point(&other.form,other.x,other.y,other.rotation_radians,point.0,point.1));
+                    if hidden { continue; }
+                    let at=|t:f64|(start.0+(end.0-start.0)*t,start.1+(end.1-start.1)*t);
+                    straight.push(ExposedBoundaryInterval{body_index,unit_index,start:at(t0),end:at(t1),outward_normal:normal});
+                }
+                let _=part;
+            }
+            GlobalBoundaryPiece::Arc{part_index,unit_index,center,radius,start,sweep,cuts} => {
+                let mut cuts=cuts;
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a,b|(*a-*b).abs()<=1e-10);
+                for pair in cuts.windows(2) {
+                    let (t0,t1)=(pair[0],pair[1]);
+                    if t1-t0<=1e-12 { continue; }
+                    let mid_angle=start+sweep*(t0+t1)*0.5;
+                    let point=(center.0+radius*mid_angle.cos(),center.1+radius*mid_angle.sin());
+                    let hidden=body.parts.iter().enumerate().any(|(other_index,other)|other_index!=part_index && crate::organism_geometry::form_contains_point(&other.form,other.x,other.y,other.rotation_radians,point.0,point.1));
+                    if hidden { continue; }
+                    curved.push(ExposedCircularArcInterval{body_index,unit_index,arc:crate::capillary_geometry::CircularArcBoundary{center_x:center.0,center_y:center.1,radius,start_angle_radians:(start+sweep*t0).rem_euclid(std::f64::consts::TAU),sweep_radians:sweep*(t1-t0)}});
+                }
             }
         }
     }
-
-    let perimeter = VisibleMaterialPerimeter { straight, curved };
-    visible_material_perimeter_length(&perimeter)?;
-    Some(perimeter)
+    let perimeter=VisibleMaterialPerimeter{straight,curved};
+    let length=visible_material_perimeter_length(&perimeter)?;
+    (length>0.0).then_some(perimeter)
 }
 
 #[cfg(test)]
@@ -4912,35 +4945,24 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-    fn source_global_perimeter_fails_closed_for_overlapping_or_touching_bounds() {
+    #[test]
+    fn source_global_perimeter_unions_overlapping_rectangle_and_circle_exactly() {
         let body = OrganismBodyGeometry {
             parts: vec![
-                PlacedForm {
-                    unit_index: 0,
-                    form: Form::Rectangle {
-                        width: 2.0,
-                        height: 2.0,
-                    },
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                PlacedForm {
-                    unit_index: 1,
-                    form: Form::Circle { radius: 1.0 },
-                    x: 2.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
+                PlacedForm { unit_index: 0, form: Form::Rectangle { width: 2.0, height: 2.0 }, x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                PlacedForm { unit_index: 1, form: Form::Circle { radius: 1.0 }, x: 2.0, y: 0.0, rotation_radians: 0.0 },
             ],
-            min_x: -1.0,
-            max_x: 3.0,
-            min_y: -1.0,
-            max_y: 1.0,
+            min_x: -1.0, max_x: 3.0, min_y: -1.0, max_y: 1.0,
         };
-        assert!(disjoint_source_global_material_perimeter(&body, 0).is_none());
+        let perimeter=disjoint_source_global_material_perimeter(&body,0).unwrap();
+        let length=visible_material_perimeter_length(&perimeter).unwrap();
+        // Shared interior half of the circle is hidden; its exposed arc is
+        // the right semicircle. The rectangle's right edge is internal.
+        let expected=6.0+std::f64::consts::PI;
+        assert!((length-expected).abs()<1e-9);
+        assert_eq!(perimeter.straight.len(),3);
+        assert_eq!(perimeter.curved.len(),1);
     }
-
     #[test]
     fn source_global_perimeter_rejects_unsupported_fluid_boundary_instead_of_approximating() {
         let body = OrganismBodyGeometry {
