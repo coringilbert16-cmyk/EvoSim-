@@ -1048,7 +1048,9 @@ mod tests {
                 rotation_radians: 0.0,
             },
         );
-        let fluid = fluid_unit.shape(&environment.catalog).expect("legacy fluid shape");
+        let fluid = fluid_unit
+            .shape(&environment.catalog)
+            .expect("legacy fluid shape");
         let boundary_vertex = match &fluid.form {
             crate::resources::Form::Fluid {
                 boundary: Some(vertices),
