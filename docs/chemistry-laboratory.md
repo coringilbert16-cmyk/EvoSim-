@@ -12,7 +12,7 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 
 ## Current workbench controls
 
-- Set world width and height, then reset the experiment.
+- Set world width and height, then reset the experiment. Grid allocation is bounded to one million cells to keep experimental setups manageable.
 - Set the deterministic random seed for a reset.
 - Configure ambient flow direction, speed, S-field strength, and local vortex intensity; changes apply immediately while paused or running, and the renderer displays the configured vector field.
 - Enable or disable the existing 440-cycle/day world tone and 880-cycle/day localized hotspot. Both are off by default and use the simulator's existing source settlement and energy ledger.
