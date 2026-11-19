@@ -208,7 +208,11 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
     rows.sort(key=lambda item: (item["created_tick"], item["molecule_id"]))
     tick_span = end_tick
     boundaries = [round(tick_span * index / windows) for index in range(windows + 1)]
-    family_first_seen: dict[str, int] = {}
+    # Initial inventory establishes the baseline; novelty counts only structures
+    # first produced by reactions after the experiment begins.
+    family_first_seen: dict[str, int] = {
+        row["fingerprint"]: 0 for row in rows if not row["is_product"]
+    }
     reaction_first_seen: dict[str, int] = {}
     transition_edges: set[tuple[str, str]] = set()
     transition_nodes: set[str] = set()
@@ -239,7 +243,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
     temporal_rows = []
     for index in range(windows):
         start, finish = boundaries[index], boundaries[index + 1]
-        created_here = [row for row in rows if start < row["created_tick"] <= finish or (index == 0 and row["created_tick"] == 0)]
+        created_here = [row for row in rows if row["is_product"] and start < row["created_tick"] <= finish]
         active = [row for row in rows if row["created_tick"] <= finish and
                   (row["destroyed_tick"] is None or row["destroyed_tick"] > finish)]
         new_families = 0
@@ -250,7 +254,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
             if fingerprint not in family_first_seen:
                 family_first_seen[fingerprint] = row["created_tick"]
                 new_families += 1
-            elif row["is_product"]:
+            else:
                 repeated_products += 1
         for event in events.values():
             if start < event["tick"] <= finish:
@@ -272,6 +276,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
             "end_tick_inclusive": finish,
             "created_molecule_identities": len(created_here),
             "created_reaction_products": len(product_rows),
+            "created_initial_identities": 0,
             "active_molecule_identities": len(active),
             "active_reaction_products": len(active_products),
             "new_structural_fingerprints": new_families,
