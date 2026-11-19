@@ -852,16 +852,10 @@ fn active_field_rejects_legacy_fluid_resources_and_materials() {
         &catalog,
     )
     .expect("legacy fluid fixture should remain geometrically realizable");
-    assert!(!field.deposit_physical_at_index(
-        destination,
-        fluid.clone(),
-        &catalog,
-    ));
-    assert!(!field.deposit_physical_batch(
-        vec![(10.0, 10.0, fluid)],
-        &catalog,
-    ));
-    assert!(field.cells.iter().all(|cell| {
-        cell.materials.is_empty() && cell.physical_materials.is_empty()
-    }));
+    assert!(!field.deposit_physical_at_index(destination, fluid.clone(), &catalog,));
+    assert!(!field.deposit_physical_batch(vec![(10.0, 10.0, fluid)], &catalog,));
+    assert!(field
+        .cells
+        .iter()
+        .all(|cell| { cell.materials.is_empty() && cell.physical_materials.is_empty() }));
 }
