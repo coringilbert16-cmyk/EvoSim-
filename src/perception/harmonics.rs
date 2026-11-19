@@ -1458,22 +1458,30 @@ fn material_aura_receptions_with_geometry(
         environmental_material_resonance(source, catalog, tick)?;
 
     let receiver_geometry = receiver_bodies.first()?;
-    // Receiver samples come from the receiver's own complete physical
-    // perimeter, independent of the source centroid. The union query removes
-    // internal constituent boundaries before any reception is evaluated.
-    let receiver_perimeter =
-        crate::source_exposure::disjoint_source_global_material_perimeter(receiver_geometry, 0)?;
+    // Select the emitting point from the actual source perimeter, nearest the
+    // receiver's world-space bounds center. The source is therefore not
+    // collapsed to its centroid or allowed to shadow its own emitted field.
+    let receiver_center = (
+        (receiver_geometry.min_x + receiver_geometry.max_x) * 0.5,
+        (receiver_geometry.min_y + receiver_geometry.max_y) * 0.5,
+    );
+    let source_surface = crate::source_exposure::nearest_visible_material_perimeter_point(
+        receiver_center,
+        std::slice::from_ref(source_geometry),
+        0,
+    )?;
+
+    // Partition the receiver's perimeter by exact line-of-sight visibility
+    // from that source-surface point. Blocker silhouettes and boundary
+    // intersections split straight and curved intervals before reception is
+    // evaluated; no whole-interval midpoint can discard a visible shoulder.
+    let receiver_perimeter = crate::source_exposure::visible_material_perimeter_from_point(
+        (source_surface.x, source_surface.y),
+        receiver_bodies,
+        0,
+    )?;
     let straight_intervals = receiver_perimeter.straight;
     let curved_intervals = receiver_perimeter.curved;
-
-    // Source geometry is the emitting body; remaining bodies are third-party
-    // occluders. The receiver itself is the query point and is not a blocker.
-    let mut source_bodies = Vec::with_capacity(receiver_bodies.len() + 1);
-    source_bodies.push(source_geometry.clone());
-    // The receiver is the viewpoint, not an intervening blocker: each
-    // query starts on its own exposed boundary. Keep only third-party bodies
-    // in the source-visibility occluder set.
-    source_bodies.extend(receiver_bodies.iter().skip(1).cloned());
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -1488,7 +1496,6 @@ fn material_aura_receptions_with_geometry(
                           normal_x: f64,
                           normal_y: f64,
                           projected_extent: f64,
-                          source_surface: crate::source_exposure::VisibleMaterialPerimeterPoint,
                           boundary: MaterialAuraBoundary| {
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
@@ -1533,13 +1540,6 @@ fn material_aura_receptions_with_geometry(
     for interval in straight_intervals {
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
         let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
-        let Some(source_surface) = crate::source_exposure::nearest_visible_material_perimeter_point(
-            (receiver_x, receiver_y),
-            &source_bodies,
-            0,
-        ) else {
-            continue;
-        };
         let projected_extent = crate::source_exposure::point_source_projected_extent(
             interval,
             (source_surface.x, source_surface.y),
@@ -1550,7 +1550,6 @@ fn material_aura_receptions_with_geometry(
             interval.outward_normal.0,
             interval.outward_normal.1,
             projected_extent,
-            source_surface,
             MaterialAuraBoundary::Straight {
                 start: interval.start,
                 end: interval.end,
@@ -1564,13 +1563,6 @@ fn material_aura_receptions_with_geometry(
         let (normal_y, normal_x) = midpoint_angle.sin_cos();
         let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
         let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
-        let Some(source_surface) = crate::source_exposure::nearest_visible_material_perimeter_point(
-            (receiver_x, receiver_y),
-            &source_bodies,
-            0,
-        ) else {
-            continue;
-        };
         let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
             interval.arc,
             (source_surface.x, source_surface.y),
@@ -1581,14 +1573,12 @@ fn material_aura_receptions_with_geometry(
             normal_x,
             normal_y,
             projected_extent,
-            source_surface,
             MaterialAuraBoundary::Arc(interval.arc),
         )?;
     }
 
     Some(receptions)
 }
-
 /// One tick-local emitter prepared for repeated chemistry-field queries.
 /// Source position, mass scaling, and emitted spectrum are shared by every
 /// candidate sample during the tick instead of being rebuilt per reaction.
