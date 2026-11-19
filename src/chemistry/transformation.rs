@@ -563,7 +563,7 @@ pub(crate) fn environmental_break_candidates(
             }
 
             let mut hypothetical = organism.structure.clone();
-            let Some(indices) = crate::material_restoration::restore_material(
+            let Some(indices) = crate::physical_material::restore_material(
                 &mut hypothetical,
                 instance,
                 crate::structure::Placement {
@@ -697,7 +697,7 @@ pub(crate) fn try_start_environmental_break(
         }
 
         let mut hypothetical = organism.structure.clone();
-        let indices = crate::material_restoration::restore_material(
+        let indices = crate::physical_material::restore_material(
             &mut hypothetical,
             &instance,
             Placement {
