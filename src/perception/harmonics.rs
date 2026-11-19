@@ -5400,9 +5400,9 @@ mod environmental_movement_spatial_candidate_tests {
             emitter(0.0, 0.0, 0.5, 0.0),
             emitter(reach + 1e-6, 0.0, 0.5, 0.0),
         ];
-        assert!(environmental_movement_spatial_candidate_pairs(&beyond_boundary)
-            .unwrap()
-            .is_empty());
+        let beyond_candidates =
+            environmental_movement_spatial_candidate_pairs(&beyond_boundary).unwrap();
+        assert!(beyond_candidates.is_empty());
     }
 
     #[test]
