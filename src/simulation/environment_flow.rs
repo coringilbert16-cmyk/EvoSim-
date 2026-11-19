@@ -47,6 +47,41 @@ impl Velocity {
 const FLOW_BIN_SIZE: f64 = 5.0;
 const FLOW_RESPONSE_SCALE: f64 = 0.30; // permanent 2× renderer-tested current
 
+/// Experiment-configurable ambient vector field. Strength blends a uniform
+/// directional current with the existing S-shaped field; vortex strength
+/// controls the two local recirculation zones independently.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct FlowFieldConfig {
+    pub direction_degrees: f64,
+    pub speed: f64,
+    pub strength: f64,
+    pub vortex_strength: f64,
+}
+
+impl Default for FlowFieldConfig {
+    fn default() -> Self {
+        Self {
+            direction_degrees: 0.0,
+            speed: 1.0,
+            strength: 1.0,
+            vortex_strength: 1.0,
+        }
+    }
+}
+
+impl FlowFieldConfig {
+    pub(crate) fn is_valid(self) -> bool {
+        self.direction_degrees.is_finite()
+            && (-360.0..=360.0).contains(&self.direction_degrees)
+            && self.speed.is_finite()
+            && (0.0..=10.0).contains(&self.speed)
+            && self.strength.is_finite()
+            && (0.0..=1.0).contains(&self.strength)
+            && self.vortex_strength.is_finite()
+            && (0.0..=2.0).contains(&self.vortex_strength)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
     source_cell: usize,
@@ -192,7 +227,21 @@ fn mobility(mass: f64) -> f64 {
 /// Smooth S-shaped background flow with outward speed falloff and two small
 /// vortices at the bends. The same query is used for every material type.
 fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
-    if ![x, y, width, height].iter().all(|v| v.is_finite()) || width <= 0.0 || height <= 0.0 {
+    background_velocity_with_config(x, y, width, height, FlowFieldConfig::default())
+}
+
+fn background_velocity_with_config(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    config: FlowFieldConfig,
+) -> Velocity {
+    if ![x, y, width, height].iter().all(|v| v.is_finite())
+        || width <= 0.0
+        || height <= 0.0
+        || !config.is_valid()
+    {
         return Velocity::default();
     }
     let phase = std::f64::consts::TAU * x / width;
@@ -202,10 +251,18 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     let width_scale = (height * 0.16).max(1.0);
     let envelope = (-0.5 * (vertical_delta / width_scale).powi(2)).exp();
     let tangent = Velocity { x: 1.0, y: slope }.normalized();
-    let mut velocity = tangent.scale(0.12 + 0.88 * envelope);
+    let curved = tangent.scale(0.12 + 0.88 * envelope);
+    let direction = config.direction_degrees.to_radians();
+    let uniform = Velocity {
+        x: direction.cos(),
+        y: direction.sin(),
+    };
+    let mut velocity = uniform
+        .scale(1.0 - config.strength)
+        .add(curved.scale(config.strength));
 
-    // Localized counter-flow is a real vector-field vortex, not an arbitrary
-    // per-particle reversal. Its sign alternates across the two S bends.
+    // Localized counter-flow remains a spatial vector-field feature. Its
+    // contribution can be tuned independently from the large-scale S bend.
     let vortex_radius = (height * 0.13).max(1.0);
     for (fraction, sign) in [(0.25, 1.0), (0.75, -1.0)] {
         let cx = width * fraction;
@@ -213,13 +270,17 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
         let dx = x - cx;
         let dy = (y - cy + height * 0.5).rem_euclid(height) - height * 0.5;
         let radial_sq = dx * dx + dy * dy;
-        let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 1.2;
+        let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp()
+            * sign
+            * 1.2
+            * config.vortex_strength
+            * config.strength;
         velocity = velocity.add(Velocity {
             x: -dy / vortex_radius * weight,
             y: dx / vortex_radius * weight,
         });
     }
-    velocity
+    velocity.scale(config.speed)
 }
 
 fn obstacle_adjusted_velocity(
@@ -610,6 +671,27 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     world_width: f64,
     world_height: f64,
 ) -> usize {
+    transport_field_with_config::<REUSE_SINGLETON_CENTER_VELOCITY>(
+        field,
+        catalog,
+        world_width,
+        world_height,
+        FlowFieldConfig::default(),
+    )
+}
+
+pub(crate) fn transport_field_with_config<
+    const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+>(
+    field: &mut ActiveMaterialField,
+    catalog: &[BaseResource],
+    world_width: f64,
+    world_height: f64,
+    flow_config: FlowFieldConfig,
+) -> usize {
+    if !flow_config.is_valid() {
+        return 0;
+    }
     let width = world_width.min(field.width_cells as f64 * field.cell_size);
     let height = world_height.min(field.height_cells as f64 * field.cell_size);
     if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
@@ -698,7 +780,7 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
         let velocity = obstacle_adjusted_velocity(
-            background_velocity(x, y, width, height),
+            background_velocity_with_config(x, y, width, height, flow_config),
             x,
             y,
             source_cell,
