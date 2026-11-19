@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn multi_contact_endpoint_resolution_preserves_exact_contact_point() {
         use crate::capillary_geometry::{
-            solve_water_against_collinear_contacts, CapillaryContactFamily,
+            solve_fluid_against_collinear_contacts, CapillaryContactFamily,
         };
 
         let area = 0.5;
@@ -317,7 +317,7 @@ mod tests {
             ((third, 0.0), (family.contact_length * 0.5, 0.0)),
         ];
         let boundary =
-            solve_water_against_collinear_contacts(area, family.contact_angle_radians, &segments)
+            solve_fluid_against_collinear_contacts(area, family.contact_angle_radians, &segments)
                 .unwrap();
         let point =
             boundary_point_at_multi_contact(&boundary, -family.contact_length * 0.25, 0.0).unwrap();
