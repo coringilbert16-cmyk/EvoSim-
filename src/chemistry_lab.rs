@@ -86,6 +86,7 @@ pub struct LaboratoryConfig {
     pub world_tone_enabled: bool,
     #[serde(default)]
     pub hotspot_enabled: bool,
+    pub reaction_history: Vec<ReactionEventSnapshot>,
 }
 
 impl Default for LaboratoryConfig {
@@ -142,6 +143,7 @@ pub struct Laboratory {
     simulation: Simulation,
     run_generation: u64,
     initial_placements: Vec<LaboratoryInitialPlacement>,
+    reaction_history: Vec<ReactionEventSnapshot>,
 }
 
 impl Laboratory {
@@ -212,7 +214,45 @@ impl Laboratory {
             simulation,
             run_generation: 0,
             initial_placements: Vec::new(),
+            reaction_history: Vec::new(),
         })
+    }
+
+    fn capture_current_tick_events(&mut self) {
+        for event in &self.simulation.environmental_chemistry_events {
+            self.reaction_history.push(ReactionEventSnapshot {
+                tick: event.tick,
+                reaction: event.reaction.clone(),
+                source_cells: event.source_cells.clone(),
+                source_materials: event.source_materials.clone(),
+                work_required: event.work_required,
+                reaction_frequency_hz: event.reaction_frequency_hz,
+                activation_signal: event.activation_signal,
+                accumulated_reaction: event.accumulated_reaction,
+                outcome: event.outcome.clone(),
+                failure_reason: event.failure_reason.clone(),
+                product_material: event.product_material.clone(),
+                product_internal_bond_count: event.product_internal_bond_count,
+                molecular_lifecycle: event
+                    .molecular_lifecycle
+                    .iter()
+                    .map(|lifecycle| MolecularLifecycleSnapshot {
+                        action: lifecycle.action.clone(),
+                        tick: lifecycle.tick,
+                        molecule_id: lifecycle.molecule_id,
+                        parent_ids: lifecycle.parent_ids.clone(),
+                        reaction_id: lifecycle.reaction_id.clone(),
+                        reaction: lifecycle.reaction.clone(),
+                        molecule: lifecycle.molecule.clone(),
+                    })
+                    .collect(),
+            });
+        }
+        const MAX_REACTION_HISTORY: usize = 2_000;
+        if self.reaction_history.len() > MAX_REACTION_HISTORY {
+            let excess = self.reaction_history.len() - MAX_REACTION_HISTORY;
+            self.reaction_history.drain(..excess);
+        }
     }
 
     pub fn document(&self) -> LaboratoryDocument {
@@ -462,6 +502,7 @@ impl Laboratory {
         }
         for _ in 0..count {
             self.simulation.step();
+            self.capture_current_tick_events();
         }
         Ok(())
     }
@@ -520,8 +561,37 @@ impl Laboratory {
             flow: self.config.flow,
             world_tone_enabled: self.config.world_tone_enabled,
             hotspot_enabled: self.config.hotspot_enabled,
+            reaction_history: self.reaction_history.clone(),
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ReactionEventSnapshot {
+    pub tick: u64,
+    pub reaction: String,
+    pub source_cells: Vec<usize>,
+    pub source_materials: Vec<Vec<(String, f64)>>,
+    pub work_required: f64,
+    pub reaction_frequency_hz: Option<f64>,
+    pub activation_signal: Option<f64>,
+    pub accumulated_reaction: Option<f64>,
+    pub outcome: String,
+    pub failure_reason: Option<String>,
+    pub product_material: Option<Vec<(String, f64)>>,
+    pub product_internal_bond_count: Option<usize>,
+    pub molecular_lifecycle: Vec<MolecularLifecycleSnapshot>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MolecularLifecycleSnapshot {
+    pub action: String,
+    pub tick: u64,
+    pub molecule_id: u64,
+    pub parent_ids: Vec<u64>,
+    pub reaction_id: String,
+    pub reaction: String,
+    pub molecule: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -689,7 +759,9 @@ async fn start(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
                 if !laboratory.simulation.running || laboratory.run_generation != generation {
                     break;
                 }
-                laboratory.simulation.step();
+                laboratory
+                    .step(1)
+                    .expect("one real-time laboratory tick must be valid");
             }
         });
     }
