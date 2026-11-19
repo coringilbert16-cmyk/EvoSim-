@@ -46,6 +46,20 @@ struct BondFormationRequest {
     investment: f64,
 }
 
+fn material_contains_only_rigid_resources(
+    material: &crate::resources::Material,
+    catalog: &[BaseResource],
+) -> bool {
+    material.parts.iter().all(|(name, _)| {
+        catalog
+            .iter()
+            .find(|resource| resource.name == *name)
+            .is_some_and(|resource| {
+                resource.physical_state == crate::resources::PhysicalState::Rigid
+            })
+    })
+}
+
 fn transient_fluid_pair(
     structure: &crate::structure::OrganismStructure,
     unit_a: usize,
@@ -797,7 +811,10 @@ pub(crate) fn try_combine_stored_unit(
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
     let raw = organism.stored_material.first_material()?;
-    if !raw.is_valid() || raw.is_empty() {
+    if !raw.is_valid()
+        || raw.is_empty()
+        || !material_contains_only_rigid_resources(&raw, &environment.catalog)
+    {
         return None;
     }
 
@@ -1522,6 +1539,13 @@ pub(crate) fn combine_specific_pair(
     if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
         return None;
     }
+    if !material_contains_only_rigid_resources(
+        &structure.units[unit_a].material,
+        catalog,
+    ) || !material_contains_only_rigid_resources(&structure.units[unit_b].material, catalog)
+    {
+        return None;
+    }
 
     // Bond direction is a biological choice. Try the requested orientation first,
     // then let the same physical pair form in the reverse orientation if the
@@ -1578,7 +1602,10 @@ fn try_combine_environmental(
             .map(|cell| cell.physical_materials.clone())
             .unwrap_or_default();
         for (material_index, instance) in physicals.into_iter().enumerate() {
-            if !instance.is_realized() || instance.material.is_empty() {
+            if !instance.is_realized()
+                || instance.material.is_empty()
+                || !material_contains_only_rigid_resources(&instance.material, &environment.catalog)
+            {
                 continue;
             }
             let mut hypothetical = organism.structure.clone();
