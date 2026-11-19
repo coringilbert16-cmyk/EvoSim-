@@ -74,9 +74,10 @@ def graph_metrics(molecule: Any) -> dict[str, Any]:
                 if neighbor not in seen:
                     seen.add(neighbor)
                     stack.append(neighbor)
-    diameter = 0
+    diameter = None
+    diameter_exact = False
     if n and components == 1:
-        for root in range(n):
+        def breadth_first_distances(root: int) -> dict[int, int]:
             distances = {root: 0}
             queue = [root]
             for current in queue:
@@ -84,14 +85,27 @@ def graph_metrics(molecule: Any) -> dict[str, Any]:
                     if neighbor not in distances:
                         distances[neighbor] = distances[current] + 1
                         queue.append(neighbor)
-            diameter = max(diameter, max(distances.values(), default=0))
+            return distances
+
+        if n <= 128:
+            diameter = max(
+                max(breadth_first_distances(root).values(), default=0)
+                for root in range(n)
+            )
+            diameter_exact = True
+        else:
+            first = breadth_first_distances(0)
+            farthest = max(first, key=first.get)
+            second = breadth_first_distances(farthest)
+            diameter = max(second.values(), default=0)
     return {
         "constituents": n,
         "bonds": len(edges),
         "max_degree": max(degrees, default=0),
         "branch_points": sum(degree >= 3 for degree in degrees),
         "connected_components": components,
-        "graph_diameter": diameter if n and components == 1 else None,
+        "graph_diameter": diameter,
+        "graph_diameter_exact": diameter_exact,
         "independent_cycles": max(0, len(edges) - n + components),
     }
 
@@ -125,41 +139,45 @@ def structural_fingerprint(molecule: Any, rounds: int | None = None) -> str:
 
 
 def strongly_connected_components(nodes: set[str], edges: set[tuple[str, str]]) -> list[list[str]]:
+    """Iterative Kosaraju SCC decomposition; avoids recursion limits on large networks."""
     adjacency: dict[str, list[str]] = {node: [] for node in nodes}
+    reverse: dict[str, list[str]] = {node: [] for node in nodes}
     for source, target in edges:
         adjacency.setdefault(source, []).append(target)
-    index = 0
-    stack: list[str] = []
-    on_stack: set[str] = set()
-    indices: dict[str, int] = {}
-    low: dict[str, int] = {}
+        reverse.setdefault(target, []).append(source)
+    visited: set[str] = set()
+    finish_order: list[str] = []
+    for root in sorted(nodes):
+        if root in visited:
+            continue
+        visited.add(root)
+        stack: list[tuple[str, bool]] = [(root, False)]
+        while stack:
+            node, expanded = stack.pop()
+            if expanded:
+                finish_order.append(node)
+                continue
+            stack.append((node, True))
+            for neighbor in adjacency.get(node, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    stack.append((neighbor, False))
+    assigned: set[str] = set()
     result: list[list[str]] = []
-
-    def visit(node: str) -> None:
-        nonlocal index
-        indices[node] = low[node] = index
-        index += 1
-        stack.append(node)
-        on_stack.add(node)
-        for neighbor in adjacency.get(node, []):
-            if neighbor not in indices:
-                visit(neighbor)
-                low[node] = min(low[node], low[neighbor])
-            elif neighbor in on_stack:
-                low[node] = min(low[node], indices[neighbor])
-        if low[node] == indices[node]:
-            component = []
-            while True:
-                member = stack.pop()
-                on_stack.remove(member)
-                component.append(member)
-                if member == node:
-                    break
-            result.append(sorted(component))
-
-    for node in sorted(nodes):
-        if node not in indices:
-            visit(node)
+    for root in reversed(finish_order):
+        if root in assigned:
+            continue
+        component: list[str] = []
+        stack = [root]
+        assigned.add(root)
+        while stack:
+            node = stack.pop()
+            component.append(node)
+            for neighbor in reverse.get(node, []):
+                if neighbor not in assigned:
+                    assigned.add(neighbor)
+                    stack.append(neighbor)
+        result.append(sorted(component))
     return result
 
 
