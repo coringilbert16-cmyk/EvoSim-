@@ -4650,8 +4650,9 @@ mod complete_visible_material_perimeter_tests {
             2.5,
             0.0,
         );
-        let clear = visible_material_perimeter_from_point((0.0, 0.0), std::slice::from_ref(&source), 0)
-            .expect("unblocked circle visibility");
+        let clear =
+            visible_material_perimeter_from_point((0.0, 0.0), std::slice::from_ref(&source), 0)
+                .expect("unblocked circle visibility");
         let blocked = visible_material_perimeter_from_point((0.0, 0.0), &[source, blocker], 0)
             .expect("remaining visible arcs survive the blocker");
         let clear_sweep: f64 = clear.curved.iter().map(|i| i.arc.sweep_radians).sum();
@@ -4783,10 +4784,7 @@ fn segment_arc_intersections(
 
     let root = discriminant.max(0.0).sqrt();
     let mut hits = Vec::new();
-    for t in [
-        (-bb - root) / (2.0 * aa),
-        (-bb + root) / (2.0 * aa),
-    ] {
+    for t in [(-bb - root) / (2.0 * aa), (-bb + root) / (2.0 * aa)] {
         if (-1e-10..=1.0 + 1e-10).contains(&t) {
             let point = (start.0 + dx * t, start.1 + dy * t);
             let angle = (point.1 - center.1).atan2(point.0 - center.0);
@@ -4844,9 +4842,7 @@ fn add_global_intersection_cuts(
 
             let t = (q.0 * s.1 - q.1 * s.0) / cross;
             let u = (q.0 * r.1 - q.1 * r.0) / cross;
-            if (-1e-10..=1.0 + 1e-10).contains(&t)
-                && (-1e-10..=1.0 + 1e-10).contains(&u)
-            {
+            if (-1e-10..=1.0 + 1e-10).contains(&t) && (-1e-10..=1.0 + 1e-10).contains(&u) {
                 cuts_a.push(t.clamp(0.0, 1.0));
                 cuts_b.push(u.clamp(0.0, 1.0));
             }
@@ -4872,14 +4868,9 @@ fn add_global_intersection_cuts(
             if segment_part == arc_part {
                 return Some(());
             }
-            for (segment_t, arc_t) in segment_arc_intersections(
-                *start,
-                *end,
-                *center,
-                *radius,
-                *arc_start,
-                *arc_sweep,
-            )? {
+            for (segment_t, arc_t) in
+                segment_arc_intersections(*start, *end, *center, *radius, *arc_start, *arc_sweep)?
+            {
                 segment_cuts.push(segment_t);
                 arc_cuts.push(arc_t);
             }
@@ -4905,14 +4896,9 @@ fn add_global_intersection_cuts(
             if segment_part == arc_part {
                 return Some(());
             }
-            for (segment_t, arc_t) in segment_arc_intersections(
-                *start,
-                *end,
-                *center,
-                *radius,
-                *arc_start,
-                *arc_sweep,
-            )? {
+            for (segment_t, arc_t) in
+                segment_arc_intersections(*start, *end, *center, *radius, *arc_start, *arc_sweep)?
+            {
                 arc_cuts.push(arc_t);
                 segment_cuts.push(segment_t);
             }
@@ -4953,9 +4939,8 @@ fn add_global_intersection_cuts(
                 return Some(());
             }
 
-            let along =
-                (radius_a * radius_a - radius_b * radius_b + distance * distance)
-                    / (2.0 * distance);
+            let along = (radius_a * radius_a - radius_b * radius_b + distance * distance)
+                / (2.0 * distance);
             let height_squared = radius_a * radius_a - along * along;
             if height_squared < -1e-10 {
                 return Some(());
@@ -5033,12 +5018,7 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 let (sin, cos) = part.rotation_radians.sin_cos();
                 let vertices: Vec<_> = local_vertices
                     .into_iter()
-                    .map(|(x, y)| {
-                        (
-                            part.x + x * cos - y * sin,
-                            part.y + x * sin + y * cos,
-                        )
-                    })
+                    .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                     .collect();
                 let area_twice: f64 = vertices
                     .iter()
@@ -5110,19 +5090,17 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         start.0 + (end.0 - start.0) * midpoint_t,
                         start.1 + (end.1 - start.1) * midpoint_t,
                     );
-                    let hidden = body.parts.iter().enumerate().any(
-                        |(other_index, other)| {
-                            other_index != part_index
-                                && crate::organism_geometry::form_contains_point(
-                                    &other.form,
-                                    other.x,
-                                    other.y,
-                                    other.rotation_radians,
-                                    midpoint.0,
-                                    midpoint.1,
-                                )
-                        },
-                    );
+                    let hidden = body.parts.iter().enumerate().any(|(other_index, other)| {
+                        other_index != part_index
+                            && crate::organism_geometry::form_contains_point(
+                                &other.form,
+                                other.x,
+                                other.y,
+                                other.rotation_radians,
+                                midpoint.0,
+                                midpoint.1,
+                            )
+                    });
                     if hidden {
                         continue;
                     }
@@ -5162,19 +5140,17 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         center.0 + radius * midpoint_angle.cos(),
                         center.1 + radius * midpoint_angle.sin(),
                     );
-                    let hidden = body.parts.iter().enumerate().any(
-                        |(other_index, other)| {
-                            other_index != part_index
-                                && crate::organism_geometry::form_contains_point(
-                                    &other.form,
-                                    other.x,
-                                    other.y,
-                                    other.rotation_radians,
-                                    midpoint.0,
-                                    midpoint.1,
-                                )
-                        },
-                    );
+                    let hidden = body.parts.iter().enumerate().any(|(other_index, other)| {
+                        other_index != part_index
+                            && crate::organism_geometry::form_contains_point(
+                                &other.form,
+                                other.x,
+                                other.y,
+                                other.rotation_radians,
+                                midpoint.0,
+                                midpoint.1,
+                            )
+                    });
                     if hidden {
                         continue;
                     }
