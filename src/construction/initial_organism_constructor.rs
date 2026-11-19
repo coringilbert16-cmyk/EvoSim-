@@ -770,10 +770,9 @@ mod tests {
         )
         .expect("candidate material should realize");
         let mut trial = structure.clone();
-        let indices = crate::physical_material::restore_material(
-            &mut trial, &instance, proposed, &catalog,
-        )
-        .expect("accepted Bob pose should restore into the trial structure");
+        let indices =
+            crate::physical_material::restore_material(&mut trial, &instance, proposed, &catalog)
+                .expect("accepted Bob pose should restore into the trial structure");
         let candidate = *indices.first().expect("one Carbon constituent");
         for (index, unit) in trial.units.iter().enumerate() {
             if indices.contains(&index) {
