@@ -175,6 +175,7 @@ jobs:
           python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
           python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
           python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
+          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir temporal-chemical-complexity
       - name: Upload combined experiment report
         uses: actions/upload-artifact@v4
         with:
@@ -185,5 +186,6 @@ jobs:
             reaction-network/
             geometry-aware-network/
             contact-opportunities/
+            temporal-chemical-complexity/
           if-no-files-found: error
           retention-days: 90
