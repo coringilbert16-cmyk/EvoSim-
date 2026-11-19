@@ -877,7 +877,9 @@ mod integration_tests {
                 .parts
                 .first()
                 .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
-                .is_some_and(|resource| resource.physical_state == crate::resources::PhysicalState::Rigid)
+                .is_some_and(|resource| {
+                    resource.physical_state == crate::resources::PhysicalState::Rigid
+                })
         }));
 
     }
