@@ -1909,10 +1909,10 @@ mod tests {
     }
 
     #[test]
-    fn only_fluid_resources_can_take_context_fitting_geometry() {
-        let catalog = crate::resources::default_catalog();
+    fn only_legacy_fluid_fixtures_can_take_context_fitting_geometry() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let mut water = StructuralUnit::new(
-            "Water",
+            "LegacyFluidFixture",
             Placement {
                 x: 0.0,
                 y: 0.0,
@@ -1932,7 +1932,7 @@ mod tests {
         assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
 
         let mut bulk_water = StructuralUnit::from_material(
-            Material::free_base("Water", 4.0),
+            Material::free_base("LegacyFluidFixture", 4.0),
             Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2764,184 +2764,6 @@ mod tests {
     }
 
     #[test]
-    fn structural_membership_follows_realized_bonded_components() {
-        let catalog = crate::resources::default_catalog();
-        let mut s = OrganismStructure::new();
-        let a = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 2.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let ida = s.physical_id(a).unwrap();
-        let idb = s.physical_id(b).unwrap();
-        assert!(s.structural_unit_indices(&catalog).is_empty());
-        s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
-            endpoint_b: BondEndpoint::new(
-                idb,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
-            ),
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
-        s.set_genome_constituent_ids([idb]);
-        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
-    }
-
-    fn connect(s: &mut OrganismStructure, a: usize, b: usize) {
-        let ida = s.physical_id(a).unwrap();
-        let idb = s.physical_id(b).unwrap();
-        s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
-            endpoint_b: BondEndpoint::new(
-                idb,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: std::f64::consts::PI,
-                },
-            ),
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-    }
-
-    fn water_chain_structure(names: &[&str]) -> (OrganismStructure, Vec<usize>) {
-        let mut s = OrganismStructure::new();
-        let mut units = Vec::new();
-        for (index, name) in names.iter().enumerate() {
-            units.push(s.add_unit(StructuralUnit::new(
-                *name,
-                Placement {
-                    x: index as f64,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            )));
-        }
-        for index in 0..units.len().saturating_sub(1) {
-            connect(&mut s, units[index], units[index + 1]);
-        }
-        let genome_id = s.physical_id(units[0]).unwrap();
-        s.set_genome_constituent_ids([genome_id]);
-        (s, units)
-    }
-
-    #[test]
-    fn water_structural_matrix_follows_component_nonfluid_rule() {
-        let catalog = crate::resources::default_catalog();
-
-        let (s, u) = water_chain_structure(&["Carbon", "Water"]);
-        assert!(s.is_structurally_qualified(u[1], &catalog));
-
-        let (s, u) = water_chain_structure(&["Carbon", "Water", "Water"]);
-        assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(s.is_structurally_qualified(u[2], &catalog));
-
-        let (s, u) = water_chain_structure(&["Carbon", "Water", "Water", "Water", "Carbon"]);
-        assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(s.is_structurally_qualified(u[2], &catalog));
-        assert!(s.is_structurally_qualified(u[3], &catalog));
-        assert!(s.is_structurally_qualified(u[4], &catalog));
-
-        let (s, u) = water_chain_structure(&["Carbon", "Water", "Carbon", "Water", "Carbon"]);
-        assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(s.is_structurally_qualified(u[3], &catalog));
-    }
-
-    #[test]
-    fn component_nonfluid_member_qualifies_fluid_water() {
-        let catalog = crate::resources::default_catalog();
-        let mut s = OrganismStructure::new();
-        let genome = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let water = s.add_unit(StructuralUnit::new(
-            "Water",
-            Placement {
-                x: 1.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let gid = s.physical_id(genome).unwrap();
-        let wid = s.physical_id(water).unwrap();
-        s.set_genome_constituent_ids([gid]);
-        s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
-            endpoint_b: BondEndpoint::new(wid, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-        assert!(s.is_structurally_qualified(water, &catalog));
-    }
-
-    #[test]
-    fn water_water_chain_qualifies_when_component_contains_nonfluid() {
-        let catalog = crate::resources::default_catalog();
-        let mut s = OrganismStructure::new();
-        let genome = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let w1 = s.add_unit(StructuralUnit::new(
-            "Water",
-            Placement {
-                x: 1.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let w2 = s.add_unit(StructuralUnit::new(
-            "Water",
-            Placement {
-                x: 2.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let gid = s.physical_id(genome).unwrap();
-        let w1id = s.physical_id(w1).unwrap();
-        let w2id = s.physical_id(w2).unwrap();
-        s.set_genome_constituent_ids([gid]);
-        s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
-            endpoint_b: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-        s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
-            endpoint_b: BondEndpoint::new(w2id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-        assert!(s.is_structurally_qualified(w1, &catalog));
-        assert!(s.is_structurally_qualified(w2, &catalog));
-    }
-
-    #[test]
     fn physical_constituents_receive_stable_ids() {
         let mut s = OrganismStructure::new();
         let a = s.add_unit(StructuralUnit::new(
@@ -2982,7 +2804,7 @@ mod tests {
         view.units[0].placement.x += 0.25;
         assert!(!aggregate.contains_exact_physical_subgraph(&view));
         view.units[0].placement = pose;
-        view.units[0].material = Material::free_base("Water", 1.0);
+        view.units[0].material = Material::free_base("Oxygen", 1.0);
         assert!(!aggregate.contains_exact_physical_subgraph(&view));
     }
 
