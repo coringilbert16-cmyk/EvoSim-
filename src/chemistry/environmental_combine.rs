@@ -4122,13 +4122,9 @@ mod tests {
         );
 
         let mut restored = OrganismStructure::new();
-        let restored_indices = crate::physical_material::restore_material(
-            &mut restored,
-            &stored,
-            origin(),
-            &catalog,
-        )
-        .expect("stored product must restore its physical bond graph");
+        let restored_indices =
+            crate::physical_material::restore_material(&mut restored, &stored, origin(), &catalog)
+                .expect("stored product must restore its physical bond graph");
         assert_eq!(restored_indices.len(), 2);
         assert_eq!(restored.bonds.len(), 1);
         assert_eq!(restored.bonds[0].bond_energy, 2.5);
