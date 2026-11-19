@@ -19,7 +19,8 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Place catalog elements by selecting an element and tapping the field (initial placement is restricted to paused tick zero).
 - Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
-- Inspect material identities, constituent coordinates, and recorded internal bonds.
+- Select and inspect individual molecules by tapping them; inspect stable identity, constituent composition, exact coordinates, rotations, and bond graph.
+- Zoom with the mouse wheel/pinch and pan by dragging the field.
 
 Molecule placement is validated by the existing `PhysicalMaterial::realized` geometry and bond rules. Invalid geometry is rejected; the lab does not invent bond endpoints or force a reaction.
 
