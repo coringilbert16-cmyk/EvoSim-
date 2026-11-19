@@ -353,6 +353,7 @@ mod tests {
                     .is_none_or(|part| part.0 != "LegacyFluidFixture")
             })
         }));
+    }
 
     #[test]
     fn rejected_destination_restores_expulsion_source_and_neighbor_order() {
