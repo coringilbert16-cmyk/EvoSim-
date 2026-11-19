@@ -1798,6 +1798,10 @@ mod tests {
     #[test]
     fn aggregate_owned_construction_keeps_energy_in_parent_holder() {
         let mut simulation = Simulation::new(11, 20.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         let mut parent = simulation.organisms.remove(0);
         let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
