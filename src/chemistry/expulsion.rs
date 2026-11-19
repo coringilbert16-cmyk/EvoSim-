@@ -495,8 +495,7 @@ mod tests {
     #[test]
     fn missing_destination_index_preserves_expulsion_source_and_neighbor_order() {
         let mut simulation = Simulation::new(928, 10.0);
-        let catalog = crate::resources::legacy_fluid_test_catalog();
-        simulation.environment.catalog = catalog.clone();
+        let catalog = crate::resources::default_catalog();
         let make = |name: &str, x: f64| {
             PhysicalMaterial::realized(
                 Material::free_base(name, 1.0),
@@ -512,7 +511,7 @@ mod tests {
         let before = make("Nitrogen", 0.0);
         let fluid = catalog
             .iter()
-            .find(|resource| resource.name == "LegacyFluidFixture")
+            .find(|resource| resource.name == "Carbon")
             .unwrap();
         let area = match &fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
@@ -534,7 +533,7 @@ mod tests {
             },
         };
         let mut source = PhysicalMaterial::realized(
-            Material::free_base("LegacyFluidFixture", 1.0),
+            Material::free_base("Carbon", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
