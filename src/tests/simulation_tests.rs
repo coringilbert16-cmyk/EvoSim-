@@ -654,12 +654,9 @@ mod integration_tests {
         assert!(!o.stored_material.is_empty());
         let stored = o.stored_material.materials_snapshot();
         assert_eq!(stored.len(), 3);
-        assert!(stored.iter().all(|material| {
-            material
-                .parts
-                .iter()
-                .all(|(name, _)| name != "Water")
-        }));
+        assert!(stored
+            .iter()
+            .all(|material| { material.parts.iter().all(|(name, _)| name != "Water") }));
         assert!(o.usable_energy >= o.genome.reproductive_energy_allocation);
         assert!(o.decision_history.entries.is_empty());
     }
