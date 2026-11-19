@@ -876,6 +876,35 @@ mod tests {
     }
 
     #[test]
+    fn configured_uniform_flow_obeys_direction_and_speed() {
+        let config = FlowFieldConfig {
+            direction_degrees: 90.0,
+            speed: 2.0,
+            strength: 0.0,
+            vortex_strength: 2.0,
+        };
+        let velocity = background_velocity_with_config(20.0, 30.0, 100.0, 80.0, config);
+        assert!(velocity.x.abs() < 1e-12);
+        assert!((velocity.y - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn default_flow_configuration_preserves_the_existing_vector_field() {
+        for (x, y) in [(0.0, 0.0), (20.0, 30.0), (75.0, 55.0), (99.0, 79.0)] {
+            assert_eq!(
+                background_velocity(x, y, 100.0, 80.0),
+                background_velocity_with_config(
+                    x,
+                    y,
+                    100.0,
+                    80.0,
+                    FlowFieldConfig::default()
+                )
+            );
+        }
+    }
+
+    #[test]
     fn current_has_a_speed_gradient_and_vortices() {
         let core = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0).length();
         let outer = background_velocity(25.0, 5.0, 100.0, 80.0).length();
