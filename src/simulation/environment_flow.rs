@@ -680,9 +680,7 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     )
 }
 
-pub(crate) fn transport_field_with_config<
-    const REUSE_SINGLETON_CENTER_VELOCITY: bool,
->(
+pub(crate) fn transport_field_with_config<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
     field: &mut ActiveMaterialField,
     catalog: &[BaseResource],
     world_width: f64,
