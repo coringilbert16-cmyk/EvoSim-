@@ -123,11 +123,15 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
         self.assertTrue(report["elemental_bond_pairs"]["inventory_reconciliation_all_seeds_match"])
         self.assertTrue(report["validation"]["all_runs_pass_inventory_and_lifecycle_checks"])
 
-    def test_rejects_water_in_the_active_chemistry_inventory(self):
+    def test_rejects_excluded_resources_in_the_active_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            write_run(root, 42, six_elements_only=False)
-            with self.assertRaisesRegex(ValueError, "exclude Water"):
+            write_run(root, 42)
+            chemistry_path = root / "seed-42-chemistry.json"
+            chemistry = json.loads(chemistry_path.read_text(encoding="utf-8"))
+            chemistry["resource_coverage"]["excluded_resources"] = ["Water"]
+            chemistry_path.write_text(json.dumps(chemistry), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must not declare excluded resources"):
                 build_report(root, [42], 300)
 
 
