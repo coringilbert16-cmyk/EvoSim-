@@ -243,3 +243,26 @@ Priority 1's focused PR/test review and branch comparison are now complete. The 
 2. PR #392: local-neighborhood sampling, exact COMBINE/DISPLACEMENT participant joins, and the fail-closed matched-control preflight. Keep sampling explicitly bounded and causal eligibility blocked until full-run exposure and denominator gates are satisfied.
 
 Do not port the old branches wholesale. Next, reanalyze retained EXP-2026-004, EXP-2026-006/PLAN-002, and resource-feed artifacts; then draft the canonical manifest and event/opportunity/energy schema against current main. No simulator behavior or diagnostic code has been changed in this follow-up audit, and no new experiment has been launched.
+
+
+## Existing-artifact reanalysis checkpoint — EXP-2026-006 report footprint (2026-11-20)
+
+Downloaded and inspected the already-completed combined analysis artifact from workflow [#44792658175](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44792658175), artifact `chemistry-experiment-combined`. No simulation was rerun.
+
+- ZIP size: **236,988,261 bytes** (about 237 MB).
+- ZIP entries: 56 files.
+- Total uncompressed content: **10,748,880,670 bytes** (about 10.75 GB).
+- The `contact-opportunities/` directory accounts for **10,660,578,639 bytes** (about 10.66 GB) across 30 files.
+- Across the artifact, JSON files account for about 8.70 GB uncompressed and CSV files about 2.05 GB. Compression is strong, but extraction and downstream processing still face the expanded size.
+
+The cause is confirmed in PR #392's `tools/contact_opportunity_analyzer.py`: the returned report already contains the complete `tick_diagnostics`, `opportunity_samples`, and `neighborhood_samples` arrays. The writer then serializes those same arrays again into separate `contact-opportunity-samples.json`, `contact-opportunity-samples.csv`, `contact-opportunity-neighborhoods.csv`, and `contact-opportunity-ticks.csv` files. The archive therefore stores the large sampled datasets in the main analysis JSON and again as standalone exports. For example, per-seed main analysis JSON files range from roughly 1.0 to 1.6 GB uncompressed, while standalone sample JSON files add roughly 386–621 MB and sample CSVs another 211–341 MB per seed; neighborhood CSVs add another 111–184 MB per seed.
+
+**Decision:** The unified reporting layer should have one canonical machine-readable representation for each large diagnostic dataset. The compact top-level report should contain summaries, counts, coverage/truncation flags, and references to drill-down artifacts. Do not package the same full arrays in both a monolithic JSON report and duplicate JSON/CSV exports by default. CSV should be generated on demand or only for specifically requested downstream use. This is a high-value consolidation target and can reduce artifact size and extraction/analysis cost without losing scientific evidence.
+
+### Active-run status check
+
+Resource-feed paired workflow [#44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988) was still running when checked: 8 observation jobs had completed and 2 remained in progress. Six per-seed artifacts were visible at that check. Do not mark EXP-2026-005 complete until both remaining jobs, all ten artifacts, and the final aggregation are verified.
+
+### Documentation PR status
+
+After the audit update, PR #397 head is `fa7fc56fdcb72024ea84e9f239b37c76a65cec4e`. Its Rust workflow [#44803567727](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44803567727) was still in progress at the latest check. No merge was performed.
