@@ -1132,6 +1132,8 @@ pub(crate) struct Simulation {
     /// Enables full molecular graph/lifecycle snapshots for chemistry experiments.
     /// Identity assignment remains part of successful reaction commits either way.
     pub(crate) record_environmental_molecular_history: bool,
+    /// Ambient transport field configuration; chemistry rules remain unchanged.
+    pub(crate) flow_field: crate::environment_flow::FlowFieldConfig,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

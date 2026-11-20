@@ -1208,7 +1208,6 @@ impl MultiContactFluidBoundary {
             .count()
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Fluid API"))]
     pub fn free_arc_count(&self) -> usize {
         self.pieces
             .iter()
@@ -1233,7 +1232,6 @@ pub struct CapillaryContactFamily {
     pub enclosed_area: f64,
 }
 
-#[expect(dead_code, reason = "Fluid API")]
 impl CapillaryContactFamily {
     /// Solve the zero-gravity 2-D Young–Laplace equilibrium for a fluid
     /// contacting a flat solid boundary.

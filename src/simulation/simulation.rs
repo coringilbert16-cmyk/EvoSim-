@@ -395,6 +395,7 @@ impl Simulation {
             environmental_local_resonance_samples: Vec::new(),
             record_local_resonance_diagnostics: false,
             record_environmental_molecular_history: false,
+            flow_field: crate::environment_flow::FlowFieldConfig::default(),
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -988,13 +989,12 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
-        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
-            REUSE_SINGLETON_CENTER_VELOCITY,
-        >(
+        crate::environment_flow::transport_field_with_config::<REUSE_SINGLETON_CENTER_VELOCITY>(
             &mut self.environment.field,
             &self.environment.catalog,
             self.environment.width,
             self.environment.height,
+            self.flow_field,
         );
         if profile_tick {
             finish_profile_phase("ambient_transport");

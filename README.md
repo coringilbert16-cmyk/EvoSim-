@@ -10,6 +10,7 @@ This repository contains the simulator, its browser viewer, chemistry data, expe
 - **Want to run the simulator?** Follow [Getting started](#getting-started).
 - **Want to understand the design?** Start with [Architecture and specifications](docs/README.md#architecture-and-design).
 - **Want to run chemistry experiments?** Read [the experiment guide](experiments/README.md).
+- **Want a controlled chemistry workbench?** See [the Chemical Laboratory](docs/chemistry-laboratory.md).
 
 ## Getting started
 
@@ -42,6 +43,16 @@ cargo run --release
 
 Then open http://127.0.0.1:3000/ in a browser.
 
+### Chemical Laboratory
+
+The separate controlled workbench uses the same Rust chemistry engine and starts with an empty environment:
+
+```bash
+cargo run --bin chemistry-lab
+```
+
+Open http://127.0.0.1:3030/. The workbench supports exact-coordinate element/molecule placement, live flow and established energy-source controls, molecule inspection, bounded reaction/lineage history, energy-ledger diagnostics, and reproducible setup import/export. See the [laboratory guide](docs/chemistry-laboratory.md) for controls and current API/scope.
+
 ### Build and test
 
 ```bash
@@ -66,7 +77,7 @@ The full test suite and lint status must be judged from the latest exact-commit 
 | `docs/` | Architecture, specifications, audits, plans, and historical records |
 | `.github/workflows/` | CI and explicitly triggered experiment workflows |
 
-Rust unit and contract tests are also colocated under `src/tests/` and compiled through the main binary.
+Rust unit and contract tests are also colocated under `src/tests/` and compiled through the shared Rust library.
 
 ## Running chemistry experiments
 
