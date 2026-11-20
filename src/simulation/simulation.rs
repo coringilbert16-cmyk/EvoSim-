@@ -2766,7 +2766,6 @@ mod decomposition_finalization_tests {
             cell.physical_materials.clear();
         }
 
-        let owner_id = simulation.organisms[0].id.clone();
         simulation.organisms[0]
             .structure
             .clear_genome_constituent_ids();
@@ -3324,12 +3323,18 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn live_world_tone_capture_settles_and_reconciles_world_energy() {
+    fn live_world_tone_capture_settles_environmental_material_and_reconciles_energy() {
         let mut simulation = Simulation::new(918, 10.0);
-        for cell in &mut simulation.environment.field.cells {
-            cell.physical_materials.clear();
-        }
         assert!(simulation.world_tone.is_some());
+        assert!(
+            simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .any(|cell| !cell.physical_materials.is_empty()),
+            "fixture must contain environmental physical material"
+        );
 
         let external_before = simulation.energy_ledger.total_external_energy_input;
         simulation.step();
