@@ -1241,11 +1241,16 @@ mod tests {
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
         laboratory.simulation.environmental_chemistry_events.push(
             crate::state::EnvironmentalChemistryEvent {
+                reaction_id: "7-0".into(),
                 tick: 7,
                 reaction: "COMBINE".into(),
                 source_cells: vec![2],
                 source_material_indices: vec![0, 1],
-                source_materials: vec![vec![("Carbon".into(), 1.0)]],
+                source_material_ids: vec![Some(11), Some(12)],
+                source_materials: vec![
+                    vec![("Carbon".into(), 1.0)],
+                    vec![("Carbon".into(), 1.0)],
+                ],
                 work_required: 0.5,
                 reaction_frequency_hz: None,
                 activation_signal: None,
@@ -1268,6 +1273,10 @@ mod tests {
                 }],
             },
         );
+        let event = &laboratory.simulation.environmental_chemistry_events[0];
+        assert_eq!(event.reaction_id, "7-0");
+        assert_eq!(event.source_material_ids, vec![Some(11), Some(12)]);
+        assert_eq!(event.molecular_lifecycle[0].reaction_id, event.reaction_id);
         laboratory.capture_current_tick_events();
         let history = laboratory.snapshot().reaction_history;
         assert_eq!(history.len(), 1);
