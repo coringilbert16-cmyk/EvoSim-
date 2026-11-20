@@ -1071,6 +1071,118 @@ pub(crate) fn build_matched(
     Ok(fixture)
 }
 
+fn exposure_json_matches(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    match (left, right) {
+        (serde_json::Value::Number(a), serde_json::Value::Number(b)) => {
+            match (a.as_f64(), b.as_f64()) {
+                (Some(a), Some(b)) => {
+                    a.is_finite() && b.is_finite() && (a - b).abs() <= 1e-9
+                }
+                _ => false,
+            }
+        }
+        (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .zip(b)
+                    .all(|(left, right)| exposure_json_matches(left, right))
+        }
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter().all(|(key, value)| {
+                    b.get(key)
+                        .is_some_and(|other| exposure_json_matches(value, other))
+                })
+        }
+        _ => left == right,
+    }
+}
+
+/// Build both tick-zero arms and refuse execution unless the local exposure
+/// contract is complete. Candidate-specific resonance is intentionally reported
+/// separately; it is the putative interaction, not a background confound.
+pub(crate) fn preflight_matched_pair(
+    seed: u64,
+    config: &MatchedCatalysisConfig,
+) -> Result<serde_json::Value, String> {
+    let near = build_matched(seed, config, MatchedCatalysisCondition::CandidateNear)?;
+    let remote = build_matched(seed, config, MatchedCatalysisCondition::CandidateRemote)?;
+    let near_metadata = near
+        .experiment_metadata
+        .as_ref()
+        .ok_or_else(|| "candidate-near fixture omitted setup metadata".to_string())?;
+    let remote_metadata = remote
+        .experiment_metadata
+        .as_ref()
+        .ok_or_else(|| "candidate-remote fixture omitted setup metadata".to_string())?;
+    let near_exposure = near_metadata
+        .get("local_exposure")
+        .ok_or_else(|| "candidate-near fixture omitted local exposure telemetry".to_string())?;
+    let remote_exposure = remote_metadata
+        .get("local_exposure")
+        .ok_or_else(|| "candidate-remote fixture omitted local exposure telemetry".to_string())?;
+
+    for material in ["candidate", "target_reactant_a", "target_reactant_b"] {
+        for channel in ["flow_velocity", "hotspot_intensity_per_tick_per_area"] {
+            let left = near_exposure
+                .get(material)
+                .and_then(|value| value.get(channel))
+                .ok_or_else(|| format!("near {material} {channel} exposure is missing"))?;
+            let right = remote_exposure
+                .get(material)
+                .and_then(|value| value.get(channel))
+                .ok_or_else(|| format!("remote {material} {channel} exposure is missing"))?;
+            if !exposure_json_matches(left, right) {
+                return Err(format!(
+                    "tick-zero exposure preflight failed: {material} {channel} differs between candidate-near and candidate-remote arms"
+                ));
+            }
+        }
+    }
+    let near_tone = near_exposure
+        .get("world_tone")
+        .ok_or_else(|| "near world-tone source sample is missing".to_string())?;
+    let remote_tone = remote_exposure
+        .get("world_tone")
+        .ok_or_else(|| "remote world-tone source sample is missing".to_string())?;
+    if !exposure_json_matches(near_tone, remote_tone) {
+        return Err("tick-zero world-tone source exposure differs between paired arms".to_string());
+    }
+
+    // These are hard blockers, not warnings. A future implementation may
+    // change the metadata coverage labels only after adding the corresponding
+    // production-path measurements and tests.
+    for (arm, exposure) in [("near", near_exposure), ("remote", remote_exposure)] {
+        let coverage = exposure
+            .get("coverage")
+            .ok_or_else(|| format!("{arm} exposure coverage metadata is missing"))?;
+        if coverage.get("flow").and_then(serde_json::Value::as_str) != Some("time_resolved") {
+            return Err(format!(
+                "{arm} flow exposure is tick-zero only; full-run time-resolved flow matching is required"
+            ));
+        }
+        if coverage.get("hotspot").and_then(serde_json::Value::as_str) != Some("time_resolved") {
+            return Err(format!(
+                "{arm} hotspot exposure is tick-zero only; full-run time-resolved hotspot matching is required"
+            ));
+        }
+        if exposure
+            .get("legacy_pairwise_resonance")
+            .and_then(|value| value.get("background_from_other_materials"))
+            .and_then(serde_json::Value::as_str)
+            != Some("measured")
+        {
+            return Err(format!(
+                "{arm} background resonance from non-candidate materials is not measured"
+            ));
+        }
+    }
+    Err(
+        "matched exposure preflight cannot authorize a catalytic run until complete eligible target-pair opportunity denominators are implemented"
+            .to_string(),
+    )
+}
+
 fn randomized_pile_centers(
     pile_sizes: &[usize],
     hotspot_x: f64,
