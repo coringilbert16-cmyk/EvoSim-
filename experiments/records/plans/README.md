@@ -61,7 +61,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-004 — Pseudo-metabolism
 
-**Status:** Planned; depends on validated pathways and intermediate regeneration from PLAN-001, with relevant facilitation/self-production tests from PLAN-002/003 where applicable.
+**Status:** In progress — exact-instance pathway trace completed; paired resource-feed experiment EXP-2026-005 registered and implementation underway.
 
 **Question:** Can a connected chemical network repeatedly transform environmental resources, turn over intermediates, and regenerate compounds needed by earlier stages?
 
@@ -74,6 +74,10 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 - Evidence that persistence follows from general chemistry and environmental physics, not an organism-specific controller.
 
 **Initial candidates:** H–O–P ⇌ H + O–P and N–O–P ⇌ N + O–P are candidate reversible intermediate transformations. They are not yet metabolism.
+
+**Existing evidence:** EXP-2026-004's exact-instance trace identified an eight-event connected sequence in seed 45, with O–P₂ family regeneration through N–O–P₂ and C–O branches. This establishes connected multistage chemistry and identity turnover in a finite inventory, not pseudo-metabolism. See [PLAN-004 lineage trace](../results/2026-11-20-plan-004-lineage-trace.md).
+
+**Next experiment:** EXP-2026-005 is pre-registered as a five-seed, one-hour paired comparison (seeds 42–46): the standard no-feed control versus six deterministic pulses of 72 free atoms each, 12 of each active element, at 5, 15, 25, 35, 45, and 55 minutes. Total external matter is 432 atoms (36% of the initial 1,200 free-resource inventory); no compounds or energy are injected. Existing diagnostics remain unchanged, with source-event records for feed identity and timing. Implementation and CI gates passed; the paired run is active on [GitHub Actions run #44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988). See [EXP-2026-005 pre-registration](../results/2026-11-20-plan-004-resource-feed-paired-experiment.md).
 
 ## PLAN-005 — Cross-catalysis and cooperative chemical networks
 

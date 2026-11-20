@@ -1,0 +1,6 @@
+{
+  "run": true,
+  "experiment_id": "EXP-2026-005",
+  "seeds": [42, 43, 44, 45, 46],
+  "duration_seconds": 3600
+}

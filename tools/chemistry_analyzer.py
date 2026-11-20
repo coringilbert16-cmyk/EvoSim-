@@ -263,7 +263,11 @@ def _bond_pair_attribution(
         if action == "created":
             molecule = record.get("molecule")
             active_molecules[molecule_id] = molecule
-            if record.get("reaction") == "INITIAL":
+            if (
+                record.get("reaction") == "INITIAL"
+                and record.get("tick") == 0
+                and not isinstance(record.get("tick"), bool)
+            ):
                 initial_lifecycle_material_count += 1
                 if not _has_complete_molecule_graph(molecule):
                     missing_inventory_graph_snapshots += 1

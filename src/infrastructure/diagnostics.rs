@@ -690,6 +690,90 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         Ok(recorder)
     }
 
+    pub(crate) fn record_resource_feed_plan(&mut self, enabled: bool) -> std::io::Result<()> {
+        self.write_event(json!({
+            "event": "environmental_experiment_condition",
+            "experiment": "PLAN-004-resource-feed",
+            "resource_feed_enabled": enabled,
+            "pulse_count": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT
+            } else {
+                0
+            },
+            "pulse_size": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_SIZE
+            } else {
+                0
+            },
+            "total_external_resources": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_TOTAL
+            } else {
+                0
+            },
+            "first_pulse_seconds": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_FIRST_PULSE_SECONDS
+            } else {
+                0
+            },
+            "pulse_interval_seconds": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_INTERVAL_SECONDS
+            } else {
+                0
+            },
+            "composition_per_pulse": if enabled {
+                json!({"Carbon":12,"Hydrogen":12,"Nitrogen":12,"Oxygen":12,"Phosphorus":12,"Sulfur":12})
+            } else {
+                Value::Null
+            }
+        }))?;
+        self.writer.flush()
+    }
+
+    pub(crate) fn record_resource_feed(
+        &mut self,
+        tick: u64,
+        elapsed_wall_seconds: f64,
+        pulse_index: usize,
+        particles: &[crate::environment_resource_feed::ResourceFeedParticle],
+    ) -> std::io::Result<()> {
+        let mut elemental_counts = BTreeMap::new();
+        let material_ids = particles
+            .iter()
+            .map(|particle| {
+                *elemental_counts
+                    .entry(particle.element.clone())
+                    .or_insert(0_usize) += 1;
+                particle.material.environmental_identity
+            })
+            .collect::<Vec<_>>();
+        self.write_event(json!({
+            "event": "environmental_resource_feed",
+            "source": "external_environmental_matter",
+            "tick": tick,
+            "elapsed_wall_seconds": elapsed_wall_seconds,
+            "pulse_index": pulse_index,
+            "pulse_count": crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT,
+            "pulse_interval_seconds": crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_INTERVAL_SECONDS,
+            "resource_count": particles.len(),
+            "elemental_counts": elemental_counts,
+            "material_ids": material_ids
+        }))?;
+        for particle in particles {
+            self.write_event(json!({
+                "event": "molecular_lifecycle",
+                "action": "created",
+                "tick": tick,
+                "molecule_id": particle.material.environmental_identity,
+                "parent_ids": [],
+                "reaction_id": format!("resource-feed-pulse-{pulse_index}"),
+                "reaction": "INITIAL",
+                "molecule": &particle.material,
+                "external_source": true
+            }))?;
+        }
+        self.writer.flush()
+    }
+
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         for sample in &simulation.environmental_local_resonance_samples {
             self.write_event(sample.clone())?;
