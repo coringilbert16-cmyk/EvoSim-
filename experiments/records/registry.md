@@ -17,16 +17,16 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Research question | Status | Plan |
 |---|---|---|---|
-| PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **In progress — artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
-| PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | Planned — depends on PLAN-001 and matched controls | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
+| PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | Completed — EXP-2026-004 artifact analysis; no new run | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
+| PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | Blocked — no facilitator candidate identified; requires local-neighborhood diagnostics and matched controls | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
 | PLAN-003 | Does a product promote net production of additional copies of its own structure? | Planned — requires a defined self-production pathway and seeded/unseeded controls | [Autocatalysis](plans/README.md#plan-003-autocatalysis) |
 | PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
-| PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
-| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
+| PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/README.md#plan-005-cross-catalysis-and-cooperative-chemical-networks) |
+| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/README.md#plan-006-spatially-organized-chemistry) |
 
-## Current PLAN-001 progress
+## PLAN-001 closeout
 
-The first artifact pass identified four exact-instance reversible fragment-reuse cycles across seeds 43, 44, and 45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. These support reusable intermediate chemistry, not catalysis. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
+Four exact-instance reversible fragment-reuse cycles have been confirmed across seeds 43–45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. Three additional exact-instance sequences show H–O–P temporarily incorporated into H–O–P–S and released again in seed 45. A broader scan found 192 exact-pair fragment reunifications across seeds 42–46, dominated by simple two-constituent families. Longest connected identity-lineage walks range from 12 to 39 events across seeds. No facilitator can be identified from the available event/opportunity records. These support reusable intermediate chemistry, not catalysis. The artifact-analysis success criteria are met; no facilitator candidate was identified. PLAN-002 remains blocked pending improved local-neighborhood observations and matched controls. See [full findings and closeout](results/2026-11-20-plan-001-initial-findings.md).
 
 ## Interpretation guardrails
 

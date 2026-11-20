@@ -1,6 +1,6 @@
 # PLAN-001 — Initial instance-level pathway findings
 
-**Status:** In progress; first-pass analysis of retained artifacts. No new simulation was run.
+**Status:** Completed artifact analysis of EXP-2026-004. No new simulation was run.
 
 ## Source dataset
 
@@ -76,3 +76,39 @@ The geometry-aware report contains 4,305 committed reaction events, but complete
 4. Close PLAN-001 only after the candidate set, identity transitions, and missing-data limits are documented.
 
 No reaction rules, thresholds, energy grants, or simulator behavior were changed.
+
+## Broader exact-pair reunification audit
+
+A broader scan of all two-child BREAK events found **192 cases** where both exact child molecule IDs later appeared together as the exact parent IDs of a COMBINE event. Counts by independent seed were: seed 42: 25; 43: 49; 44: 51; 45: 54; 46: 13. The median BREAK-to-COMBINE interval was 599 ticks (mean 1,308 ticks; maximum 15,689 ticks). Reunited products span 22 recorded composition/topology families.
+
+This wider set includes ordinary dissociation/recombination and re-association of fragments from larger structures; it is not equivalent to the four highlighted H–O–P/N–O–P reversals. It is evidence that exact fragment instances can remain available and later reunite, not evidence of catalysis. The four candidate H–O–P/N–O–P cycles remain the strongest targeted examples because they return to the original composition/topology family.
+
+
+## Second-pass lineage reconstruction
+
+The instance graph was also traversed chronologically: an event is linked to a later event when one of its exact child molecule IDs is consumed as a later parent. The longest such lineage walk per seed contained:
+
+| Seed | Committed events | Longest connected identity-lineage walk |
+|---:|---:|---:|
+| 42 | 639 | 25 events |
+| 43 | 1,153 | 31 events |
+| 44 | 985 | 23 events |
+| 45 | 1,082 | 39 events |
+| 46 | 446 | 12 events |
+
+These are maximum connected event walks through exact molecule identities, not 25–39-step single reactions or closed metabolic cycles. A walk can follow one branch of a multi-product reaction while other products take different paths. They demonstrate that product identities can pass through long, temporally ordered sequences of subsequent transformations.
+
+The 192 exact-pair reunifications are heavily concentrated in simple two-constituent families: C–H (45), H–S (32), H–O (30), C–O (19), N–O (17), P–S (14), and O–P (9), with the remaining cases spread across more complex families. This is an important qualification: the aggregate of 192 is primarily evidence of ordinary reversible bond turnover and exact fragment reuse, not 192 complex pathway cycles.
+
+## Catalytic-facilitation evidence audit
+
+The event schema records only the molecules transformed by each committed event: COMBINE consumes its two parent identities into a product; BREAK consumes its parent into fragments; DISPLACEMENT consumes its two parent identities into two replacement products. No event records a third, chemically unchanged molecule as a facilitator or spectator participant. The contact-opportunity samples record pairwise endpoint candidates, not the full local molecular neighborhood and a controlled reaction outcome with/without a candidate facilitator.
+
+Consequently, the current artifact cannot establish that a particular molecule facilitated a separate reaction while remaining chemically available. It can nominate families for controlled follow-up, but it cannot rank catalysts. The H–O–P + sulfur ⇌ H–O–P–S sequences are reversible association/dissociation of the same substrate family, not catalytic facilitation.
+
+**PLAN-001 conclusion remains open:** the artifact supports reusable intermediates and long identity-linked reaction histories. The next useful output is a ranked list of pathway motifs with exact molecule/event references and explicit candidate/control requirements. Catalysis requires a separate matched comparison and better local-opportunity attribution; no new baseline or longer observation window addresses that missing evidence.
+
+
+## PLAN-001 closeout
+
+The success criterion is met for this dataset: exact-instance evidence, identity transitions, a ranked pathway-candidate list, and the material geometry/opportunity limitations are recorded above. The analysis closes with **no validated facilitator candidate**. This is a completed analysis result, not a claim that the project has established catalysis. PLAN-002 remains blocked until a candidate can be observed in a defined local reaction context and suitable matched controls are available.
