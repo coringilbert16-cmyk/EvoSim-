@@ -26,7 +26,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 ## PLAN-002 — Catalytic facilitation
 
-**Status:** Infrastructure implementation in progress; experiment remains blocked pending a defensible candidate and a valid exposure-matched control.
+**Status:** Infrastructure validation passed; exposure-matched design and candidate selection remain in progress. No catalytic experiment is authorized.
 
 **Question:** Does a molecule increase the likelihood or rate of a reaction while remaining chemically available, rather than being consumed as a reactant?
 
@@ -40,9 +40,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 **Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed in a reaction and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
 
-**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, an offline comparison analyzer, and a manual-only GitHub Actions workflow. Automated analyzer tests are implemented and included in routine Rust CI; full validation remains pending.
+**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, an offline comparison analyzer, and a manual-only GitHub Actions workflow. Full CI passed on commit `a9fdc384d211f22915d96c3cf7cea3e2f16d98df` (formatting, architecture, analyzer tests, Rust tests, chemistry smoke, organization analysis, artifact upload, and Clippy). The PR remains draft and unmerged.
 
-**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only and is not an approved candidate. The initial paired setup translates the candidate molecule, which can also change its local flow, resonance, and hotspot exposure. Therefore the first paired workflow is only a placement-screening capability; it is not an exposure-matched causal test. Do not run it as a catalytic experiment until candidate selection and field/flow exposure controls are justified.
+**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only. The initial candidate translation can change flow/wake, source/hotspot, and resonance exposure; its output cannot isolate catalysis. The detailed gate and proposed exposure-matched placement protocol are documented in [PLAN-002 exposure-matching design](PLAN-002-exposure-matching-design.md). Do not dispatch the current workflow as a catalytic experiment.
 
 ## PLAN-003 — Autocatalysis
 
@@ -113,7 +113,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 1. Complete PLAN-001 from EXP-2026-004 artifacts; this is complete for the current dataset, so do not repeat the generic baseline.
 2. Select the strongest instance-level pathways and distinguish reusable substrates from possible facilitators.
-3. Finish and validate the PLAN-002 comparison infrastructure, then resolve spatial-field and flow exposure confounds before selecting or running a candidate.
+3. With PR #392's infrastructure validation green, implement and validate the PLAN-002 exposure telemetry, matched-placement gate, and complete opportunity denominators; then select a candidate from evidence before any catalytic run.
 4. Test autocatalysis only if a plausible self-production mechanism emerges.
 5. Evaluate pseudo-metabolism after repeated pathway turnover and regeneration are demonstrated.
 6. Investigate cross-catalysis after individual facilitation is operationally established.
