@@ -65,7 +65,6 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             "committed_sum": sum(committed) if all(value is not None for value in committed) else None,
         }
     return {
-        "_records": records,
         "independent_seed_count": len(records),
         "seeds": [row["identity"]["seed"] for row in records],
         "reaction_totals": reaction_totals,
@@ -106,7 +105,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def comparison_vectors(summary: dict[str, Any]) -> dict[str, list[int | float | None]]:
+def comparison_vectors(summary: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, list[int | float | None]]:
     vectors: dict[str, list[int | float | None]] = {}
     for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
         vectors[f"{reaction}.committed"] = summary["reaction_totals"][reaction]["committed_by_seed"]
@@ -123,7 +122,7 @@ def comparison_vectors(summary: dict[str, Any]) -> dict[str, list[int | float | 
             vectors[f"bond_accounting.{reaction}.{field}"] = [
                 numeric((row.get("bond_accounting") or {}).get("by_reaction", {})
                         .get(reaction, {}).get(field))
-                for row in summary["_records"]
+                for row in records
             ]
     return vectors
 
@@ -164,10 +163,16 @@ def compare(paths: list[Path]) -> dict[str, Any]:
     comparisons = []
     if len(measurement_groups) == 1 and len(rendered_groups) > 1:
         baseline = rendered_groups[0]
-        baseline_vectors = comparison_vectors(baseline["summary"])
+        baseline_records = condition_groups[condition_group_key(records[0])]
+        baseline_vectors = comparison_vectors(baseline["summary"], baseline_records)
         baseline_means = {name: mean_if_complete(values) for name, values in baseline_vectors.items()}
         for candidate in rendered_groups[1:]:
-            candidate_vectors = comparison_vectors(candidate["summary"])
+            candidate_records = next(
+                group for key, group in condition_groups.items()
+                if key[0] == candidate["experiment_id"] and key[1] == candidate["condition_id"]
+                and key[2] == candidate["comparison_configuration_sha256"]
+            )
+            candidate_vectors = comparison_vectors(candidate["summary"], candidate_records)
             differences = {}
             for name, values in candidate_vectors.items():
                 left_mean = baseline_means.get(name)
