@@ -47,7 +47,19 @@ Among the 1,890 groups with at least one physically valid sampled interface, the
 
 For each listed family, the descriptive within-seed association was positive in all five seeds. Odds ratios are exploratory summaries only; no inferential p-values or confidence claims are made. Families co-occur, and the comparison does not control for local density, flow, hotspot exposure, resonance, or other neighborhood composition.
 
-**Interpretation:** H–S is a reasonable provisional family to prioritize in a controlled follow-up, alongside H–O and S–S. This does not validate the illustrative H–S candidate instance or establish catalytic facilitation. The observed neighbors were generally still chemically available at the target event, but availability alone does not show that they increased the reaction rate.
+**Exact-instance trace worth following up:** In seed 45, molecule identity 1526 is an H–S molecule created at tick 3,148 by COMBINE (reaction ID `3148-0`). Its bond energy was 0.05145462766947298. It appeared in six physically valid sampled neighborhoods around distinct target-pair/tick groups; three had same-pair/tick COMBINE commits:
+
+| Tick | Target pair | Target transformation | Candidate distance from sampled contact |
+|---:|---|---|---:|
+| 3,639 | S:585 + H:1417 | H–S product identity 1549 | 23.90 |
+| 3,944 | O:536 + P:1544 | O–P product identity 1568 | 0.96 |
+| 4,145 | O:801 + H:838 | H–O product identity 1582 | 7.18 |
+
+The same H–S identity was also sampled near H+P at tick 3,246, N+H at 3,539, and S+S at 3,939, with no same-pair/tick COMBINE commit recorded. Identity 1526's bond graph and bond energy match between creation and destruction; it was not destroyed until a BREAK event (`4413-3`) at tick 4,413. Thus it was chemically available during all three target commits. The tick-3,639 event is especially interesting because a nearby H–S molecule remained intact while a separate H–S product formed from H and S. This is a traceable facilitation/autocatalysis hypothesis, not proof.
+
+The candidate and target pairs were clustered near the right-hand world boundary (x approximately 250), so spatial accumulation, local density, transport, or boundary effects are strong alternative explanations. The neighborhood is a diagnostic window, not proof of direct contact. H–S identity 1526 is therefore a high-priority *instance to test*, not a selected or validated catalyst.
+
+**Interpretation:** H–S is a reasonable provisional family to prioritize in a controlled follow-up, alongside H–O and S–S. The observed neighbors were often still chemically available at the target event, but availability alone does not show that they increased the reaction rate.
 
 ## Data-quality and coverage limits
 
