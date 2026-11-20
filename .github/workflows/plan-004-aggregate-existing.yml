@@ -1,0 +1,87 @@
+name: Recover PLAN-004 Existing Observations
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Completed PLAN-004 observation run containing the ten retained seed artifacts."
+        required: true
+        default: "44784506988"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] || { echo "Invalid run ID"; exit 2; }
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$SOURCE_RUN_ID")"
+          python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["head_branch"] == "experiments/plan-004-resource-feed", r.get("head_branch"); assert r["event"] in {"workflow_dispatch","push"}, r.get("event"); print("Validated source run:", r["id"], r["head_branch"], r["status"], r["conclusion"])' <<< "$run_json"
+      - name: Download retained per-seed artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plan004-*
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: observations
+          merge-multiple: true
+      - name: Assemble and validate both analysis inputs
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          root = Path("observations")
+          seeds = (42, 43, 44, 45, 46)
+          conditions = ("no-feed", "resource-feed")
+          required_suffixes = (".jsonl", "-chemistry.json", "-organization.json")
+
+          for condition in conditions:
+              destination = root / condition
+              destination.mkdir(parents=True, exist_ok=True)
+              for seed in seeds:
+                  prefix = f"{condition}-seed-{seed}"
+                  for suffix in required_suffixes:
+                      source = root / f"{prefix}{suffix}"
+                      if not source.is_file():
+                          raise SystemExit(f"Missing retained input: {source}")
+                      if suffix == ".jsonl":
+                          target = destination / f"seed-{seed}.jsonl"
+                      else:
+                          target = destination / f"seed-{seed}{suffix}"
+                      shutil.copy2(source, target)
+
+          print("Validated and assembled all 10 raw observations and 20 per-seed analyzer reports.")
+          PY
+      - name: Run cross-seed and network analyzers
+        env:
+          SEEDS: "42,43,44,45,46"
+          DURATION_SECONDS: "3600"
+        run: |
+          set -euo pipefail
+          for condition in no-feed resource-feed; do
+            mkdir -p "analysis/$condition"
+            python3 tools/chemistry_experiment_batch_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out "analysis/$condition/chemistry-batch.json" --markdown-out "analysis/$condition/chemistry-batch.md"
+            python3 tools/reaction_network_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/reaction-network"
+            python3 tools/geometry_aware_reaction_network.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/geometry-aware-network"
+            python3 tools/contact_opportunity_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/contact-opportunities"
+            python3 tools/temporal_chemical_complexity_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir "analysis/$condition/temporal-chemical-complexity"
+          done
+      - name: Upload recovered analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan004-resource-feed-recovered-analysis
+          path: analysis/
+          if-no-files-found: error
+          retention-days: 90
