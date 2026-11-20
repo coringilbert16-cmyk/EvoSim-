@@ -24,6 +24,14 @@ This is the master index. Detailed completed-run results live under [results/](r
 | PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
 | PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
 
+## Engineering and observability initiatives
+
+| ID | Objective | Status | Implementation record |
+|---|---|---|---|
+| OBS-001 | Build compact, reproducible chemistry diagnostics and unified offline analysis without changing simulation behavior | **Active — foundations merged; integration and historical pilot in progress** | [Unified analysis implementation](plans/OBS-001-unified-analysis-implementation.md) |
+
+OBS-001 is an engineering initiative, not a scientific experiment. It has no EXP identifier and does not itself establish a chemistry hypothesis. Its merged foundations are PR #398 (reaction identity/settlement telemetry), PR #400 (opportunity coverage semantics), and PR #401 (canonical run manifests). The opportunity-coverage and manifest implementation records remain linked in [plans/](plans/).
+
 ## Current PLAN-001 progress
 
 The first artifact pass identified four exact-instance reversible fragment-reuse cycles across seeds 43, 44, and 45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. These support reusable intermediate chemistry, not catalysis. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
