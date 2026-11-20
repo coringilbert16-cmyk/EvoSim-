@@ -936,6 +936,7 @@ impl Simulation {
         self.decomposing_bodies = dormant_decomposing_bodies;
         // Reconcile once, after the environmental tick and after every dormant
         // holder has been restored to the authoritative inventory.
+        self.reconcile_energy_inventory_holders();
     }
 
     fn step_environmental_chemistry_with_transport_reuse<
