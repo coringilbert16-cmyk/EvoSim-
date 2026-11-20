@@ -1135,13 +1135,15 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
-            let committed =
-                crate::environmental_combine::resolve_environmental_preserving_accumulation(
+            let energy_settlement =
+                crate::environmental_combine::resolve_environmental_preserving_accumulation_with_settlement(
                     operation,
                     &mut self.environment,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let committed = energy_settlement.is_some();
+            let energy_settlement = energy_settlement.unwrap_or_default();
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
             } else {
@@ -1205,6 +1207,7 @@ impl Simulation {
                     failure_reason: (!committed).then(|| {
                         "resolver rejected stale, invalid, or unfunded settlement; detailed reason is not yet exposed".to_string()
                     }),
+                    energy_settlement,
                     product_material,
                     product_internal_bond_count,
                     post_commit_source_cell_materials,
@@ -1297,6 +1300,10 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let energy_settlement = match &resolution {
+                Ok(settlement) => settlement.clone(),
+                Err(_) => crate::state::EnvironmentalEnergySettlement::default(),
+            };
             let committed = resolution.is_ok();
             let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
@@ -1350,6 +1357,7 @@ impl Simulation {
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
                     failure_reason,
+                    energy_settlement,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
@@ -1455,6 +1463,10 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let energy_settlement = match &resolution {
+                Ok(settlement) => settlement.clone(),
+                Err(_) => crate::state::EnvironmentalEnergySettlement::default(),
+            };
             let committed = resolution.is_ok();
             let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
@@ -1509,6 +1521,7 @@ impl Simulation {
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
                     failure_reason,
+                    energy_settlement,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
