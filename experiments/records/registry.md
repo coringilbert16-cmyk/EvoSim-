@@ -20,14 +20,14 @@ This is the master index. Detailed completed-run results live under [results/](r
 | PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **In progress — artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
 | PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | In progress — matched-catalysis diagnostic screen running | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
 | PLAN-003 | Does a product promote net production of additional copies of its own structure? | Planned — requires a defined self-production pathway and seeded/unseeded controls | [Autocatalysis](plans/README.md#plan-003-autocatalysis) |
-| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | **In progress — initial baseline artifact screen completed; exact multi-step pathway trace remains** | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
-| PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
-| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | **In progress — descriptive baseline screen completed; causal comparison blocked** | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
+| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | **In progress — exact-instance multistep trace completed; resource-fed experiment blocked by missing timed input capability** | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
+| PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/README.md#plan-005-cross-catalysis-and-cooperative-chemical-networks) |
+| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | **In progress — descriptive baseline screen completed; causal comparison blocked** | [Spatially organized chemistry](plans/README.md#plan-006-spatially-organized-chemistry) |
 
 ## Current findings
 
 - PLAN-001 identified exact-instance reversible fragment-reuse cycles across seeds 43–45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
-- PLAN-004's initial screen found recurrent family-level pathway turnover and additional H–O–P / sulfur association-dissociation sequences. This is promising intermediate recycling, not demonstrated pseudo-metabolism.
+- PLAN-004's exact-instance trace found an eight-event connected sequence in seed 45 (ticks 13,639–20,850) with repeated O–P₂ family regeneration through N–O–P₂ and C–O branches. This establishes multistage connected chemistry in a finite inventory, not pseudo-metabolism. See [initial screen](results/2026-11-20-plan-004-006-initial-screens.md) and [lineage trace](results/2026-11-20-plan-004-lineage-trace.md).
 - PLAN-006's descriptive screen found spatial concentration in committed-event geometry, with substantial seed-to-seed variation. It cannot identify causal environmental effects because complete opportunity denominators and matched spatial conditions are absent. See [PLAN-004/006 initial screens](results/2026-11-20-plan-004-006-initial-screens.md).
 
 ## Interpretation guardrails
