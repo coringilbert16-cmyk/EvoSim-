@@ -174,7 +174,7 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "seed-42.jsonl").write_text(
-                json.dumps({"event": "environmental_chemistry_summary"}) + "\\n",
+                json.dumps({"event": "environmental_chemistry_summary"}) + "\n",
                 encoding="utf-8",
             )
             report = analyze(root, [42], 60)
@@ -232,7 +232,7 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
                 },
             ]
             (root / "seed-42.jsonl").write_text(
-                "".join(json.dumps(record) + "\\n" for record in records),
+                "".join(json.dumps(record) + "\n" for record in records),
                 encoding="utf-8",
             )
             report = analyze(root, [42], 60)
