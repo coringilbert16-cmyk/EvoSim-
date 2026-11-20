@@ -133,10 +133,7 @@ pub(crate) fn inject_plan004_resource_pulse(
                 material.environmental_identity, 0,
                 "every externally supplied atom must receive a stable identity"
             );
-            ResourceFeedParticle {
-                element,
-                material,
-            }
+            ResourceFeedParticle { element, material }
         })
         .collect::<Vec<_>>();
 
