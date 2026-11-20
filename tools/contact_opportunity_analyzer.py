@@ -66,10 +66,34 @@ REACTION_FIELDS = (
 )
 
 
+def _contact_key(
+    reaction_kind: str,
+    source_ids: Any,
+    unit_indices: Any,
+    endpoints: Any,
+) -> tuple[Any, ...] | None:
+    if not isinstance(source_ids, list) or len(source_ids) != 2:
+        return None
+    if not isinstance(unit_indices, (list, tuple)) or len(unit_indices) != 2:
+        return None
+    if not isinstance(endpoints, (list, tuple)) or len(endpoints) != 2:
+        return None
+    return (
+        reaction_kind,
+        int(source_ids[0]),
+        int(source_ids[1]),
+        int(unit_indices[0]),
+        int(unit_indices[1]),
+        json.dumps(endpoints[0], sort_keys=True, separators=(",", ":")),
+        json.dumps(endpoints[1], sort_keys=True, separators=(",", ":")),
+    )
+
+
 def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     per_seed: list[dict[str, Any]] = []
     all_ticks: list[dict[str, Any]] = []
     opportunity_samples: list[dict[str, Any]] = []
+    reaction_outcomes: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     totals = {field: 0 for field in (*SEARCH_FIELDS, *DISPLACEMENT_FIELDS, *REACTION_FIELDS)}
     for seed in seeds:
         path = root / f"seed-{seed}.jsonl"
@@ -85,6 +109,24 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                     record = json.loads(line)
                 except json.JSONDecodeError as exc:
                     raise ValueError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
+
+                if record.get("event") == "environmental_reaction":
+                    event = record.get("reaction") or {}
+                    reaction_kind = event.get("reaction")
+                    key = _contact_key(
+                        reaction_kind,
+                        event.get("source_material_ids"),
+                        event.get("contact_unit_indices"),
+                        event.get("contact_endpoints"),
+                    )
+                    if key is not None:
+                        reaction_outcomes.setdefault(key, []).append({
+                            "tick": event.get("tick"),
+                            "outcome": event.get("outcome"),
+                            "failure_reason": event.get("failure_reason"),
+                        })
+                    continue
+
                 if record.get("event") != "environmental_chemistry_tick":
                     continue
                 work = record.get("reaction_work") or {}
@@ -96,11 +138,21 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                     seed_totals[field] += value
                 for sample in search.get("opportunity_samples", []) or []:
                     if isinstance(sample, dict):
-                        opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
+                        opportunity_samples.append({
+                            "seed": seed,
+                            "tick": record.get("tick"),
+                            "reaction_kind_name": "COMBINE",
+                            **sample,
+                        })
                 displacement = work.get("displacement_discovery") or {}
                 for sample in displacement.get("opportunity_samples", []) or []:
                     if isinstance(sample, dict):
-                        opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
+                        opportunity_samples.append({
+                            "seed": seed,
+                            "tick": record.get("tick"),
+                            "reaction_kind_name": "DISPLACEMENT",
+                            **sample,
+                        })
                 for field in DISPLACEMENT_FIELDS:
                     value = int(displacement.get(field, 0) or 0)
                     row[f"displacement_{field}"] = value
@@ -118,11 +170,86 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         for field, value in seed_totals.items():
             totals[field] += value
 
+    neighborhood_rows: list[dict[str, Any]] = []
+    neighborhood_summary: dict[str, dict[str, int]] = {
+        "COMBINE": {
+            "opportunity_samples": 0,
+            "samples_with_neighbors": 0,
+            "neighbors_recorded": 0,
+            "neighbors_truncated": 0,
+            "neighbors_missing_geometry": 0,
+            "samples_with_exact_transaction_match": 0,
+            "samples_with_multiple_transaction_matches": 0,
+        },
+        "DISPLACEMENT": {
+            "opportunity_samples": 0,
+            "samples_with_neighbors": 0,
+            "neighbors_recorded": 0,
+            "neighbors_truncated": 0,
+            "neighbors_missing_geometry": 0,
+            "samples_with_exact_transaction_match": 0,
+            "samples_with_multiple_transaction_matches": 0,
+        },
+    }
+    for sample in opportunity_samples:
+        reaction_kind = sample.get("reaction_kind_name", "UNKNOWN")
+        neighborhood = sample.get("local_neighborhood") or {}
+        neighbors = neighborhood.get("molecules") or []
+        recorded_neighbors = [neighbor for neighbor in neighbors if isinstance(neighbor, dict)]
+        summary = neighborhood_summary.get(reaction_kind)
+        if summary is not None:
+            summary["opportunity_samples"] += 1
+            summary["samples_with_neighbors"] += int(bool(recorded_neighbors))
+            summary["neighbors_recorded"] += len(recorded_neighbors)
+            summary["neighbors_truncated"] += int(neighborhood.get("truncated_molecule_count", 0) or 0)
+            summary["neighbors_missing_geometry"] += int(neighborhood.get("missing_geometry_count", 0) or 0)
+
+        key = _contact_key(
+            reaction_kind,
+            [sample.get("source_a_identity"), sample.get("source_b_identity")],
+            [sample.get("unit_a"), sample.get("unit_b")],
+            [sample.get("endpoint_a"), sample.get("endpoint_b")],
+        )
+        matches = reaction_outcomes.get(key, []) if key is not None else []
+        sample["matching_reaction_outcomes"] = matches
+        sample["exact_transaction_match_count"] = len(matches)
+        if summary is not None:
+            summary["samples_with_exact_transaction_match"] += int(bool(matches))
+            summary["samples_with_multiple_transaction_matches"] += int(len(matches) > 1)
+
+        for neighbor in recorded_neighbors:
+            composition = neighbor.get("elemental_counts") or []
+            neighborhood_rows.append({
+                "seed": sample.get("seed"),
+                "tick": sample.get("tick"),
+                "reaction_kind": reaction_kind,
+                "source_a_identity": sample.get("source_a_identity"),
+                "source_b_identity": sample.get("source_b_identity"),
+                "unit_a": sample.get("unit_a"),
+                "unit_b": sample.get("unit_b"),
+                "neighbor_identity": neighbor.get("identity"),
+                "neighbor_distance": neighbor.get("distance_from_contact"),
+                "neighbor_center_x": neighbor.get("center_x"),
+                "neighbor_center_y": neighbor.get("center_y"),
+                "neighbor_constituent_count": neighbor.get("constituent_count"),
+                "neighbor_topology_signature": neighbor.get("topology_signature"),
+                "carbon_count": composition[0] if len(composition) > 0 else 0,
+                "hydrogen_count": composition[1] if len(composition) > 1 else 0,
+                "nitrogen_count": composition[2] if len(composition) > 2 else 0,
+                "oxygen_count": composition[3] if len(composition) > 3 else 0,
+                "phosphorus_count": composition[4] if len(composition) > 4 else 0,
+                "sulfur_count": composition[5] if len(composition) > 5 else 0,
+                "unclassified_constituents": neighbor.get("unclassified_constituents", 0),
+                "environmental_usable_energy": sample.get("environmental_usable_energy"),
+                "environmental_resonant_energy": sample.get("environmental_resonant_energy"),
+                "matched_transaction_count": len(matches),
+            })
+
     inspected = totals["constituent_pairs_inspected"]
     valid_pairs = totals["constituent_pairs_with_valid_interfaces"]
     interfaces = totals["physically_evaluable_interfaces"]
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "experiment": {"seeds": seeds, "duration_seconds_per_seed": duration},
         "per_seed": per_seed,
         "pooled_totals": totals,
@@ -142,22 +269,27 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             "displacement_activation_below_threshold": totals["activation_below_threshold"],
             "displacement_trial_rejections_after_activation": totals["trial_build_rejections_after_activation"],
         },
+        "local_neighborhood_summary": neighborhood_summary,
         "interpretation_limits": [
-            "These are per-tick aggregate discovery counters, not a complete list of every molecule-pair encounter.",
-            "A constituent-pair broad-phase overlap is a candidate opportunity, not proof of endpoint contact.",
-            "A physically evaluable interface is passed to the chemistry accumulation step; it is not necessarily reaction-ready or committed.",
-            "Bounded search windows leave some available pairs uninspected; uninspected counts must not be treated as rejected contacts.",
-            "The counters do not yet attribute failed opportunities to individual molecule identities or preserve their full geometry.",
+            "The local neighborhood is a diagnostic observation window extending two spatial cells around the sampled contact midpoint; it is not a chemistry contact cutoff or proof of facilitation.",
+            "At most 16 neighboring molecules are retained per sample; truncation and missing-geometry counts are reported.",
+            "Neighbor composition is recorded as C, H, N, O, P, S counts plus an unclassified count; topology signatures are descriptors, not exact graph-isomorphism proofs.",
+            "Environmental usable and resonant energy values are global reservoir context, not local field energy density or energy owned by neighboring molecules.",
+            "Opportunity samples remain bounded and deterministic; they are not a complete unbiased census of every eligible encounter.",
+            "An exact transaction match links the sampled source pair, constituent indices, and endpoints to a later reaction event. A missing match does not prove that no reaction occurred.",
+            "A nearby molecule is a candidate facilitator only. Causal facilitation still requires paired present/absent controls and evidence that the candidate remains chemically available.",
+            "A physically evaluable interface is passed to chemistry accumulation; it is not necessarily reaction-ready or committed.",
         ],
         "tick_diagnostics": all_ticks,
         "opportunity_samples": opportunity_samples,
         "opportunity_sample_outcomes": {
             "physically_valid": sum(bool(row.get("physically_valid")) for row in opportunity_samples),
             "physically_rejected": sum(not bool(row.get("physically_valid")) for row in opportunity_samples),
+            "exact_transaction_matches": sum(bool(row.get("exact_transaction_match_count")) for row in opportunity_samples),
         },
+        "neighborhood_samples": neighborhood_rows,
     }
     return report
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -193,6 +325,17 @@ def main() -> int:
     )
     sample_path = args.output_dir / "contact-opportunity-samples.json"
     sample_path.write_text(json.dumps(report["opportunity_samples"], indent=2) + "\n", encoding="utf-8")
+    neighborhood_path = args.output_dir / "contact-opportunity-neighborhoods.csv"
+    neighborhood_rows = report["neighborhood_samples"]
+    if neighborhood_rows:
+        with neighborhood_path.open("w", newline="", encoding="utf-8") as neighborhood_stream:
+            neighborhood_writer = csv.DictWriter(
+                neighborhood_stream, fieldnames=list(neighborhood_rows[0])
+            )
+            neighborhood_writer.writeheader()
+            neighborhood_writer.writerows(neighborhood_rows)
+    else:
+        neighborhood_path.write_text("", encoding="utf-8")
     if report["opportunity_samples"]:
         with (args.output_dir / "contact-opportunity-samples.csv").open("w", newline="", encoding="utf-8") as sample_stream:
             sample_writer = csv.DictWriter(sample_stream, fieldnames=list(report["opportunity_samples"][0]))

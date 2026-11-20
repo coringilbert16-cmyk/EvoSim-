@@ -340,6 +340,79 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
+/// Sample the production ambient-flow velocity at every realized constituent
+/// position of one environmental material. This uses the same background
+/// vector field, obstacle construction, obstacle influence, and self-exclusion
+/// as transport; it is diagnostic only and never advances or mutates the field.
+pub(crate) fn material_flow_velocity_samples(
+    field: &ActiveMaterialField,
+    catalog: &[BaseResource],
+    environmental_identity: u64,
+    world_width: f64,
+    world_height: f64,
+) -> Option<Vec<(f64, f64)>> {
+    if environmental_identity == 0
+        || !world_width.is_finite()
+        || !world_height.is_finite()
+        || world_width <= 0.0
+        || world_height <= 0.0
+    {
+        return None;
+    }
+    let width = world_width.min(field.width_cells as f64 * field.cell_size);
+    let height = world_height.min(field.height_cells as f64 * field.cell_size);
+    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+
+    let mut target = None;
+    let mut obstacles = Vec::new();
+    for (cell_index, cell) in field.cells.iter().enumerate() {
+        for (material_index, material) in cell.physical_materials.iter().enumerate() {
+            if material.environmental_identity == environmental_identity
+                && target
+                    .replace((cell_index, material_index, material))
+                    .is_some()
+            {
+                return None;
+            }
+            if let Some(obstacle) =
+                obstacle_for(cell_index, material_index, material, catalog, height)
+            {
+                obstacles.push(obstacle);
+            }
+        }
+    }
+    let (source_cell, source_index, material) = target?;
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty() || placements.len() != material.material.parts.len() {
+        return None;
+    }
+    let mut samples = Vec::with_capacity(placements.len());
+    for placement in placements {
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
+            return None;
+        }
+        let velocity = obstacle_adjusted_velocity(
+            background_velocity(placement.x, placement.y, width, height),
+            placement.x,
+            placement.y,
+            source_cell,
+            source_index,
+            &obstacles,
+            height,
+        );
+        if !velocity.x.is_finite() || !velocity.y.is_finite() {
+            return None;
+        }
+        samples.push((velocity.x, velocity.y));
+    }
+    Some(samples)
+}
+
 fn clamp_horizontal_displacement(
     material: &PhysicalMaterial,
     requested_dx: f64,
@@ -873,6 +946,35 @@ pub(crate) fn transport_field_with_config<const REUSE_SINGLETON_CENTER_VELOCITY:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn material_flow_exposure_uses_realized_positions_and_is_finite() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(100.0, 80.0, 10.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 40.0,
+                y: 30.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        assert!(field.deposit_physical(40.0, 30.0, material, &catalog));
+        field.assign_missing_material_identities();
+        let identity = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .next()
+            .expect("deposited material")
+            .environmental_identity;
+        let samples = material_flow_velocity_samples(&field, &catalog, identity, 100.0, 80.0)
+            .expect("production flow sampler should resolve the material");
+        assert_eq!(samples.len(), 1);
+        assert!(samples[0].0.is_finite() && samples[0].1.is_finite());
+    }
 
     #[test]
     fn background_flow_is_finite_deterministic_and_left_to_right() {

@@ -52,6 +52,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_reaction_network_analyzer.py'
           python3 -m unittest discover -s tests -p 'test_geometry_aware_reaction_network.py'
           python3 -m unittest discover -s tests -p 'test_contact_opportunity_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_matched_catalysis_comparison_analyzer.py'
           python3 -m unittest discover -s tests -p 'test_temporal_chemical_complexity_analyzer.py'
       - name: Run Rust tests
         if: success()

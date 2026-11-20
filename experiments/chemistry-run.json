@@ -9,7 +9,7 @@
   ],
   "duration_seconds": 3600,
   "diagnostic_interval": 100,
-  "request_note": "Five independent one-hour standard chemistry observations; 12 temporal complexity windows per seed; ordinary chemistry, no forced reactions.",
+  "request_note": "PLAN-002 neighborhood diagnostic screen using existing chemistry and energy rules; same five seeds and one-hour conditions as EXP-2026-004. No forced reactions or chemistry changes.",
   "profile_movement": false,
   "profile_tick": false
 }

@@ -2,11 +2,11 @@
 
 These plans define questions and evidence standards, not claims that the behaviors already exist. The research objective is to discover naturally arising organization in the general chemistry engine. No plan authorizes special-case reactions, organism-specific logic, forced reactions, artificial energy grants, or threshold changes.
 
-The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 is now in progress.
+The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLAN-001 artifact analysis is complete; subsequent work must use the archived findings rather than repeat the generic baseline.
 
 ## PLAN-001 — Existing pathway and molecular-lineage analysis
 
-**Status:** In progress; existing-artifact analysis only.
+**Status:** Completed for EXP-2026-004; existing-artifact analysis only.
 
 **Question:** Which instance-level reaction sequences demonstrate reusable intermediates, reversible transformations, multistep synthesis, or plausible facilitation?
 
@@ -26,7 +26,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-002 — Catalytic facilitation
 
-**Status:** Planned; depends on PLAN-001 identifying a defensible candidate.
+**Status:** Five-seed neighborhood screen analyzed (EXP-2026-006); provisional family associations identified, but candidate selection and causal testing remain blocked. No catalytic experiment is authorized.
 
 **Question:** Does a molecule increase the likelihood or rate of a reaction while remaining chemically available, rather than being consumed as a reactant?
 
@@ -40,7 +40,11 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 **Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed in a reaction and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
 
-**Infrastructure prerequisite:** the current environmental workflow runs one fixed baseline condition and has no paired facilitator control. Comparative setup execution and comparable opportunity diagnostics must be implemented or supplied by a suitable laboratory workflow before a controlled run.
+**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, and a manual-only workflow. A first exposure telemetry increment records per-constituent production flow velocity, hotspot intensity, the uniform world-tone source sample, and candidate-to-target legacy pairwise aura magnitudes. The analyzer compares tick-zero flow/hotspot/source samples and explicitly fails causal eligibility when telemetry is missing or unmatched. A Rust preflight command now checks both tick-zero arms and blocks the manual paired-run workflow before simulations while time-resolved flow/hotspot exposure, non-candidate background resonance, and complete eligible-opportunity denominators are unavailable. Focused flow-sampler, analyzer-gate, and preflight-blocker tests were added. Full CI is running against the current implementation. See [PLAN-002 exposure-matching design](PLAN-002-exposure-matching-design.md) for limitations. The PR remains draft and unmerged.
+
+**Current observational result:** EXP-2026-006 found cross-seed associations between several nearby molecular families and same-pair/tick COMBINE commits within a small subset of physically valid sampled opportunities. H–S, H–O, S–S, and O–P families are provisional follow-up candidates, not established facilitators. The H–S example configuration remains illustrative; its family-level association is not enough to select an exact molecule identity.
+
+**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only. Current exposure measurements are tick-zero only; background resonance from other materials and full-cycle flow/hotspot exposure are not measured; complete eligible target-pair opportunity denominators are absent. The analyzer therefore cannot mark causal interpretation eligible. The run #77 observations were ordinary baseline chemistry with neighborhood telemetry, not candidate-near versus candidate-remote arms. Do not dispatch the current workflow as a catalytic experiment.
 
 ## PLAN-003 — Autocatalysis
 
@@ -109,9 +113,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## Research sequence
 
-1. Complete PLAN-001 from EXP-2026-004 artifacts; do not repeat the generic baseline.
+1. Complete PLAN-001 from EXP-2026-004 artifacts; this is complete for the current dataset, so do not repeat the generic baseline.
 2. Select the strongest instance-level pathways and distinguish reusable substrates from possible facilitators.
-3. Build the minimum controlled-comparison capability needed for PLAN-002.
+3. With PR #392's infrastructure validation green, implement and validate the PLAN-002 exposure telemetry, matched-placement gate, and complete opportunity denominators; then select a candidate from evidence before any catalytic run.
 4. Test autocatalysis only if a plausible self-production mechanism emerges.
 5. Evaluate pseudo-metabolism after repeated pathway turnover and regeneration are demonstrated.
 6. Investigate cross-catalysis after individual facilitation is operationally established.

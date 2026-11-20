@@ -1256,6 +1256,9 @@ mod tests {
                 product_material: Some(vec![("Carbon".into(), 2.0)]),
                 product_internal_bond_count: Some(1),
                 post_commit_source_cell_materials: Vec::new(),
+                source_material_ids: Vec::new(),
+                contact_unit_indices: None,
+                contact_endpoints: None,
                 molecular_lifecycle: vec![crate::state::EnvironmentalMoleculeLifecycleEvent {
                     event: "molecular_lifecycle".into(),
                     action: "created".into(),

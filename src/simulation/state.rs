@@ -927,6 +927,164 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub(crate) struct EnvironmentalNearbyMoleculeSample {
+    /// Stable identity of the unchanged neighboring molecule at this tick.
+    pub(crate) identity: u64,
+    /// C, H, N, O, P, S constituent counts in that fixed order.
+    pub(crate) elemental_counts: [u16; 6],
+    pub(crate) unclassified_constituents: u16,
+    pub(crate) constituent_count: u16,
+    /// Composition plus undirected bond descriptor hash; not an isomorphism proof.
+    pub(crate) topology_signature: u64,
+    pub(crate) center_x: f64,
+    pub(crate) center_y: f64,
+    pub(crate) distance_from_contact: f64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub(crate) struct EnvironmentalLocalNeighborhoodSample {
+    /// Observation radius is two spatial cells; this is a diagnostic window,
+    /// not a chemistry contact cutoff or an asserted catalytic interaction range.
+    pub(crate) radius: f64,
+    pub(crate) total_molecule_count: usize,
+    pub(crate) recorded_molecule_count: usize,
+    pub(crate) truncated_molecule_count: usize,
+    pub(crate) missing_geometry_count: usize,
+    pub(crate) molecules: [Option<EnvironmentalNearbyMoleculeSample>; 16],
+}
+
+impl EnvironmentalLocalNeighborhoodSample {
+    pub(crate) fn capture(
+        environment: &Environment,
+        center_x: f64,
+        center_y: f64,
+        source_a_identity: u64,
+        source_b_identity: u64,
+    ) -> Self {
+        let field = &environment.field;
+        if !center_x.is_finite() || !center_y.is_finite() || field.cells.is_empty() {
+            return Self::default();
+        }
+        let radius = (2.0 * field.cell_size).max(1.0);
+        let query_radius = radius + field.cell_size * std::f64::consts::SQRT_2 * 0.5;
+        let candidate_cells = field.cells_within_radius(center_x, center_y, query_radius);
+        let field_height = field.height_cells as f64 * field.cell_size;
+        let mut candidates = Vec::new();
+        let mut missing_geometry_count = 0usize;
+
+        for cell_index in candidate_cells {
+            let Some(cell) = field.cells.get(cell_index) else {
+                continue;
+            };
+            for material in &cell.physical_materials {
+                let identity = material.environmental_identity;
+                if identity == 0
+                    || identity == source_a_identity
+                    || identity == source_b_identity
+                    || material.material.parts.len() < 2
+                {
+                    continue;
+                }
+                let Some(placements) = material.placements.as_ref() else {
+                    missing_geometry_count += 1;
+                    continue;
+                };
+                if placements.is_empty()
+                    || placements
+                        .iter()
+                        .any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
+                {
+                    missing_geometry_count += 1;
+                    continue;
+                }
+                let count = placements.len() as f64;
+                let molecule_x =
+                    placements.iter().map(|placement| placement.x).sum::<f64>() / count;
+                let molecule_y =
+                    placements.iter().map(|placement| placement.y).sum::<f64>() / count;
+                let dx = molecule_x - center_x;
+                let direct_dy = (molecule_y - center_y).abs();
+                let dy = if field_height.is_finite() && field_height > 0.0 {
+                    direct_dy.min((field_height - direct_dy).abs())
+                } else {
+                    direct_dy
+                };
+                let distance = dx.hypot(dy);
+                if !distance.is_finite() || distance > radius {
+                    continue;
+                }
+
+                let mut elemental_counts = [0u16; 6];
+                let mut unclassified_constituents = 0u16;
+                for (name, amount) in &material.material.parts {
+                    let index = match name.as_str() {
+                        "Carbon" => Some(0),
+                        "Hydrogen" => Some(1),
+                        "Nitrogen" => Some(2),
+                        "Oxygen" => Some(3),
+                        "Phosphorus" => Some(4),
+                        "Sulfur" => Some(5),
+                        _ => None,
+                    };
+                    let count = if amount.is_finite() && *amount > 0.0 {
+                        amount.round().min(u16::MAX as f64) as u16
+                    } else {
+                        0
+                    };
+                    if let Some(index) = index {
+                        elemental_counts[index] = elemental_counts[index].saturating_add(count);
+                    } else {
+                        unclassified_constituents = unclassified_constituents.saturating_add(count);
+                    }
+                }
+                let descriptor = format!(
+                    "{:?}|{:?}",
+                    material.material.parts, material.material.internal_bonds
+                );
+                let topology_signature = descriptor
+                    .bytes()
+                    .fold(0xcbf29ce484222325_u64, |hash, byte| {
+                        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+                    });
+                candidates.push(EnvironmentalNearbyMoleculeSample {
+                    identity,
+                    elemental_counts,
+                    unclassified_constituents,
+                    constituent_count: placements.len().min(u16::MAX as usize) as u16,
+                    topology_signature,
+                    center_x: molecule_x,
+                    center_y: molecule_y,
+                    distance_from_contact: distance,
+                });
+            }
+        }
+
+        candidates.sort_by(|left, right| {
+            left.distance_from_contact
+                .partial_cmp(&right.distance_from_contact)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| left.identity.cmp(&right.identity))
+        });
+        let total_molecule_count = candidates.len();
+        let recorded_molecule_count = total_molecule_count.min(16);
+        let mut molecules = [None; 16];
+        for (index, candidate) in candidates.into_iter().take(16).enumerate() {
+            molecules[index] = Some(candidate);
+        }
+        Self {
+            radius,
+            total_molecule_count,
+            recorded_molecule_count,
+            truncated_molecule_count: total_molecule_count.saturating_sub(recorded_molecule_count),
+            missing_geometry_count,
+            molecules,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalContactOpportunitySample {
     pub(crate) source_a_identity: u64,
@@ -947,6 +1105,11 @@ pub(crate) struct EnvironmentalContactOpportunitySample {
     pub(crate) physically_valid: bool,
     pub(crate) reaction_kind: u8,
     pub(crate) old_bond_energy: f64,
+    /// Global environmental energy reservoirs at the sampled opportunity.
+    /// These are context values, not energy owned by the sampled molecules.
+    pub(crate) environmental_usable_energy: f64,
+    pub(crate) environmental_resonant_energy: f64,
+    pub(crate) local_neighborhood: EnvironmentalLocalNeighborhoodSample,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -1091,6 +1254,18 @@ pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
     #[serde(default)]
     pub(crate) molecular_lifecycle: Vec<EnvironmentalMoleculeLifecycleEvent>,
+    /// Stable source identities and the exact constituent/endpoints used by the
+    /// committed/rejected transaction, allowing opportunity samples to be joined
+    /// to reaction outcomes without relying on transient cell/vector positions.
+    #[serde(default)]
+    pub(crate) source_material_ids: Vec<u64>,
+    #[serde(default)]
+    pub(crate) contact_unit_indices: Option<(usize, usize)>,
+    #[serde(default)]
+    pub(crate) contact_endpoints: Option<(
+        crate::structure::ConnectionEndpoint,
+        crate::structure::ConnectionEndpoint,
+    )>,
 }
 
 #[derive(Clone)]

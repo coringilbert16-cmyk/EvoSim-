@@ -415,9 +415,285 @@ fn seed_randomized_molecular_resources(
     assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
+/// Generic setup for a paired catalytic-facilitation comparison. The part
+/// lists describe exact molecule compositions, not privileged reaction rules.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MatchedCatalysisConfig {
+    pub(crate) candidate_parts: Vec<String>,
+    pub(crate) target_reactant_a_parts: Vec<String>,
+    pub(crate) target_reactant_b_parts: Vec<String>,
+    #[serde(default = "default_candidate_near_distance")]
+    pub(crate) near_distance: f64,
+    #[serde(default = "default_max_target_pair_distance")]
+    pub(crate) max_target_pair_distance: f64,
+    #[serde(default = "default_minimum_remote_distance")]
+    pub(crate) minimum_remote_distance: f64,
+}
+
+fn default_candidate_near_distance() -> f64 {
+    8.0
+}
+fn default_max_target_pair_distance() -> f64 {
+    30.0
+}
+fn default_minimum_remote_distance() -> f64 {
+    60.0
+}
+
+impl MatchedCatalysisConfig {
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        for (label, parts) in [
+            ("candidate_parts", &self.candidate_parts),
+            ("target_reactant_a_parts", &self.target_reactant_a_parts),
+            ("target_reactant_b_parts", &self.target_reactant_b_parts),
+        ] {
+            if parts.len() != 2 || parts.iter().any(|part| part.trim().is_empty()) {
+                return Err(format!(
+                    "{label} must contain exactly two non-empty element names"
+                ));
+            }
+        }
+        if self.near_distance <= 0.0
+            || self.max_target_pair_distance <= 0.0
+            || self.minimum_remote_distance <= self.near_distance
+            || !self.near_distance.is_finite()
+            || !self.max_target_pair_distance.is_finite()
+            || !self.minimum_remote_distance.is_finite()
+        {
+            return Err("control distances must be finite and positive, with remote distance greater than near distance".to_string());
+        }
+        if canonical_part_names(&self.candidate_parts)
+            == canonical_part_names(&self.target_reactant_a_parts)
+            || canonical_part_names(&self.candidate_parts)
+                == canonical_part_names(&self.target_reactant_b_parts)
+        {
+            return Err(
+                "candidate molecule must differ from each target reactant composition".to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MatchedCatalysisCondition {
+    CandidateNear,
+    CandidateRemote,
+}
+
+impl MatchedCatalysisCondition {
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "candidate_near" => Ok(Self::CandidateNear),
+            "candidate_remote" => Ok(Self::CandidateRemote),
+            _ => Err(
+                "matched-catalysis condition must be candidate_near or candidate_remote"
+                    .to_string(),
+            ),
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::CandidateNear => "candidate_near",
+            Self::CandidateRemote => "candidate_remote",
+        }
+    }
+}
+
+#[derive(Clone)]
+struct MatchedMoleculeLocation {
+    identity: u64,
+    parts: Vec<String>,
+    center: (f64, f64),
+}
+
+fn canonical_part_names(parts: &[String]) -> Vec<String> {
+    let mut names = parts.to_vec();
+    names.sort();
+    names
+}
+
+fn material_part_names(material: &PhysicalMaterial) -> Option<Vec<String>> {
+    if material
+        .material
+        .parts
+        .iter()
+        .any(|(_, amount)| !amount.is_finite() || (*amount - 1.0).abs() > 1e-9)
+    {
+        return None;
+    }
+    Some(canonical_part_names(
+        &material
+            .material
+            .parts
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn physical_material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty()
+        || placements
+            .iter()
+            .any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
+    {
+        return None;
+    }
+    let count = placements.len() as f64;
+    Some((
+        placements.iter().map(|placement| placement.x).sum::<f64>() / count,
+        placements.iter().map(|placement| placement.y).sum::<f64>() / count,
+    ))
+}
+
+fn matched_molecule_locations(simulation: &Simulation) -> Vec<MatchedMoleculeLocation> {
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter_map(|material| {
+            Some(MatchedMoleculeLocation {
+                identity: material.environmental_identity,
+                parts: material_part_names(material)?,
+                center: physical_material_center(material)?,
+            })
+        })
+        .filter(|molecule| molecule.identity != 0 && molecule.parts.len() >= 2)
+        .collect()
+}
+
+fn point_distance(left: (f64, f64), right: (f64, f64)) -> f64 {
+    (left.0 - right.0).hypot(left.1 - right.1)
+}
+
+fn canonical_inventory(simulation: &Simulation) -> Vec<(String, f64)> {
+    let mut inventory = simulation.environment.field.total_material();
+    inventory.sort_by(|left, right| left.0.cmp(&right.0));
+    inventory
+}
+
+fn non_candidate_layout_signature(simulation: &Simulation, candidate_id: u64) -> u64 {
+    let mut rows = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| material.environmental_identity != candidate_id)
+        .map(|material| {
+            let placements = material.placements.as_deref().unwrap_or_default();
+            format!(
+                "{}|{:?}|{:?}",
+                material.environmental_identity,
+                material.material.parts,
+                placements
+                    .iter()
+                    .map(|p| (p.x.to_bits(), p.y.to_bits(), p.rotation_radians.to_bits()))
+                    .collect::<Vec<_>>()
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.sort();
+    rows.join("\n")
+        .bytes()
+        .fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        })
+}
+
+fn relocate_candidate_near_target(
+    simulation: &mut Simulation,
+    candidate_id: u64,
+    candidate_center: (f64, f64),
+    target_center: (f64, f64),
+    near_distance: f64,
+) -> Result<(f64, f64), String> {
+    // Try deterministic angular positions at the requested separation. Each
+    // movement uses the environment's atomic geometry/collision validator.
+    for ring_scale in [1.0, 0.85, 1.15] {
+        let radius = near_distance * ring_scale;
+        if radius > near_distance + 1e-9 {
+            continue;
+        }
+        for step in 0..64 {
+            let angle = std::f64::consts::TAU * step as f64 / 64.0;
+            let destination = (
+                target_center.0 + radius * angle.cos(),
+                target_center.1 + radius * angle.sin(),
+            );
+            let dx = destination.0 - candidate_center.0;
+            let dy = destination.1 - candidate_center.1;
+            if simulation
+                .environment
+                .field
+                .move_physical_material_by_identity(
+                    candidate_id,
+                    dx,
+                    dy,
+                    &simulation.environment.catalog,
+                )
+            {
+                return Ok(destination);
+            }
+        }
+    }
+    Err("could not place candidate molecule near the target pair without overlap or boundary violation".to_string())
+}
+
+fn relocate_candidate_remote(
+    simulation: &mut Simulation,
+    candidate_id: u64,
+    candidate_center: (f64, f64),
+    target_center: (f64, f64),
+    minimum_remote_distance: f64,
+) -> Result<(f64, f64), String> {
+    let field = &simulation.environment.field;
+    let mut destinations = (0..field.cells.len())
+        .map(|index| field.cell_center(index))
+        .filter(|point| point_distance(*point, target_center) >= minimum_remote_distance)
+        .collect::<Vec<_>>();
+    destinations.sort_by(|left, right| {
+        point_distance(*right, target_center)
+            .partial_cmp(&point_distance(*left, target_center))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                left.0
+                    .partial_cmp(&right.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| {
+                left.1
+                    .partial_cmp(&right.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+    for destination in destinations {
+        if simulation
+            .environment
+            .field
+            .move_physical_material_by_identity(
+                candidate_id,
+                destination.0 - candidate_center.0,
+                destination.1 - candidate_center.1,
+                &simulation.environment.catalog,
+            )
+        {
+            return Ok(destination);
+        }
+    }
+    Err("could not place candidate molecule at the configured remote distance without overlap or boundary violation".to_string())
+}
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
+    pub(crate) experiment_metadata: Option<serde_json::Value>,
 }
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
@@ -483,7 +759,426 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     EnvironmentalChemistryFixture {
         simulation,
         pile_sizes,
+        experiment_metadata: None,
     }
+}
+
+/// Build one arm of a paired facilitator-placement comparison. Both arms use
+/// the exact same seed and initial inventory; only the configured candidate
+/// molecule is translated after the deterministic tick-zero fixture is built.
+fn material_by_identity(simulation: &Simulation, identity: u64) -> Option<&PhysicalMaterial> {
+    let mut matches = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| material.environmental_identity == identity);
+    let material = matches.next()?;
+    matches.next().is_none().then_some(material)
+}
+
+/// Tick-zero exposure diagnostics use the same production transport sampler
+/// and the live source models. These are measurements, not a claim that a
+/// near/remote pair is matched over a complete run.
+fn material_local_exposure(
+    simulation: &Simulation,
+    identity: u64,
+) -> Result<serde_json::Value, String> {
+    let material = material_by_identity(simulation, identity)
+        .ok_or_else(|| format!("material identity {identity} is missing or duplicated"))?;
+    let placements = material
+        .placements
+        .as_ref()
+        .filter(|placements| {
+            !placements.is_empty() && placements.len() == material.material.parts.len()
+        })
+        .ok_or_else(|| format!("material identity {identity} has incomplete geometry"))?;
+    let flow = crate::environment_flow::material_flow_velocity_samples(
+        &simulation.environment.field,
+        &simulation.environment.catalog,
+        identity,
+        simulation.environment.width,
+        simulation.environment.height,
+    )
+    .ok_or_else(|| format!("flow exposure unavailable for material identity {identity}"))?;
+    let hotspot = simulation
+        .hotspot
+        .ok_or_else(|| "localized hotspot source is unavailable".to_string())?;
+    let hotspot_intensity = placements
+        .iter()
+        .map(|placement| {
+            hotspot
+                .intensity_at(placement.x, placement.y)
+                .ok_or_else(|| format!("hotspot exposure invalid for material identity {identity}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let flow_json = flow
+        .iter()
+        .map(|(vx, vy)| serde_json::json!({"vx": vx, "vy": vy, "speed": vx.hypot(*vy)}))
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "constituent_positions": placements.iter().map(|p| serde_json::json!({"x": p.x, "y": p.y})).collect::<Vec<_>>(),
+        "flow_velocity": flow_json,
+        "hotspot_intensity_per_tick_per_area": hotspot_intensity,
+    }))
+}
+
+fn world_tone_exposure(simulation: &Simulation) -> Result<serde_json::Value, String> {
+    let sample = simulation
+        .world_tone_cycle
+        .as_ref()
+        .and_then(|cycle| cycle.sample(0))
+        .ok_or_else(|| "world-tone source sample unavailable at tick zero".to_string())?;
+    Ok(serde_json::json!({
+        "source_x": sample.source_x,
+        "source_y": sample.source_y,
+        "frequency_cycles_per_day": sample.frequency_cycles_per_day,
+        "energy_intensity_per_tick_per_width": sample.energy_intensity_per_tick_per_width,
+        "orbital_phase": sample.orbital_phase,
+        "recipient_semantics": "uniform_per_constituent_source_width; independent of material position",
+    }))
+}
+
+fn candidate_resonance_contribution(
+    simulation: &Simulation,
+    candidate_id: u64,
+    target_id: u64,
+) -> Result<Vec<f64>, String> {
+    let candidate = material_by_identity(simulation, candidate_id)
+        .ok_or_else(|| format!("candidate identity {candidate_id} is missing or duplicated"))?;
+    let target = material_by_identity(simulation, target_id)
+        .ok_or_else(|| format!("target identity {target_id} is missing or duplicated"))?;
+    let receptions = crate::harmonics::material_aura_receptions(
+        candidate,
+        target,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+    .ok_or_else(|| {
+        "legacy pairwise candidate-to-target resonance sample unavailable".to_string()
+    })?;
+    if receptions
+        .iter()
+        .any(|sample| !sample.magnitude.is_finite())
+    {
+        return Err("legacy pairwise resonance sample is non-finite".to_string());
+    }
+    Ok(receptions.iter().map(|sample| sample.magnitude).collect())
+}
+
+pub(crate) fn build_matched(
+    seed: u64,
+    config: &MatchedCatalysisConfig,
+    condition: MatchedCatalysisCondition,
+) -> Result<EnvironmentalChemistryFixture, String> {
+    config.validate()?;
+    let mut fixture = build(seed);
+    let molecules = matched_molecule_locations(&fixture.simulation);
+    let candidate_parts = canonical_part_names(&config.candidate_parts);
+    let target_a_parts = canonical_part_names(&config.target_reactant_a_parts);
+    let target_b_parts = canonical_part_names(&config.target_reactant_b_parts);
+
+    let target_a = molecules
+        .iter()
+        .filter(|molecule| molecule.parts == target_a_parts)
+        .collect::<Vec<_>>();
+    let target_b = molecules
+        .iter()
+        .filter(|molecule| molecule.parts == target_b_parts)
+        .collect::<Vec<_>>();
+    let mut target_pair: Option<(&MatchedMoleculeLocation, &MatchedMoleculeLocation, f64)> = None;
+    for left in &target_a {
+        for right in &target_b {
+            if left.identity == right.identity {
+                continue;
+            }
+            let distance = point_distance(left.center, right.center);
+            if distance > config.max_target_pair_distance {
+                continue;
+            }
+            let replace = target_pair
+                .as_ref()
+                .is_none_or(|(_, _, current)| distance < *current);
+            if replace {
+                target_pair = Some((left, right, distance));
+            }
+        }
+    }
+    let (target_a, target_b, target_separation) = target_pair.ok_or_else(|| {
+        format!(
+            "seed {seed} has no distinct target-reactant pair within {:.3} world units",
+            config.max_target_pair_distance
+        )
+    })?;
+    let target_center = (
+        0.5 * (target_a.center.0 + target_b.center.0),
+        0.5 * (target_a.center.1 + target_b.center.1),
+    );
+    let candidate = molecules
+        .iter()
+        .filter(|molecule| {
+            molecule.parts == candidate_parts
+                && molecule.identity != target_a.identity
+                && molecule.identity != target_b.identity
+        })
+        .min_by(|left, right| {
+            point_distance(left.center, target_center)
+                .partial_cmp(&point_distance(right.center, target_center))
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| left.identity.cmp(&right.identity))
+        })
+        .ok_or_else(|| format!("seed {seed} has no molecule matching candidate_parts"))?;
+    let candidate_id = candidate.identity;
+    let candidate_before = candidate.center;
+
+    let initial_inventory = canonical_inventory(&fixture.simulation);
+    let initial_energy = fixture.simulation.energy_inventory_snapshot();
+    let non_candidate_layout_before =
+        non_candidate_layout_signature(&fixture.simulation, candidate_id);
+
+    let candidate_after = match condition {
+        MatchedCatalysisCondition::CandidateNear => relocate_candidate_near_target(
+            &mut fixture.simulation,
+            candidate_id,
+            candidate_before,
+            target_center,
+            config.near_distance,
+        )?,
+        MatchedCatalysisCondition::CandidateRemote => relocate_candidate_remote(
+            &mut fixture.simulation,
+            candidate_id,
+            candidate_before,
+            target_center,
+            config.minimum_remote_distance,
+        )?,
+    };
+    let actual_distance = point_distance(candidate_after, target_center);
+    match condition {
+        MatchedCatalysisCondition::CandidateNear
+            if actual_distance > config.near_distance + 1e-6 =>
+        {
+            return Err("near candidate placement exceeded the configured distance".to_string());
+        }
+        MatchedCatalysisCondition::CandidateRemote
+            if actual_distance + 1e-6 < config.minimum_remote_distance =>
+        {
+            return Err(
+                "remote candidate placement fell inside the configured minimum distance"
+                    .to_string(),
+            );
+        }
+        _ => {}
+    }
+
+    let final_inventory = canonical_inventory(&fixture.simulation);
+    let final_energy = fixture.simulation.energy_inventory_snapshot();
+    if initial_inventory != final_inventory {
+        return Err("matched control relocation changed elemental inventory".to_string());
+    }
+    // Moving a material between field cells changes the grouping/order of the
+    // independent structural-energy sum. Permit only the rounding envelope of
+    // that reordering; meaningful inventory changes and non-finite values fail.
+    let energy_component_matches = |before: f64, after: f64| {
+        before.is_finite()
+            && after.is_finite()
+            && (after - before).abs()
+                <= 64.0 * f64::EPSILON * before.abs().max(after.abs()).max(1.0)
+    };
+    if !energy_component_matches(
+        initial_energy.current_usable_energy,
+        final_energy.current_usable_energy,
+    ) || !energy_component_matches(
+        initial_energy.current_resonant_energy,
+        final_energy.current_resonant_energy,
+    ) || !energy_component_matches(
+        initial_energy.current_structural_energy,
+        final_energy.current_structural_energy,
+    ) || !energy_component_matches(
+        initial_energy.current_pair_interaction_potential,
+        final_energy.current_pair_interaction_potential,
+    ) {
+        return Err(format!(
+            "matched control relocation changed the initial energy inventory: usable_delta={:.17e}, resonant_delta={:.17e}, structural_delta={:.17e}, pair_potential_delta={:.17e}",
+            final_energy.current_usable_energy - initial_energy.current_usable_energy,
+            final_energy.current_resonant_energy - initial_energy.current_resonant_energy,
+            final_energy.current_structural_energy - initial_energy.current_structural_energy,
+            final_energy.current_pair_interaction_potential
+                - initial_energy.current_pair_interaction_potential,
+        ));
+    }
+    if non_candidate_layout_before
+        != non_candidate_layout_signature(&fixture.simulation, candidate_id)
+    {
+        return Err(
+            "matched control relocation changed a non-candidate molecule's geometry".to_string(),
+        );
+    }
+
+    let local_exposure = serde_json::json!({
+        "sampling_tick": fixture.simulation.tick,
+        "flow_model": "production ambient S-flow plus complete obstacle-adjusted velocity",
+        "candidate": material_local_exposure(&fixture.simulation, candidate_id)?,
+        "target_reactant_a": material_local_exposure(&fixture.simulation, target_a.identity)?,
+        "target_reactant_b": material_local_exposure(&fixture.simulation, target_b.identity)?,
+        "world_tone": world_tone_exposure(&fixture.simulation)?,
+        "legacy_pairwise_resonance": {
+            "candidate_to_target_a_boundary_magnitudes": candidate_resonance_contribution(&fixture.simulation, candidate_id, target_a.identity)?,
+            "candidate_to_target_b_boundary_magnitudes": candidate_resonance_contribution(&fixture.simulation, candidate_id, target_b.identity)?,
+            "background_from_other_materials": "not_measured",
+            "model_status": "legacy instantaneous pairwise aura; not the approved persistent finite-speed wave field"
+        },
+        "coverage": {
+            "flow": "tick-zero constituent-position samples; no time integration",
+            "hotspot": "tick-zero constituent-position intensity; no occlusion model",
+            "world_tone": "uniform per-constituent source input; same source sample for both arms",
+            "resonance": "candidate contribution only; background spectrum not measured"
+        },
+        "pre_run_exposure_gate": "not_eligible_incomplete_temporal_and_background_resonance_coverage"
+    });
+
+    fixture.experiment_metadata = Some(serde_json::json!({
+        "schema_version": 1,
+        "seed": seed,
+        "condition": condition.label(),
+        "candidate_identity": candidate_id,
+        "candidate_parts": candidate_parts,
+        "candidate_position_before": {"x": candidate_before.0, "y": candidate_before.1},
+        "candidate_position_after": {"x": candidate_after.0, "y": candidate_after.1},
+        "candidate_distance_to_target_midpoint": actual_distance,
+        "target_reactant_a_identity": target_a.identity,
+        "target_reactant_a_parts": target_a_parts,
+        "target_reactant_a_position": {"x": target_a.center.0, "y": target_a.center.1},
+        "target_reactant_b_identity": target_b.identity,
+        "target_reactant_b_parts": target_b_parts,
+        "target_reactant_b_position": {"x": target_b.center.0, "y": target_b.center.1},
+        "target_pair_separation": target_separation,
+        "target_pair_midpoint": {"x": target_center.0, "y": target_center.1},
+        "near_distance_limit": config.near_distance,
+        "minimum_remote_distance": config.minimum_remote_distance,
+        "max_target_pair_distance": config.max_target_pair_distance,
+        "initial_elemental_inventory_unchanged": true,
+        "initial_energy_inventory_unchanged": true,
+        "initial_energy_inventory": {
+            "usable": initial_energy.current_usable_energy,
+            "resonant": initial_energy.current_resonant_energy,
+            "structural": initial_energy.current_structural_energy
+        },
+        "all_non_candidate_molecule_geometry_unchanged": true,
+        "local_exposure": local_exposure,
+        "interpretation": "The candidate is not established as a facilitator. Target reactants are selected by composition and proximity only; this setup does not establish an eligible endpoint contact or causal facilitation."
+    }));
+    Ok(fixture)
+}
+
+fn exposure_json_matches(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    match (left, right) {
+        (serde_json::Value::Number(a), serde_json::Value::Number(b)) => {
+            match (a.as_f64(), b.as_f64()) {
+                (Some(a), Some(b)) => a.is_finite() && b.is_finite() && (a - b).abs() <= 1e-9,
+                _ => false,
+            }
+        }
+        (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .zip(b)
+                    .all(|(left, right)| exposure_json_matches(left, right))
+        }
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter().all(|(key, value)| {
+                    b.get(key)
+                        .is_some_and(|other| exposure_json_matches(value, other))
+                })
+        }
+        _ => left == right,
+    }
+}
+
+/// Build both tick-zero arms and refuse execution unless the local exposure
+/// contract is complete. Candidate-specific resonance is intentionally reported
+/// separately; it is the putative interaction, not a background confound.
+pub(crate) fn preflight_matched_pair(
+    seed: u64,
+    config: &MatchedCatalysisConfig,
+) -> Result<serde_json::Value, String> {
+    let near = build_matched(seed, config, MatchedCatalysisCondition::CandidateNear)?;
+    let remote = build_matched(seed, config, MatchedCatalysisCondition::CandidateRemote)?;
+    let near_metadata = near
+        .experiment_metadata
+        .as_ref()
+        .ok_or_else(|| "candidate-near fixture omitted setup metadata".to_string())?;
+    let remote_metadata = remote
+        .experiment_metadata
+        .as_ref()
+        .ok_or_else(|| "candidate-remote fixture omitted setup metadata".to_string())?;
+    let near_exposure = near_metadata
+        .get("local_exposure")
+        .ok_or_else(|| "candidate-near fixture omitted local exposure telemetry".to_string())?;
+    let remote_exposure = remote_metadata
+        .get("local_exposure")
+        .ok_or_else(|| "candidate-remote fixture omitted local exposure telemetry".to_string())?;
+
+    for material in ["candidate", "target_reactant_a", "target_reactant_b"] {
+        for channel in ["flow_velocity", "hotspot_intensity_per_tick_per_area"] {
+            let left = near_exposure
+                .get(material)
+                .and_then(|value| value.get(channel))
+                .ok_or_else(|| format!("near {material} {channel} exposure is missing"))?;
+            let right = remote_exposure
+                .get(material)
+                .and_then(|value| value.get(channel))
+                .ok_or_else(|| format!("remote {material} {channel} exposure is missing"))?;
+            if !exposure_json_matches(left, right) {
+                return Err(format!(
+                    "tick-zero exposure preflight failed: {material} {channel} differs between candidate-near and candidate-remote arms"
+                ));
+            }
+        }
+    }
+    let near_tone = near_exposure
+        .get("world_tone")
+        .ok_or_else(|| "near world-tone source sample is missing".to_string())?;
+    let remote_tone = remote_exposure
+        .get("world_tone")
+        .ok_or_else(|| "remote world-tone source sample is missing".to_string())?;
+    if !exposure_json_matches(near_tone, remote_tone) {
+        return Err("tick-zero world-tone source exposure differs between paired arms".to_string());
+    }
+
+    // These are hard blockers, not warnings. A future implementation may
+    // change the metadata coverage labels only after adding the corresponding
+    // production-path measurements and tests.
+    for (arm, exposure) in [("near", near_exposure), ("remote", remote_exposure)] {
+        let coverage = exposure
+            .get("coverage")
+            .ok_or_else(|| format!("{arm} exposure coverage metadata is missing"))?;
+        if coverage.get("flow").and_then(serde_json::Value::as_str) != Some("time_resolved") {
+            return Err(format!(
+                "{arm} flow exposure is tick-zero only; full-run time-resolved flow matching is required"
+            ));
+        }
+        if coverage.get("hotspot").and_then(serde_json::Value::as_str) != Some("time_resolved") {
+            return Err(format!(
+                "{arm} hotspot exposure is tick-zero only; full-run time-resolved hotspot matching is required"
+            ));
+        }
+        if exposure
+            .get("legacy_pairwise_resonance")
+            .and_then(|value| value.get("background_from_other_materials"))
+            .and_then(serde_json::Value::as_str)
+            != Some("measured")
+        {
+            return Err(format!(
+                "{arm} background resonance from non-candidate materials is not measured"
+            ));
+        }
+    }
+    Err(
+        "matched exposure preflight cannot authorize a catalytic run until complete eligible target-pair opportunity denominators are implemented"
+            .to_string(),
+    )
 }
 
 fn randomized_pile_centers(
@@ -535,6 +1230,112 @@ fn randomized_pile_centers(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn matched_config_rejects_molecules_with_more_than_two_constituents() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Hydrogen".into(), "Sulfur".into(), "Oxygen".into()],
+            target_reactant_a_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 8.0,
+            max_target_pair_distance: 30.0,
+            minimum_remote_distance: 60.0,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn matched_fixture_conditions_move_only_candidate_and_preserve_inventory() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Hydrogen".into(), "Sulfur".into()],
+            target_reactant_a_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 20.0,
+            max_target_pair_distance: 50.0,
+            minimum_remote_distance: 80.0,
+        };
+        let near = build_matched(42, &config, MatchedCatalysisCondition::CandidateNear)
+            .expect("the standard seed should support the near control placement");
+        let remote = build_matched(42, &config, MatchedCatalysisCondition::CandidateRemote)
+            .expect("the standard seed should support the remote control placement");
+
+        assert_eq!(near.pile_sizes, remote.pile_sizes);
+        assert_eq!(
+            canonical_inventory(&near.simulation),
+            canonical_inventory(&remote.simulation)
+        );
+        let near_metadata = near.experiment_metadata.expect("near metadata");
+        let remote_metadata = remote.experiment_metadata.expect("remote metadata");
+        assert_eq!(
+            near_metadata["candidate_identity"],
+            remote_metadata["candidate_identity"]
+        );
+        assert_eq!(
+            near_metadata["target_reactant_a_identity"],
+            remote_metadata["target_reactant_a_identity"]
+        );
+        assert_eq!(
+            near_metadata["target_reactant_b_identity"],
+            remote_metadata["target_reactant_b_identity"]
+        );
+        assert!(
+            near_metadata["candidate_distance_to_target_midpoint"]
+                .as_f64()
+                .expect("near distance")
+                <= config.near_distance
+        );
+        assert!(
+            remote_metadata["candidate_distance_to_target_midpoint"]
+                .as_f64()
+                .expect("remote distance")
+                >= config.minimum_remote_distance
+        );
+        assert_eq!(
+            near_metadata["all_non_candidate_molecule_geometry_unchanged"],
+            true
+        );
+        assert_eq!(
+            remote_metadata["all_non_candidate_molecule_geometry_unchanged"],
+            true
+        );
+    }
+
+    #[test]
+    fn matched_pair_preflight_blocks_incomplete_temporal_exposure_coverage() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Hydrogen".into(), "Sulfur".into()],
+            target_reactant_a_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 20.0,
+            max_target_pair_distance: 50.0,
+            minimum_remote_distance: 80.0,
+        };
+        let error = preflight_matched_pair(42, &config)
+            .expect_err("tick-zero-only exposure must not authorize a catalytic run");
+        assert!(
+            error.contains("preflight"),
+            "unexpected preflight blocker: {error}"
+        );
+        assert!(
+            error.contains("flow_velocity")
+                || error.contains("hotspot_intensity")
+                || error.contains("tick-zero only"),
+            "preflight did not identify an exposure or coverage blocker: {error}"
+        );
+    }
+
+    #[test]
+    fn matched_config_rejects_candidate_that_is_a_target_reactant() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_a_parts: vec!["Phosphorus".into(), "Oxygen".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 8.0,
+            max_target_pair_distance: 30.0,
+            minimum_remote_distance: 60.0,
+        };
+        assert!(config.validate().is_err());
+    }
 
     #[test]
     fn molecular_history_recording_does_not_change_chemistry_or_energy() {

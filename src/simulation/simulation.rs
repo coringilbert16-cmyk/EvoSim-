@@ -1108,6 +1108,15 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let source_material_ids = vec![
+                operation.source_a.environmental_identity,
+                operation.source_b.environmental_identity,
+            ];
+            let contact_unit_indices = Some((operation.unit_a, operation.unit_b));
+            let contact_endpoints = Some((
+                operation.candidate.endpoint_a,
+                operation.candidate.endpoint_b,
+            ));
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1199,6 +1208,9 @@ impl Simulation {
                     product_internal_bond_count,
                     post_commit_source_cell_materials,
                     molecular_lifecycle,
+                    source_material_ids,
+                    contact_unit_indices,
+                    contact_endpoints,
                 },
             );
         }
@@ -1251,6 +1263,15 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let source_material_ids = vec![
+                operation.source_a.environmental_identity,
+                operation.source_b.environmental_identity,
+            ];
+            let contact_unit_indices = Some((operation.anchor_unit, operation.incoming_unit));
+            let contact_endpoints = Some((
+                operation.candidate.endpoint_a,
+                operation.candidate.endpoint_b,
+            ));
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1334,6 +1355,9 @@ impl Simulation {
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
                     molecular_lifecycle,
+                    source_material_ids,
+                    contact_unit_indices,
+                    contact_endpoints,
                 });
         }
 
@@ -1488,6 +1512,9 @@ impl Simulation {
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
                     molecular_lifecycle,
+                    source_material_ids: Vec::new(),
+                    contact_unit_indices: None,
+                    contact_endpoints: None,
                 });
         }
 

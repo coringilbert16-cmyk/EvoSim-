@@ -420,6 +420,7 @@ fn select_best_contact(
         remaining_work,
         None,
         None,
+        None,
     )
     .into_iter()
     .next()
@@ -489,6 +490,7 @@ fn select_best_contact_from_pairs(
     remaining_work: &mut usize,
     diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
     sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
+    environment: Option<&Environment>,
 ) -> Vec<SelectedContact> {
     let mut diagnostics = diagnostics;
     let mut selected_contacts = Vec::new();
@@ -545,6 +547,23 @@ fn select_best_contact_from_pairs(
                                     physically_valid,
                                     reaction_kind: 0,
                                     old_bond_energy: 0.0,
+                                    environmental_usable_energy: environment
+                                        .map(|environment| environment.chemistry_usable_energy)
+                                        .unwrap_or(0.0),
+                                    environmental_resonant_energy: environment
+                                        .and_then(|environment| environment.resonant_energy.total_energy())
+                                        .unwrap_or(0.0),
+                                    local_neighborhood: environment
+                                        .map(|environment| {
+                                            crate::state::EnvironmentalLocalNeighborhoodSample::capture(
+                                                environment,
+                                                0.5 * (unit_a_ref.placement.x + unit_b_ref.placement.x),
+                                                0.5 * (unit_a_ref.placement.y + unit_b_ref.placement.y),
+                                                source_a.environmental_identity,
+                                                source_b.environmental_identity,
+                                            )
+                                        })
+                                        .unwrap_or_default(),
                                 });
                             diagnostics.opportunity_sample_count += 1;
                         }
@@ -1118,6 +1137,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         &mut component_work,
                         Some(&mut *diagnostics),
                         Some((&source_a, &source_b)),
+                        Some(environment),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
@@ -3697,6 +3717,7 @@ mod tests {
             &mut cache,
             &mut work,
             Some(&mut diagnostics),
+            None,
             None,
         );
         assert!(
