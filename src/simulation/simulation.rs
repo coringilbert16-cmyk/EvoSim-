@@ -2743,6 +2743,7 @@ mod decomposition_finalization_tests {
         );
         let field_before = simulation.environment.field.total_amount();
         let bonds_before = simulation.organisms[0].structure.bonds.clone();
+        let units_before = simulation.organisms[0].structure.units.clone();
         let living = HashSet::new();
 
         simulation.release_finished_dead_organisms(&living);
@@ -2757,7 +2758,7 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn dead_bonded_graph_uses_ordinary_chemistry_without_forced_decomposition() {
+    fn organism_owned_bonded_graph_is_dormant_during_chemistry_ticks() {
         let mut simulation = Simulation::new(0xD3B5, 10.0);
         // Keep the normal world configuration. Death disables biological
         // activity; it must not install a special decomposition reaction.
@@ -2787,9 +2788,8 @@ mod decomposition_finalization_tests {
             .sum::<f64>();
         let material_before = field_before + structural_amount_before;
 
-        // One ordinary tick exercises the shared scheduler for a dead,
-        // physically bonded aggregate. Do not assume these constructor bonds
-        // are chemically breakable or require them to break within a deadline.
+        // The chemistry-only tick must not run organism-owned BREAK discovery,
+        // lifecycle checks, or dead-material release.
         simulation.step();
 
         let structural_amount_after = simulation
@@ -2803,51 +2803,34 @@ mod decomposition_finalization_tests {
         let material_after = simulation.environment.field.total_amount() + structural_amount_after;
         assert!(
             (material_after - material_before).abs() <= 1e-9,
-            "ordinary chemistry/lifecycle must preserve physical material ownership: before={material_before}, after={material_after}"
+            "chemistry-only ticks must preserve total physical material: before={material_before}, after={material_after}"
         );
-        // This integration check covers ordinary chemistry and material
-        // ownership, not the stricter no-creation release gate. Aggregate
-        // holder summation can leave a sub-ULP signed residual; dedicated
-        // energy-settlement tests enforce the stronger one-sided condition.
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].structure.units, units_before);
+        assert_eq!(simulation.organisms[0].structure.bonds, bonds_before);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-8),
-            "ordinary chemistry on a dead bonded graph must conserve world energy: {:?}",
+            "chemistry-only tick must conserve world energy: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
-        if simulation
-            .organisms
-            .iter()
-            .any(|organism| organism.id == owner_id)
-        {
-            assert_eq!(
-                simulation.environment.field.total_amount(),
-                field_before,
-                "material still owned by the dead aggregate must not be prematurely released"
-            );
-        } else {
-            assert!(
-                (simulation.environment.field.total_amount()
-                    - (field_before + structural_amount_before))
-                    .abs()
-                    <= 1e-9,
-                "if ordinary chemistry removes all bonds, final release must deposit the structure exactly once"
-            );
-        }
     }
 
     #[test]
-    fn live_tick_releases_a_dead_bondless_graph_into_the_environment() {
+    fn bondless_organism_graph_remains_dormant_during_chemistry_ticks() {
         let mut simulation = Simulation::new(0xD3B0, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
         let field_before = simulation.environment.field.total_amount();
 
+        let organism_units_before = simulation.organisms[0].structure.units.clone();
         simulation.step();
 
-        assert!(simulation.organisms.is_empty());
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].structure.units, organism_units_before);
         assert_eq!(
             simulation.environment.field.total_amount(),
-            field_before + 1.0,
-            "the live lifecycle must release the dead graph exactly once"
+            field_before,
+            "biology-disabled ticks must not release organism-owned material"
         );
     }
 
@@ -3268,18 +3251,21 @@ mod decomposition_finalization_tests {
             "reserved source must remain counted while held by an in-flight transformation"
         );
 
-        // The first tick reaches preparation, where the persisted target is
-        // malformed. The simulation-level rollback must return the escrow.
+        // Organism-owned transactions are dormant in chemistry-only ticks.
+        // Their escrow and ownership metadata must remain untouched.
+        let transformation_id = simulation.active_transformations[0].id;
+        let owner_id = simulation.organisms[0].active_transformation_id;
         simulation.step();
 
-        assert!(simulation.active_transformations.is_empty());
-        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+        assert_eq!(simulation.active_transformations.len(), 1);
+        assert_eq!(simulation.active_transformations[0].id, transformation_id);
+        assert_eq!(simulation.organisms[0].active_transformation_id, owner_id);
         assert_eq!(
             rollback_material_inventory(&simulation),
             inventory_before,
-            "failed live preparation must preserve all constituent ownership"
+            "a dormant transaction must preserve all constituent ownership"
         );
-        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
+        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 0);
     }
 
     #[test]
