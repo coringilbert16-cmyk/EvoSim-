@@ -126,7 +126,7 @@ pub(crate) fn inject_plan004_resource_pulse(
 
     let particles = locations
         .into_iter()
-        .map(|(element, x, y, cell_index, material_index)| {
+        .map(|(element, _, _, cell_index, material_index)| {
             let material = simulation.environment.field.cells[cell_index].physical_materials
                 [material_index]
                 .clone();
@@ -232,8 +232,8 @@ mod tests {
                 .map(|particle| (
                     particle.element.clone(),
                     particle.material.environmental_identity,
-                    particle.x,
-                    particle.y
+                    particle.material.placements.as_ref().unwrap()[0].x,
+                    particle.material.placements.as_ref().unwrap()[0].y
                 ))
                 .collect::<Vec<_>>()
         );
