@@ -875,12 +875,28 @@ pub(crate) fn build_matched(
     if initial_inventory != final_inventory {
         return Err("matched control relocation changed elemental inventory".to_string());
     }
-    if initial_energy.current_usable_energy != final_energy.current_usable_energy
-        || initial_energy.current_resonant_energy != final_energy.current_resonant_energy
-        || initial_energy.current_structural_energy != final_energy.current_structural_energy
-        || initial_energy.current_pair_interaction_potential
-            != final_energy.current_pair_interaction_potential
-    {
+    // Moving a material between field cells changes the grouping/order of the
+    // independent structural-energy sum. Permit only the rounding envelope of
+    // that reordering; meaningful inventory changes and non-finite values fail.
+    let energy_component_matches = |before: f64, after: f64| {
+        before.is_finite()
+            && after.is_finite()
+            && (after - before).abs()
+                <= 64.0 * f64::EPSILON * before.abs().max(after.abs()).max(1.0)
+    };
+    if !energy_component_matches(
+        initial_energy.current_usable_energy,
+        final_energy.current_usable_energy,
+    ) || !energy_component_matches(
+        initial_energy.current_resonant_energy,
+        final_energy.current_resonant_energy,
+    ) || !energy_component_matches(
+        initial_energy.current_structural_energy,
+        final_energy.current_structural_energy,
+    ) || !energy_component_matches(
+        initial_energy.current_pair_interaction_potential,
+        final_energy.current_pair_interaction_potential,
+    ) {
         return Err(format!(
             "matched control relocation changed the initial energy inventory: usable_delta={:.17e}, resonant_delta={:.17e}, structural_delta={:.17e}, pair_potential_delta={:.17e}",
             final_energy.current_usable_energy - initial_energy.current_usable_energy,
