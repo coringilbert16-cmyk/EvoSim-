@@ -1424,10 +1424,8 @@ impl Simulation {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
-            let source_material_ids = vec![
-                (operation.source_material.environmental_identity != 0)
-                    .then_some(operation.source_material.environmental_identity),
-            ];
+            let source_material_ids = vec![(operation.source_material.environmental_identity != 0)
+                .then_some(operation.source_material.environmental_identity)];
             let reaction_id = format!(
                 "{}-{}",
                 self.tick,
