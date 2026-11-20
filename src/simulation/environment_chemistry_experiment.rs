@@ -1317,7 +1317,9 @@ mod tests {
             "unexpected preflight blocker: {error}"
         );
         assert!(
-            error.contains("flow_velocity") || error.contains("hotspot_intensity") || error.contains("tick-zero only"),
+            error.contains("flow_velocity")
+                || error.contains("hotspot_intensity")
+                || error.contains("tick-zero only"),
             "preflight did not identify an exposure or coverage blocker: {error}"
         );
     }
