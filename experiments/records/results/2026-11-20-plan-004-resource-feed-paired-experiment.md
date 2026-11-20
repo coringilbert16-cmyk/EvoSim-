@@ -1,6 +1,6 @@
 # EXP-2026-005 — PLAN-004 paired resource-feed experiment
 
-**Status:** Running — preliminary analysis of two completed matched seed pairs (42 and 43); six of ten observation jobs remain active. Findings below are interim and not a validated five-seed conclusion.
+**Status:** All ten observations complete. Five-pair chemistry/organization comparison recovered from retained artifacts; full specialist-analyzer aggregation pending. See the [five-pair recovery report](2026-11-20-plan-004-five-pair-recovery.md).
 
 **GitHub Actions:** [Run #44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988).
 
@@ -54,8 +54,9 @@ The no-feed arm receives no external matter after tick zero. Both arms retain th
 - Feed flag: `--plan004-resource-feed`.
 - Feed pulse event type: `environmental_resource_feed`; each introduced material is also recorded as an `INITIAL`-classified `molecular_lifecycle` source identity with `external_source=true`, so analyzers do not misclassify feed atoms as reaction-created products.
 - Run configuration: `experiments/plan-004-run.json` (will be activated only after code validation).
-- Combined artifact: pending.
-- GitHub Actions run: pending.
+- Original combined artifact: not produced because the aggregation job failed on input filename/layout mismatch.
+- Recovery workflow: `.github/workflows/plan-004-aggregate-existing.yml`; uses retained run #44784506988 artifacts without repeating simulations.
+- Five-pair recovered comparison: [recovery report](2026-11-20-plan-004-five-pair-recovery.md).
 
 ## Validation gates before launch
 
@@ -113,3 +114,12 @@ The organization indicators also disagree between seeds. The extra active materi
 ## Final result
 
 Pending completion and analysis of all five matched seed pairs.
+
+
+## Five-pair observation closeout
+
+All ten observation jobs (five seeds × two arms) completed successfully. The aggregation job failed because the raw JSONL inputs were copied into the expected directories but the already-generated per-seed chemistry and organization JSON files were not. A dedicated aggregation-only recovery workflow was added to the experiment branch; it downloads the ten original artifacts, validates all 30 expected files, normalizes the report filenames, and runs the existing specialist analyzers. It does not rerun simulations.
+
+The retained per-seed chemistry and organization reports were independently recovered and compared across all five pairs. The direction of the committed-reaction rate was lower in feed for three seeds and higher for two; the mean paired difference was -4.02 committed reactions per 1,000 observed ticks. Recurrent-family counts were lower in feed for four seeds and higher for one. These data do not support a consistent positive resource-feed effect. See the [five-pair recovery report](2026-11-20-plan-004-five-pair-recovery.md) for the full table, feed-pulse verification, limits, and recovery details.
+
+**Updated status:** observation complete; partial five-pair analysis recovered; complete network/contact/temporal aggregation still pending. Do not repeat the ten one-hour simulations to fix the aggregation defect.
