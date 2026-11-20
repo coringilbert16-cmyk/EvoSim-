@@ -96,6 +96,10 @@ def run_cached_stage(
             "stage": stage_id, "status": "cached", "analyzer": str(script.relative_to(ROOT)),
             "analyzer_sha256": analyzer_sha, "outputs": [str(output_json), str(output_md)],
         }
+    # A stale prior result must never survive a failed recomputation.
+    output_json.unlink(missing_ok=True)
+    output_md.unlink(missing_ok=True)
+    metadata_path.unlink(missing_ok=True)
     command = [
         sys.executable, str(script), str(raw),
         "--json-out", str(output_json), "--markdown-out", str(output_md),
