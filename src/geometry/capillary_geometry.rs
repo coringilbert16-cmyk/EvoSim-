@@ -1208,7 +1208,7 @@ impl MultiContactFluidBoundary {
             .count()
     }
 
-        pub fn free_arc_count(&self) -> usize {
+    pub fn free_arc_count(&self) -> usize {
         self.pieces
             .iter()
             .filter(|piece| matches!(piece, FluidBoundaryPiece::FreeArc(_)))
