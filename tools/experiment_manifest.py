@@ -47,10 +47,23 @@ def validate_manifest(path: Path, verify_artifacts: bool = True) -> dict[str, An
     conditions = manifest.get("conditions")
     if not isinstance(conditions, dict) or conditions.get("configuration_schema_version") != 1:
         raise ValueError("conditions.configuration_schema_version must be 1")
-    if not SHA256_PATTERN.fullmatch(str(conditions.get("configuration_sha256", ""))):
+    configuration_hash = conditions.get("configuration_sha256")
+    if not SHA256_PATTERN.fullmatch(str(configuration_hash or "")):
         raise ValueError("conditions.configuration_sha256 must be a lowercase SHA-256 digest")
-    if not isinstance(conditions.get("configuration"), dict):
+    configuration = conditions.get("configuration")
+    if not isinstance(configuration, dict):
         raise ValueError("conditions.configuration must be an object")
+    canonical_configuration = conditions.get("configuration_canonical_json")
+    if not isinstance(canonical_configuration, str):
+        raise ValueError("conditions.configuration_canonical_json must be a string")
+    try:
+        decoded_configuration = json.loads(canonical_configuration)
+    except json.JSONDecodeError as error:
+        raise ValueError("conditions.configuration_canonical_json is invalid JSON") from error
+    if decoded_configuration != configuration:
+        raise ValueError("canonical configuration does not match the configuration object")
+    if hashlib.sha256(canonical_configuration.encode("utf-8")).hexdigest() != configuration_hash:
+        raise ValueError("configuration checksum mismatch")
 
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, list) or not artifacts:
