@@ -1757,7 +1757,13 @@ pub(crate) fn resolve_environmental_diagnosed(
     environment.chemistry_usable_energy = staged_usable_energy;
     environment.resonant_energy = staged_resonance;
     *ledger = staged_ledger;
-    Ok(crate::state::EnvironmentalEnergySettlement::settled(usable_delta,resonant_funding,structural_delta,transaction.work_expended,transaction.heat_dissipated))
+    Ok(crate::state::EnvironmentalEnergySettlement::settled(
+        usable_delta,
+        resonant_funding,
+        structural_delta,
+        transaction.work_expended,
+        transaction.heat_dissipated,
+    ))
 }
 
 fn resonance_withdrawal_rounding_tolerance(before: f64, after: f64, components: usize) -> f64 {
