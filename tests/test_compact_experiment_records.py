@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tools.compact_experiment_record import build_record
 from tools.compare_compact_experiment_records import compare
+from tools.chemistry_analyzer import summarize_settlements
 
 
 class CompactExperimentRecordTests(unittest.TestCase):
@@ -114,6 +115,26 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(len(result["compatibility_groups"]), 2)
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
         self.assertFalse(result["quality"]["pooled_rates_emitted"])
+
+    def test_settlement_summary_preserves_unsettled_and_missing_values(self) -> None:
+        summary = summarize_settlements([
+            {"reaction": "BREAK", "energy_settlement": {
+                "status": "settled", "usable_energy_delta": -2.0,
+                "resonance_withdrawn": 1.0, "structural_energy_delta": 0.5,
+                "physical_work": 0.25, "heat_dissipated": 0.25,
+            }},
+            {"reaction": "BREAK", "energy_settlement": {
+                "status": "not_settled", "usable_energy_delta": None,
+                "resonance_withdrawn": None, "structural_energy_delta": None,
+                "physical_work": None, "heat_dissipated": None,
+            }},
+        ])
+        self.assertEqual(summary["BREAK"]["settled_event_count"], 1)
+        self.assertEqual(summary["BREAK"]["not_settled_event_count"], 1)
+        self.assertEqual(summary["BREAK"]["usable_energy_delta"]["sum"], -2.0)
+        self.assertIsNone(summary["BREAK"]["heat_dissipated"]["mean"])
+        self.assertEqual(summary["COMBINE"]["event_count"], 0)
+        self.assertIsNone(summary["COMBINE"]["physical_work"]["sum"])
 
     def test_comparison_rejects_duplicate_seeds(self) -> None:
         chemistry, organization, manifest = self.seed_inputs(42)
