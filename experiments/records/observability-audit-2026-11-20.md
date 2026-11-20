@@ -113,6 +113,42 @@ The PR adds `source_material_ids`, contact unit indices, and contact endpoints t
 
 The PR adds an observed-stage funnel to the chemistry analyzer using discovery counters already present in its branch, and adds paired-seed batch analyzers for dispersion and starting-mixture matrices. These are valuable aggregation patterns, but they must not turn stage counters into a denominator unless the search semantics prove exhaustive coverage. The experimental matrices also should remain distinct experiment records with explicit conditions rather than being silently treated as routine baseline telemetry.
 
+## Remaining analyzer and energy-boundary audit
+
+The current `tools/` directory contains nine relevant analysis utilities:
+- `chemistry_analyzer.py`: per-run reaction/energy/bond attribution and lifecycle-derived chemistry.
+- `chemistry_organization_analyzer.py`: molecular identity, structural-family recurrence, lineage, and persistence.
+- `chemistry_experiment_batch_analyzer.py`: cross-seed aggregation of per-seed chemistry/organization reports.
+- `reaction_network_analyzer.py`: compound families, family transitions, pathways, and CSV exports.
+- `geometry_aware_reaction_network.py`: instance-level reaction network enriched with geometry descriptors.
+- `contact_opportunity_analyzer.py`: bounded sampled opportunity and search funnel summaries.
+- `temporal_chemical_complexity_analyzer.py`: fixed-window complexity, novelty, and candidate family-graph cycles.
+- `chemistry_batch_analyzer.py` and `audit_geometry_storage.py`: specialized batch/geometry audit utilities, not part of the standard environmental workflow.
+
+The standard workflow already calls the first seven in a staged manner (per-seed chemistry and organization, then aggregate chemistry, reaction network, geometry-aware network, contact opportunities, and temporal complexity). Each report family currently has its own schema version (mostly version 1) and its own JSON/Markdown/CSV conventions. The pipeline is capable but lacks a common top-level experiment manifest and report index that states which subreports are present, their analyzer versions, validation status, and coverage warnings.
+
+### Energy settlement boundaries
+
+The energy audit traced the environmental COMBINE, DISPLACEMENT, and BREAK commit paths:
+
+- COMBINE resolves a cloned trial through the shared COMBINE authority and stages the ledger/usable-energy holder before atomically replacing source material. The resolver currently returns a boolean; the reaction event records required work but not the authoritative signed structural delta, usable-energy delta, work, heat, or exact settlement result.
+- DISPLACEMENT evaluates a coupled replacement and retains a `ReactionEnergyBalance` on the trial. At commit it stages compatible resonance withdrawal, remaining usable-energy funding, the conservative settlement transaction, and ledger updates before mutating the field. The reaction event currently records activation/work context but not the transaction breakdown or resonance withdrawal.
+- BREAK stages compatible resonance withdrawal and usable-energy payment, calls the chemical-break energy preparation authority, then commits the split and ledger state. The event records required work and activation but not the exact funding split or resulting transaction values.
+- The authoritative `EnergyTransaction` contract represents signed structural delta, usable-energy delta, physical work, and heat; environmental reaction paths also update resonance-held totals where applicable. These should be observed at the authoritative settlement boundary, not recalculated in the diagnostics recorder or an offline analyzer.
+
+**Implementation implication:** add a small serializable settlement summary returned or captured by the existing commit authority, and attach it to the same stable reaction event. This must be observational only: no duplicate formulas, no second ledger, and no changes to transaction decisions. Include source/frequency/resonance-withdrawal details where the authoritative path already knows them.
+
+## Analyzer consolidation opportunity
+
+Do not combine all domain-specific analyses into one monolithic script. Keep specialist analyzers focused, then add a thin orchestration/report-index layer:
+1. Validate raw JSONL and manifest.
+2. Run or reuse specialist outputs.
+3. Verify that every expected output exists and has compatible seed/duration/provenance.
+4. Produce one compact index/summary linking subreports and surfacing data-quality/coverage flags.
+5. Preserve full JSON/CSV details as drill-down artifacts.
+
+This is a lower-risk way to make results feel like one coherent lab notebook without discarding existing analytical depth.
+
 ## Audit limitations and next work
 
 This first pass inspected the main environmental recorder, chemistry analyzer, contact-opportunity analyzer, experiment execution guide, experiment registry, and plans guide; it also inspected PR metadata and changed-file inventories for #345 and #392. It did not yet audit every analyzer, event struct, workflow, or energy-ledger call site. No code was changed and no experiment was launched.
