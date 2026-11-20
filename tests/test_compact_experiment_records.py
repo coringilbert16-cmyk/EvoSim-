@@ -136,6 +136,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         record = build_record(42, chemistry, organization, manifest, coverage)
         self.assertEqual(record["schema"], "evosim.permanent_experiment_record")
         self.assertEqual(record["opportunity_coverage"]["by_reaction"]["break"]["state"], "complete")
+        self.assertEqual(record["conditions"]["configuration"]["active_elements"], ["Carbon", "Hydrogen"])
         self.assertEqual(record["reactions"]["BREAK"]["diagnostics"]["committed"], 1)
         self.assertIsNone(record["molecular_development"]["mean_observed_lifetime_ticks"])
         self.assertEqual(record["molecular_development"]["lineage_edge_count"], 1)
