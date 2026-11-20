@@ -766,7 +766,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                 "molecule_id": particle.material.environmental_identity,
                 "parent_ids": [],
                 "reaction_id": format!("resource-feed-pulse-{pulse_index}"),
-                "reaction": "RESOURCE_FEED",
+                "reaction": "INITIAL",
                 "molecule": &particle.material,
                 "external_source": true
             }))?;
