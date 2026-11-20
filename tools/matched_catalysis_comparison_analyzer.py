@@ -207,6 +207,10 @@ def analyze(near_dir: Path, remote_dir: Path, seeds: list[int],
                 raise ValueError(f"seed {seed}: paired setup differs for {key}")
         if near["initial_material_inventory"] != remote["initial_material_inventory"]:
             raise ValueError(f"seed {seed}: paired arms have different initial elemental inventories")
+        near_energy = near["setup"].get("initial_energy_inventory")
+        remote_energy = remote["setup"].get("initial_energy_inventory")
+        if near_energy is None or remote_energy is None or near_energy != remote_energy:
+            raise ValueError(f"seed {seed}: paired arms have different or missing initial energy inventories")
         paired_rows.append({
             "seed": seed,
             "candidate_identity": near["setup"]["candidate_identity"],
