@@ -123,4 +123,6 @@ After the pilot passes:
 
 ## Execution log
 
-- 2026-11-20: Registered following the merge of PR #401. Phase 1 begins with current-main inventory and retained artifact/aggregation status.
+- 2026-11-20: Registered following the merge of PR #401.
+- 2026-11-20: Phase 1 current-main analyzer inventory completed; see [analyzer inventory](OBS-001-analyzer-inventory.md). The initial index/orchestration design can proceed with a deliberate heavy-contact stage boundary.
+- 2026-11-20: PLAN-004 retained artifact assembly failure traced to condition-prefixed artifact names. A tested normalization helper and analysis-only workflow path were added to the PLAN-004 branch; validation and reaggregation remain pending.
