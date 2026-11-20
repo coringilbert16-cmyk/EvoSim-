@@ -184,6 +184,105 @@ def _load_seed(path: Path, expected_seed: int, expected_condition: str,
     }
 
 
+def _series_match(left: Any, right: Any, fields: tuple[str, ...] | None = None,
+                  tolerance: float = 1e-9) -> tuple[bool, float | None]:
+    if not isinstance(left, list) or not isinstance(right, list) or len(left) != len(right):
+        return False, None
+    maximum_delta = 0.0
+    for left_item, right_item in zip(left, right):
+        if fields is None:
+            try:
+                a, b = float(left_item), float(right_item)
+            except (TypeError, ValueError):
+                return False, None
+            if not (a == a and b == b):
+                return False, None
+            maximum_delta = max(maximum_delta, abs(a - b))
+        else:
+            if not isinstance(left_item, dict) or not isinstance(right_item, dict):
+                return False, None
+            for field in fields:
+                try:
+                    a, b = float(left_item[field]), float(right_item[field])
+                except (KeyError, TypeError, ValueError):
+                    return False, None
+                if not (a == a and b == b):
+                    return False, None
+                maximum_delta = max(maximum_delta, abs(a - b))
+    return maximum_delta <= tolerance, maximum_delta
+
+
+def _exposure_match_gate(near_setup: dict[str, Any],
+                         remote_setup: dict[str, Any]) -> dict[str, Any]:
+    near = near_setup.get("local_exposure")
+    remote = remote_setup.get("local_exposure")
+    reasons: list[str] = []
+    comparisons: dict[str, Any] = {}
+    if not isinstance(near, dict) or not isinstance(remote, dict):
+        return {
+            "passed": False,
+            "reasons": ["tick-zero local exposure telemetry is missing"],
+            "comparisons": {},
+        }
+
+    for material_key in ("candidate", "target_reactant_a", "target_reactant_b"):
+        near_material = near.get(material_key) or {}
+        remote_material = remote.get(material_key) or {}
+        for exposure_key, fields in (
+            ("flow_velocity", ("vx", "vy", "speed")),
+            ("hotspot_intensity_per_tick_per_area", None),
+        ):
+            matched, delta = _series_match(
+                near_material.get(exposure_key), remote_material.get(exposure_key), fields
+            )
+            label = f"{material_key}.{exposure_key}"
+            comparisons[label] = {"matched_within_1e-9": matched, "max_abs_delta": delta}
+            if not matched:
+                reasons.append(f"{label} differs or is unavailable between paired arms")
+
+    near_tone, remote_tone = near.get("world_tone"), remote.get("world_tone")
+    tone_fields = (
+        "source_x", "source_y", "frequency_cycles_per_day",
+        "energy_intensity_per_tick_per_width", "orbital_phase",
+    )
+    tone_match = isinstance(near_tone, dict) and isinstance(remote_tone, dict)
+    tone_delta = 0.0
+    if tone_match:
+        for field in tone_fields:
+            try:
+                delta = abs(float(near_tone[field]) - float(remote_tone[field]))
+            except (KeyError, TypeError, ValueError):
+                tone_match = False
+                break
+            tone_delta = max(tone_delta, delta)
+        tone_match = tone_match and tone_delta <= 1e-9
+    comparisons["world_tone_source_sample"] = {
+        "matched_within_1e-9": tone_match,
+        "max_abs_delta": tone_delta if tone_match else None,
+    }
+    if not tone_match:
+        reasons.append("world-tone source samples differ or are unavailable")
+
+    resonance = near.get("legacy_pairwise_resonance") or {}
+    remote_resonance = remote.get("legacy_pairwise_resonance") or {}
+    if (resonance.get("background_from_other_materials") != "measured"
+            or remote_resonance.get("background_from_other_materials") != "measured"):
+        reasons.append("background resonance from non-candidate materials is not measured")
+    for arm, exposure in (("near", near), ("remote", remote)):
+        coverage = exposure.get("coverage") or {}
+        if coverage.get("flow") != "time_resolved":
+            reasons.append(f"{arm} flow exposure is tick-zero only, not time-resolved")
+        if coverage.get("hotspot") != "time_resolved":
+            reasons.append(f"{arm} hotspot exposure is tick-zero only, not time-resolved")
+    return {
+        "passed": not reasons,
+        "reasons": reasons,
+        "comparisons": comparisons,
+        "tested_candidate_resonance_reported_separately": True,
+        "opportunity_denominator_complete": False,
+    }
+
+
 def analyze(near_dir: Path, remote_dir: Path, seeds: list[int],
             duration_seconds: int, config: dict[str, Any]) -> dict[str, Any]:
     if not seeds or len(seeds) != len(set(seeds)):
@@ -211,8 +310,10 @@ def analyze(near_dir: Path, remote_dir: Path, seeds: list[int],
         remote_energy = remote["setup"].get("initial_energy_inventory")
         if near_energy is None or remote_energy is None or near_energy != remote_energy:
             raise ValueError(f"seed {seed}: paired arms have different or missing initial energy inventories")
+        exposure_gate = _exposure_match_gate(near["setup"], remote["setup"])
         paired_rows.append({
             "seed": seed,
+            "exposure_match_gate": exposure_gate,
             "candidate_identity": near["setup"]["candidate_identity"],
             "target_reactant_a_identity": near["setup"]["target_reactant_a_identity"],
             "target_reactant_b_identity": near["setup"]["target_reactant_b_identity"],
@@ -246,8 +347,20 @@ def analyze(near_dir: Path, remote_dir: Path, seeds: list[int],
             total_committed / total_samples if total_samples else None
         )
 
+    all_exposure_gates_passed = all(
+        pair["exposure_match_gate"]["passed"] for pair in paired_rows
+    )
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "causal_interpretation_eligible": (
+            all_exposure_gates_passed
+            and all(pair["exposure_match_gate"]["opportunity_denominator_complete"] for pair in paired_rows)
+        ),
+        "exposure_match_gate_passed_for_all_seeds": all_exposure_gates_passed,
+        "exposure_match_gate_failures": [
+            {"seed": pair["seed"], "reasons": pair["exposure_match_gate"]["reasons"]}
+            for pair in paired_rows if not pair["exposure_match_gate"]["passed"]
+        ],
         "experiment": {
             "seeds": seeds,
             "duration_seconds_per_seed": duration_seconds,
@@ -262,6 +375,7 @@ def analyze(near_dir: Path, remote_dir: Path, seeds: list[int],
         "pooled": pooled,
         "interpretation_limits": [
             "This is a paired placement screen, not proof that the selected candidate is a catalyst.",
+            "Causal interpretation is ineligible unless every seed passes the local exposure gate and complete eligible-opportunity denominators are available.",
             "The local-neighborhood opportunity samples are bounded and deterministic, not a complete unbiased count of eligible target-reactant contacts.",
             "The descriptive commits-per-sampled-opportunity ratio must not be interpreted as a reaction probability or exposure-normalized catalytic rate.",
             "Candidate identity destruction shows consumption of the configured instance; lack of destruction only shows that this identity was not retired in the recorded lifecycle stream.",
