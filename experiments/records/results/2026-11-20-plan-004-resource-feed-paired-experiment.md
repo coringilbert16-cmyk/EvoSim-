@@ -1,6 +1,8 @@
 # EXP-2026-005 — PLAN-004 paired resource-feed experiment
 
-**Status:** Registered and awaiting implementation validation. No simulation results yet.
+**Status:** Running — EXP-2026-005 was dispatched on 2026-11-20. Five of ten paired observation jobs are active; five are queued. No simulation results are available yet.
+
+**GitHub Actions:** [Run #44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988).
 
 ## Research question
 
