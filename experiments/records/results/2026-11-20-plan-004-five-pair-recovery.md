@@ -1,9 +1,9 @@
 # EXP-2026-005 — Five-pair retained-artifact recovery
 
-**Status:** All ten one-hour observations complete; per-seed chemistry and organization reports recovered and compared. Full network/contact/temporal aggregation remains pending the aggregation-only workflow.
+**Status:** Completed. All ten observations and all specialist aggregators completed from retained artifacts; no simulation reruns.
 
 **Source run:** [GitHub Actions #44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988)  
-**Recovery workflow:** `.github/workflows/plan-004-aggregate-existing.yml` (manual dispatch; no simulations are rerun)  
+**Recovery workflow:** paired workflow analysis-only mode, source run #44784506988; [successful recovery run #44833658626](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44833658626). The observe matrix was skipped; no simulations were rerun.  
 **Seeds:** 42–46, paired no-feed and resource-feed  
 **Duration:** 3,600 wall-clock seconds per run
 
@@ -21,7 +21,7 @@ The recovery workflow now:
 5. Runs the existing batch, reaction-network, geometry-aware network, contact-opportunity, and temporal-complexity analyzers for both arms.
 6. Uploads recovered outputs as a 90-day artifact.
 
-The recovery workflow has been committed to the experiment branch. It has not yet been dispatched; the available GitHub integration in this session can inspect and download artifacts but cannot trigger a workflow-dispatch event. The existing artifacts and this recovery path are retained.
+The paired workflow now supports analysis-only dispatch with a numeric source run ID. Recovery run #44833658626 successfully assembled the retained artifacts and uploaded the full specialist report artifact `plan004-resource-feed-combined` (artifact ID 14676499429; 90-day retention).
 
 ## Feed-delivery verification
 
@@ -65,12 +65,12 @@ This is a descriptive five-pair comparison, not a causal or statistical proof of
 
 A committed-reaction rate per observed tick is not an opportunity-normalized rate. Existing diagnostics do not provide complete eligible-pair and exposure denominators, so no claim about intrinsic reaction probability is justified. The 1-hour runs also show different tick throughput between conditions and seeds.
 
-## Remaining analysis and limits
+## Aggregation closeout
 
-The per-seed chemistry and organization outputs are available in the ten retained source artifacts and have been used for this paired recovery. The complete cross-seed batch/network/contact/temporal reports have not yet been produced because the original aggregate job failed and the new aggregation-only workflow has not been dispatched.
+The successful recovery artifact includes the batch chemistry report, reaction network, geometry-aware reaction network, contact-opportunity analysis, and temporal-complexity outputs for both matched arms. The original raw artifacts and per-seed reports remain unchanged. Recovered output is now available for cross-checking the recorded per-seed summaries.
 
-The recovery workflow is a workflow correction only. It does not alter simulation behavior, chemistry rules, energy calculations, experimental conditions, or any source observation. Do not rerun the ten one-hour simulations to resolve the aggregation failure.
+The workflow correction is analysis-only. It does not alter simulation behavior, chemistry rules, energy calculations, experimental conditions, or source observations.
 
 ## Status
 
-**Observation complete; partial five-pair analysis recovered; full specialist-analyzer aggregation pending.** Once the aggregation-only workflow succeeds, attach its artifact and reconcile any differences between its specialist reports and the per-seed results recorded here.
+**Observation complete; full specialist aggregation complete; scientific result inconclusive for a positive feed effect.**
