@@ -2414,9 +2414,7 @@ mod tests {
             .push(physical);
         environment.field.mark_changed_at_index(source);
         assert_eq!(
-            environment
-                .field
-                .environmental_bond_candidates(0, usize::MAX),
+            environment.field.environmental_bond_candidates(),
             vec![(source, 0, 0)]
         );
         let destination = environment.field.index_for_position(40.0, 10.0).unwrap();
@@ -2455,9 +2453,7 @@ mod tests {
         assert!(environment.field.cell_revisions[destination] > destination_revision);
         assert!(environment.field.revision > field_revision);
         assert_eq!(
-            environment
-                .field
-                .environmental_bond_candidates(0, usize::MAX),
+            environment.field.environmental_bond_candidates(),
             vec![(destination, 0, 0)],
             "the maintained bond index must move with the physical material"
         );

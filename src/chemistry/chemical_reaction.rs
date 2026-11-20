@@ -492,49 +492,22 @@ pub(crate) fn accumulate(
 struct EnvironmentalBondDiscovery {
     candidates: Vec<(usize, usize, usize)>,
     inspected_entries: usize,
-    checked_materials: Vec<(u64, usize)>,
 }
 
 /// Discover chemical reactions at realized environmental material bonds in the
 /// field. Environmental bonds are restored only into a trial graph to recover
 /// their authoritative geometry and activation strength; allocated bond energy
 /// remains attached to the environmental bond and is transferred through restoration.
-/// Traverse a bounded, tick-rotated window of the maintained environmental bond
-/// index. Returns only existing bond locators and identity/bond-count pairs for
-/// materials represented in that window. No field cells or unbonded materials
-/// are scanned during normal chemistry discovery.
+/// Traverse the complete maintained environmental bond index. The index
+/// contains only existing molecular bonds, so every returned locator is an
+/// eligible bond record to inspect and no free material is scanned.
 fn discover_environmental_bonds(
     environment: &crate::state::Environment,
-    tick: u64,
-    candidate_limit: usize,
 ) -> EnvironmentalBondDiscovery {
-    let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let candidates = environment.field.environmental_bond_candidates(tick, limit);
-    let mut checked_materials = std::collections::BTreeMap::new();
-
-    // Read only the maintained index of actual bonds. Resolve each selected
-    // locator once for stale-progress validation; empty cells and unbonded
-    // materials are never traversed during discovery.
-    for &(cell_index, material_index, _) in &candidates {
-        let Some(material) = environment
-            .field
-            .cells
-            .get(cell_index)
-            .and_then(|cell| cell.physical_materials.get(material_index))
-        else {
-            continue;
-        };
-        let bond_count = material
-            .internal_connections
-            .as_ref()
-            .map_or(0, |connections| connections.len());
-        checked_materials.insert((material.environmental_identity, bond_count), ());
-    }
-
+    let candidates = environment.field.environmental_bond_candidates();
     EnvironmentalBondDiscovery {
         inspected_entries: candidates.len(),
         candidates,
-        checked_materials: checked_materials.into_keys().collect(),
     }
 }
 #[allow(dead_code)] // Compatibility wrapper used by focused chemistry tests.
@@ -566,18 +539,17 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
     diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
-    // Environmental progress belongs to the field, not to the organism
-    // whose turn happens to discover it. Search the field directly; the
-    // bounded candidate budget below keeps this world-owned scan finite.
+    // Environmental progress belongs to the field, not to an organism.
+    // Enumerate the complete maintained bond index once at the end of the tick;
+    // no rotating window or candidate-inspection budget applies to BREAK.
     const ENVIRONMENT_PREFIX: &str = "environment|environment:";
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
-    let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let discovery = discover_environmental_bonds(environment, tick, count);
+    let discovery = discover_environmental_bonds(environment);
     diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
     let candidates = discovery.candidates;
     diagnostics.bond_candidates_inspected = candidates.len() as u64;
-    let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
+    *remaining_discovery_work = 0;
     // Full local boundary reception evaluates every resonant emitter against
     // one receiver. Rotate one candidate per tick to bound this geometric work
     // while ensuring the field can influence every candidate over time.
@@ -586,29 +558,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     } else {
         Some(tick as usize % candidates.len())
     };
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
-    for (identity, bond_count) in checked_materials {
-        if identity == 0 {
-            continue;
-        }
-        let material_prefix = format!("environment|environment:{identity}:");
-        for key in accumulation.keys() {
-            let Some(existing_index) = key
-                .strip_prefix(&material_prefix)
-                .and_then(|suffix| suffix.split(':').next())
-                .and_then(|index| index.parse::<usize>().ok())
-            else {
-                continue;
-            };
-            if existing_index >= bond_count {
-                checked_keys.insert(key.clone());
-                diagnostics.stale_progress_invalidated =
-                    diagnostics.stale_progress_invalidated.saturating_add(1);
-            }
-        }
-    }
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut restored_materials = std::collections::BTreeMap::new();
@@ -964,6 +915,16 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         }
     }
 
+    // Every indexed bond was checked, so any environmental progress key not
+    // represented by the current bond graph is stale rather than unsearched.
+    let stale_before = accumulation
+        .keys()
+        .filter(|key| key.starts_with(&current_prefix) && !checked_keys.contains(*key))
+        .count() as u64;
+    accumulation.retain(|key, _| !key.starts_with(&current_prefix) || checked_keys.contains(key));
+    diagnostics.stale_progress_invalidated = diagnostics
+        .stale_progress_invalidated
+        .saturating_add(stale_before);
     let (preserved, dissipated) = dissipate_checked_unupdated_accumulations(
         accumulation,
         &current_prefix,
@@ -1460,7 +1421,7 @@ mod material_identity_tests {
     }
 
     #[test]
-    fn environmental_break_unsearched_progress_is_preserved() {
+    fn bounded_accumulation_helper_preserves_unchecked_progress() {
         let key = "environment|environment:41:0:bond".to_string();
         let mut accumulation = std::collections::BTreeMap::from([(key.clone(), 0.75)]);
         dissipate_checked_unupdated_accumulations(
@@ -1524,59 +1485,79 @@ mod material_identity_tests {
             &mut discovery_budget,
         );
         assert!(
-            accumulation[&stale_key] < 0.75,
-            "revisiting a material must dissipate progress for a bond no longer present"
+            !accumulation.contains_key(&stale_key),
+            "exhaustive discovery must discard progress for a bond no longer present"
         );
     }
 
     #[test]
-    fn environmental_break_bounded_search_preserves_unvisited_bond_progress() {
+    fn environmental_break_discovery_checks_every_bond_beyond_the_old_budget() {
         let mut simulation = crate::state::Simulation::new(944, 10.0);
-        for cell in &mut simulation.environment.field.cells {
-            cell.physical_materials.clear();
+        simulation.environment.width = 500.0;
+        simulation.environment.height = 500.0;
+        simulation.environment.field =
+            crate::environment::ActiveMaterialField::new(500.0, 500.0, 25.0);
+        let catalog = simulation.environment.catalog.clone();
+        let template = environmental_test_composite(&catalog);
+
+        // 300 independent one-bond molecules exceed both the former
+        // environmental BREAK share (64) and the former global cap (256).
+        for index in 0..300 {
+            let x = (index % 20) as f64 * 25.0 + 12.5;
+            let y = (index / 20) as f64 * 25.0 + 12.5;
+            let material = crate::physical_material::PhysicalMaterial::realized(
+                template.material.clone(),
+                vec![
+                    crate::structure::Placement {
+                        x,
+                        y,
+                        rotation_radians: 0.0,
+                    },
+                    crate::structure::Placement {
+                        x: x + 1.8,
+                        y,
+                        rotation_radians: 0.0,
+                    },
+                ],
+                &catalog,
+            )
+            .expect("each test molecule should be physically realizable");
+            let cell = simulation
+                .environment
+                .field
+                .index_for_position(x, y)
+                .unwrap();
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical_at_index(cell, material, &catalog));
         }
-        let source = environmental_test_composite(&simulation.environment.catalog);
-        let bond = source
-            .internal_connections
-            .as_ref()
-            .and_then(|connections| connections.first())
-            .expect("fixture must contain an internal bond")
-            .clone();
-        let last_cell = simulation.environment.field.cells.len() - 1;
-        assert_ne!(last_cell, 0, "fixture needs distinct first and last cells");
-        // The index is ordered by field locator, not by the old cell traversal
-        // budget. Put an earlier bond in the first cell so a one-bond budget
-        // genuinely leaves the target bond outside the selected index window.
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            0,
-            source.clone(),
-            &simulation.environment.catalog,
-        ));
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            last_cell,
-            source,
-            &simulation.environment.catalog,
-        ));
         simulation
             .environment
             .field
             .assign_missing_material_identities();
-        let material = &simulation.environment.field.cells[last_cell].physical_materials[0];
-        let unvisited_key = environmental_break_accumulation_key(material, 0, &bond);
-        let mut accumulation = std::collections::BTreeMap::from([(unvisited_key.clone(), 0.75)]);
+        simulation
+            .environment
+            .field
+            .ensure_environmental_bond_index();
+
+        let mut accumulation = std::collections::BTreeMap::new();
         let mut discovery_budget = 1;
-        let _ = accumulate_environmental(
+        let mut diagnostics = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+        let _ = accumulate_environmental_with_diagnostics(
             &simulation.environment,
             &mut accumulation,
             &mut simulation.chemistry_library,
-            0,
+            simulation.tick,
             &mut discovery_budget,
+            None,
+            &mut diagnostics,
         );
-        assert_eq!(
-            accumulation.get(&unvisited_key),
-            Some(&0.75),
-            "a material outside the bounded scan window must retain its reaction progress"
-        );
+
+        assert_eq!(diagnostics.scan_entries_inspected, 300);
+        assert_eq!(diagnostics.bond_candidates_inspected, 300);
+        assert_eq!(diagnostics.bond_candidates_checked, 300);
+        assert_eq!(discovery_budget, 0);
     }
 
     #[test]
@@ -1730,119 +1711,6 @@ mod material_identity_tests {
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "sunlight-captured resonance must be spent once and remain conserved"
-        );
-    }
-
-    #[test]
-    fn environmental_discovery_work_is_bounded_at_each_budget_size() {
-        let mut simulation = crate::state::Simulation::new(938, 10.0);
-        for cell in &mut simulation.environment.field.cells {
-            cell.physical_materials.clear();
-        }
-
-        // Empty cells are the worst case for candidate-only accounting: no
-        // candidate is found, but traversal must still stop at the scan bound.
-        for budget in [1_usize, 8, 64, MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK] {
-            let discovery = discover_environmental_bonds(&simulation.environment, 0, budget);
-            let candidates = discovery.candidates;
-            let inspected = discovery.inspected_entries;
-            assert!(candidates.len() <= budget);
-            assert!(
-                inspected <= budget.saturating_mul(8).max(1),
-                "empty-field traversal exceeded the documented 8x bound: budget={budget}, inspected={inspected}"
-            );
-            assert!(candidates.is_empty());
-        }
-
-        // A sparse candidate at the far end must remain reachable across
-        // rotated windows while every individual tick stays within its bound.
-        let source = environmental_test_composite(&simulation.environment.catalog);
-        let last_cell = simulation.environment.field.cells.len() - 1;
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            last_cell,
-            source,
-            &simulation.environment.catalog,
-        ));
-        let budget = 8;
-        let mut reached = false;
-        for tick in 0..simulation.environment.field.cells.len() as u64 + 8 {
-            let discovery = discover_environmental_bonds(&simulation.environment, tick, budget);
-            let candidates = discovery.candidates;
-            let inspected = discovery.inspected_entries;
-            assert!(candidates.len() <= budget);
-            assert!(inspected <= budget * 8);
-            if candidates.iter().any(|(cell, _, _)| *cell == last_cell) {
-                reached = true;
-                break;
-            }
-        }
-        assert!(
-            reached,
-            "rotated bounded scans must eventually reach sparse material"
-        );
-    }
-
-    #[test]
-    fn sparse_environmental_discovery_rotates_with_a_bounded_scan_window() {
-        let mut simulation = crate::state::Simulation::new(937, 10.0);
-        for cell in &mut simulation.environment.field.cells {
-            cell.physical_materials.clear();
-        }
-        let source = environmental_test_composite(&simulation.environment.catalog);
-        // Choose a known-late field index directly. A hard-coded world-space
-        // position can map into an early cell when field dimensions or cell size
-        // change, making this fairness regression fail before discovery runs.
-        let cell_index = simulation
-            .environment
-            .field
-            .cells
-            .len()
-            .checked_sub(1)
-            .expect("the environmental field must contain cells");
-        assert!(
-            cell_index > 8,
-            "fixture requires a field larger than the first bounded scan window"
-        );
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            cell_index,
-            source,
-            &simulation.environment.catalog,
-        ));
-        simulation
-            .environment
-            .field
-            .assign_missing_material_identities();
-
-        let target_prefix = "environment|environment:".to_string();
-        let mut accumulation = std::collections::BTreeMap::new();
-        let mut found = false;
-        let max_ticks = cell_index as u64 + 8;
-        for tick in 0..max_ticks {
-            let mut discovery_budget = 1;
-            let operations = accumulate_environmental(
-                &simulation.environment,
-                &mut accumulation,
-                &mut simulation.chemistry_library,
-                tick,
-                &mut discovery_budget,
-            );
-            if !operations.is_empty()
-                || discovery_budget == 0
-                || accumulation
-                    .keys()
-                    .any(|key| key.starts_with(&target_prefix))
-            {
-                found = true;
-                break;
-            }
-            assert_eq!(
-                discovery_budget, 1,
-                "empty-cell traversal must not consume the candidate budget"
-            );
-        }
-        assert!(
-            found,
-            "rotating bounded traversal must eventually reach sparse environmental material"
         );
     }
 

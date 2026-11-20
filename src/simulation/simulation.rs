@@ -1043,16 +1043,11 @@ impl Simulation {
             finish_profile_phase("hotspot_settlement");
         }
 
-        // Environmental chemistry is a first-class owner and must run
-        // even when the world contains no organisms. Reserve half of the
-        // realization and discovery budgets for the field, independently of
-        // the organism iteration below.
-        let mut environmental_break_discovery_remaining =
-            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+        // Environmental chemistry is a first-class owner and runs without
+        // organisms. The chemistry phases below operate on the field directly.
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
         // Build the material-origin field once per tick and share it across
-        // bounded environmental BREAK candidates.
-        let local_resonance_snapshot_started = std::time::Instant::now();
+        // environmental chemistry discovery.
         // A controlled A/B run can disable only local activation influence. Stored
         // resonance funding and all other environmental chemistry remain unchanged.
         let local_resonance_world =
@@ -1061,36 +1056,12 @@ impl Simulation {
             } else {
                 crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
             };
-        break_discovery.local_resonance_snapshot_build_nanoseconds =
-            local_resonance_snapshot_started
-                .elapsed()
-                .as_nanos()
-                .min(u64::MAX as u128) as u64;
         self.environment.field.ensure_environmental_bond_index();
         if profile_tick {
             finish_profile_phase("resonance_snapshot_and_bond_index");
         }
-        let environmental_break_operations =
-            crate::chemical_reaction::accumulate_environmental_with_diagnostics(
-                &self.environment,
-                &mut self.chemical_reaction_accumulation,
-                &mut self.chemistry_library,
-                self.tick,
-                &mut environmental_break_discovery_remaining,
-                local_resonance_world.as_ref(),
-                &mut break_discovery,
-            );
-        self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
-        self.environmental_chemistry_diagnostics
-            .break_ready_candidates = environmental_break_operations.len();
-        self.environmental_chemistry_diagnostics
-            .break_discovery_work_remaining = environmental_break_discovery_remaining;
-        if profile_tick {
-            finish_profile_phase("environmental_break_discovery");
-        }
-
-        // Split the field-owned discovery share between COMBINE and the new
-        // coupled displacement path; BREAK retains its independent quarter.
+        // Keep bounded discovery shares for COMBINE and displacement. BREAK
+        // uses the complete bond index after both reaction phases resolve.
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         self.environmental_chemistry_diagnostics.combine_search =
@@ -1112,124 +1083,6 @@ impl Simulation {
 
         if profile_tick {
             finish_profile_phase("environmental_combine_discovery");
-        }
-
-        let mut environmental_break_work_remaining =
-            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
-        let environmental_break_operations =
-            crate::chemical_reaction::schedule_environmental_operations(
-                environmental_break_operations,
-                self.tick,
-                &mut environmental_break_work_remaining,
-                &mut self.chemical_reaction_accumulation,
-            );
-        self.environmental_chemistry_diagnostics.break_scheduled =
-            environmental_break_operations.len();
-        self.environmental_chemistry_diagnostics
-            .break_realization_work_remaining = environmental_break_work_remaining;
-        for operation in environmental_break_operations {
-            // A bounded sample every 50 ticks captures actual scheduled BREAK
-            // locations without placing the full-world geometric sampler on
-            // the ordinary tick path or multiplying its cost by candidate count.
-            if self.record_local_resonance_diagnostics
-                && self.tick % 50 == 0
-                && self.environmental_local_resonance_samples.is_empty()
-            {
-                self.environmental_local_resonance_samples
-                    .push(environmental_break_local_resonance_sample(self, &operation));
-            }
-            let source_cell = operation.cell_index;
-            let source_material_index = operation.material_index;
-            let source_materials = vec![operation.source_material.material.parts.clone()];
-            let molecular_history_enabled = self.record_environmental_molecular_history;
-            let parent_materials = if molecular_history_enabled {
-                vec![operation.source_material.clone()]
-            } else {
-                Vec::new()
-            };
-            let previous_identities = if molecular_history_enabled {
-                environmental_material_identity_set(&self.environment)
-            } else {
-                HashSet::new()
-            };
-            let work_required = operation.disruption_cost;
-            let reaction_frequency_hz =
-                Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
-            let activation_signal = Some(operation.activation_signal);
-            let accumulated_reaction = Some(operation.accumulated_reaction);
-            let broken_bond_index = Some(operation.bond_index);
-            let resolution =
-                crate::chemical_reaction::resolve_environmental_preserving_accumulation(
-                    operation,
-                    &mut self.environment,
-                    &mut self.energy_ledger,
-                    &mut self.chemical_reaction_accumulation,
-                );
-            let committed = resolution.is_ok();
-            let product_materials = if committed && molecular_history_enabled {
-                environmental_new_materials(&self.environment, &previous_identities)
-            } else {
-                Vec::new()
-            };
-            let molecular_lifecycle = if committed && molecular_history_enabled {
-                environmental_lifecycle_records(
-                    self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
-                    "BREAK",
-                    &parent_materials,
-                    &product_materials,
-                )
-            } else {
-                Vec::new()
-            };
-            let failure_reason = resolution.err().map(str::to_string);
-            if committed {
-                self.environmental_chemistry_diagnostics.break_committed += 1;
-            } else {
-                self.environmental_chemistry_diagnostics.break_rejected += 1;
-            }
-            let post_commit_source_cell_materials = if committed {
-                self.environment
-                    .field
-                    .cells
-                    .get(source_cell)
-                    .map(|cell| {
-                        cell.physical_materials
-                            .iter()
-                            .map(|material| material.material.parts.clone())
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-            self.environmental_chemistry_events
-                .push(crate::state::EnvironmentalChemistryEvent {
-                    tick: self.tick,
-                    reaction: "BREAK".to_string(),
-                    source_cells: vec![source_cell],
-                    source_material_indices: vec![source_material_index],
-                    source_materials,
-                    work_required,
-                    reaction_frequency_hz,
-                    activation_signal,
-                    accumulated_reaction,
-                    broken_bond_index,
-                    outcome: if committed { "committed" } else { "rejected" }.to_string(),
-                    failure_reason,
-                    product_material: None,
-                    product_internal_bond_count: None,
-                    post_commit_source_cell_materials,
-                    molecular_lifecycle,
-                });
-        }
-
-        if profile_tick {
-            finish_profile_phase("environmental_break_resolution");
         }
 
         // Environmental COMBINE receives its own bounded share of the field's
@@ -1486,6 +1339,160 @@ impl Simulation {
 
         if profile_tick {
             finish_profile_phase("environmental_displacement_resolution");
+        }
+
+        // BREAK discovery runs after transport, world input, COMBINE, and
+        // displacement have completed. Rebuild its local-resonance snapshot
+        // from the final environmental geometry before checking each bond once.
+        let break_local_resonance_snapshot_started = std::time::Instant::now();
+        let break_local_resonance_world =
+            if std::env::var_os("EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION").is_some() {
+                None
+            } else {
+                crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
+            };
+        break_discovery.local_resonance_snapshot_build_nanoseconds =
+            break_local_resonance_snapshot_started
+                .elapsed()
+                .as_nanos()
+                .min(u64::MAX as u128) as u64;
+        let mut environmental_break_discovery_remaining = 0;
+        self.environment.field.ensure_environmental_bond_index();
+        let environmental_break_operations =
+            crate::chemical_reaction::accumulate_environmental_with_diagnostics(
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
+                self.tick,
+                &mut environmental_break_discovery_remaining,
+                break_local_resonance_world.as_ref(),
+                &mut break_discovery,
+            );
+        self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
+        self.environmental_chemistry_diagnostics
+            .break_ready_candidates = environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics
+            .break_discovery_work_remaining = environmental_break_discovery_remaining;
+        if profile_tick {
+            finish_profile_phase("environmental_break_discovery");
+        }
+
+        let mut environmental_break_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+        let environmental_break_operations =
+            crate::chemical_reaction::schedule_environmental_operations(
+                environmental_break_operations,
+                self.tick,
+                &mut environmental_break_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+        self.environmental_chemistry_diagnostics.break_scheduled =
+            environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics
+            .break_realization_work_remaining = environmental_break_work_remaining;
+        for operation in environmental_break_operations {
+            // A bounded sample every 50 ticks captures actual scheduled BREAK
+            // locations without placing the full-world geometric sampler on
+            // the ordinary tick path or multiplying its cost by candidate count.
+            if self.record_local_resonance_diagnostics
+                && self.tick % 50 == 0
+                && self.environmental_local_resonance_samples.is_empty()
+            {
+                self.environmental_local_resonance_samples
+                    .push(environmental_break_local_resonance_sample(self, &operation));
+            }
+            let source_cell = operation.cell_index;
+            let source_material_index = operation.material_index;
+            let source_materials = vec![operation.source_material.material.parts.clone()];
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_material.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
+            let work_required = operation.disruption_cost;
+            let reaction_frequency_hz =
+                Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
+            let activation_signal = Some(operation.activation_signal);
+            let accumulated_reaction = Some(operation.accumulated_reaction);
+            let broken_bond_index = Some(operation.bond_index);
+            let resolution =
+                crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+                    operation,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
+            let committed = resolution.is_ok();
+            let product_materials = if committed && molecular_history_enabled {
+                environmental_new_materials(&self.environment, &previous_identities)
+            } else {
+                Vec::new()
+            };
+            let molecular_lifecycle = if committed && molecular_history_enabled {
+                environmental_lifecycle_records(
+                    self.tick,
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
+                    "BREAK",
+                    &parent_materials,
+                    &product_materials,
+                )
+            } else {
+                Vec::new()
+            };
+            let failure_reason = resolution.err().map(str::to_string);
+            if committed {
+                self.environmental_chemistry_diagnostics.break_committed += 1;
+            } else {
+                self.environmental_chemistry_diagnostics.break_rejected += 1;
+            }
+            let post_commit_source_cell_materials = if committed {
+                self.environment
+                    .field
+                    .cells
+                    .get(source_cell)
+                    .map(|cell| {
+                        cell.physical_materials
+                            .iter()
+                            .map(|material| material.material.parts.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            self.environmental_chemistry_events
+                .push(crate::state::EnvironmentalChemistryEvent {
+                    tick: self.tick,
+                    reaction: "BREAK".to_string(),
+                    source_cells: vec![source_cell],
+                    source_material_indices: vec![source_material_index],
+                    source_materials,
+                    work_required,
+                    reaction_frequency_hz,
+                    activation_signal,
+                    accumulated_reaction,
+                    broken_bond_index,
+                    outcome: if committed { "committed" } else { "rejected" }.to_string(),
+                    failure_reason,
+                    product_material: None,
+                    product_internal_bond_count: None,
+                    post_commit_source_cell_materials,
+                    molecular_lifecycle,
+                });
+        }
+
+        if profile_tick {
+            finish_profile_phase("environmental_break_resolution");
         }
 
         // Organism-owned BREAK/COMBINE, uptake, decisions, movement,

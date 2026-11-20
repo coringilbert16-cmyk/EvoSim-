@@ -604,9 +604,9 @@ pub(crate) struct Environment {
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
-    /// Cell, material, and bond entries traversed by bounded discovery.
+    /// Bond-index entries inspected by exhaustive environmental BREAK discovery.
     pub(crate) scan_entries_inspected: u64,
-    /// Physical bond records yielded by the candidate window.
+    /// Physical bond records yielded by the complete bond index.
     pub(crate) bond_candidates_inspected: u64,
     /// Candidates with a valid realized connection record and accumulation key.
     pub(crate) bond_candidates_checked: u64,
@@ -636,7 +636,7 @@ pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     pub(crate) activation_threshold_met: u64,
     /// Existing bond keys invalidated after their material or bond identity changed.
     pub(crate) stale_progress_invalidated: u64,
-    /// Unsearched progress entries retained by bounded discovery.
+    /// Unsearched progress entries retained by discovery (zero for exhaustive BREAK).
     pub(crate) progress_preserved_unsearched: u64,
     /// Checked but unupdated progress entries that dissipated.
     pub(crate) progress_dissipated_checked: u64,

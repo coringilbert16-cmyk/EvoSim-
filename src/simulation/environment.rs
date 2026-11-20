@@ -684,24 +684,10 @@ impl ActiveMaterialField {
         }
     }
 
-    /// Return a tick-rotated bounded window of known bonds. Every locator in
-    /// this result is unique, and no cells or unbonded materials are inspected.
-    pub(crate) fn environmental_bond_candidates(
-        &self,
-        tick: u64,
-        limit: usize,
-    ) -> Vec<(usize, usize, usize)> {
-        let count = limit.min(self.environmental_bond_index.len());
-        if count == 0 {
-            return Vec::new();
-        }
-        let start = tick as usize % self.environmental_bond_index.len();
-        (0..count)
-            .map(|offset| {
-                self.environmental_bond_index
-                    [(start + offset) % self.environmental_bond_index.len()]
-            })
-            .collect()
+    /// Return every locator in the maintained index of existing molecular
+    /// bonds. Each bond appears exactly once; free materials are not indexed.
+    pub(crate) fn environmental_bond_candidates(&self) -> Vec<(usize, usize, usize)> {
+        self.environmental_bond_index.clone()
     }
 
     /// Translate one complete environmental physical object without changing
