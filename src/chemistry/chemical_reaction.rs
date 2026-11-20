@@ -1495,7 +1495,8 @@ mod material_identity_tests {
         let mut simulation = crate::state::Simulation::new(944, 10.0);
         simulation.environment.width = 500.0;
         simulation.environment.height = 500.0;
-        simulation.environment.field = crate::environment::ActiveMaterialField::new(500.0, 500.0, 25.0);
+        simulation.environment.field =
+            crate::environment::ActiveMaterialField::new(500.0, 500.0, 25.0);
         let catalog = simulation.environment.catalog.clone();
         let template = environmental_test_composite(&catalog);
 
@@ -1507,17 +1508,38 @@ mod material_identity_tests {
             let material = crate::physical_material::PhysicalMaterial::realized(
                 template.material.clone(),
                 vec![
-                    crate::structure::Placement { x, y, rotation_radians: 0.0 },
-                    crate::structure::Placement { x: x + 1.8, y, rotation_radians: 0.0 },
+                    crate::structure::Placement {
+                        x,
+                        y,
+                        rotation_radians: 0.0,
+                    },
+                    crate::structure::Placement {
+                        x: x + 1.8,
+                        y,
+                        rotation_radians: 0.0,
+                    },
                 ],
                 &catalog,
             )
             .expect("each test molecule should be physically realizable");
-            let cell = simulation.environment.field.index_for_position(x, y).unwrap();
-            assert!(simulation.environment.field.deposit_physical_at_index(cell, material, &catalog));
+            let cell = simulation
+                .environment
+                .field
+                .index_for_position(x, y)
+                .unwrap();
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical_at_index(cell, material, &catalog));
         }
-        simulation.environment.field.assign_missing_material_identities();
-        simulation.environment.field.ensure_environmental_bond_index();
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        simulation
+            .environment
+            .field
+            .ensure_environmental_bond_index();
 
         let mut accumulation = std::collections::BTreeMap::new();
         let mut discovery_budget = 1;
@@ -1537,7 +1559,6 @@ mod material_identity_tests {
         assert_eq!(diagnostics.bond_candidates_checked, 300);
         assert_eq!(discovery_budget, 0);
     }
-
 
     #[test]
     fn environmental_break_discovered_invalid_bond_dissipates_progress() {
