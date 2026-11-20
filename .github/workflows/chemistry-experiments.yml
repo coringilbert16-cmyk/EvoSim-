@@ -280,12 +280,13 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name | startswith("chemistry-observation-seed-")) | .id' |
+            --jq '.artifacts[] | select((.name | startswith("chemistry-observation-seed-")) and (.workflow_run.id == (env.RUN_ID | tonumber))) | .id' |
           while read -r ARTIFACT_ID; do
             [[ -n "$ARTIFACT_ID" ]] || continue
             gh api --method DELETE "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID"
           done
-          rm -rf observations deep
+          rm -rf observations deep compact-records
