@@ -77,9 +77,7 @@ pub(crate) fn inject_plan004_resource_pulse(
     );
     let mut elements = ACTIVE_ELEMENTS
         .iter()
-        .flat_map(|element| {
-            std::iter::repeat_n(*element, PLAN004_RESOURCES_PER_ELEMENT_PER_PULSE)
-        })
+        .flat_map(|element| std::iter::repeat_n(*element, PLAN004_RESOURCES_PER_ELEMENT_PER_PULSE))
         .collect::<Vec<_>>();
     elements.shuffle(&mut rng);
 
@@ -113,7 +111,10 @@ pub(crate) fn inject_plan004_resource_pulse(
             .physical_materials
             .len();
         assert!(
-            simulation.environment.field.deposit_physical(x, y, material, &catalog),
+            simulation
+                .environment
+                .field
+                .deposit_physical(x, y, material, &catalog),
             "external base resource must be accepted by the environment"
         );
         locations.push((element.to_owned(), x, y, cell_index, material_index));
