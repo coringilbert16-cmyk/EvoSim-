@@ -76,3 +76,9 @@ The geometry-aware report contains 4,305 committed reaction events, but complete
 4. Close PLAN-001 only after the candidate set, identity transitions, and missing-data limits are documented.
 
 No reaction rules, thresholds, energy grants, or simulator behavior were changed.
+
+## Broader exact-pair reunification audit
+
+A broader scan of all two-child BREAK events found **192 cases** where both exact child molecule IDs later appeared together as the exact parent IDs of a COMBINE event. Counts by independent seed were: seed 42: 25; 43: 49; 44: 51; 45: 54; 46: 13. The median BREAK-to-COMBINE interval was 599 ticks (mean 1,308 ticks; maximum 15,689 ticks). Reunited products span 22 recorded composition/topology families.
+
+This wider set includes ordinary dissociation/recombination and re-association of fragments from larger structures; it is not equivalent to the four highlighted H–O–P/N–O–P reversals. It is evidence that exact fragment instances can remain available and later reunite, not evidence of catalysis. The four candidate H–O–P/N–O–P cycles remain the strongest targeted examples because they return to the original composition/topology family.
