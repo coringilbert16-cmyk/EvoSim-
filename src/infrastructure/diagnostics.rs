@@ -717,6 +717,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         }
         recorder.write_snapshot(simulation, "initial")?;
         recorder.writer.flush()?;
+        recorder.write_run_manifest(simulation, "running")?;
         Ok(recorder)
     }
 
@@ -899,22 +900,30 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "energy_balance_residual": simulation.energy_inventory_snapshot().residual()
         }))?;
         self.writer.flush()?;
-        self.write_run_manifest(simulation)
+        self.write_run_manifest(simulation, "completed")
     }
 
-    fn write_run_manifest(&self, simulation: &Simulation) -> std::io::Result<()> {
+    fn write_run_manifest(
+        &self,
+        simulation: &Simulation,
+        status: &str,
+    ) -> std::io::Result<()> {
         let artifact_metadata = std::fs::metadata(&self.diagnostics_path)?;
-        let mut artifact = File::open(&self.diagnostics_path)?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
-        loop {
-            let bytes_read = artifact.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
+        let artifact_sha256 = if status == "completed" {
+            let mut artifact = File::open(&self.diagnostics_path)?;
+            let mut hasher = Sha256::new();
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let bytes_read = artifact.read(&mut buffer)?;
+                if bytes_read == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..bytes_read]);
             }
-            hasher.update(&buffer[..bytes_read]);
-        }
-        let artifact_sha256 = format!("{:x}", hasher.finalize());
+            Some(format!("{:x}", hasher.finalize()))
+        } else {
+            None
+        };
         let context_bytes = serde_json::to_vec(&self.manifest_context)?;
         let configuration_sha256 = format!("{:x}", Sha256::digest(context_bytes));
         let completed_at_unix_ms = unix_timestamp_ms();
@@ -958,11 +967,12 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                 "run_attempt": workflow_run_attempt,
                 "workflow": workflow_name,
                 "workflow_url": workflow_run_url,
-                "status": "completed",
+                "status": status,
                 "started_at_unix_ms": self.started_at_unix_ms,
-                "completed_at_unix_ms": completed_at_unix_ms,
+                "completed_at_unix_ms": (status == "completed").then_some(completed_at_unix_ms),
                 "requested_duration_seconds": self.manifest_context["requested_duration_seconds"],
-                "actual_elapsed_wall_seconds": self.started_at.elapsed().as_secs_f64(),
+                "actual_elapsed_wall_seconds": (status == "completed")
+                    .then_some(self.started_at.elapsed().as_secs_f64()),
                 "start_tick": 0,
                 "end_tick": simulation.tick
             },
@@ -994,7 +1004,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                 "size_bytes": artifact_metadata.len()
             }],
             "quality": {
-                "observation_complete": true,
+                "observation_complete": status == "completed",
                 "diagnostic_coverage": "reaction_specific",
                 "warnings": warnings
             }
