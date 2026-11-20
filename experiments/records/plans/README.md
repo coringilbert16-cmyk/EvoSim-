@@ -14,6 +14,10 @@ The EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze reta
 
 **Success criterion:** A reproducible instance-level evidence table and ranked follow-up candidates. No new simulation is required.
 
+**Second-pass result:** Exact-ID lineage walks reach 25, 31, 23, 39, and 12 connected reaction events in seeds 42–46, respectively. These are chronological identity-linked event walks, not single reactions or closed metabolic cycles. The 192 exact-pair reunifications are dominated by simple two-constituent families. A targeted audit found no event-level evidence of an unchanged third-party facilitator; current contact samples are pairwise and do not provide matched facilitator controls. See [initial findings and evidence audit](../results/2026-11-20-plan-001-initial-findings.md).
+
+**Current candidate ranking:** (1) N–O–P ⇌ N + O–P, with four exact-fragment cycles across three seeds and complete participant geometry; (2) H–O–P ⇌ H + O–P, with one exact-fragment cycle; (3) H–O–P + S ⇌ H–O–P–S, with three exact-identity incorporation/release sequences in seed 45, one of the three initial COMBINE events lacking complete geometry. These are pathway/intermediate candidates, not facilitator candidates.
+
 **Initial findings:** Four exact-instance fragment-reuse cycles are confirmed: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. Three additional exact-instance sequences show H–O–P temporarily incorporated into an H–O–P–S product and released again by BREAK. A broader scan identified 192 exact-pair fragment reunifications across the five seeds. See [PLAN-001 initial findings](../results/2026-11-20-plan-001-initial-findings.md). These establish reversible intermediate/substrate reuse, not catalysis.
 
 ## PLAN-002 — Catalytic facilitation
