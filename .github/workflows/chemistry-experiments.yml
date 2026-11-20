@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      deep_diagnostics:
+        description: "Opt in to exhaustive local-resonance and detailed contact diagnostics; temporary only."
+        required: true
+        default: false
+        type: boolean
       experiment_id:
         description: "Registered experiment ID (for example EXP-2026-007)."
         required: false
@@ -61,6 +66,7 @@ jobs:
       diagnostic_interval: ${{ steps.parameters.outputs.diagnostic_interval }}
       profile_movement: ${{ steps.parameters.outputs.profile_movement }}
       profile_tick: ${{ steps.parameters.outputs.profile_tick }}
+      deep_diagnostics: ${{ steps.parameters.outputs.deep_diagnostics }}
       experiment_id: ${{ steps.parameters.outputs.experiment_id }}
       research_plan: ${{ steps.parameters.outputs.research_plan }}
       condition_id: ${{ steps.parameters.outputs.condition_id }}
@@ -75,6 +81,7 @@ jobs:
           DIAGNOSTIC_INTERVAL: ${{ inputs.diagnostic_interval }}
           PROFILE_MOVEMENT_INPUT: ${{ inputs.profile_movement }}
           PROFILE_TICK_INPUT: ${{ inputs.profile_tick }}
+          DEEP_DIAGNOSTICS_INPUT: ${{ inputs.deep_diagnostics }}
           EXPERIMENT_ID_INPUT: ${{ inputs.experiment_id }}
           RESEARCH_PLAN_INPUT: ${{ inputs.research_plan }}
           CONDITION_ID_INPUT: ${{ inputs.condition_id }}
@@ -98,6 +105,7 @@ jobs:
               interval = int(config.get("diagnostic_interval", 100))
               profile_movement = bool(config.get("profile_movement", False))
               profile_tick = bool(config.get("profile_tick", False))
+              deep_diagnostics = bool(config.get("deep_diagnostics", False))
               experiment_id = str(config.get("experiment_id") or "").strip()
               research_plan = str(config.get("research_plan") or "").strip()
               condition_id = str(config.get("condition_id") or "").strip()
@@ -111,6 +119,7 @@ jobs:
               interval = int(os.environ["DIAGNOSTIC_INTERVAL"])
               profile_movement = os.environ["PROFILE_MOVEMENT_INPUT"].lower() == "true"
               profile_tick = os.environ["PROFILE_TICK_INPUT"].lower() == "true"
+              deep_diagnostics = os.environ["DEEP_DIAGNOSTICS_INPUT"].lower() == "true"
               experiment_id = os.environ.get("EXPERIMENT_ID_INPUT", "").strip()
               research_plan = os.environ.get("RESEARCH_PLAN_INPUT", "").strip()
               condition_id = os.environ.get("CONDITION_ID_INPUT", "").strip()
@@ -140,6 +149,7 @@ jobs:
               output.write("diagnostic_interval=" + str(interval) + chr(10))
               output.write("profile_movement=" + str(profile_movement).lower() + chr(10))
               output.write("profile_tick=" + str(profile_tick).lower() + chr(10))
+              output.write("deep_diagnostics=" + str(deep_diagnostics).lower() + chr(10))
               output.write("experiment_id=" + experiment_id + chr(10))
               output.write("research_plan=" + research_plan + chr(10))
               output.write("condition_id=" + condition_id + chr(10))
@@ -167,6 +177,7 @@ jobs:
           SEED: ${{ matrix.seed }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
           DIAGNOSTIC_INTERVAL: ${{ needs.prepare.outputs.diagnostic_interval }}
+          DEEP_DIAGNOSTICS: ${{ needs.prepare.outputs.deep_diagnostics }}
           EVOSIM_PROFILE_MOVEMENT: ${{ needs.prepare.outputs.profile_movement }}
           EVOSIM_PROFILE_TICK: ${{ needs.prepare.outputs.profile_tick }}
           EVOSIM_EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
@@ -175,7 +186,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p observations
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds "$DURATION_SECONDS" --seed "$SEED" --diagnostics "observations/seed-$SEED.jsonl" --diagnostic-interval "$DIAGNOSTIC_INTERVAL"
+          EXTRA_ARGS=()
+          if [[ "$DEEP_DIAGNOSTICS" == "true" ]]; then
+            EXTRA_ARGS+=(--deep-diagnostics)
+          fi
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds "$DURATION_SECONDS" --seed "$SEED" --diagnostics "observations/seed-$SEED.jsonl" --diagnostic-interval "$DIAGNOSTIC_INTERVAL" "${EXTRA_ARGS[@]}"
       - name: Analyze reactions and energy
         env:
           SEED: ${{ matrix.seed }}
@@ -193,7 +208,7 @@ jobs:
           name: chemistry-observation-seed-${{ matrix.seed }}
           path: observations/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
   aggregate:
     if: needs.prepare.outputs.should_run == 'true'
@@ -216,7 +231,11 @@ jobs:
           python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
           python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
           python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
-          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
+          if [[ "${{ needs.prepare.outputs.deep_diagnostics }}" == "true" ]]; then
+            python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
+          else
+            echo "Detailed contact-opportunity analysis skipped (deep diagnostics disabled)."
+          fi
           python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir temporal-chemical-complexity
       - name: Upload combined experiment report
         uses: actions/upload-artifact@v4
@@ -230,4 +249,4 @@ jobs:
             contact-opportunities/
             temporal-chemical-complexity/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 14
