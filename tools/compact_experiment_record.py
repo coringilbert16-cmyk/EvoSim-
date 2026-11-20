@@ -73,10 +73,41 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
         raise ValueError(f"seed mismatch: requested {seed}, chemistry report says {source.get('seed')}")
     if not chemistry.get("sampling", {}).get("summary_present"):
         raise ValueError(f"seed {seed}: final chemistry summary is missing")
-    lifecycle_errors = nested(chemistry, "molecular_history", "validation_errors", default=[])
-    organization_errors = nested(organization, "scope", "lifecycle_validation_errors", default=[])
-    if not isinstance(lifecycle_errors, list) or not isinstance(organization_errors, list):
-        raise ValueError(f"seed {seed}: lifecycle validation fields must be arrays")
+    lifecycle_errors = nested(chemistry, "molecular_history", "validation_errors", default=None)
+    organization_errors = nested(organization, "scope", "lifecycle_validation_errors", default=None)
+    if lifecycle_errors is not None and not isinstance(lifecycle_errors, list):
+        raise ValueError(f"seed {seed}: chemistry lifecycle validation errors must be an array")
+    if organization_errors is not None and not isinstance(organization_errors, list):
+        raise ValueError(f"seed {seed}: organization lifecycle validation errors must be an array")
+    lineage_status = (
+        "unknown" if lifecycle_errors is None or organization_errors is None
+        else "invalid" if lifecycle_errors or organization_errors
+        else "valid"
+    )
+    transition_rows = nested(organization, "reaction_network", "family_to_family_transitions", default=None)
+    transition_summary = None
+    if isinstance(transition_rows, list):
+        ordered_transitions = sorted(
+            (row for row in transition_rows if isinstance(row, dict)),
+            key=lambda row: (-int(row.get("count", 0) or 0), str(row.get("reaction")),
+                             str(row.get("parent_family")), str(row.get("child_family"))),
+        )
+        transition_summary = {
+            "transition_type_count": len(transition_rows),
+            "transition_event_count": sum(
+                int(row.get("count", 0) or 0) for row in ordered_transitions
+            ),
+            "top_family_pairs": [
+                {
+                    "reaction": row.get("reaction"),
+                    "parent_family": row.get("parent_family"),
+                    "child_family": row.get("child_family"),
+                    "count": row.get("count"),
+                }
+                for row in ordered_transitions[:25]
+            ],
+            "truncated": len(ordered_transitions) > 25,
+        }
 
     manifest = validate_manifest(manifest_path) if manifest_path else {}
     coverage_report = read_json(opportunity_coverage_path) if opportunity_coverage_path else {}
@@ -113,7 +144,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
-        "record_status": "complete" if not lifecycle_errors and not organization_errors and seed_coverage is not None else "partial",
+        "record_status": "complete" if lifecycle_errors is not None and organization_errors is not None and not lifecycle_errors and not organization_errors and seed_coverage is not None else "partial",
         "identity": {
             "experiment_id": experiment.get("experiment_id"),
             "research_plan": experiment.get("research_plan"),
@@ -190,6 +221,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "active_at_end_count": history.get("active_at_end_count"),
             "lineage_edge_count": len(history.get("lineage_edges", []))
                 if isinstance(history.get("lineage_edges"), list) else None,
+            "lineage_validation_status": lineage_status,
             "lineage_reaction_counts": scalar_tree(history.get("lineage_reaction_counts")),
             "mean_observed_lifetime_ticks": history.get("mean_observed_lifetime_ticks"),
             "unique_structural_families": org.get("unique_exact_structural_families"),
@@ -200,9 +232,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
                 nested(organization, "material_distribution",
                        "reaction_created_compound_constituent_amount_by_resource", default={})
             ),
-            "family_transition_count": len(nested(
-                organization, "reaction_network", "family_to_family_transitions", default=[]
-            )),
+            "family_transition_summary": transition_summary,
         },
         "organization": {
             "unique_structural_families": org.get("unique_exact_structural_families"),
@@ -219,9 +249,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
                 organization, "material_distribution",
                 "reaction_created_compound_constituent_amount_by_resource", default={}
             )),
-            "family_transition_count": len(nested(
-                organization, "reaction_network", "family_to_family_transitions", default=[]
-            )),
+            "family_transition_summary": transition_summary,
         },
         "energy": {
             "first_balance_residual": energy.get("first_balance_residual"),
@@ -237,6 +265,8 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
                     "configuration_sha256": conditions.get("configuration_sha256"),
                     "actual_elapsed_wall_seconds": run.get("actual_elapsed_wall_seconds"),
                     "opportunity_coverage": seed_coverage,
+                    "chemistry_lifecycle_validation": lifecycle_errors,
+                    "organization_lifecycle_validation": organization_errors,
                     "settlement": nested(reactions, "settlement", default=None),
                 }.items() if value is None
             ],
