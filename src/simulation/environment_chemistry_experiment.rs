@@ -442,8 +442,8 @@ impl MatchedCatalysisConfig {
             ("target_reactant_a_parts", &self.target_reactant_a_parts),
             ("target_reactant_b_parts", &self.target_reactant_b_parts),
         ] {
-            if parts.len() < 2 || parts.iter().any(|part| part.trim().is_empty()) {
-                return Err(format!("{label} must contain at least two non-empty element names"));
+            if parts.len() != 2 || parts.iter().any(|part| part.trim().is_empty()) {
+                return Err(format!("{label} must contain exactly two non-empty element names"));
             }
         }
         if self.near_distance <= 0.0
