@@ -111,7 +111,7 @@ jobs:
           SEED: ${{ matrix.seed }}
           CONDITION: ${{ matrix.condition }}
         run: |
-          python3 tools/chemistry_organization_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION-seed-$SEED-organization.json" --markdown-out "observations/$CONDITION-seed-$SEED-organization.md"
+          python3 tools/chemistry_organization_analyzer.py "observations/$CONDITION-seed-$SEED.jsonl" --json-out "observations/$CONDITION-seed-$SEED-organization.json" --markdown-out "observations/$CONDITION-seed-$SEED-organization.md"
       - name: Upload raw observation and per-seed analysis
         if: always() && hashFiles('observations/*.jsonl') != ''
         uses: actions/upload-artifact@v4
