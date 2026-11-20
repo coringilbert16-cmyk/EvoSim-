@@ -149,13 +149,28 @@ Do not combine all domain-specific analyses into one monolithic script. Keep spe
 
 This is a lower-risk way to make results feel like one coherent lab notebook without discarding existing analytical depth.
 
+## Test inventory and coverage notes
+
+The seven analyzers used by the standard workflow each have a dedicated Python test file on main:
+- Chemistry: 12 tests.
+- Molecular organization: 13 tests.
+- Cross-seed chemistry batch: 2 tests.
+- Reaction network: 3 tests.
+- Geometry-aware network: 5 tests.
+- Contact opportunities: 2 tests.
+- Temporal complexity: 7 tests.
+
+The current test inventory emphasizes lifecycle correctness, structural topology, bond attribution/reconciliation, geometry invariants, time-window analysis, and basic opportunity aggregation. The relatively small contact-opportunity and batch-analyzer suites warrant closer review for truncation/coverage semantics, denominator misuse, missing provenance, malformed/mixed-version inputs, and cross-seed consistency. No common manifest/report-index validator exists in the standard workflow.
+
 ## Audit limitations and next work
 
-This first pass inspected the main environmental recorder, chemistry analyzer, contact-opportunity analyzer, experiment execution guide, experiment registry, and plans guide; it also inspected PR metadata and changed-file inventories for #345 and #392. It did not yet audit every analyzer, event struct, workflow, or energy-ledger call site. No code was changed and no experiment was launched.
+The first-pass source audit now covers the main environmental recorder, event/lifecycle and tick-diagnostic structs, chemistry and contact analyzers, all seven standard workflow analyzers and their test-file inventory, the standard experiment workflow, and environmental COMBINE/BREAK/DISPLACEMENT energy settlement paths. PR #345 and PR #392 metadata, changed-file inventories, and selected source/analyzer patches have also been inspected.
 
-Next:
-1. Complete the remaining analyzer/workflow and event-to-energy call-site audit.
-2. Produce a field-level canonical schema and join map based on actual serialized event structs.
-3. Reconcile #345 and #392 work against main before selecting implementation slices.
-4. Reanalyze retained artifacts to test what can already be reconstructed.
-5. Implement only gaps that cannot be resolved offline, with focused tests and no chemistry behavior changes.
+The audit is sufficient to define the core schema priorities, but not yet sufficient to start changing production diagnostics. The remaining pre-implementation work is:
+1. Review the focused tests in PR #345/#392 and the weakest main analyzer suites, especially contact-opportunity and batch aggregation.
+2. Reconcile branch divergence and identify which open-PR changes can be safely reused or should remain separate.
+3. Reanalyze retained EXP-2026-004, EXP-2026-006/PLAN-002, and resource-feed artifacts to identify which proposed fields can already be reconstructed offline.
+4. Draft the field-level schema and manifest contract against the concrete event/energy call sites.
+5. Select the smallest implementation slice, add focused tests, and keep all chemistry/physics behavior unchanged.
+
+No code was changed and no experiment was launched during this audit.
