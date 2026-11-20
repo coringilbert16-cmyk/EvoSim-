@@ -18,20 +18,22 @@ This is the master index. Detailed completed-run results live under [results/](r
 | ID | Research question | Status | Plan |
 |---|---|---|---|
 | PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **In progress — artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
-| PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | Planned — depends on PLAN-001 and matched controls | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
+| PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | In progress — matched-catalysis diagnostic screen running | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
 | PLAN-003 | Does a product promote net production of additional copies of its own structure? | Planned — requires a defined self-production pathway and seeded/unseeded controls | [Autocatalysis](plans/README.md#plan-003-autocatalysis) |
-| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
+| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | **In progress — initial baseline artifact screen completed; exact multi-step pathway trace remains** | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
 | PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
-| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
+| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | **In progress — descriptive baseline screen completed; causal comparison blocked** | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
 
-## Current PLAN-001 progress
+## Current findings
 
-The first artifact pass identified four exact-instance reversible fragment-reuse cycles across seeds 43, 44, and 45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. These support reusable intermediate chemistry, not catalysis. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
+- PLAN-001 identified exact-instance reversible fragment-reuse cycles across seeds 43–45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
+- PLAN-004's initial screen found recurrent family-level pathway turnover and additional H–O–P / sulfur association-dissociation sequences. This is promising intermediate recycling, not demonstrated pseudo-metabolism.
+- PLAN-006's descriptive screen found spatial concentration in committed-event geometry, with substantial seed-to-seed variation. It cannot identify causal environmental effects because complete opportunity denominators and matched spatial conditions are absent. See [PLAN-004/006 initial screens](results/2026-11-20-plan-004-006-initial-screens.md).
 
 ## Interpretation guardrails
 
 - EXP-2026-004 is the strongest validated multi-seed dataset currently recorded.
-- Family-transition cycles can arise from reversible BREAK/COMBINE transformations and identity turnover; they are not proof of catalysis or autocatalysis.
+- Family-transition cycles can arise from reversible BREAK/COMBINE transformations and identity turnover; they are not proof of catalysis, autocatalysis, or metabolism.
 - Product reuse as a parent is evidence of subsequent chemical participation, not proof that the product facilitated another reaction.
 - No completed experiment currently confirms catalysis, autocatalysis, pseudo-metabolism, cross-catalysis, or self-sustaining chemistry.
 - Do not repeat generic baselines or extend observation windows solely to wait for an event.
