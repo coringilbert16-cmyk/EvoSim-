@@ -34,8 +34,6 @@ const ACTIVE_ELEMENTS: [&str; 6] = [
 pub(crate) struct ResourceFeedParticle {
     pub(crate) element: String,
     pub(crate) material: PhysicalMaterial,
-    pub(crate) x: f64,
-    pub(crate) y: f64,
 }
 
 /// Capture the tick-zero positions of free resources. Feed placements sample
@@ -138,8 +136,6 @@ pub(crate) fn inject_plan004_resource_pulse(
             ResourceFeedParticle {
                 element,
                 material,
-                x,
-                y,
             }
         })
         .collect::<Vec<_>>();
@@ -230,8 +226,8 @@ mod tests {
                 .map(|particle| (
                     particle.element.clone(),
                     particle.material.environmental_identity,
-                    particle.x,
-                    particle.y
+                    particle.material.placements.as_ref().unwrap()[0].x,
+                    particle.material.placements.as_ref().unwrap()[0].y
                 ))
                 .collect::<Vec<_>>(),
             second_particles
