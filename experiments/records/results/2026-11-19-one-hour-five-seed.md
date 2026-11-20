@@ -16,13 +16,13 @@
 
 ## Per-seed results
 
-| Seed | Committed reactions | Exact structural families | Compound products |
+| Seed | Committed reactions | Unique structural families | Compound products |
 |---:|---:|---:|---:|
-| 42 | 639 | 72 | 422 |
-| 43 | 1,153 | 85 | 767 |
-| 44 | 985 | 57 | 617 |
-| 45 | 1,082 | 78 | 712 |
-| 46 | 446 | 38 | 267 |
+| 42 | 639 | 73 | 422 |
+| 43 | 1,153 | 86 | 767 |
+| 44 | 985 | 59 | 617 |
+| 45 | 1,082 | 79 | 712 |
+| 46 | 446 | 40 | 267 |
 | **Total / mean** | **4,305 total** | **67.4 mean per seed** | **637 mean per seed** |
 
 ## Reaction totals
@@ -83,7 +83,7 @@ These observations support recurring pathways and reusable intermediates. They d
 
 The reaction network contains 426 pathway patterns, with 178 recurring in at least two independent seeds. The pooled family-transition graph has a large strongly connected component, but this is expected to include reversible BREAK/COMBINE transformations. Graph connectivity alone cannot establish catalytic turnover or metabolism.
 
-The temporal analyzer reported the following mean changes across the five seeds:
+The temporal analyzer reported the following mean changes across the five seeds. Its separate per-seed fingerprint counts were 72, 85, 57, 78, and 38; these use a different fingerprint pipeline and should not be substituted for the exact structural-family counts above:
 
 | Window | Cumulative structural fingerprints | Cumulative reaction patterns | Mean active-product size | Mean maximum product size |
 |---:|---:|---:|---:|---:|
