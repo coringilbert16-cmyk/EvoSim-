@@ -911,6 +911,11 @@ pub(crate) fn build_matched(
         "max_target_pair_distance": config.max_target_pair_distance,
         "initial_elemental_inventory_unchanged": true,
         "initial_energy_inventory_unchanged": true,
+        "initial_energy_inventory": {
+            "usable": initial_energy.current_usable_energy,
+            "resonant": initial_energy.current_resonant_energy,
+            "structural": initial_energy.current_structural_energy
+        },
         "all_non_candidate_molecule_geometry_unchanged": true,
         "interpretation": "The candidate is not established as a facilitator. Target reactants are selected by composition and proximity only; this setup does not establish an eligible endpoint contact or causal facilitation."
     }));
