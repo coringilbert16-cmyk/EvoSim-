@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -195,7 +196,7 @@ def _series_match(left: Any, right: Any, fields: tuple[str, ...] | None = None,
                 a, b = float(left_item), float(right_item)
             except (TypeError, ValueError):
                 return False, None
-            if not (a == a and b == b):
+            if not (math.isfinite(a) and math.isfinite(b)):
                 return False, None
             maximum_delta = max(maximum_delta, abs(a - b))
         else:
@@ -406,6 +407,11 @@ def main() -> int:
         "",
         f"- Seeds: {', '.join(map(str, seeds))}",
         f"- Duration per seed: {args.duration_seconds} seconds",
+        "",
+        "## Exposure-match gate",
+        "",
+        f"- All seeds pass tick-zero matching: {report["exposure_match_gate_passed_for_all_seeds"]}",
+        f"- Causal interpretation eligible: {report["causal_interpretation_eligible"]}",
         "",
         "## Paired pooled observations",
         "",
