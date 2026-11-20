@@ -1,7 +1,7 @@
 # OBS-001 — Compact chemistry observability and experiment analysis
 
 **Type:** Engineering/measurement infrastructure plan (not a scientific research PLAN).
-**Status:** Approved; Phase 1 audit in progress.
+**Status:** Approved; Phase 1 audit substantially complete; Phase 2 schema proposal drafted for source-level review.
 **Tracking:** [GitHub issue #396](https://github.com/coringilbert16-cmyk/EvoSim-/issues/396).
 **Scope:** Experiment records, diagnostic schemas, offline analyzers, and standard reports only.
 
@@ -65,7 +65,7 @@ Audit current main and relevant open PRs. Map every existing data source and ana
 
 ### Phase 2 — Canonical schema and run manifest
 
-Define a compact, versioned record contract and stable identity/join rules for run → time window → event/opportunity → material lineage → energy/environment context. Specify units, nullable/unknown semantics, schema migration, and artifact provenance.
+Drafted: [OBS-001 schema v1 proposal](OBS-001-schema-v1-proposal.md). Review its field-level contract against every environmental reaction commit path, then resolve the listed source-level open questions before implementation. The proposal defines a compact manifest, stable reaction/lifecycle joins, participant identities, energy-settlement capture, opportunity coverage semantics, exposure references, and a report index. It remains a proposal, not an implemented schema.
 
 ### Phase 3 — Close decision-relevant instrumentation gaps
 
@@ -163,3 +163,14 @@ Focused tests from PR #345 and PR #392 were inspected. #345 validates funnel agg
 - Initial findings: see [observability audit](../observability-audit-2026-11-20.md).
 - Next action: complete the remaining analyzer/workflow/source audit, then finalize the schema proposal and identify the smallest non-duplicative implementation slice.
 - No simulator code or diagnostics have been modified; no new experiment was launched.
+
+
+## Updated checkpoint — 2026-11-20
+
+- Phase 1 focused audit and PR #345/#392 test/branch review are complete. Findings and reusable-slice decisions are recorded in the dated audit.
+- Existing EXP-2026-005 observations are complete. All ten artifacts were inspected; the original aggregate failure is an input assembly issue. A no-rerun aggregation recovery workflow and five-pair partial analysis were committed on PR #394's branch. Full specialist aggregation remains pending manual workflow dispatch.
+- EXP-2026-005 results do not show a consistent positive resource-feed effect; see the permanent five-pair recovery report in the experiment branch.
+- Phase 2 field-level schema proposal drafted at [OBS-001-schema-v1-proposal.md](OBS-001-schema-v1-proposal.md). It is not implemented. It proposes promoting the existing tick/ordinal lifecycle reaction ID to the event, recording participant IDs for rejected and committed events, capturing actual energy settlement values at commit boundaries, and explicitly marking opportunity coverage.
+- Source confirmation: the current EnergyTransaction contains reason, usable delta, signed structural delta, work, and heat; ReactionEnergyBalance contains reactant/product energy, work, heat, signed net change, required external input, and surplus. Environmental resonance withdrawals/funding must be captured separately at the actual commit boundary; never treat legacy potential_released as a source.
+- No simulator code or chemistry/energy behavior has been changed under OBS-001. No new simulation was launched.
+- Next: review the schema's open questions against exact COMBINE/BREAK/DISPLACEMENT resolution call sites, then implement only the identity join as the first small instrumentation slice with focused tests. Hold energy and opportunity instrumentation until the exact settlement and search semantics are confirmed.
