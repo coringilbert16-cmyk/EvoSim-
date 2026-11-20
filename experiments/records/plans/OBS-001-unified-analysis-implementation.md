@@ -97,15 +97,16 @@ First use retained evidence; no simulation reruns by default:
 
 Compare unified results with existing specialist reports. Investigate every discrepancy and record any non-reconstructible historical field as unavailable rather than inferred.
 
-### Phase 6 — Adoption
+### Phase 6 — Compact-record adoption
 
-After the pilot passes:
-
-- add the unified report/index to the standard environmental chemistry workflow;
-- make the compact core analysis required for registered runs;
-- keep high-volume traces optional and purpose-driven;
-- update experiment documentation and result-record templates;
-- require each new measurement to state its scientific question, expected data volume, consumer stage, and acceptance test.
+- Define and validate the permanent record contract before changing retention defaults.
+- Build compact per-seed records directly from the existing specialist analyzer outputs.
+- Compare experiments from compact records alone, without requiring raw JSONL or intermediate analyzer outputs.
+- Make exhaustive local-resonance sampling, contact-opportunity CSVs, reaction-network expansion, and temporal detail explicit deep-analysis options.
+- Upload raw source artifacts only temporarily (one day), delete them after successful aggregation, and retain compact transport artifacts separately.
+- Commit validated compact per-seed records and the experiment comparison record with the permanent result note.
+- Preserve selected reference datasets only through an explicit allowlist and documented retention reason.
+- Require each new measurement to state its scientific question, expected data volume, consumer stage, and acceptance test.
 
 ## Acceptance criteria
 
@@ -118,6 +119,8 @@ After the pilot passes:
 - Missing, null, sampled, partial, unknown, and measured zero are never conflated.
 - No rate is emitted without a valid, complete, semantically appropriate denominator.
 - Reports distinguish observations from interpretation and retain seed-level results.
+- Compact records can be compared after all raw/intermediate artifacts have expired.
+- Routine workflow retains no raw JSONL or detailed contact CSV by default; temporary raw artifacts expire automatically and are deleted after successful aggregation.
 - Automated tests cover invalid manifests/checksums, legacy schema, partial coverage, missing analyzer output, stale cache, deterministic index/report assembly, and aggregation naming variants.
 - No simulation behavior or chemistry/physics rules change.
 
