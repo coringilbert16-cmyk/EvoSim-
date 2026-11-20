@@ -14,10 +14,11 @@ class UnifiedChemistryAnalysisTests(unittest.TestCase):
             root = Path(temporary)
             raw = root / "seed-42.jsonl"
             raw.write_bytes(b'{"record":"fixture"}\n')
+            expected_sha = unified.sha256_file(raw)
             run = unified.validate_run(root, 42)
-        self.assertEqual(run["manifest_status"], "legacy_manifest_missing")
-        self.assertEqual(run["raw_sha256"], unified.sha256_file(raw))
-        self.assertIsNone(run["manifest_path"])
+            self.assertEqual(run["manifest_status"], "legacy_manifest_missing")
+            self.assertEqual(run["raw_sha256"], expected_sha)
+            self.assertIsNone(run["manifest_path"])
 
     def test_cache_requires_matching_input_analyzer_and_output_hash(self):
         with tempfile.TemporaryDirectory() as temporary:
