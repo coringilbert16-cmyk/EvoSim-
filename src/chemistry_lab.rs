@@ -1255,6 +1255,7 @@ mod tests {
                 broken_bond_index: None,
                 outcome: "committed".into(),
                 failure_reason: None,
+                energy_settlement: crate::state::EnvironmentalEnergySettlement::default(),
                 product_material: Some(vec![("Carbon".into(), 2.0)]),
                 product_internal_bond_count: Some(1),
                 post_commit_source_cell_materials: Vec::new(),
