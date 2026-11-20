@@ -16,6 +16,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.experiment_manifest import validate_manifest  # noqa: E402
+from tools.compare_compact_experiment_records import (  # noqa: E402
+    compare as compare_compact_records,
+    render_markdown as render_compact_comparison_markdown,
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -299,13 +303,38 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input_dir", type=Path, help="directory containing seed-N.jsonl and optional manifests")
-    parser.add_argument("--seeds", required=True, help="comma-separated independent seed IDs")
-    parser.add_argument("--duration-seconds", type=int, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("input_dir", nargs="?", type=Path, help="directory containing seed-N.jsonl and optional manifests")
+    parser.add_argument("--seeds", help="comma-separated independent seed IDs")
+    parser.add_argument("--duration-seconds", type=int)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--compare-records", nargs="+", type=Path,
+                        help="compare compact permanent records without raw diagnostics")
+    parser.add_argument("--comparison-json-out", type=Path,
+                        help="JSON output path for compact-record-only comparison")
+    parser.add_argument("--comparison-markdown-out", type=Path,
+                        help="optional Markdown output path for compact-record-only comparison")
     parser.add_argument("--include-heavy-contact", action="store_true",
                         help="run detailed contact CSV analysis; may produce very large files")
     args = parser.parse_args()
+    if args.compare_records:
+        if args.input_dir or args.seeds or args.duration_seconds is not None or args.output_dir:
+            parser.error("--compare-records cannot be combined with raw-input analysis arguments")
+        if not args.comparison_json_out:
+            parser.error("--comparison-json-out is required with --compare-records")
+        result = compare_compact_records(args.compare_records)
+        args.comparison_json_out.parent.mkdir(parents=True, exist_ok=True)
+        args.comparison_json_out.write_text(
+            json.dumps(result, sort_keys=True, indent=2) + "\\n", encoding="utf-8"
+        )
+        if args.comparison_markdown_out:
+            args.comparison_markdown_out.parent.mkdir(parents=True, exist_ok=True)
+            args.comparison_markdown_out.write_text(
+                render_compact_comparison_markdown(result), encoding="utf-8"
+            )
+        print(f"Compact-only comparison: {args.comparison_json_out}")
+        return 0
+    if not args.input_dir or not args.seeds or args.duration_seconds is None or not args.output_dir:
+        parser.error("raw analysis requires input_dir, --seeds, --duration-seconds, and --output-dir")
     seeds = [int(value) for value in args.seeds.split(",") if value]
     if not seeds or len(seeds) != len(set(seeds)) or any(seed < 0 for seed in seeds):
         parser.error("seeds must be unique nonnegative integers")
