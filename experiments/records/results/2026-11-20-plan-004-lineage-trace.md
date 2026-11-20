@@ -44,6 +44,9 @@ Mean initial free-resource identities consumed per seed, by element:
 - Phosphorus: 56.2 of 196.8
 - Sulfur: 64.2 of 204.6
 
+
+At the final snapshot, the total number of active free, unbonded single-element identities was 1,215 / 1,201 / 1,177 / 1,180 / 1,218 for seeds 42–46 respectively (mean 1,198.2), compared with 1,200 at tick zero. Thus, despite hundreds of original free-resource identities entering reactions, the aggregate free-element pool was nearly unchanged by the end, consistent with substantial internal recycling. This is a pool-count comparison, not a full atom-by-atom flux or proof of a sustained cycle.
+
 This is an **identity-turnover count**, not net depletion or elemental consumption: an atom may be released again under a new molecule identity after BREAK, and reaction-created identities are not counted as initial free resources. It provides a rough scale for designing a feed intervention, but should not be used alone to set the feed composition or claim a resource requirement.
 
 ## Recurrent turnover evidence
