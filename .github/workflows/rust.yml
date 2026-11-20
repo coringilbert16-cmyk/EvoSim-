@@ -53,6 +53,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_geometry_aware_reaction_network.py'
           python3 -m unittest discover -s tests -p 'test_contact_opportunity_analyzer.py'
           python3 -m unittest discover -s tests -p 'test_temporal_chemical_complexity_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_experiment_manifest.py'
       - name: Run Rust tests
         if: success()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
@@ -70,6 +71,9 @@ jobs:
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
+      - name: Validate generated experiment manifest
+        if: success()
+        run: python3 tools/experiment_manifest.py environmental-chemistry-smoke.jsonl.manifest.json
       - name: Analyze shared chemistry smoke output
         if: success()
         run: |
@@ -89,6 +93,7 @@ jobs:
           name: environmental-chemistry-smoke-output
           path: |
             environmental-chemistry-smoke.jsonl
+            environmental-chemistry-smoke.jsonl.manifest.json
             environmental-chemistry-smoke-analysis.json
             environmental-chemistry-smoke-analysis.md
             environmental-chemistry-smoke-organization.json
