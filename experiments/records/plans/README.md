@@ -26,7 +26,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 ## PLAN-002 — Catalytic facilitation
 
-**Status:** First local-exposure telemetry increment implemented; full exposure matching and candidate selection remain blocked. No catalytic experiment is authorized.
+**Status:** Five-seed neighborhood screen analyzed (EXP-2026-006); provisional family associations identified, but candidate selection and causal testing remain blocked. No catalytic experiment is authorized.
 
 **Question:** Does a molecule increase the likelihood or rate of a reaction while remaining chemically available, rather than being consumed as a reactant?
 
@@ -42,7 +42,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 **Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, and a manual-only workflow. A first exposure telemetry increment records per-constituent production flow velocity, hotspot intensity, the uniform world-tone source sample, and candidate-to-target legacy pairwise aura magnitudes. The analyzer compares tick-zero flow/hotspot/source samples and explicitly fails causal eligibility when telemetry is missing or unmatched. A Rust preflight command now checks both tick-zero arms and blocks the manual paired-run workflow before simulations while time-resolved flow/hotspot exposure, non-candidate background resonance, and complete eligible-opportunity denominators are unavailable. Focused flow-sampler, analyzer-gate, and preflight-blocker tests were added. Full CI is running against the current implementation. See [PLAN-002 exposure-matching design](PLAN-002-exposure-matching-design.md) for limitations. The PR remains draft and unmerged.
 
-**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only. Current exposure measurements are tick-zero only; background resonance from other materials and full-cycle flow/hotspot exposure are not measured; complete eligible target-pair opportunity denominators are absent. The analyzer therefore cannot mark causal interpretation eligible. Do not dispatch the current workflow as a catalytic experiment.
+**Current observational result:** EXP-2026-006 found cross-seed associations between several nearby molecular families and same-pair/tick COMBINE commits within a small subset of physically valid sampled opportunities. H–S, H–O, S–S, and O–P families are provisional follow-up candidates, not established facilitators. The H–S example configuration remains illustrative; its family-level association is not enough to select an exact molecule identity.
+
+**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only. Current exposure measurements are tick-zero only; background resonance from other materials and full-cycle flow/hotspot exposure are not measured; complete eligible target-pair opportunity denominators are absent. The analyzer therefore cannot mark causal interpretation eligible. The run #77 observations were ordinary baseline chemistry with neighborhood telemetry, not candidate-near versus candidate-remote arms. Do not dispatch the current workflow as a catalytic experiment.
 
 ## PLAN-003 — Autocatalysis
 
