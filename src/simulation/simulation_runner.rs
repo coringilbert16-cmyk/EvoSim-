@@ -186,7 +186,9 @@ fn run_environment_chemistry_experiment(
     let fixture = match matched_setup.as_ref() {
         Some((config, condition)) => {
             crate::environment_chemistry_experiment::build_matched(seed, config, *condition)
-                .unwrap_or_else(|error| panic!("failed to build matched-catalysis fixture: {error}"))
+                .unwrap_or_else(|error| {
+                    panic!("failed to build matched-catalysis fixture: {error}")
+                })
         }
         None => crate::environment_chemistry_experiment::build(seed),
     };
