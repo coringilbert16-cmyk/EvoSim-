@@ -941,6 +941,12 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         if workflow_run_id.is_none() {
             warnings.push("workflow run identity is unavailable outside a configured CI environment".to_string());
         }
+        if status != "completed" {
+            warnings.push("observation did not reach the recorder's completed state".to_string());
+        }
+        if std::env::var("EVOSIM_EXPERIMENT_ID").is_err() {
+            warnings.push("experiment registry identity was not supplied to the run".to_string());
+        }
         let workflow_run_url = repository
             .as_ref()
             .zip(workflow_run_id.as_ref())
@@ -986,6 +992,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "conditions": {
                 "configuration_schema_version": 1,
                 "configuration_sha256": configuration_sha256,
+                "configuration_completeness": "captured_fields_only",
                 "configuration": self.manifest_context
             },
             "diagnostics": {
