@@ -31,7 +31,7 @@ A compact offline pass grouped COMBINE samples by source-molecule pair and tick,
 - 1,890 groups contained at least one sampled interface marked physically valid.
 - 244 of those valid groups also had a same-pair/tick COMBINE commit (12.9% descriptive association; not a reaction probability).
 - 1,428 of the 2,037 COMBINE commits (70.1%) had some same-pair/tick neighborhood sample. Only 244 commits (12.0% of all COMBINE commits) coincided with a group containing a physically valid sampled interface.
-- Across the 1,428 matched COMBINE event groups, 20,119 third-party neighbor-identity incidences were observed; 19,850 (98.7%) were still active at the target reaction tick. These are event-neighbor incidences, not globally unique molecules.
+- Across all sampled interfaces in the 1,428 matched COMBINE event groups (including interfaces marked physically invalid), 20,119 third-party neighbor-identity incidences were observed; 19,850 (98.7%) were still active at the target reaction tick. This unfiltered count is not used for candidate ranking. Restricting to neighbors recorded on physically valid sampled interfaces leaves 3,211 event-neighbor incidences, of which 3,169 (98.7%) were still active at the target reaction tick. These are event-neighbor incidences, not globally unique molecules.
 
 ### Family-presence associations
 
