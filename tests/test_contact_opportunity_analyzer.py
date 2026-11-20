@@ -104,6 +104,12 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
             root = Path(temporary)
             write_tick(root, {
                 "displacement_discovery": {
+                    "anchor_cells_available": 100,
+                    "anchor_cells_inspected": 64,
+                    "anchor_cells_unvisited_by_window": 36,
+                    "anchor_cells_not_reached_in_selected_window": 0,
+                    "target_cell_windows_inspected": 12,
+                    "target_cell_window_limit_reached": 0,
                     "replacement_contact_searches": 4,
                     "replacement_contacts_found": 0,
                 },
@@ -118,6 +124,38 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             write_tick(root, {"displacement_discovery_work_remaining": 7})
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "unknown")
+
+
+    def test_displacement_anchor_window_reports_partial_coverage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"displacement_discovery": {
+                "anchor_cells_available": 100,
+                "anchor_cells_inspected": 64,
+                "anchor_cells_unvisited_by_window": 36,
+                "anchor_cells_not_reached_in_selected_window": 0,
+                "target_cell_windows_inspected": 10,
+                "target_cell_window_limit_reached": 0,
+            }, "displacement_discovery_work_remaining": 5})
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "partial")
+        self.assertEqual(report["pooled_totals"]["displacement_anchor_cells_unvisited_by_window"], 36)
+
+    def test_displacement_target_window_limit_is_not_misreported_as_complete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"displacement_discovery": {
+                "anchor_cells_available": 10,
+                "anchor_cells_inspected": 10,
+                "anchor_cells_unvisited_by_window": 0,
+                "anchor_cells_not_reached_in_selected_window": 0,
+                "target_cell_windows_inspected": 10,
+                "target_cell_window_limit_reached": 2,
+            }, "displacement_discovery_work_remaining": 5})
             report = analyze(root, [42], 60)
 
         self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "unknown")
