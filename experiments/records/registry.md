@@ -28,7 +28,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Objective | Status | Implementation record |
 |---|---|---|---|
-| OBS-001 | Build compact, reproducible chemistry diagnostics and unified offline analysis without changing simulation behavior | **Active — foundations merged; integration and historical pilot in progress** | [Unified analysis implementation](plans/OBS-001-unified-analysis-implementation.md) |
+| OBS-001 | Build compact, reproducible chemistry diagnostics and unified offline analysis without changing simulation behavior | **Active — compact record and retention implementation in progress** | [Unified analysis implementation](plans/OBS-001-unified-analysis-implementation.md); [permanent record contract](plans/OBS-001-permanent-experiment-record.md) |
 
 OBS-001 is an engineering initiative, not a scientific experiment. It has no EXP identifier and does not itself establish a chemistry hypothesis. Its merged foundations are PR #398 (reaction identity/settlement telemetry), PR #400 (opportunity coverage semantics), and PR #401 (canonical run manifests). The opportunity-coverage and manifest implementation records remain linked in [plans/](plans/).
 
