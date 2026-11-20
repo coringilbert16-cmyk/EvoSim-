@@ -280,7 +280,6 @@ pub(crate) fn accumulate(
     let mut operations = Vec::new();
     let mut updated_keys = std::collections::BTreeSet::new();
     let indices = discovery_indices(bond_count, *remaining_discovery_work, tick);
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
 
     for index in indices {
         let Some(bond) = organism.structure.bonds.get(index).copied() else {
@@ -492,7 +491,6 @@ pub(crate) fn accumulate(
 struct EnvironmentalBondDiscovery {
     candidates: Vec<(usize, usize, usize)>,
     inspected_entries: usize,
-    active_keys: std::collections::BTreeSet<String>,
 }
 
 /// Discover chemical reactions at realized environmental material bonds in the
@@ -506,38 +504,9 @@ fn discover_environmental_bonds(
     environment: &crate::state::Environment,
 ) -> EnvironmentalBondDiscovery {
     let candidates = environment.field.environmental_bond_candidates();
-    let mut active_keys = std::collections::BTreeSet::new();
-
-    // Capture the authoritative key for every indexed bond. This also lets
-    // exhaustive discovery discard progress belonging to bonds removed by an
-    // earlier reaction, including materials whose final bond was removed.
-    for &(cell_index, material_index, bond_index) in &candidates {
-        let Some(material) = environment
-            .field
-            .cells
-            .get(cell_index)
-            .and_then(|cell| cell.physical_materials.get(material_index))
-        else {
-            continue;
-        };
-        let Some(connection) = material
-            .internal_connections
-            .as_ref()
-            .and_then(|connections| connections.get(bond_index))
-        else {
-            continue;
-        };
-        active_keys.insert(environmental_break_accumulation_key(
-            material,
-            bond_index,
-            connection,
-        ));
-    }
-
     EnvironmentalBondDiscovery {
         inspected_entries: candidates.len(),
         candidates,
-        active_keys,
     }
 }
 #[allow(dead_code)] // Compatibility wrapper used by focused chemistry tests.
@@ -578,7 +547,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
     let candidates = discovery.candidates;
     diagnostics.bond_candidates_inspected = candidates.len() as u64;
-    let active_keys = discovery.active_keys;
     let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = 0;
     // Full local boundary reception evaluates every resonant emitter against
@@ -951,9 +919,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     // represented by the current bond graph is stale rather than unsearched.
     let stale_before = accumulation
         .keys()
-        .filter(|key| key.starts_with(&current_prefix) && !active_keys.contains(*key))
+        .filter(|key| key.starts_with(&current_prefix) && !checked_keys.contains(*key))
         .count() as u64;
-    accumulation.retain(|key, _| !key.starts_with(&current_prefix) || active_keys.contains(key));
+    accumulation.retain(|key, _| !key.starts_with(&current_prefix) || checked_keys.contains(key));
     diagnostics.stale_progress_invalidated = diagnostics
         .stale_progress_invalidated
         .saturating_add(stale_before);
