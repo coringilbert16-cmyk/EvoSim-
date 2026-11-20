@@ -1115,7 +1115,11 @@ impl Simulation {
             .into_iter()
             .map(|identity| (identity != 0).then_some(identity))
             .collect();
-            let reaction_id = format!("{}-{}", self.tick, self.environmental_chemistry_events.len());
+            let reaction_id = format!(
+                "{}-{}",
+                self.tick,
+                self.environmental_chemistry_events.len()
+            );
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1257,6 +1261,18 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let source_material_ids = [
+                operation.source_a.environmental_identity,
+                operation.source_b.environmental_identity,
+            ]
+            .into_iter()
+            .map(|identity| (identity != 0).then_some(identity))
+            .collect();
+            let reaction_id = format!(
+                "{}-{}",
+                self.tick,
+                self.environmental_chemistry_events.len()
+            );
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1412,7 +1428,11 @@ impl Simulation {
                 (operation.source_material.environmental_identity != 0)
                     .then_some(operation.source_material.environmental_identity),
             ];
-            let reaction_id = format!("{}-{}", self.tick, self.environmental_chemistry_events.len());
+            let reaction_id = format!(
+                "{}-{}",
+                self.tick,
+                self.environmental_chemistry_events.len()
+            );
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_material.clone()]
