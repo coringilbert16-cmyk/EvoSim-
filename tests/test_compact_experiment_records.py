@@ -151,6 +151,9 @@ class CompactExperimentRecordTests(unittest.TestCase):
             record = build_record(seed, chemistry, organization, manifest)
             path = self.root / f"record-{seed}.json"
             path.write_text(json.dumps(record), encoding="utf-8")
+            # Comparison must remain possible after all source and intermediate files expire.
+            for source in (chemistry, organization, manifest, self.root / f"seed-{seed}.jsonl"):
+                source.unlink()
             records.append(path)
         result = compare(records)
         self.assertFalse(result["compatible"])
