@@ -118,7 +118,7 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
             report = analyze(root, [42], 60)
 
         self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "partial")
-        self.assertEqual(report["pooled_totals"]["replacement_contacts_found"], 0)
+        self.assertEqual(report["pooled_totals"]["displacement_replacement_contacts_found"], 0)
 
     def test_displacement_with_remaining_budget_is_still_unknown(self):
         with tempfile.TemporaryDirectory() as temporary:
