@@ -34,6 +34,7 @@ pub(crate) struct CombineAttempt {
     pub net_energy_change: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
+    pub settlement_transaction: EnergyTransaction,
     pub environmental_source: Option<(usize, PhysicalMaterial)>,
 }
 
@@ -770,6 +771,7 @@ fn form_bond_from_candidate_diagnostic(
         net_energy_change: net,
         bond_strength: strength,
         bond_energy,
+        settlement_transaction: transaction,
         environmental_source: None,
     })
 }
