@@ -47,14 +47,12 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             diagnostics = row.get("diagnostics") or {}
             committed_value = numeric(diagnostics.get("committed"))
             event_value = numeric(row.get("event_count"))
-            if committed_value is not None:
-                committed.append(committed_value)
-            if event_value is not None:
-                events.append(event_value)
+            committed.append(committed_value)
+            events.append(event_value)
         reaction_totals[reaction] = {
             "committed_by_seed": committed,
             "event_count_by_seed": events,
-            "committed_sum": sum(committed) if len(committed) == len(records) else None,
+            "committed_sum": sum(committed) if all(value is not None for value in committed) else None,
         }
     return {
         "independent_seed_count": len(records),
@@ -70,6 +68,12 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             key: [numeric(row.get("energy", {}).get(key)) for row in records]
             for key in ("last_balance_residual", "maximum_absolute_snapshot_residual")
         },
+        "opportunity_coverage_by_seed": [
+            row.get("opportunity_coverage") for row in records
+        ],
+        "settlement_by_seed": [row.get("settlement") for row in records],
+        "bond_accounting_by_seed": [row.get("bond_accounting") for row in records],
+        "inventory_by_seed": [row.get("inventory") for row in records],
     }
 
 
