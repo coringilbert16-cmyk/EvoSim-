@@ -1290,7 +1290,13 @@ pub(crate) fn physical_materials_from_structure_components(
     Some(products)
 }
 
-pub(crate) fn resolve_environmental(operation:EnvironmentalCombineOperation,environment:&mut Environment,ledger:&mut EnergyLedger)->bool { resolve_environmental_with_settlement(operation,environment,ledger).is_some() }
+pub(crate) fn resolve_environmental(
+    operation: EnvironmentalCombineOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    resolve_environmental_with_settlement(operation, environment, ledger).is_some()
+}
 
 pub(crate) fn resolve_environmental_with_settlement(
     operation: EnvironmentalCombineOperation,
@@ -1462,16 +1468,41 @@ pub(crate) fn resolve_environmental_with_settlement(
     environment.field.assign_missing_material_identities();
     environment.chemistry_usable_energy = staged_usable_energy;
     *ledger = staged_ledger;
-    Some(crate::state::EnvironmentalEnergySettlement::settled(usable_delta,0.0,structural_delta,attempt.settlement_transaction.work_expended,attempt.settlement_transaction.heat_dissipated))
+    Some(crate::state::EnvironmentalEnergySettlement::settled(
+        usable_delta,
+        0.0,
+        structural_delta,
+        attempt.settlement_transaction.work_expended,
+        attempt.settlement_transaction.heat_dissipated,
+    ))
 }
-pub(crate) fn resolve_environmental_preserving_accumulation(operation:EnvironmentalCombineOperation,environment:&mut Environment,ledger:&mut EnergyLedger,accumulation:&mut BTreeMap<String,f64>)->bool {
-    resolve_environmental_preserving_accumulation_with_settlement(operation,environment,ledger,accumulation).is_some()
+pub(crate) fn resolve_environmental_preserving_accumulation(
+    operation: EnvironmentalCombineOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+    accumulation: &mut BTreeMap<String, f64>,
+) -> bool {
+    resolve_environmental_preserving_accumulation_with_settlement(
+        operation,
+        environment,
+        ledger,
+        accumulation,
+    )
+    .is_some()
 }
-pub(crate) fn resolve_environmental_preserving_accumulation_with_settlement(operation:EnvironmentalCombineOperation,environment:&mut Environment,ledger:&mut EnergyLedger,accumulation:&mut BTreeMap<String,f64>)->Option<crate::state::EnvironmentalEnergySettlement> {
-    let key=operation.accumulation_key.clone();
-    let accumulated_reaction=operation.accumulated_reaction;
-    let settlement=resolve_environmental_with_settlement(operation,environment,ledger);
-    if settlement.is_none(){accumulation.insert(key,accumulated_reaction);}
+
+pub(crate) fn resolve_environmental_preserving_accumulation_with_settlement(
+    operation: EnvironmentalCombineOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+    accumulation: &mut BTreeMap<String, f64>,
+) -> Option<crate::state::EnvironmentalEnergySettlement> {
+    let key = operation.accumulation_key.clone();
+    let accumulated_reaction = operation.accumulated_reaction;
+    let settlement = resolve_environmental_with_settlement(operation, environment, ledger);
+    if settlement.is_none() {
+        accumulation.insert(key, accumulated_reaction);
+    }
     settlement
 }
 #[cfg(test)]
