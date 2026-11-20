@@ -50,7 +50,12 @@ REACTION_FIELDS = (
     "displacement_ready_candidates", "displacement_scheduled",
     "displacement_committed", "displacement_rejected",
 )
-ALL_FIELDS = (*SEARCH_FIELDS, *BREAK_FIELDS, *DISPLACEMENT_FIELDS, *REACTION_FIELDS)
+ALL_FIELDS = (
+    *SEARCH_FIELDS,
+    *(f"break_{field}" for field in BREAK_FIELDS),
+    *(f"displacement_{field}" for field in DISPLACEMENT_FIELDS),
+    *REACTION_FIELDS,
+)
 
 
 def _counter(source: dict[str, Any], field: str) -> int | None:
@@ -170,15 +175,17 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                     observed[field].append(value)
                     seed_values[field].append(value)
                 for field in BREAK_FIELDS:
+                    key = f"break_{field}"
                     value = _counter(breaking, field)
-                    row[f"break_{field}"] = value
-                    observed[field].append(value)
-                    seed_values[field].append(value)
+                    row[key] = value
+                    observed[key].append(value)
+                    seed_values[key].append(value)
                 for field in DISPLACEMENT_FIELDS:
+                    key = f"displacement_{field}"
                     value = _counter(displacement, field)
-                    row[f"displacement_{field}"] = value
-                    observed[field].append(value)
-                    seed_values[field].append(value)
+                    row[key] = value
+                    observed[key].append(value)
+                    seed_values[key].append(value)
                 for field in REACTION_FIELDS:
                     value = _counter(work, field)
                     row[field] = value
@@ -225,8 +232,8 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     interfaces = pooled_totals["physically_evaluable_interfaces"]
     submitted = pooled_totals["interfaces_sent_to_chemistry"]
     commits = pooled_totals["combine_committed"]
-    displacement_searches = pooled_totals["replacement_contact_searches"]
-    displacement_contacts = pooled_totals["replacement_contacts_found"]
+    displacement_searches = pooled_totals["displacement_replacement_contact_searches"]
+    displacement_contacts = pooled_totals["displacement_replacement_contacts_found"]
 
     conversion = {
         "broad_phase_constituent_pairs": pooled_totals["constituent_pairs_available"],
@@ -249,9 +256,9 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             displacement_contacts / displacement_searches
             if displacement_contacts is not None and displacement_searches not in (None, 0) else None
         ),
-        "displacement_activation_threshold_met": pooled_totals["activation_threshold_met"],
-        "displacement_activation_below_threshold": pooled_totals["activation_below_threshold"],
-        "displacement_trial_rejections_after_activation": pooled_totals["trial_build_rejections_after_activation"],
+        "displacement_activation_threshold_met": pooled_totals["displacement_activation_threshold_met"],
+        "displacement_activation_below_threshold": pooled_totals["displacement_activation_below_threshold"],
+        "displacement_trial_rejections_after_activation": pooled_totals["displacement_trial_build_rejections_after_activation"],
     }
     coverage_summary = {}
     for reaction, rows in coverage_ticks.items():
