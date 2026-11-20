@@ -965,9 +965,13 @@ pub(crate) fn accumulate_environmental_with_resonance(
     let cell_count = environment.field.cells.len();
     diagnostics.anchor_cells_available = diagnostics.anchor_cells_available.saturating_add(cell_count as u64);
     if *remaining_discovery_work == 0 {
+        let selected_cell_window = cell_count.min(DISPLACEMENT_FIELD_ANCHOR_LIMIT);
+        diagnostics.anchor_cells_unvisited_by_window = diagnostics
+            .anchor_cells_unvisited_by_window
+            .saturating_add(cell_count.saturating_sub(selected_cell_window) as u64);
         diagnostics.anchor_cells_not_reached_in_selected_window = diagnostics
             .anchor_cells_not_reached_in_selected_window
-            .saturating_add(cell_count as u64);
+            .saturating_add(selected_cell_window as u64);
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
     }
