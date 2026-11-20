@@ -55,9 +55,10 @@ def validate_run(input_dir: Path, seed: int) -> dict[str, Any]:
         provenance = "legacy_manifest_missing"
     return {
         "seed": seed,
-        "raw_path": str(raw.resolve()),
+        "raw_path": raw.name,
+        "_raw_resolved_path": str(raw.resolve()),
         "raw_sha256": checksum,
-        "manifest_path": str(manifest_path.resolve()) if manifest_path else None,
+        "manifest_path": manifest_path.name if manifest_path else None,
         "manifest_sha256": sha256_file(manifest_path) if manifest_path else None,
         "manifest_status": provenance,
         "manifest": manifest,
@@ -213,7 +214,7 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
     stages: list[dict[str, Any]] = []
     for row in runs:
         seed = row["seed"]
-        raw = Path(row["raw_path"])
+        raw = Path(row["_raw_resolved_path"])
         link = workspace / f"seed-{seed}.jsonl"
         if link.exists() or link.is_symlink():
             link.unlink()
@@ -261,7 +262,8 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "experiment_id": experiment_id, "research_plan": research_plan, "condition_id": condition_id,
         "duration_seconds": duration,
-        "runs": [{key: value for key, value in row.items() if key != "manifest"} for row in runs],
+        "runs": [{key: value for key, value in row.items()
+                  if key not in ("manifest", "_raw_resolved_path")} for row in runs],
         "stages": stages,
         "quality": {
             "all_runs_have_validated_manifests": all(row["manifest_status"] == "manifest_validated" for row in runs),
