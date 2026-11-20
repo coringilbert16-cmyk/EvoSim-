@@ -162,7 +162,7 @@ Results using the normalized coverage rules:
 | BREAK | 109,849 complete | Full bond-index entries inspected matched bond candidates yielded on every tick. |
 | DISPLACEMENT | 109,849 partial | The legacy per-tick remaining-work counter was zero on every tick, so the work allowance was consumed. Exact unvisited target-cell/material totals remain unavailable. |
 
-All three newly added DISPLACEMENT window counters are absent from this historical schema on all 109,849 ticks. They remain unknown/null in pooled totals; the analyzer does not silently convert their absence to measured zero. The historical records therefore validate backward-compatible missingness behavior and demonstrate why DISPLACEMENT cannot claim complete coverage from the older diagnostics.
+All six newly added DISPLACEMENT anchor/target-window counters are absent from this historical schema on all 109,849 ticks. They remain unknown/null in pooled totals; the analyzer does not silently convert their absence to measured zero. The historical records therefore validate backward-compatible missingness behavior and demonstrate why DISPLACEMENT cannot claim complete coverage from the older diagnostics.
 
 This pass parsed the raw records and evaluated coverage/missingness in a streaming check. It did not run a new simulation. It does not claim a unique-opportunity denominator across repeated ticks.
 
