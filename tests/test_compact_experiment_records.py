@@ -143,7 +143,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
             "event": "environmental_chemistry_tick",
             "tick": 1,
             "reaction_work": {},
-        }) + "\\n", encoding="utf-8")
+        }) + "\n", encoding="utf-8")
         result = analyze_opportunities(self.root, [42], 60, summary_only=True)
         self.assertTrue(result["summary_only"])
         self.assertEqual(result["tick_diagnostics"], [])
