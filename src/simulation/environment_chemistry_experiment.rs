@@ -893,6 +893,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn matched_config_rejects_molecules_with_more_than_two_constituents() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Hydrogen".into(), "Sulfur".into(), "Oxygen".into()],
+            target_reactant_a_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 8.0,
+            max_target_pair_distance: 30.0,
+            minimum_remote_distance: 60.0,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
     fn matched_fixture_conditions_move_only_candidate_and_preserve_inventory() {
         let config = MatchedCatalysisConfig {
             candidate_parts: vec!["Hydrogen".into(), "Sulfur".into()],
