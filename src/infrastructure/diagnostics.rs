@@ -943,14 +943,10 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             );
         }
         if status != "completed" {
-            warnings.push(
-                "observation did not reach the recorder's completed state".to_string(),
-            );
+            warnings.push("observation did not reach the recorder's completed state".to_string());
         }
         if std::env::var("EVOSIM_EXPERIMENT_ID").is_err() {
-            warnings.push(
-                "experiment registry identity was not supplied to the run".to_string(),
-            );
+            warnings.push("experiment registry identity was not supplied to the run".to_string());
         }
         let workflow_run_url =
             repository
