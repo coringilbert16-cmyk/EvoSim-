@@ -121,6 +121,14 @@ Make Tier 1 and Tier 2 standard for new chemistry experiments once validated. Ad
 - Opportunity funnel and matched-starting-mixture work in [PR #345](https://github.com/coringilbert16-cmyk/EvoSim-/pull/345), currently open/unmerged at the time of audit.
 - Neighborhood, identity, exposure-preflight, and paired-analysis work in [PR #392](https://github.com/coringilbert16-cmyk/EvoSim-/pull/392), currently draft/open and intentionally blocked from causal execution pending coverage gates.
 
+### Audit checkpoint update — 2026-11-20
+
+The source audit confirms that the reaction event and lifecycle identity model is not yet fully joined: lifecycle records have a generated tick-local reaction ID, but the enclosing reaction event has no matching ID; rejected events generally lack lifecycle identity records; source material indices are not durable identities. The event also lacks the authoritative per-reaction energy settlement values, which are currently visible primarily in aggregate energy snapshots. COMBINE contact samples are bounded to eight per tick. These are explicit priorities for Phases 2–3.
+
+The current standard workflow already runs several offline analyzers (chemistry, organization, reaction network, geometry-aware network, contact opportunity, temporal complexity) and retains per-seed artifacts for 30 days and aggregate reports for 90 days. Consolidate/orchestrate these rather than replacing them. The JSONL header has requested duration but not actual elapsed time, commit/build, workflow run ID, or analyzer versions; bind those in a run manifest.
+
+**Audit progress:** first-pass source audit and workflow inventory completed for the main environmental recorder, reaction/lifecycle structs, energy ledger contract, primary chemistry/contact analyzers, and standard experiment workflow. Remaining work: inspect the other analyzers and their schemas, trace energy transaction call sites into environmental COMBINE/BREAK/DISPLACEMENT, and inspect PR #345/#392 detailed patches/tests before defining the final field-level schema.
+
 ## Current checkpoint
 
 - Approval received: 2026-11-20.
