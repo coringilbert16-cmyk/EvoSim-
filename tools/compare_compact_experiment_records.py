@@ -158,9 +158,10 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             "experiment_id": key[0],
             "condition_id": key[1],
             "comparison_configuration_sha256": key[2],
-            "active_resources": list(key[3]),
-            "requested_duration_seconds": key[4],
-            "diagnostic_interval": key[5],
+            "measurement_schema_version": key[3],
+            "active_resources": list(key[4]),
+            "requested_duration_seconds": key[5],
+            "diagnostic_interval": key[6],
             "summary": summary,
         })
 
