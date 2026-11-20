@@ -61,7 +61,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-004 — Pseudo-metabolism
 
-**Status:** Planned; depends on validated pathways and intermediate regeneration from PLAN-001, with relevant facilitation/self-production tests from PLAN-002/003 where applicable.
+**Status:** In progress — exact-instance multistep lineage trace completed; resource-fed persistence experiment blocked by missing timed resource-input capability.
 
 **Question:** Can a connected chemical network repeatedly transform environmental resources, turn over intermediates, and regenerate compounds needed by earlier stages?
 
@@ -75,7 +75,11 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 **Initial candidates:** H–O–P ⇌ H + O–P and N–O–P ⇌ N + O–P are candidate reversible intermediate transformations. They are not yet metabolism.
 
-**Current status (2026-11-20):** Initial five-seed artifact screen completed using EXP-2026-004, without a new simulation. Recurrent family-level turnover and three H–O–P / sulfur association-dissociation sequences were identified, but no persistent resource-fed multi-step network has been demonstrated. See [PLAN-004 initial screen](../results/2026-11-20-plan-004-006-initial-screens.md). Continue exact-instance tracing of longer connected sequences; a separate recurrent-resource-input experiment is required to test persistence under replenishment.
+**Current evidence (2026-11-20):** The EXP-2026-004 artifact screen found recurrent family-level turnover and three H–O–P / sulfur association-dissociation sequences. A deeper exact-instance trace identified an eight-event connected sequence in seed 45 (ticks 13,639–20,850) in which O–P₂ is transformed through N–O–P₂ and C–O branches and regenerated as new O–P₂ identities. This establishes connected multistage chemistry and family/state regeneration with identity turnover, not pseudo-metabolism. See [initial screen](../results/2026-11-20-plan-004-006-initial-screens.md) and [exact-instance lineage trace](../results/2026-11-20-plan-004-lineage-trace.md).
+
+**Critical limitation:** EXP-2026-004 used a finite starting inventory and no recurrent external resource input. Its energy validation is run-level, not pathway-specific. The standard experiment runner builds a fixed initial state and exposes no timed resource-feed option or matched no-feed arm.
+
+**Next step:** design a paired experiment with identical initial inventories and seeds: existing no-feed control versus ordinary chemistry with a predeclared deterministic schedule adding only free base resources. Keep all existing diagnostics unchanged. Declare elemental composition, feed quantity, and timing before execution; analyze connected pathway persistence, intermediate turnover, elemental inventory, and whole-run energy/heat/losses. The timed environmental input and paired-arm runner are a new experiment capability. No such code change or simulation has been started.
 
 ## PLAN-005 — Cross-catalysis and cooperative chemical networks
 
@@ -117,7 +121,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 2. Select the strongest instance-level pathways and distinguish reusable substrates from possible facilitators.
 3. Build the minimum controlled-comparison capability needed for PLAN-002.
 4. Test autocatalysis only if a plausible self-production mechanism emerges.
-5. Continue PLAN-004 by tracing longer exact-instance pathway sequences; design recurrent resource-input conditions only after a defensible network is identified.
+5. Continue PLAN-004 with a paired resource-feed experiment once its input schedule and execution capability are explicitly designed and approved.
 6. Investigate cross-catalysis after individual facilitation is operationally established.
 7. Use the PLAN-006 baseline spatial concentration as a hypothesis only; pursue causal spatial comparisons only when matched conditions and adequate local opportunity denominators are available.
 
