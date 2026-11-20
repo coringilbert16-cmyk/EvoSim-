@@ -205,3 +205,41 @@ The audit is sufficient to define the core schema priorities, but not yet suffic
 5. Select the smallest implementation slice, add focused tests, and keep all chemistry/physics behavior unchanged.
 
 No code was changed and no experiment was launched during this audit.
+
+
+## Follow-up audit checkpoint — PR test semantics and branch reconciliation (2026-11-20)
+
+### PR #345 batch aggregation review
+
+The two new PR #345 batch analyzers require all five expected seeds and validate key experimental metadata. The starting-mixture aggregator also compares the full initial elemental inventory across mixtures for each seed. This is useful and reusable.
+
+Remaining limitations found in the source/tests:
+- The dispersion aggregator sums funnel-stage fields while defaulting absent fields to zero. It does not preserve a distinction between a measured zero and a missing stage field.
+- Neither batch report establishes that the upstream funnel counters represent exhaustive eligible opportunities. They must remain stage/count summaries, not opportunity-normalized rates.
+- The batch tests cover successful 15-run aggregation and selected metadata/inventory mismatches, but do not cover missing-vs-zero funnel fields, mixed analyzer/schema versions, missing/mismatched organization provenance, incomplete or unexpectedly short runs, duplicate run inputs, or cross-condition seed alignment.
+- The run reports check requested duration and initial object counts, but the batch contract still needs actual elapsed duration, final tick count, exact source commit/workflow provenance, and analyzer version references in a common manifest.
+
+### Main contact-opportunity and cross-seed analyzer review
+
+The main contact-opportunity analyzer explicitly documents that broad-phase candidates, inspected pairs, valid interfaces, and interfaces submitted to chemistry are different stages; it also warns that bounded search windows leave uninspected pairs. This is scientifically appropriate. Its two tests, however, only cover one aggregated funnel example and a missing artifact. They do not test truncated-window accounting, zero-activity intervals, mixed schema versions, malformed numeric values, missing counters versus measured zero, or invalid duration/seed metadata.
+
+The main cross-seed chemistry batch analyzer has stronger coverage for material inventory, lifecycle validation, bond-graph reconciliation, and multi-seed aggregation. Its two tests still do not validate a common provenance manifest, analyzer-version compatibility, missing-vs-zero diagnostic fields, or uncertainty/statistical reporting. These should be addressed in the common validation/report-index layer rather than duplicated in every specialist analyzer.
+
+### PR #392 identity and test boundary
+
+The PR adds exact source material IDs and contact descriptors to COMBINE and DISPLACEMENT paths. Its current BREAK event construction still does not provide matching participant IDs/contact descriptors, so event identity is not yet uniform across all reaction kinds. The contact analyzer's added test demonstrates one successful COMBINE sample-to-outcome join; it does not validate BREAK/DISPLACEMENT joins, duplicate/ambiguous event matches, or coverage completeness. The matched-catalysis tests deliberately validate refusal when controls are not adequate; there is no demonstrated successful causal-eligibility path. Keep the fail-closed gate.
+
+### Branch reconciliation snapshot
+
+A GitHub compare against current `main` reports:
+- PR #345 branch `chemistry-dispersion-observability`: **36 commits ahead and 716 behind**; the comparison reports `diverged`. This is substantially stale. Do not attempt to merge it as a whole. Treat it as a source of selectively reusable experiment design, funnel fields, and batch-analysis patterns, then port only what remains useful onto current main after field-level review.
+- PR #392 branch `chemistry/plan-002-neighborhood-matched-controls`: **91 commits ahead and 4 behind**; the comparison reports `diverged`. It is much closer to main, but remains a large, unmerged change set with causal-analysis blockers. Reconcile it in focused slices; do not merge wholesale or authorize the paired causal experiment.
+- OBS documentation PR #397 branch `docs/chemistry-observability-plan`: **18 commits ahead and 0 behind** at this check. Its latest head `ab23256b5fadb2a05f41657a0b31adf39854dde6` has a completed successful Rust workflow run `44802636455`. This is a documentation-only PR; do not merge without the user's explicit approval.
+
+### Updated audit decision and next work
+
+Priority 1's focused PR/test review and branch comparison are now complete. The reusable work is:
+1. PR #345: controlled dispersion/starting-mixture experiment design and per-seed aggregation patterns, subject to a modernized provenance/coverage contract.
+2. PR #392: local-neighborhood sampling, exact COMBINE/DISPLACEMENT participant joins, and the fail-closed matched-control preflight. Keep sampling explicitly bounded and causal eligibility blocked until full-run exposure and denominator gates are satisfied.
+
+Do not port the old branches wholesale. Next, reanalyze retained EXP-2026-004, EXP-2026-006/PLAN-002, and resource-feed artifacts; then draft the canonical manifest and event/opportunity/energy schema against current main. No simulator behavior or diagnostic code has been changed in this follow-up audit, and no new experiment has been launched.
