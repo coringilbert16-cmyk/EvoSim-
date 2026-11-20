@@ -6,6 +6,10 @@
 **Source commit:** `191069deb65a9f40638e65fe93134eeadde2219c`  
 **Branch:** `chemistry/plan-002-neighborhood-matched-controls`
 
+## Registration note
+
+This run was launched as an instrumented PLAN-002 diagnostic screen before a formal EXP identifier had been added to the registry. It is recorded here retrospectively to preserve the raw-artifact provenance and prevent the descriptive screen from being mistaken for a completed causal catalyst experiment.
+
 ## Conditions
 
 - Five independent seed runs: 42–46.
