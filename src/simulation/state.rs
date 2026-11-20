@@ -1071,6 +1071,32 @@ pub(crate) struct EnvironmentalMoleculeLifecycleEvent {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalEnergySettlement {
+    pub(crate) status: String,
+    pub(crate) usable_energy_delta: Option<f64>,
+    pub(crate) resonance_withdrawn: Option<f64>,
+    pub(crate) structural_energy_delta: Option<f64>,
+    pub(crate) physical_work: Option<f64>,
+    pub(crate) heat_dissipated: Option<f64>,
+}
+impl Default for EnvironmentalEnergySettlement {
+    fn default() -> Self {
+        Self { status:"not_settled".to_string(), usable_energy_delta:None, resonance_withdrawn:None, structural_energy_delta:None, physical_work:None, heat_dissipated:None }
+    }
+}
+impl EnvironmentalEnergySettlement {
+    pub(crate) fn settled(usable_energy_delta:f64,resonance_withdrawn:f64,structural_energy_delta:f64,physical_work:f64,heat_dissipated:f64)->Self {
+        Self { status:"settled".to_string(), usable_energy_delta:Some(usable_energy_delta), resonance_withdrawn:Some(resonance_withdrawn), structural_energy_delta:Some(structural_energy_delta), physical_work:Some(physical_work), heat_dissipated:Some(heat_dissipated) }
+    }
+    /// Diagnostic-only world-level conservation residual; never authorizes a reaction.
+    pub(crate) fn accounting_residual(&self)->Option<f64> {
+        if self.status != "settled" { return None; }
+        let (Some(u),Some(r),Some(s),Some(w),Some(h))=(self.usable_energy_delta,self.resonance_withdrawn,self.structural_energy_delta,self.physical_work,self.heat_dissipated) else { return None; };
+        Some(u-r+s+w+h)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryEvent {
     /// Stable within a run; the run manifest scopes this tick/ordinal identifier.
     pub(crate) reaction_id: String,
@@ -1090,6 +1116,8 @@ pub(crate) struct EnvironmentalChemistryEvent {
     /// The resolver currently exposes only a boolean. This label deliberately
     /// avoids inventing a more specific cause until the commit API returns one.
     pub(crate) failure_reason: Option<String>,
+    #[serde(default)]
+    pub(crate) energy_settlement: EnvironmentalEnergySettlement,
     pub(crate) product_material: Option<Vec<(String, f64)>>,
     pub(crate) product_internal_bond_count: Option<usize>,
     pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
