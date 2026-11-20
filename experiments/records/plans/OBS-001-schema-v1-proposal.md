@@ -343,3 +343,41 @@ This path already has the complete balance and actual resonance funding at the c
 - COMBINE has no resonance withdrawal in its current environmental resolver; represent zero only if explicitly measured at that boundary.
 - BREAK and DISPLACEMENT must report actual frequency-compatible resonance withdrawn separately from the usable-holder delta.
 - No event-level summary may be computed by subtracting long-lived cumulative f64 ledger counters; use the exact staged transaction/pre-post values already held at the commit boundary.
+
+
+## 12. Confirmed opportunity-search semantics (2026-11-20)
+
+The three reaction types do not share one common search domain. The schema/report layer must preserve these differences.
+
+### BREAK — exhaustive existing-bond census per tick
+
+`chemical_reaction::accumulate_environmental_with_diagnostics` explicitly enumerates the complete maintained environmental bond index once per tick; no rotating discovery window or candidate-inspection budget applies to the BREAK bond scan. Its counters distinguish index entries inspected, bond candidates inspected/checked, material restoration, geometry/interface/chemistry rejections, activation updates, below-threshold and threshold-met candidates. The local-resonance spectrum sample rotates one candidate per tick, but that sample is separate from the exhaustive bond discovery.
+
+Coverage may be marked exhaustive **only for the defined universe of currently indexed existing environmental bonds on that tick**. It is not a census of hypothetical future bonds or every possible molecular contact. A full eligible-energy denominator still requires connecting the checked candidates to exact identities and the energy affordability stage.
+
+### COMBINE — bounded, rotating spatial/interface search
+
+`environmental_combine::accumulate_environmental_with_diagnostics` consumes a shared per-tick work budget (currently initialized to one eighth of the global candidate-inspection budget). It rotates anchor cells/materials by tick, caps target-cell windows, bounds constituent-pair inspection, and records:
+- available versus inspected constituent pairs;
+- uninspected pairs within a candidate window and truncated windows;
+- valid versus invalid interfaces;
+- generated/rejected endpoint candidates;
+- physically evaluable interfaces and interfaces actually submitted to chemistry;
+- pairs suppressed by selection and a budget-exhausted flag;
+- a bounded eight-entry opportunity sample.
+
+The complete field-wide pair universe is not inspected on one tick. `constituent_pairs_available` means candidate pairs generated inside the visited source-pair window, not every possible pair in the world. Do not calculate a world-wide reaction probability from these counters.
+
+### DISPLACEMENT — bounded rotating anchor/neighbor/contact search
+
+`environmental_displacement::accumulate_environmental_with_resonance` also receives a bounded per-tick budget (currently one eighth of the global candidate-inspection budget). It rotates anchor cells/materials by tick and charges anchor, target-cell, target-material, bond, and replacement-contact inspections. It records found replacement contacts, activation updates/threshold outcomes, trial rejection stages, and a bounded eight-entry sample.
+
+The remaining-work counter is the unspent inspection budget, not a count of uninspected opportunities. A zero remainder means the budget was depleted; by itself it does not prove that another candidate was waiting. Treat coverage as partial or unknown unless the search can explicitly prove it completed its defined domain. Do not use `replacement_contacts_found` as the number of all eligible replacements in the environment.
+
+### Common reporting rules
+
+- Keep per-reaction coverage separate; never add unlike stage counts into one denominator.
+- Distinguish candidate discovery, interface evaluation, activation threshold, energy affordability, scheduling, and final commit/rejection.
+- Existing tick rows are activity-triggered, not a guaranteed row for every tick. Use summary observed-tick count and fixed windows; absence of a row alone is not a measured zero.
+- Existing COMBINE/DISPLACEMENT opportunity samples are capped at eight examples per tick. Their sample size is descriptive only; record sample policy and never substitute it for exhaustive opportunity counts.
+- For a bounded search, a report must state the visited domain and known uninspected/truncated work. Where the engine cannot tell whether further work remained, use `coverage_status: "unknown"` rather than guessing complete or partial.
