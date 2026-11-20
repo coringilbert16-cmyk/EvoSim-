@@ -141,6 +141,15 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "diagnostics": scalar_tree(totals.get(name, {})),
         }
 
+    coverage_states = (
+        seed_coverage.get("coverage", {}) if isinstance(seed_coverage, dict) else {}
+    )
+    partial_or_unknown_coverage = [
+        {"reaction": reaction, "state": details.get("state")}
+        for reaction, details in coverage_states.items()
+        if isinstance(details, dict) and details.get("state") in ("partial", "unknown")
+    ]
+
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -265,6 +274,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "chemistry_lifecycle_validation_errors": lifecycle_errors,
             "organization_lifecycle_validation_errors": organization_errors,
             "missing_manifest": manifest_path is None,
+            "partial_or_unknown_coverage": partial_or_unknown_coverage,
             "missing_fields": [
                 field for field, value in {
                     "configuration_sha256": conditions.get("configuration_sha256"),
@@ -289,6 +299,10 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
         record["quality"]["warnings"].append("No run manifest supplied; provenance is incomplete.")
     if lifecycle_errors or organization_errors:
         record["quality"]["warnings"].append("Molecular lifecycle validation reported errors.")
+    if partial_or_unknown_coverage:
+        record["quality"]["warnings"].append(
+            "One or more reaction opportunity searches have partial or unknown coverage."
+        )
     return record
 
 
