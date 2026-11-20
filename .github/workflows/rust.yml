@@ -49,6 +49,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
           python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
           python3 -m unittest discover -s tests -p 'test_chemistry_experiment_batch_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_paired_artifact_assembly.py'
           python3 -m unittest discover -s tests -p 'test_reaction_network_analyzer.py'
           python3 -m unittest discover -s tests -p 'test_geometry_aware_reaction_network.py'
           python3 -m unittest discover -s tests -p 'test_contact_opportunity_analyzer.py'
