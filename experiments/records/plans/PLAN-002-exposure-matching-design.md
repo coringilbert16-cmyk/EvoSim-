@@ -1,0 +1,79 @@
+# PLAN-002 — Exposure-matched comparison design
+
+**Status:** Design gate; no catalytic experiment authorized or dispatched.
+
+## Why the current placement screen is not causal
+
+PR #392's candidate-near and candidate-remote fixtures preserve the elemental inventory, initial energy inventory, target identities, and all non-candidate starting geometries. They move one candidate molecule to change its distance from a selected target pair.
+
+That is a useful deterministic placement screen, but it does not isolate proximity. The candidate is itself a flow obstacle; moving it can change the local flow around the target and candidate. It also changes candidate exposure to the spatial energy sources and to other molecules' resonance signals. A difference in target reaction counts could therefore arise from altered transport or energy exposure rather than a chemically available facilitator.
+
+The present chemistry resonance implementation is the existing pairwise harmonic/aura model. It is not the approved persistent, finite-speed resonance field. Any measurements from it must be named and interpreted as legacy pairwise resonance exposure, not as a spatial wave-field measurement. See the [canonical resonance-field roadmap](../../../design/resonance-field-implementation-roadmap.md).
+
+## Candidate selection gate
+
+No facilitator candidate is selected by PLAN-001. The observed H–O–P ⇌ H + O–P and N–O–P ⇌ N + O–P cycles demonstrate reversible substrate/intermediate recycling. They do not identify an unchanged third molecule that facilitated either reaction.
+
+The H–S candidate in `matched-catalysis-config.example.json` remains an illustrative software fixture only. It must not be treated as a scientific candidate.
+
+A candidate may be nominated only with a traceable hypothesis that identifies:
+- candidate composition and, where available, exact starting molecule identity;
+- target reactant compositions and a specific COMBINE or DISPLACEMENT transformation;
+- why the candidate is not itself a target reactant or a consumed co-reactant;
+- what it means for the candidate to remain chemically available (unchanged constituent inventory and bond graph across the target event);
+- evidence supporting the hypothesis, with seed, tick, event IDs, and artifact provenance.
+
+A candidate hypothesis is not evidence of facilitation.
+
+## Required exposure controls
+
+The matched conditions must use the same seed, target molecule identities, target geometry/orientation, total initial material inventory, and initial energy inventory. All non-candidate starting placements remain identical. Candidate placement selection must be deterministic and fixed before observing outcomes.
+
+At minimum, record and compare the following at tick zero and over the observation period:
+
+1. **Target-pair exposure:** local flow velocity and shear at the target constituents; external-source/hotspot incident energy and visibility; and the background resonance signal received by the target with the candidate's own contribution reported separately.
+2. **Candidate exposure:** local flow velocity and shear over its realized geometry; incident source/hotspot exposure; and incoming pairwise resonance spectrum from all other materials.
+3. **Geometric side effects:** candidate-induced changes to target flow caused by obstacle/wake behavior, source shadowing/occlusion, target separation/orientation, and local molecule density.
+4. **Energy availability:** usable and resonant energy available to the reaction transaction, structural and pair-potential terms, heat, and the complete ledger residual.
+
+Use the simulator's actual physical geometry and the same production sampling/settlement paths wherever available. Do not substitute global reservoir totals, centroid-only approximations, or the bounded neighborhood sample count for local exposure measurements. If an exposure quantity cannot be measured reliably, mark the pair as unmatched; do not assume it is equal.
+
+The target pair's non-candidate background exposure must match between arms within predeclared numerical tolerances. The candidate's own background exposure must also be matched as closely as feasible. The candidate-to-target interaction being tested is reported separately and must not be normalized away.
+
+## Placement strategy and feasibility
+
+Do not choose locations by looking at reaction outcomes. Generate a deterministic set of candidate-near and candidate-remote placements from the tick-zero geometry, then evaluate their exposure signatures before running chemistry.
+
+A pair of placements is eligible only if:
+- the candidate is within the configured near-distance in one arm and beyond the remote-distance in the other;
+- target pair geometry and non-candidate geometry are unchanged;
+- moving the candidate does not create a target-flow difference through its obstacle/wake footprint;
+- source/hotspot exposure and occlusion at the target remain matched;
+- the candidate's background flow and source exposure are acceptably matched;
+- initial elemental, structural, usable, resonant, and pair-potential inventories reconcile.
+
+The flow model has a finite obstacle/wake influence region. Prefer near placements outside the candidate's flow-influence footprint at the target while remaining near enough to test the existing distance-dependent resonance interaction. Verify this from the production flow calculation rather than relying on a hand-chosen radius. If no such placement exists, the simple one-candidate translation design is not suitable.
+
+The world-tone source moves over time, so a tick-zero match is insufficient. Compare exposure over its full source cycle (or continuously during the run) and reject pairs whose cumulative or time-resolved exposure differs materially. Apply the same rule to hotspot exposure and changing obstacle geometry.
+
+If a placement pair cannot satisfy these controls, stop and design a stronger matched control; do not relax tolerances after seeing outcomes. Any alternative control must preserve total inventory and energy without arbitrary energy grants or chemistry-specific behavior.
+
+## Opportunity denominator and outcome analysis
+
+The current neighborhood telemetry is bounded and deterministically sampled. It is useful for context but is not a complete, unbiased denominator. Before a catalytic rate comparison, add exact aggregate counters for all eligible target-pair opportunities and their physically valid/contact-ready subsets, with candidate-near status and truncation/missing-geometry coverage reported separately. Do not infer a reaction probability from commits divided by sampled opportunities.
+
+The primary outcome is the target reaction rate per eligible target-pair opportunity, reported per independent seed with paired differences and uncertainty intervals. Also report wall-clock/tick-normalized event counts, rejection reasons, candidate survival/availability, exact parent/child identities and bond graphs, and full energy accounting. Seeds—not individual reaction events—are the independent replicates.
+
+A positive result requires a reproducible increase across independent seeds while the candidate remains chemically available, with matched target/candidate background exposures and adequate opportunity coverage. A placement effect, a higher raw event count, a single-seed difference, or candidate consumption is not catalytic facilitation.
+
+## Implementation and execution gates
+
+1. Keep PR #392 as infrastructure; its existing placement workflow remains manual-only and must not be dispatched as a catalytic test.
+2. Add exposure telemetry using authoritative production flow, source-energy, and resonance sampling paths. Clearly label legacy pairwise resonance measurements until the approved persistent field exists.
+3. Add deterministic placement-pair selection and a fail-closed exposure-match report. No run should start if the pre-run match gate fails.
+4. Add exact eligible-opportunity denominators and tests for matched/unmatched fixtures, source shadowing, flow wakes, and energy invariance.
+5. Select a candidate only after reviewing PLAN-001 artifacts and writing the candidate/target hypothesis.
+6. Register the experiment in the experiment registry with seeds, duration, tolerances, controls, and acceptance criteria before dispatch.
+7. Dispatch only after the design and candidate are explicitly approved. Archive raw artifacts and a dedicated result document.
+
+No reaction rules, thresholds, resonance physics, energy grants, or organism-specific logic may be changed to make a candidate pass.
