@@ -26,7 +26,7 @@ def compatibility_key(record: dict[str, Any]) -> tuple[Any, ...]:
     conditions = record.get("conditions", {})
     provenance = record.get("provenance", {})
     return (
-        provenance.get("configuration_sha256"),
+        provenance.get("comparison_configuration_sha256"),
         tuple(conditions.get("active_resources") or []),
         conditions.get("requested_duration_seconds"),
         conditions.get("diagnostic_interval"),
@@ -91,7 +91,7 @@ def compare(paths: list[Path]) -> dict[str, Any]:
         "compatible": compatible,
         "compatibility_groups": [
             {
-                "configuration_sha256": key[0],
+                "comparison_configuration_sha256": key[0],
                 "active_resources": list(key[1]),
                 "requested_duration_seconds": key[2],
                 "diagnostic_interval": key[3],
