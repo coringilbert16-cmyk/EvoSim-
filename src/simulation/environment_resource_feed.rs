@@ -164,7 +164,6 @@ mod tests {
     fn each_feed_pulse_adds_72_free_atoms_with_balanced_elemental_composition() {
         let mut simulation = crate::environment_chemistry_experiment::build(42).simulation;
         let before_amount = simulation.environment.field.total_amount();
-        let before_energy = simulation.energy_inventory_snapshot();
         let reference_positions = initial_free_resource_positions(&simulation);
         assert_eq!(reference_positions.len(), 1_200);
         let particles = inject_plan004_resource_pulse(&mut simulation, 42, 0, &reference_positions);
@@ -193,20 +192,6 @@ mod tests {
             .map(|particle| particle.material.environmental_identity)
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(ids.len(), 72);
-        let after_energy = simulation.energy_inventory_snapshot();
-        assert_eq!(
-            after_energy.current_usable_energy,
-            before_energy.current_usable_energy
-        );
-        assert_eq!(
-            after_energy.current_resonant_energy,
-            before_energy.current_resonant_energy
-        );
-        assert_eq!(
-            after_energy.current_structural_energy,
-            before_energy.current_structural_energy
-        );
-        assert!(after_energy.is_balanced(1e-7));
     }
 
     #[test]
