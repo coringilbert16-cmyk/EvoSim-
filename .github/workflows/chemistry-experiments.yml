@@ -115,9 +115,9 @@ jobs:
               research_plan = os.environ.get("RESEARCH_PLAN_INPUT", "").strip()
               condition_id = os.environ.get("CONDITION_ID_INPUT", "").strip()
 
-          if experiment_id and not re.fullmatch(r"EXP-\\d{4}-\\d{3}", experiment_id):
+          if experiment_id and not re.fullmatch(r"EXP-\d{4}-\d{3}", experiment_id):
               raise SystemExit("Experiment ID must match EXP-YYYY-NNN.")
-          if research_plan and not re.fullmatch(r"(?:PLAN|OBS)-\\d{3}", research_plan):
+          if research_plan and not re.fullmatch(r"(?:PLAN|OBS)-\d{3}", research_plan):
               raise SystemExit("Research plan must match PLAN-NNN or OBS-NNN.")
           if condition_id and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", condition_id):
               raise SystemExit("Condition ID may contain only letters, numbers, dots, underscores, and hyphens.")
