@@ -74,8 +74,8 @@ jobs:
           config = json.loads(config_path.read_text(encoding="utf-8"))
           for key in ("candidate_parts", "target_reactant_a_parts", "target_reactant_b_parts"):
               values = config.get(key)
-              if not isinstance(values, list) or len(values) < 2 or any(not isinstance(value, str) or not value.strip() for value in values):
-                  raise SystemExit(f"{key} must contain at least two element names.")
+              if not isinstance(values, list) or len(values) != 2 or any(not isinstance(value, str) or not value.strip() for value in values):
+                  raise SystemExit(f"{key} must contain exactly two element names.")
           if sorted(config["target_reactant_a_parts"]) == sorted(config["target_reactant_b_parts"]):
               raise SystemExit("Target reactant compositions must differ.")
           if sorted(config["candidate_parts"]) in (
