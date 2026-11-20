@@ -182,6 +182,21 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
         self.assertFalse(result["quality"]["pooled_rates_emitted"])
 
+    def test_comparison_separates_measurement_incompatibilities(self) -> None:
+        paths = []
+        for seed in (42, 43):
+            chemistry, organization, manifest = self.seed_inputs(seed)
+            record = build_record(seed, chemistry, organization, manifest)
+            if seed == 43:
+                record["conditions"]["requested_duration_seconds"] = 30
+            path = self.root / f"incompatible-{seed}.json"
+            path.write_text(json.dumps(record), encoding="utf-8")
+            paths.append(path)
+        result = compare(paths)
+        self.assertFalse(result["measurement_compatible"])
+        self.assertEqual(result["measurement_compatibility_group_count"], 2)
+        self.assertEqual(result["condition_comparisons"], [])
+
     def test_summary_only_opportunity_analysis_omits_tick_and_sample_arrays(self) -> None:
         raw = self.root / "seed-42.jsonl"
         raw.write_text(json.dumps({
