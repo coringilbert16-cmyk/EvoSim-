@@ -38,7 +38,7 @@ The no-feed arm receives no external matter after tick zero. Both arms retain th
 
 - Each feed atom is a free base element with no bond and no injected usable or resonant energy.
 - Feed events record pulse number, scheduled interval, actual elapsed time, element counts, and the stable molecule identities created.
-- The experiment runner checks that adding each free-resource pulse leaves the energy inventory balanced and does not change held usable, resonant, or structural energy at the instant of injection.
+- The runner compares the complete energy inventory snapshot immediately before and after each pulse and requires exact equality. Thus, matter injection cannot add usable/resonant energy or alter stored energy, pair-potential accounting, work, heat, or other ledger flows. This check does not reset or require a zero residual accumulated by prior simulation steps; whole-run energy validation remains part of the existing diagnostics.
 - The existing snapshots and chemistry/organization analyzers are retained for both arms.
 - Compare paired outcomes by seed. Seeds, not reaction events, are the independent replicates.
 - Primary interpretation: whether connected pathway activity and intermediate turnover persist or recover after resource input, compared with matched finite-inventory controls.
