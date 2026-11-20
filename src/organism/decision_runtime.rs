@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase")]
 //! Runtime bridge for the decision architecture.
 //!
 //! This module contains no chemistry or structural math. It connects organism

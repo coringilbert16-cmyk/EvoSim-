@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase")]
 use serde::{Deserialize, Serialize};
 
 use crate::state::{Environment, Organism, MEMORY_DECAY_PER_TICK};
