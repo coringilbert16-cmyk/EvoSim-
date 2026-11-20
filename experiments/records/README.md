@@ -7,7 +7,8 @@ This folder is the durable research record for completed, active, and planned Ev
 - [Experiment registry](registry.md) — master index of every recorded experiment and research plan.
 - [Results](results/) — immutable, dated records of completed runs and their analysis.
 - [Plans](plans/README.md) — proposed experiments, hypotheses, controls, measurements, and status.
-- [Engineering/observability plans](plans/OBS-001-unified-analysis-implementation.md) — OBS-001's implementation sequence and acceptance criteria for the unified offline analysis system.
+- [Engineering/observability plan](plans/OBS-001-unified-analysis-implementation.md) — OBS-001's implementation sequence and acceptance criteria.
+- [OBS-001 analyzer inventory](plans/OBS-001-analyzer-inventory.md) — current-main analyzer capabilities, input/output contracts, and integration gaps.
 
 ## Record-keeping rules
 
