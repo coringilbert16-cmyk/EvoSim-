@@ -9,6 +9,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
+    let mut plan004_resource_feed = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
@@ -18,6 +19,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--plan004-resource-feed" => {
+                plan004_resource_feed = true;
             }
             "--seed" => {
                 seed = args
@@ -58,10 +62,15 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         } else {
             24_000
         };
+        assert!(
+            !plan004_resource_feed || duration_seconds.is_some_and(|seconds| seconds >= 3_600),
+            "PLAN-004 resource feed requires a real-time run of at least 3,600 seconds"
+        );
         run_environment_chemistry_experiment(
             seed,
             ticks,
             duration_seconds,
+            plan004_resource_feed,
             diagnostics_path
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
@@ -141,6 +150,7 @@ fn run_environment_chemistry_experiment(
     seed: u64,
     max_ticks: u64,
     duration_seconds: Option<u64>,
+    plan004_resource_feed: bool,
     diagnostics_path: &str,
     diagnostic_interval: u64,
 ) {
@@ -190,10 +200,59 @@ fn run_environment_chemistry_experiment(
         simulation.hotspot
     );
 
+    diagnostics
+        .record_resource_feed_plan(plan004_resource_feed)
+        .expect("failed to record PLAN-004 experiment condition");
+    println!(
+        "PLAN-004 RESOURCE FEED: enabled={plan004_resource_feed} pulse_count={} pulse_size={} total_resources={} first_pulse_seconds={} interval_seconds={} feed_elements_per_pulse=12_each_of_six",
+        crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT,
+        crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_SIZE,
+        crate::environment_resource_feed::PLAN004_RESOURCE_FEED_TOTAL,
+        crate::environment_resource_feed::PLAN004_RESOURCE_FEED_FIRST_PULSE_SECONDS,
+        crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_INTERVAL_SECONDS
+    );
+
     let started_at = Instant::now();
+    let mut next_feed_pulse = 0_usize;
     while duration_seconds.map_or(simulation.tick < max_ticks, |seconds| {
         started_at.elapsed() < Duration::from_secs(seconds)
     }) {
+        if plan004_resource_feed {
+            let elapsed = started_at.elapsed();
+            while next_feed_pulse
+                < crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT
+            {
+                let scheduled_seconds =
+                    crate::environment_resource_feed::PLAN004_RESOURCE_FEED_FIRST_PULSE_SECONDS
+                        + next_feed_pulse as u64
+                            * crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_INTERVAL_SECONDS;
+                if elapsed < Duration::from_secs(scheduled_seconds) {
+                    break;
+                }
+                let particles = crate::environment_resource_feed::inject_plan004_resource_pulse(
+                    &mut simulation,
+                    seed,
+                    next_feed_pulse,
+                );
+                let elapsed_wall_seconds = started_at.elapsed().as_secs_f64();
+                diagnostics
+                    .record_resource_feed(
+                        simulation.tick,
+                        elapsed_wall_seconds,
+                        next_feed_pulse + 1,
+                        &particles,
+                    )
+                    .expect("failed to record PLAN-004 resource feed");
+                println!(
+                    "PLAN-004 RESOURCE FEED PULSE: pulse={} tick={} elapsed_wall_seconds={:.3} resources={}",
+                    next_feed_pulse + 1,
+                    simulation.tick,
+                    elapsed_wall_seconds,
+                    particles.len()
+                );
+                next_feed_pulse += 1;
+            }
+        }
         simulation.step();
         diagnostics
             .observe(&simulation)
