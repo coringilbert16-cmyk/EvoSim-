@@ -120,12 +120,15 @@ def _displacement_coverage(discovery: dict[str, Any], work: dict[str, Any]) -> d
     anchor_window_unvisited = _counter(discovery, "anchor_cells_unvisited_by_window")
     anchor_selected_unvisited = _counter(discovery, "anchor_cells_not_reached_in_selected_window")
     target_limit_reached = _counter(discovery, "target_cell_window_limit_reached")
+    if remaining == 0:
+        return _coverage("partial", "bounded_anchor_target_and_contact_search", None,
+                         "The per-tick discovery work allowance was fully consumed; total unvisited target work is not measured.")
     if anchor_window_unvisited is None or anchor_selected_unvisited is None or target_limit_reached is None:
         return _coverage("unknown", "bounded_anchor_target_and_contact_search", None,
                          "Coverage counters are absent in this record or legacy schema.")
-    if anchor_window_unvisited > 0 or anchor_selected_unvisited > 0 or remaining == 0:
+    if anchor_window_unvisited > 0 or anchor_selected_unvisited > 0:
         return _coverage("partial", "bounded_anchor_target_and_contact_search", None,
-                         "Known anchor cells were skipped by a fixed window or exhausted work allowance; total unvisited target work is not measured.")
+                         "Known anchor cells were skipped by a fixed window; total unvisited target work is not measured.")
     if target_limit_reached > 0:
         return _coverage("unknown", "bounded_anchor_target_and_contact_search", None,
                          "At least one target-cell query reached its requested limit, but the exact omitted-cell count is not measured.")
