@@ -1,0 +1,144 @@
+name: Matched Catalysis Placement Screen
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: "Comma-separated paired seeds (same seed is used in both arms; up to 25)."
+        required: true
+        default: "42,43,44,45,46"
+        type: string
+      duration_seconds:
+        description: "Real simulation duration per arm and seed (30–3600 seconds)."
+        required: true
+        default: 60
+        type: number
+      config_path:
+        description: "Repository-relative matched setup JSON configuration."
+        required: true
+        default: "experiments/matched-catalysis-example.json"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      seeds: ${{ steps.parameters.outputs.seeds }}
+      duration_seconds: ${{ steps.parameters.outputs.duration_seconds }}
+      config_path: ${{ steps.parameters.outputs.config_path }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate paired-screen request
+        id: parameters
+        env:
+          SEEDS_INPUT: ${{ inputs.seeds }}
+          DURATION_SECONDS: ${{ inputs.duration_seconds }}
+          CONFIG_PATH: ${{ inputs.config_path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          raw = os.environ["SEEDS_INPUT"]
+          parts = [part.strip() for part in raw.split(",") if part.strip()]
+          if any(not part.isascii() or not part.isdecimal() for part in parts):
+              raise SystemExit("Every seed must be a nonnegative integer.")
+          seeds = [int(part) for part in parts]
+          if not seeds or len(seeds) > 25 or len(seeds) != len(set(seeds)):
+              raise SystemExit("Provide 1–25 unique nonnegative seeds.")
+          duration = int(os.environ["DURATION_SECONDS"])
+          if not 30 <= duration <= 3600:
+              raise SystemExit("Duration must be between 30 and 3,600 seconds.")
+          config_path = Path(os.environ["CONFIG_PATH"])
+          if config_path.is_absolute() or ".." in config_path.parts or not config_path.is_file():
+              raise SystemExit("config_path must name an existing repository file without '..'.")
+          config = json.loads(config_path.read_text(encoding="utf-8"))
+          required = ("candidate_parts", "target_reactant_a_parts", "target_reactant_b_parts")
+          if any(not isinstance(config.get(key), list) or len(config[key]) != 2 for key in required):
+              raise SystemExit("Each configured molecule must contain exactly two element names.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("seeds=" + json.dumps(seeds) + chr(10))
+              output.write("duration_seconds=" + str(duration) + chr(10))
+              output.write("config_path=" + str(config_path) + chr(10))
+          print(f"Validated paired placement screen: seeds={seeds}, duration={duration}s per arm.")
+          print("This workflow is manual-only and does not establish catalytic causation.")
+          PY
+
+  observe:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        seed: ${{ fromJSON(needs.validate.outputs.seeds) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Run paired candidate-near and candidate-remote arms
+        env:
+          SEED: ${{ matrix.seed }}
+          DURATION_SECONDS: ${{ needs.validate.outputs.duration_seconds }}
+          CONFIG_PATH: ${{ needs.validate.outputs.config_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p observations/near observations/remote
+          cargo run --locked -- --headless --environment-chemistry-experiment \
+            --seconds "$DURATION_SECONDS" --seed "$SEED" \
+            --matched-catalysis-config "$CONFIG_PATH" \
+            --matched-catalysis-condition candidate_near \
+            --diagnostics "observations/near/seed-$SEED.jsonl" --diagnostic-interval 100
+          cargo run --locked -- --headless --environment-chemistry-experiment \
+            --seconds "$DURATION_SECONDS" --seed "$SEED" \
+            --matched-catalysis-config "$CONFIG_PATH" \
+            --matched-catalysis-condition candidate_remote \
+            --diagnostics "observations/remote/seed-$SEED.jsonl" --diagnostic-interval 100
+      - name: Upload paired raw observations
+        if: always() && hashFiles('observations/**/*.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: matched-catalysis-seed-${{ matrix.seed }}
+          path: observations/
+          if-no-files-found: error
+          retention-days: 30
+
+  analyze:
+    needs: [validate, observe]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download paired observations
+        uses: actions/download-artifact@v4
+        with:
+          pattern: matched-catalysis-seed-*
+          path: observations
+          merge-multiple: true
+      - name: Analyze paired placement screen
+        env:
+          SEEDS: ${{ join(fromJSON(needs.validate.outputs.seeds), ',') }}
+          DURATION_SECONDS: ${{ needs.validate.outputs.duration_seconds }}
+          CONFIG_PATH: ${{ needs.validate.outputs.config_path }}
+        run: |
+          set -euo pipefail
+          python3 tools/matched_catalysis_comparison_analyzer.py \
+            --near-dir observations/near --remote-dir observations/remote \
+            --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" \
+            --config "$CONFIG_PATH" --output matched-catalysis-comparison.json
+      - name: Upload comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: matched-catalysis-comparison-report
+          path: |
+            matched-catalysis-comparison.json
+            matched-catalysis-comparison.md
+          if-no-files-found: error
+          retention-days: 90
