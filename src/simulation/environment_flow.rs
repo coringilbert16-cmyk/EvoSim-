@@ -950,6 +950,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn material_flow_exposure_uses_realized_positions_and_is_finite() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(100.0, 80.0, 10.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 40.0,
+                y: 30.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        assert!(field.deposit_physical(40.0, 30.0, material, &catalog));
+        field.assign_missing_material_identities();
+        let identity = field.cells.iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .next()
+            .expect("deposited material")
+            .environmental_identity;
+        let samples = material_flow_velocity_samples(&field, &catalog, identity, 100.0, 80.0)
+            .expect("production flow sampler should resolve the material");
+        assert_eq!(samples.len(), 1);
+        assert!(samples[0].0.is_finite() && samples[0].1.is_finite());
+    }
+
+    #[test]
     fn background_flow_is_finite_deterministic_and_left_to_right() {
         let first = background_velocity(20.0, 30.0, 100.0, 80.0);
         let second = background_velocity(20.0, 30.0, 100.0, 80.0);
