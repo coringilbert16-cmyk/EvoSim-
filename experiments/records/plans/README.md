@@ -118,3 +118,4 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 7. Pursue spatial organization once spatially resolved opportunity and rate comparisons are available.
 
 All future experiments must be registered before execution and receive a dedicated result record at closeout. Plans do not authorize simulator behavior changes; implementation requires a separate explicit design decision and approval.
+
