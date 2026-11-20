@@ -73,6 +73,22 @@ Its own PR description says the paired comparison is not eligible for causal int
 - Make full neighborhood, field, and movement traces opt-in, bounded, and explicit about truncation.
 - Reanalyze existing artifacts before commissioning any new runs.
 
+## Deeper source and workflow findings
+
+The field-level source pass confirmed several important details:
+
+- `EnvironmentalChemistryEvent` carries tick, reaction kind, source cell indices, source material indices, source compositions, required work, optional frequency/activation/accumulation values, broken-bond index, committed/rejected outcome, a failure label, product summaries, and lifecycle records.
+- Lifecycle records carry exact molecule IDs, parent IDs, reaction IDs, reaction type, action, tick, and optional full molecule/material snapshots. The current lifecycle reaction ID is generated from tick plus the event's position in the per-tick event vector.
+- The reaction event itself does **not** carry that reaction ID. Rejected events generally have no lifecycle records, so they lack the exact persistent source-molecule identity join available for successful lifecycle transitions. Source material indices are location/vector indices, not durable identities.
+- COMBINE's current failure label intentionally groups stale, invalid, and unfunded resolver failures rather than inventing a detailed cause. This is honest but limits rejection analysis.
+- The per-tick COMBINE opportunity sample is explicitly bounded to eight entries. The sample records source identities, geometry/endpoints, distance, physical validity, reaction kind, and old bond energy; it is not a complete opportunity census.
+- Per-tick diagnostics contain useful scan/work/budget and candidate counters, but the JSONL recorder emits a tick diagnostic record only when relevant work/activity exists. It does not write an explicit zero-activity record for every tick. The summary does retain a count of observed ticks; periodic snapshots provide a coarser timeline.
+- Energy is strong at the **run inventory** level: snapshots report usable, resonant, structural, external-input, escaped-signal, work, heat, and residual values. The authoritative energy ledger's reaction transaction includes reason, usable delta, signed structural delta, work, and heat, but those transaction values are not presently serialized alongside each environmental reaction event. This prevents straightforward event/pathway-level energy attribution from the JSONL alone.
+- The standard workflow already runs multiple offline analyzers: chemistry, molecular organization, reaction-network, geometry-aware network, contact-opportunity, and temporal-complexity analysis. Per-seed artifacts are retained for 30 days and combined reports for 90 days. This is useful existing infrastructure; OBS-001 should orchestrate and standardize it, not replace it wholesale.
+- The JSONL header records requested duration and planned ticks, but not actual elapsed wall-clock duration, exact commit/build identity, GitHub workflow/run ID, or analyzer versions. The workflow environment can supply some provenance externally; a canonical manifest should join it to the raw data.
+
+These findings sharpen the implementation priorities: add durable event IDs to reaction events and connect them to lifecycle/energy records; preserve exact source identities for rejected as well as committed events where feasible; formalize bounded-sample and zero-activity semantics; and add a small manifest/analysis index that binds workflow provenance to raw artifacts. Do not add full snapshots each tick.
+
 ## Audit limitations and next work
 
 This first pass inspected the main environmental recorder, chemistry analyzer, contact-opportunity analyzer, experiment execution guide, experiment registry, and plans guide; it also inspected PR metadata and changed-file inventories for #345 and #392. It did not yet audit every analyzer, event struct, workflow, or energy-ledger call site. No code was changed and no experiment was launched.
