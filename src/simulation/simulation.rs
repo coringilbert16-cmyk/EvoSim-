@@ -923,6 +923,33 @@ impl Simulation {
     pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
         &mut self,
     ) {
+        // Biology is dormant while the simulator establishes chemistry-first
+        // behavior. Preserve every biological holder, but remove it from the
+        // active tick so no lifecycle, organism-owned reaction, decision,
+        // movement, reproduction, maintenance, or death rule can execute.
+        // Environmental material remains in place and continues through the
+        // ordinary physical and chemical tick below.
+        let dormant_organisms = std::mem::take(&mut self.organisms);
+        let dormant_transformations = std::mem::take(&mut self.active_transformations);
+        let dormant_decomposing_bodies = std::mem::take(&mut self.decomposing_bodies);
+
+        self.step_environmental_chemistry_with_transport_reuse::<
+            REUSE_SINGLETON_CENTER_VELOCITY,
+        >();
+
+        self.organisms = dormant_organisms;
+        self.active_transformations = dormant_transformations;
+        self.decomposing_bodies = dormant_decomposing_bodies;
+        // The chemistry-only tick reconciles the field while the dormant
+        // holders are detached. Restore their unchanged inventories afterward.
+        self.reconcile_energy_inventory_holders();
+    }
+
+    fn step_environmental_chemistry_with_transport_reuse<
+        const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+    >(
+        &mut self,
+    ) {
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
@@ -1080,7 +1107,7 @@ impl Simulation {
             );
         }
         if profile_tick {
-            finish_profile_phase("world_tone_organism_settlement");
+            finish_profile_phase("world_tone_environment_settlement");
         }
         if let Some(hotspot) = self.hotspot {
             self.environmental_chemistry_diagnostics
@@ -2182,25 +2209,12 @@ impl Simulation {
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
         self.release_finished_dead_organisms(&living_ids);
-        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
-            &self.organisms,
-            &self.decomposing_bodies,
-        ) + self.environment.chemistry_usable_energy;
-        self.energy_ledger.total_resonant_energy_held =
-            crate::reproduction::total_resonant_energy_held(&self.organisms)
-                + self
-                    .environment
-                    .resonant_energy
-                    .total_energy()
-                    .unwrap_or(f64::NAN);
-        self.energy_ledger.total_structural_energy_held =
-            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
-                + Self::environmental_structural_energy_held(&self.environment);
+        self.reconcile_energy_inventory_holders();
         self.environmental_chemistry_diagnostics
             .accumulation_entries = self.chemical_reaction_accumulation.len();
 
         if profile_tick {
-            finish_profile_phase("reproduction_and_tick_finalization");
+            finish_profile_phase("chemistry_tick_finalization");
             drop(finish_profile_phase);
             let total_ns = tick_profile_started.map_or(0, |started| started.elapsed().as_nanos());
             eprintln!(
@@ -2331,6 +2345,26 @@ impl Simulation {
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
     ) -> f64 {
         crate::reproduction::total_structural_energy_held(organisms, decomposing_bodies)
+    }
+
+    /// Reconcile all authoritative energy holders after a tick. This is
+    /// inventory bookkeeping only; it does not invoke biological behavior.
+    fn reconcile_energy_inventory_holders(&mut self) {
+        self.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(
+                &self.organisms,
+                &self.decomposing_bodies,
+            ) + self.environment.chemistry_usable_energy;
+        self.energy_ledger.total_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(&self.organisms)
+                + self
+                    .environment
+                    .resonant_energy
+                    .total_energy()
+                    .unwrap_or(f64::NAN);
+        self.energy_ledger.total_structural_energy_held =
+            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
+                + Self::environmental_structural_energy_held(&self.environment);
     }
 
     /// Signed potential stored in realized physical bonds owned by the field.
