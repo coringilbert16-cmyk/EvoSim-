@@ -1383,7 +1383,6 @@ mod integration_tests {
     #[test]
     fn chemistry_tick_preserves_all_dormant_biological_holders() {
         let mut simulation = Simulation::new(0xC4E0, 10.0);
-        simulation.organisms[0].usable_energy = 0.0;
         simulation.organisms[0].stress = 3.0;
         let organisms_before = serde_json::to_value(&simulation.organisms).unwrap();
         let transformations_before =
