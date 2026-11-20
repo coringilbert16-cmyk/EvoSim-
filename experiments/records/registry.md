@@ -17,7 +17,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Experiment | Conditions | Status | Primary record |
 |---|---|---|---|---|
-| EXP-2026-005 | PLAN-004 paired resource-feed comparison | Five paired seeds (42–46); 3,600 seconds per arm; no-feed control versus six pulses of 72 free atoms (12 of each active element) at 5, 15, 25, 35, 45, and 55 minutes | **Observations complete; five-pair chemistry/organization comparison recovered; full specialist aggregation pending** | [Pre-registration and protocol](results/2026-11-20-plan-004-resource-feed-paired-experiment.md) · [Five-pair recovery](results/2026-11-20-plan-004-five-pair-recovery.md) |
+| EXP-2026-005 | PLAN-004 paired resource-feed comparison | Five paired seeds (42–46); 3,600 seconds per arm; no-feed control versus six pulses of 72 free atoms (12 of each active element) at 5, 15, 25, 35, 45, and 55 minutes | **Completed; full specialist aggregation recovered; scientific outcome inconclusive** | [Pre-registration and protocol](results/2026-11-20-plan-004-resource-feed-paired-experiment.md) · [Five-pair recovery](results/2026-11-20-plan-004-five-pair-recovery.md) |
 
 ## Planned research
 
