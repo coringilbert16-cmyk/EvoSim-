@@ -50,6 +50,8 @@ def scalar_tree(value: Any) -> Any:
         return {str(key): scalar_tree(item) for key, item in value.items()
                 if key not in DROP_KEYS and (isinstance(item, (dict, int, float, str, bool)) or item is None)}
     if isinstance(value, list):
+        if len(value) <= 128 and all(item is None or isinstance(item, (int, float, str, bool)) for item in value):
+            return value
         return None
     if isinstance(value, (int, float, str, bool)) or value is None:
         return value
