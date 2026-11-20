@@ -734,21 +734,21 @@ fn environmental_bond_index_tracks_only_existing_bonds_and_updates_changed_cells
 
     let cell = field.index_for_position(12.5, 12.5).unwrap();
     assert!(field.deposit_physical_at_index(cell, free, &catalog));
-    assert!(field.environmental_bond_candidates(0, 8).is_empty());
+    assert!(field.environmental_bond_candidates().is_empty());
 
     assert!(field.deposit_physical_at_index(cell, bonded, &catalog));
-    let first = field.environmental_bond_candidates(0, 8);
+    let first = field.environmental_bond_candidates();
     assert_eq!(first.len(), 1, "only the existing internal bond is indexed");
     assert_eq!(
-        field.environmental_bond_candidates(1, 8),
+        field.environmental_bond_candidates(),
         first,
-        "tick rotation over a single known bond must not duplicate it"
+        "the complete index remains stable until a cell changes"
     );
 
     field.cells[cell].physical_materials.pop();
     field.mark_changed_at_index(cell);
     assert!(
-        field.environmental_bond_candidates(2, 8).is_empty(),
+        field.environmental_bond_candidates().is_empty(),
         "removing a bonded material must remove its bond locator"
     );
 }
