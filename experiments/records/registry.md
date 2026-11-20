@@ -13,6 +13,12 @@ This is the master index. Detailed completed-run results live under [results/](r
 | EXP-2026-003 | Five-seed extended chemistry observation | 25 minutes per seed; seeds 42–46 | Completed; reanalyzed | [Historical result summary](results/historical-experiments.md) |
 | EXP-2026-004 | Five-seed one-hour chemistry observation | 3,600 seconds per seed; seeds 42–46; 1,200 independent resources + 80 two-constituent molecules; six active elements | Completed; validated | [Full result and analysis](results/2026-11-19-one-hour-five-seed.md) |
 
+## Registered upcoming experiments
+
+| ID | Experiment | Conditions | Status | Primary record |
+|---|---|---|---|---|
+| EXP-2026-005 | PLAN-004 paired resource-feed comparison | Five paired seeds (42–46); 3,600 seconds per arm; no-feed control versus six pulses of 72 free atoms (12 of each active element) at 5, 15, 25, 35, 45, and 55 minutes | **Registered — implementation and CI validation in progress; not yet launched** | [Pre-registration and protocol](results/2026-11-20-plan-004-resource-feed-paired-experiment.md) |
+
 ## Planned research
 
 | ID | Research question | Status | Plan |
