@@ -1139,7 +1139,13 @@ pub(crate) fn resolve_environmental_diagnosed(
     ledger.total_usable_energy_held = next_total_usable;
     ledger.total_structural_energy_held = next_total_structural;
     ledger.total_resonant_energy_held = next_total_resonant;
-    Ok(crate::state::EnvironmentalEnergySettlement::settled(usable_delta,resonant_work,structural_delta,operation.disruption_cost,prepared.transaction.heat_dissipated))
+    Ok(crate::state::EnvironmentalEnergySettlement::settled(
+        usable_delta,
+        resonant_work,
+        structural_delta,
+        operation.disruption_cost,
+        prepared.transaction.heat_dissipated,
+    ))
 }
 
 pub(crate) fn resolve_environmental_preserving_accumulation(
