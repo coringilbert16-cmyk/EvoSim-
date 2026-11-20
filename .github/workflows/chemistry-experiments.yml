@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   prepare:
@@ -46,6 +47,8 @@ jobs:
       diagnostic_interval: ${{ steps.parameters.outputs.diagnostic_interval }}
       profile_movement: ${{ steps.parameters.outputs.profile_movement }}
       profile_tick: ${{ steps.parameters.outputs.profile_tick }}
+      analysis_only: ${{ steps.parameters.outputs.analysis_only }}
+      source_run_id: ${{ steps.parameters.outputs.source_run_id }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate experiment parameters
@@ -63,19 +66,32 @@ jobs:
           import json
           import os
 
+          analysis_only = False
+          source_run_id = ""
           if os.environ["EVENT_NAME"] == "push":
               with open("experiments/chemistry-run.json", encoding="utf-8") as source:
                   config = json.load(source)
-              if config.get("run") is not True:
+              if config.get("run") is True:
+                  seeds = config.get("seeds", [])
+                  duration = int(config.get("duration_seconds", 300))
+                  interval = int(config.get("diagnostic_interval", 100))
+                  profile_movement = bool(config.get("profile_movement", False))
+                  profile_tick = bool(config.get("profile_tick", False))
+              elif config.get("aggregate_existing_run_id") is not None:
+                  source_run_id = str(int(config["aggregate_existing_run_id"]))
+                  if int(source_run_id) <= 0:
+                      raise SystemExit("aggregate_existing_run_id must be a positive GitHub Actions run ID.")
+                  analysis_only = True
+                  seeds = config.get("seeds", [])
+                  duration = int(config.get("duration_seconds", 300))
+                  interval = int(config.get("diagnostic_interval", 100))
+                  profile_movement = False
+                  profile_tick = False
+              else:
                   with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                       output.write("should_run=false" + chr(10))
                   print("Experiment request is inactive; no simulations launched.")
                   raise SystemExit(0)
-              seeds = config.get("seeds", [])
-              duration = int(config.get("duration_seconds", 300))
-              interval = int(config.get("diagnostic_interval", 100))
-              profile_movement = bool(config.get("profile_movement", False))
-              profile_tick = bool(config.get("profile_tick", False))
           else:
               raw = os.environ["SEEDS_INPUT"]
               parts = [part.strip() for part in raw.split(",") if part.strip()]
@@ -105,12 +121,15 @@ jobs:
               output.write("diagnostic_interval=" + str(interval) + chr(10))
               output.write("profile_movement=" + str(profile_movement).lower() + chr(10))
               output.write("profile_tick=" + str(profile_tick).lower() + chr(10))
+              output.write("analysis_only=" + str(analysis_only).lower() + chr(10))
+              output.write("source_run_id=" + source_run_id + chr(10))
           print(f"Validated {len(seeds)} seeds: {seeds}")
           print(f"Duration per seed: {duration}s; diagnostic interval: {interval} ticks")
+          print(f"Analysis-only reaggregation: {analysis_only}; source run: {source_run_id or 'current run'}")
           PY
 
   observe:
-    if: needs.prepare.outputs.should_run == 'true'
+    if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.analysis_only != 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -154,7 +173,7 @@ jobs:
           retention-days: 30
 
   aggregate:
-    if: needs.prepare.outputs.should_run == 'true'
+    if: always() && needs.prepare.outputs.should_run == 'true' && (needs.prepare.outputs.analysis_only == 'true' || needs.observe.result == 'success')
     needs: [prepare, observe]
     runs-on: ubuntu-latest
     steps:
@@ -165,6 +184,9 @@ jobs:
           pattern: chemistry-observation-seed-*
           path: observations
           merge-multiple: true
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.source_run_id != '' && needs.prepare.outputs.source_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build pooled chemistry and molecular-development report
         env:
           SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
@@ -174,8 +196,16 @@ jobs:
           python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
           python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
           python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
-          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
-          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir temporal-chemical-complexity
+          mkdir -p contact-opportunities temporal-chemical-complexity
+          IFS=',' read -r -a seed_list <<< "$SEEDS"
+          for seed in "${seed_list[@]}"; do
+            echo "Analyzing contact opportunities for seed $seed"
+            python3 tools/contact_opportunity_analyzer.py observations --seeds "$seed" --duration-seconds "$DURATION_SECONDS" --output-dir "contact-opportunities/seed-$seed"
+          done
+          for seed in "${seed_list[@]}"; do
+            echo "Analyzing temporal chemical complexity for seed $seed"
+            python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$seed" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir "temporal-chemical-complexity/seed-$seed"
+          done
       - name: Upload combined experiment report
         uses: actions/upload-artifact@v4
         with:
