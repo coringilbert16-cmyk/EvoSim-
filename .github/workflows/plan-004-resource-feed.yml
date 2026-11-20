@@ -1,0 +1,155 @@
+name: PLAN-004 Resource-Feed Comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: "Five paired independent seeds."
+        required: true
+        default: "42,43,44,45,46"
+        type: string
+      duration_seconds:
+        description: "Real simulation duration per arm and seed."
+        required: true
+        default: 3600
+        type: number
+  push:
+    branches: [experiments/plan-004-resource-feed]
+    paths:
+      - experiments/plan-004-run.json
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      seeds: ${{ steps.parameters.outputs.seeds }}
+      duration_seconds: ${{ steps.parameters.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate paired experiment configuration
+        id: parameters
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SEEDS_INPUT: ${{ inputs.seeds }}
+          DURATION_INPUT: ${{ inputs.duration_seconds }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+
+          if os.environ["EVENT_NAME"] == "push":
+              with open("experiments/plan-004-run.json", encoding="utf-8") as source:
+                  config = json.load(source)
+              if config.get("run") is not True:
+                  raise SystemExit("PLAN-004 run request is inactive.")
+              seeds = config.get("seeds", [])
+              duration = int(config.get("duration_seconds", 0))
+          else:
+              raw = os.environ["SEEDS_INPUT"]
+              parts = [part.strip() for part in raw.split(",") if part.strip()]
+              if any(not part.isascii() or not part.isdecimal() for part in parts):
+                  raise SystemExit("Every seed must be a nonnegative integer.")
+              seeds = [int(part) for part in parts]
+              duration = int(os.environ["DURATION_INPUT"])
+
+          if seeds != [42, 43, 44, 45, 46]:
+              raise SystemExit("EXP-2026-005 is pre-registered for paired seeds 42–46.")
+          if duration != 3600:
+              raise SystemExit("EXP-2026-005 requires exactly 3,600 wall-clock seconds per run.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("seeds=" + json.dumps(seeds) + chr(10))
+              output.write("duration_seconds=3600" + chr(10))
+          print("Validated five matched seeds, two arms, and one hour per run.")
+          PY
+
+  observe:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        seed: ${{ fromJSON(needs.prepare.outputs.seeds) }}
+        condition: [no-feed, resource-feed]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run matched PLAN-004 chemistry condition
+        timeout-minutes: 110
+        env:
+          SEED: ${{ matrix.seed }}
+          CONDITION: ${{ matrix.condition }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+        run: |
+          set -euo pipefail
+          mkdir -p "observations/$CONDITION"
+          args=(
+            --headless
+            --environment-chemistry-experiment
+            --seconds "$DURATION_SECONDS"
+            --seed "$SEED"
+            --diagnostics "observations/$CONDITION/seed-$SEED.jsonl"
+            --diagnostic-interval 100
+          )
+          if [[ "$CONDITION" == "resource-feed" ]]; then
+            args+=(--plan004-resource-feed)
+          fi
+          cargo run --locked -- "${args[@]}"
+      - name: Analyze reactions and energy
+        env:
+          SEED: ${{ matrix.seed }}
+          CONDITION: ${{ matrix.condition }}
+        run: |
+          python3 tools/chemistry_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION/seed-$SEED-chemistry.json" --markdown-out "observations/$CONDITION/seed-$SEED-chemistry.md"
+      - name: Analyze molecular organization and lineage
+        env:
+          SEED: ${{ matrix.seed }}
+          CONDITION: ${{ matrix.condition }}
+        run: |
+          python3 tools/chemistry_organization_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION/seed-$SEED-organization.json" --markdown-out "observations/$CONDITION/seed-$SEED-organization.md"
+      - name: Upload raw observation and per-seed analysis
+        if: always() && hashFiles('observations/**/*.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan004-${{ matrix.condition }}-seed-${{ matrix.seed }}
+          path: observations/${{ matrix.condition }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate:
+    needs: [prepare, observe]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all paired observations
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plan004-*
+          path: observations
+          merge-multiple: false
+      - name: Assemble matched arm reports
+        env:
+          SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+        run: |
+          set -euo pipefail
+          for condition in no-feed resource-feed; do
+            mkdir -p "analysis/$condition"
+            python3 tools/chemistry_experiment_batch_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out "analysis/$condition/chemistry-batch.json" --markdown-out "analysis/$condition/chemistry-batch.md"
+            python3 tools/reaction_network_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/reaction-network"
+            python3 tools/geometry_aware_reaction_network.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/geometry-aware-network"
+            python3 tools/contact_opportunity_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/contact-opportunities"
+            python3 tools/temporal_chemical_complexity_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir "analysis/$condition/temporal-chemical-complexity"
+          done
+      - name: Upload paired experiment reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan004-resource-feed-combined
+          path: analysis/
+          if-no-files-found: error
+          retention-days: 90
