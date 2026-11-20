@@ -103,7 +103,7 @@ Compare unified results with existing specialist reports. Investigate every disc
 - Build compact per-seed records directly from the existing specialist analyzer outputs.
 - Compare experiments from compact records alone, without requiring raw JSONL or intermediate analyzer outputs.
 - Make exhaustive local-resonance sampling, contact-opportunity CSVs, reaction-network expansion, and temporal detail explicit deep-analysis options.
-- Upload raw source artifacts only temporarily (one day), delete them after successful aggregation, and retain compact transport artifacts separately.
+- Do not upload raw JSONL, manifests, or specialist intermediate reports in routine runs; generate and validate compact records in the same per-seed job, then clean the local workspace. Retain only compact transport artifacts separately.
 - Commit validated compact per-seed records and the experiment comparison record with the permanent result note.
 - Preserve selected reference datasets only through an explicit allowlist and documented retention reason.
 - Require each new measurement to state its scientific question, expected data volume, consumer stage, and acceptance test.
@@ -120,7 +120,7 @@ Compare unified results with existing specialist reports. Investigate every disc
 - No rate is emitted without a valid, complete, semantically appropriate denominator.
 - Reports distinguish observations from interpretation and retain seed-level results.
 - Compact records can be compared after all raw/intermediate artifacts have expired.
-- Routine workflow retains no raw JSONL or detailed contact CSV by default; temporary raw artifacts expire automatically and are deleted after successful aggregation.
+- Routine workflow uploads no raw JSONL, manifest, specialist report, or detailed contact CSV; local source files are deleted after compact-record generation. Deep artifacts are explicit opt-in and expire automatically.
 - Automated tests cover invalid manifests/checksums, legacy schema, partial coverage, missing analyzer output, stale cache, deterministic index/report assembly, and aggregation naming variants.
 - No simulation behavior or chemistry/physics rules change.
 
