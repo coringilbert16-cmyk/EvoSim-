@@ -70,6 +70,7 @@ pub(crate) fn inject_plan004_resource_pulse(
 ) -> Vec<ResourceFeedParticle> {
     assert!(pulse_index < PLAN004_RESOURCE_FEED_PULSE_COUNT);
     assert!(!reference_positions.is_empty());
+    let energy_before = simulation.energy_inventory_snapshot();
     let mut rng = ChaCha8Rng::seed_from_u64(
         seed ^ 0x504c_414e_3030_3400_u64.wrapping_add(pulse_index as u64),
     );
@@ -146,12 +147,29 @@ pub(crate) fn inject_plan004_resource_pulse(
         .iter()
         .all(|element| counts.get(*element) == Some(&PLAN004_RESOURCES_PER_ELEMENT_PER_PULSE)));
 
-    let inventory = simulation.energy_inventory_snapshot();
-    assert!(
-        inventory.is_balanced(1e-7),
-        "adding free base matter must not create an energy-ledger imbalance: {:?}",
-        inventory.residual()
+    let energy_after = simulation.energy_inventory_snapshot();
+    assert_eq!(
+        energy_after.current_usable_energy,
+        energy_before.current_usable_energy,
+        "free-matter input must not change held usable energy"
     );
+    assert_eq!(
+        energy_after.current_resonant_energy,
+        energy_before.current_resonant_energy,
+        "free-matter input must not change held resonant energy"
+    );
+    assert_eq!(
+        energy_after.current_structural_energy,
+        energy_before.current_structural_energy,
+        "unbonded free-matter input must not change held structural energy"
+    );
+    assert_eq!(
+        energy_after.external_energy_input,
+        energy_before.external_energy_input,
+        "free-matter input must not inject energy"
+    );
+    assert_eq!(energy_after.work_expended, energy_before.work_expended);
+    assert_eq!(energy_after.heat_dissipated, energy_before.heat_dissipated);
 
     particles
 }
