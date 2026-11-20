@@ -256,7 +256,7 @@ jobs:
           for SEED in "${SEED_LIST[@]}"; do
             RECORD_ARGS+=("compact-records/seed-$SEED-record.json")
           done
-          python3 tools/compare_compact_experiment_records.py "${RECORD_ARGS[@]}" --output compact-record-comparison.json
+          python3 tools/compare_compact_experiment_records.py "${RECORD_ARGS[@]}" --output compact-record-comparison.json --markdown-out compact-record-comparison.md
       - name: Run explicitly requested deep analyses
         if: needs.prepare.outputs.deep_diagnostics == 'true'
         env:
@@ -275,6 +275,7 @@ jobs:
           path: |
             compact-records/
             compact-record-comparison.json
+            compact-record-comparison.md
           if-no-files-found: error
           retention-days: 90
       - name: Upload temporary deep analysis
