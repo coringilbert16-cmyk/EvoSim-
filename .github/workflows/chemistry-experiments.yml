@@ -28,6 +28,21 @@ on:
         required: true
         default: false
         type: boolean
+      experiment_id:
+        description: "Registered experiment ID (for example EXP-2026-007)."
+        required: false
+        default: ""
+        type: string
+      research_plan:
+        description: "Research plan ID, if this run supports a registered plan."
+        required: false
+        default: ""
+        type: string
+      condition_id:
+        description: "Condition identifier within the registered experiment."
+        required: false
+        default: ""
+        type: string
   push:
     branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration, movement/05-performance-acceptance, movement/06-performance-optimization]
     paths:
@@ -46,6 +61,9 @@ jobs:
       diagnostic_interval: ${{ steps.parameters.outputs.diagnostic_interval }}
       profile_movement: ${{ steps.parameters.outputs.profile_movement }}
       profile_tick: ${{ steps.parameters.outputs.profile_tick }}
+      experiment_id: ${{ steps.parameters.outputs.experiment_id }}
+      research_plan: ${{ steps.parameters.outputs.research_plan }}
+      condition_id: ${{ steps.parameters.outputs.condition_id }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate experiment parameters
@@ -57,11 +75,15 @@ jobs:
           DIAGNOSTIC_INTERVAL: ${{ inputs.diagnostic_interval }}
           PROFILE_MOVEMENT_INPUT: ${{ inputs.profile_movement }}
           PROFILE_TICK_INPUT: ${{ inputs.profile_tick }}
+          EXPERIMENT_ID_INPUT: ${{ inputs.experiment_id }}
+          RESEARCH_PLAN_INPUT: ${{ inputs.research_plan }}
+          CONDITION_ID_INPUT: ${{ inputs.condition_id }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
           import os
+          import re
 
           if os.environ["EVENT_NAME"] == "push":
               with open("experiments/chemistry-run.json", encoding="utf-8") as source:
@@ -76,6 +98,9 @@ jobs:
               interval = int(config.get("diagnostic_interval", 100))
               profile_movement = bool(config.get("profile_movement", False))
               profile_tick = bool(config.get("profile_tick", False))
+              experiment_id = str(config.get("experiment_id") or "").strip()
+              research_plan = str(config.get("research_plan") or "").strip()
+              condition_id = str(config.get("condition_id") or "").strip()
           else:
               raw = os.environ["SEEDS_INPUT"]
               parts = [part.strip() for part in raw.split(",") if part.strip()]
@@ -86,6 +111,16 @@ jobs:
               interval = int(os.environ["DIAGNOSTIC_INTERVAL"])
               profile_movement = os.environ["PROFILE_MOVEMENT_INPUT"].lower() == "true"
               profile_tick = os.environ["PROFILE_TICK_INPUT"].lower() == "true"
+              experiment_id = os.environ.get("EXPERIMENT_ID_INPUT", "").strip()
+              research_plan = os.environ.get("RESEARCH_PLAN_INPUT", "").strip()
+              condition_id = os.environ.get("CONDITION_ID_INPUT", "").strip()
+
+          if experiment_id and not re.fullmatch(r"EXP-\\d{4}-\\d{3}", experiment_id):
+              raise SystemExit("Experiment ID must match EXP-YYYY-NNN.")
+          if research_plan and not re.fullmatch(r"(?:PLAN|OBS)-\\d{3}", research_plan):
+              raise SystemExit("Research plan must match PLAN-NNN or OBS-NNN.")
+          if condition_id and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", condition_id):
+              raise SystemExit("Condition ID may contain only letters, numbers, dots, underscores, and hyphens.")
 
           if not isinstance(seeds, list) or not seeds or len(seeds) > 25:
               raise SystemExit("Provide between 1 and 25 independent seeds.")
@@ -105,6 +140,10 @@ jobs:
               output.write("diagnostic_interval=" + str(interval) + chr(10))
               output.write("profile_movement=" + str(profile_movement).lower() + chr(10))
               output.write("profile_tick=" + str(profile_tick).lower() + chr(10))
+              output.write("experiment_id=" + experiment_id + chr(10))
+              output.write("research_plan=" + research_plan + chr(10))
+              output.write("condition_id=" + condition_id + chr(10))
+          print(f"Experiment metadata: experiment={experiment_id or 'unspecified'}, plan={research_plan or 'unspecified'}, condition={condition_id or 'unspecified'}")
           print(f"Validated {len(seeds)} seeds: {seeds}")
           print(f"Duration per seed: {duration}s; diagnostic interval: {interval} ticks")
           PY
@@ -130,6 +169,9 @@ jobs:
           DIAGNOSTIC_INTERVAL: ${{ needs.prepare.outputs.diagnostic_interval }}
           EVOSIM_PROFILE_MOVEMENT: ${{ needs.prepare.outputs.profile_movement }}
           EVOSIM_PROFILE_TICK: ${{ needs.prepare.outputs.profile_tick }}
+          EVOSIM_EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
+          EVOSIM_RESEARCH_PLAN: ${{ needs.prepare.outputs.research_plan }}
+          EVOSIM_CONDITION_ID: ${{ needs.prepare.outputs.condition_id }}
         run: |
           set -euo pipefail
           mkdir -p observations
