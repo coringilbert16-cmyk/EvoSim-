@@ -1,6 +1,6 @@
 # EXP-2026-005 — PLAN-004 paired resource-feed experiment
 
-**Status:** Running — EXP-2026-005 was dispatched on 2026-11-20. Five of ten paired observation jobs are active; five are queued. No simulation results are available yet.
+**Status:** Running — preliminary analysis of two completed matched seed pairs (42 and 43); six of ten observation jobs remain active. Findings below are interim and not a validated five-seed conclusion.
 
 **GitHub Actions:** [Run #44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988).
 
@@ -64,6 +64,52 @@ The no-feed arm receives no external matter after tick zero. Both arms retain th
 3. Validate the paired workflow and artifact aggregation paths.
 4. Only after those gates pass, activate the registered run configuration and launch the ten one-hour simulations.
 
-## Result
 
-Pending. This document is the pre-registration; findings and interpretation will be appended after the paired run completes.
+## Preliminary paired observations (two of five seeds)
+
+The first two completed matched pairs confirm that the feed protocol executed as specified, but they do not yet show a consistent chemistry response.
+
+### Feed delivery and accounting
+
+- Both completed feed arms contain exactly six `environmental_resource_feed` records.
+- Each pulse introduced 72 free atoms: 12 each of C, H, N, O, P, and S; total external matter per feed run is 432 atoms.
+- Pulse records occur at approximately 300, 900, 1,500, 2,100, 2,700, and 3,300 elapsed seconds.
+- In seed 42, final constituent count is 1,792 versus 1,360 in the no-feed arm, exactly +432. Each element's final free-resource inventory is +72 versus its matched no-feed run. This confirms the supplied matter is present in the final accounting.
+- Whole-run energy residuals remain small: seed 42 feed 0.0002942 versus no-feed 0.0003684; seed 43 feed 0.0006884 versus no-feed 0.0007143. The per-pulse energy-inventory invariance assertion is part of the implementation validation.
+
+### Committed reaction outcomes
+
+| Seed | Arm | BREAK | COMBINE | DISPLACEMENT | Total committed |
+|---:|---|---:|---:|---:|---:|
+| 42 | No-feed | 297 | 296 | 87 | 680 |
+| 42 | Feed | 167 | 165 | 44 | 376 |
+| 43 | No-feed | 320 | 322 | 74 | 716 |
+| 43 | Feed | 385 | 386 | 104 | 875 |
+
+Raw committed reaction totals move in opposite directions: feed is lower in seed 42 and higher in seed 43. The difference remains after normalizing by observed simulation ticks: seed 42 total committed reactions per 1,000 ticks are 34.86 no-feed versus 23.81 feed; seed 43 are 36.58 no-feed versus 45.60 feed. COMBINE plus DISPLACEMENT per 1,000 ticks shows the same opposite direction (19.63 vs 13.23 for seed 42; 20.23 vs 25.53 for seed 43). This is not a reproducible feed effect on the evidence currently available.
+
+### Organization indicators
+
+| Seed | Arm | Recurrent reaction-created families | Multi-resource or bonded identities | Families active at end |
+|---:|---|---:|---:|---:|
+| 42 | No-feed | 39 | 553 | 22 |
+| 42 | Feed | 20 | 314 | 18 |
+| 43 | No-feed | 35 | 541 | 21 |
+| 43 | Feed | 34 | 667 | 23 |
+
+The organization indicators also disagree between seeds. The extra active material in feed arms (about 1,712–1,714 objects versus about 1,278–1,281 in controls) largely reflects the 432 supplied free atoms; it must not be mistaken for an increase in organized compounds. Recurrent family counts are a more relevant, though still descriptive, indicator.
+
+### Interim interpretation
+
+1. Feed delivery and material conservation are working in the observed arms.
+2. The current two pairs do not demonstrate sustained pseudo-metabolism. Seed 42's feed arm has fewer committed reactions and fewer recurrent families; seed 43's feed arm has more committed reactions but almost unchanged recurrent-family count.
+3. A reaction-count increase alone would not satisfy PLAN-004. We still need exact-instance connected pathway traces across multiple feed intervals, intermediate regeneration/turnover, and evidence that new resource input participates in those pathways.
+4. The feed arms run with a larger physical inventory, which can affect wall-clock throughput. Observed tick counts differ between arms (seed 42: 15,794 feed vs 19,509 control; seed 43: 19,190 vs 19,574). Per-tick normalization helps but does not replace the paired five-seed analysis.
+5. Independent experimental replication is by seed, not by reaction event. With only two matched pairs, no statistical or causal conclusion is warranted.
+
+**Interim conclusion:** the intervention is delivering matter without an evident energy-ledger disturbance, but the chemistry response is seed-dependent and currently inconclusive. Complete seeds 44–46 and reconstruct pathway-level turnover before deciding whether the feed supports pseudo-metabolic organization.
+
+
+## Final result
+
+Pending completion and analysis of all five matched seed pairs.
