@@ -26,7 +26,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 ## PLAN-002 — Catalytic facilitation
 
-**Status:** Infrastructure validation passed; exposure-matched design and candidate selection remain in progress. No catalytic experiment is authorized.
+**Status:** First local-exposure telemetry increment implemented; full exposure matching and candidate selection remain blocked. No catalytic experiment is authorized.
 
 **Question:** Does a molecule increase the likelihood or rate of a reaction while remaining chemically available, rather than being consumed as a reactant?
 
@@ -40,9 +40,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 **Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed in a reaction and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
 
-**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, an offline comparison analyzer, and a manual-only GitHub Actions workflow. Full CI passed on commit `a9fdc384d211f22915d96c3cf7cea3e2f16d98df` (formatting, architecture, analyzer tests, Rust tests, chemistry smoke, organization analysis, artifact upload, and Clippy). The PR remains draft and unmerged.
+**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, and a manual-only workflow. A first exposure telemetry increment now records per-constituent production flow velocity, hotspot intensity, the uniform world-tone source sample, and candidate-to-target legacy pairwise aura magnitudes. The analyzer compares tick-zero flow/hotspot/source samples and explicitly fails causal eligibility when telemetry is missing or unmatched. A focused flow-sampler Rust test and analyzer gate tests were added. Full CI passed on the preceding documentation-only commit `a14f225c595e19b18db42d5f94c7d802a87f3ad0`; the latest code/test changes are awaiting CI. See [PLAN-002 exposure-matching design](PLAN-002-exposure-matching-design.md) for limitations. The PR remains draft and unmerged.
 
-**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only. The initial candidate translation can change flow/wake, source/hotspot, and resonance exposure; its output cannot isolate catalysis. The detailed gate and proposed exposure-matched placement protocol are documented in [PLAN-002 exposure-matching design](PLAN-002-exposure-matching-design.md). Do not dispatch the current workflow as a catalytic experiment.
+**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only. Current exposure measurements are tick-zero only; background resonance from other materials and full-cycle flow/hotspot exposure are not measured; complete eligible target-pair opportunity denominators are absent. The analyzer therefore cannot mark causal interpretation eligible. Do not dispatch the current workflow as a catalytic experiment.
 
 ## PLAN-003 — Autocatalysis
 
