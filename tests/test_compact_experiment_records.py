@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -74,16 +75,35 @@ class CompactExperimentRecordTests(unittest.TestCase):
             },
             "reaction_network": {"family_to_family_transitions": [{"edge": 1}]},
         }
+        raw_path = self.root / f"seed-{seed}.jsonl"
+        raw_bytes = b'{"event":"environmental_chemistry_header"}\\n'
+        raw_path.write_bytes(raw_bytes)
+        configuration = {
+            "seed": seed,
+            "active_elements": (["Carbon", "Hydrogen", "Oxygen"]
+                                if config_hash.startswith("c") else ["Carbon", "Hydrogen"]),
+        }
+        canonical_configuration = json.dumps(configuration, separators=(",", ":"))
         manifest = {
+            "schema": "evosim.experiment_manifest",
             "schema_version": 1,
             "experiment": {"experiment_id": "EXP-2026-999", "research_plan": "OBS-001",
-                           "condition_id": "baseline"},
-            "provenance": {"commit_sha": "deadbeef"},
-            "run": {"status": "completed", "actual_elapsed_wall_seconds": 60.1,
+                           "condition_id": "baseline", "seed": seed},
+            "build": {"commit_sha": "deadbeef"},
+            "run": {"status": "completed", "started_at_unix_ms": 1000,
+                    "completed_at_unix_ms": 61000, "actual_elapsed_wall_seconds": 60.1,
                     "start_tick": 0, "end_tick": 600},
-            "conditions": {"configuration_sha256": config_hash,
-                           "configuration": {"active_elements": ["Carbon", "Hydrogen"]}},
-            "artifacts": [{"role": "raw_observation", "sha256": "b" * 64, "size_bytes": 1234}],
+            "conditions": {
+                "configuration_schema_version": 1,
+                "configuration_sha256": hashlib.sha256(canonical_configuration.encode()).hexdigest(),
+                "configuration_canonical_json": canonical_configuration,
+                "configuration": configuration,
+            },
+            "artifacts": [{
+                "role": "raw_observation", "path": raw_path.name,
+                "sha256": hashlib.sha256(raw_bytes).hexdigest(), "size_bytes": len(raw_bytes),
+            }],
+            "quality": {"warnings": []},
         }
         return (
             self.write(f"chemistry-{seed}.json", chemistry),
