@@ -934,9 +934,8 @@ impl Simulation {
         self.organisms = dormant_organisms;
         self.active_transformations = dormant_transformations;
         self.decomposing_bodies = dormant_decomposing_bodies;
-        // The chemistry-only tick reconciles the field while the dormant
-        // holders are detached. Restore their unchanged inventories afterward.
-        self.reconcile_energy_inventory_holders();
+        // Reconcile once, after the environmental tick and after every dormant
+        // holder has been restored to the authoritative inventory.
     }
 
     fn step_environmental_chemistry_with_transport_reuse<
@@ -1488,7 +1487,6 @@ impl Simulation {
         // reproduction, survival, and dead-holder release are intentionally
         // absent from the chemistry tick. Their implementations remain
         // available for later redesign against universal material ownership.
-        self.reconcile_energy_inventory_holders();
         self.environmental_chemistry_diagnostics
             .accumulation_entries = self.chemical_reaction_accumulation.len();
 
