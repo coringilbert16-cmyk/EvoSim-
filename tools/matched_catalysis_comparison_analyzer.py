@@ -100,6 +100,7 @@ def _load_seed(path: Path, expected_seed: int, expected_condition: str,
     if not metadata.get("all_non_candidate_molecule_geometry_unchanged"):
         raise ValueError(f"seed {expected_seed}: setup moved molecules other than the candidate")
 
+    target_ids = tuple(sorted((target_a_id, target_b_id)))
     target_committed_events = []
     target_rejected_events = []
     target_kind_counts = {"COMBINE": 0, "DISPLACEMENT": 0}
@@ -110,7 +111,8 @@ def _load_seed(path: Path, expected_seed: int, expected_condition: str,
         reaction_kind = event.get("reaction")
         if reaction_kind not in target_kind_counts:
             continue
-        if _target_pair_key(event.get("source_materials")) != target_pair:
+        source_ids = event.get("source_material_ids") or []
+        if tuple(sorted(int(identity) for identity in source_ids)) != target_ids:
             continue
         if event.get("outcome") == "committed":
             target_committed_events.append(event)
@@ -129,6 +131,12 @@ def _load_seed(path: Path, expected_seed: int, expected_condition: str,
                 if not isinstance(sample, dict):
                     continue
                 source_ids = [sample.get("source_a_identity"), sample.get("source_b_identity")]
+                try:
+                    exact_source_ids = tuple(sorted(int(identity) for identity in source_ids))
+                except (TypeError, ValueError):
+                    continue
+                if exact_source_ids != target_ids:
+                    continue
                 try:
                     composition_pair = tuple(sorted((identity_parts[int(source_ids[0])], identity_parts[int(source_ids[1])])))
                 except (KeyError, TypeError, ValueError, IndexError):
@@ -185,6 +193,8 @@ def analyze(near_dir: Path, remote_dir: Path, seeds: list[int],
     if target_a is None or target_b is None:
         raise ValueError("target reactant part lists must contain valid element names")
     target_pair = tuple(sorted((target_a, target_b)))
+    if target_a == target_b:
+        raise ValueError("target reactant compositions must be different")
 
     paired_rows = []
     for seed in seeds:
