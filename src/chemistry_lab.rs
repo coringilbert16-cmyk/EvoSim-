@@ -461,6 +461,73 @@ impl Laboratory {
             let catalog = &self.simulation.environment.catalog;
             let physical = PhysicalMaterial::realized(material, placements, catalog)
                 .ok_or("physical realization or bond geometry validation failed")?;
+            let candidate_placements = physical
+                .placements
+                .as_ref()
+                .ok_or("realized material has no constituent placements")?;
+            let candidate_shapes = physical
+                .realized_shapes_for_parts(catalog)
+                .ok_or("realized material has invalid constituent geometry")?;
+            let candidate_parts = candidate_placements
+                .iter()
+                .copied()
+                .zip(candidate_shapes)
+                .enumerate()
+                .map(|(part_index, (placement, shape))| {
+                    crate::material_geometry::PlacedMaterialPart {
+                        part_index,
+                        form: shape.form,
+                        placement,
+                    }
+                })
+                .collect::<Vec<_>>();
+            for candidate_part in &candidate_parts {
+                let radius = candidate_part.form.bounding_radius();
+                if !radius.is_finite()
+                    || radius < 0.0
+                    || candidate_part.placement.x - radius < 0.0
+                    || candidate_part.placement.x + radius > self.config.width
+                    || candidate_part.placement.y - radius < 0.0
+                    || candidate_part.placement.y + radius > self.config.height
+                {
+                    return Err("material geometry must remain inside laboratory bounds");
+                }
+            }
+            let field = &self.simulation.environment.field;
+            for existing in field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+            {
+                if !existing.is_realized() {
+                    return Err("existing material has invalid physical geometry");
+                }
+                let existing_placements = existing
+                    .placements
+                    .as_ref()
+                    .ok_or("existing material has no constituent placements")?;
+                let existing_shapes = existing
+                    .realized_shapes_for_parts(catalog)
+                    .ok_or("existing material has invalid constituent geometry")?;
+                for (part_index, (placement, shape)) in
+                    existing_placements.iter().copied().zip(existing_shapes).enumerate()
+                {
+                    let existing_part = crate::material_geometry::PlacedMaterialPart {
+                        part_index,
+                        form: shape.form,
+                        placement,
+                    };
+                    if candidate_parts.iter().any(|candidate_part| {
+                        crate::material_geometry::placed_forms_penetrate(
+                            candidate_part,
+                            &existing_part,
+                            crate::material_geometry::GEOMETRY_EPSILON,
+                        )
+                    }) {
+                        return Err("material placement would penetrate existing material");
+                    }
+                }
+            }
             let field = &mut self.simulation.environment.field;
             if !field.deposit_physical(x, y, physical, catalog) {
                 return Err("environment rejected material");
@@ -1095,6 +1162,19 @@ mod tests {
                 .is_balanced_without_creation(1e-9),
             "pre-placed bond potential belongs to the tick-zero initial condition"
         );
+    }
+
+    #[test]
+    fn laboratory_rejects_overlapping_initial_material_placement_atomically() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        laboratory
+            .place_element("Carbon", 20.0, 20.0)
+            .expect("first carbon placement");
+        assert!(laboratory.place_element("Carbon", 20.0, 20.0).is_err());
+        let snapshot = laboratory.snapshot();
+        assert_eq!(snapshot.material_count, 1);
+        assert_eq!(snapshot.materials[0].parts, vec![("Carbon".to_string(), 1.0)]);
     }
 
     #[test]
