@@ -766,6 +766,103 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
 /// Build one arm of a paired facilitator-placement comparison. Both arms use
 /// the exact same seed and initial inventory; only the configured candidate
 /// molecule is translated after the deterministic tick-zero fixture is built.
+fn material_by_identity(
+    simulation: &Simulation,
+    identity: u64,
+) -> Option<&PhysicalMaterial> {
+    let mut matches = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| material.environmental_identity == identity);
+    let material = matches.next()?;
+    matches.next().is_none().then_some(material)
+}
+
+/// Tick-zero exposure diagnostics use the same production transport sampler
+/// and the live source models. These are measurements, not a claim that a
+/// near/remote pair is matched over a complete run.
+fn material_local_exposure(
+    simulation: &Simulation,
+    identity: u64,
+) -> Result<serde_json::Value, String> {
+    let material = material_by_identity(simulation, identity)
+        .ok_or_else(|| format!("material identity {identity} is missing or duplicated"))?;
+    let placements = material
+        .placements
+        .as_ref()
+        .filter(|placements| !placements.is_empty() && placements.len() == material.material.parts.len())
+        .ok_or_else(|| format!("material identity {identity} has incomplete geometry"))?;
+    let flow = crate::environment_flow::material_flow_velocity_samples(
+        &simulation.environment.field,
+        &simulation.environment.catalog,
+        identity,
+        simulation.environment.width,
+        simulation.environment.height,
+    )
+    .ok_or_else(|| format!("flow exposure unavailable for material identity {identity}"))?;
+    let hotspot = simulation
+        .hotspot
+        .ok_or_else(|| "localized hotspot source is unavailable".to_string())?;
+    let hotspot_intensity = placements
+        .iter()
+        .map(|placement| {
+            hotspot
+                .intensity_at(placement.x, placement.y)
+                .ok_or_else(|| format!("hotspot exposure invalid for material identity {identity}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let flow_json = flow
+        .iter()
+        .map(|(vx, vy)| serde_json::json!({"vx": vx, "vy": vy, "speed": vx.hypot(*vy)}))
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "constituent_positions": placements.iter().map(|p| serde_json::json!({"x": p.x, "y": p.y})).collect::<Vec<_>>(),
+        "flow_velocity": flow_json,
+        "hotspot_intensity_per_tick_per_area": hotspot_intensity,
+    }))
+}
+
+fn world_tone_exposure(simulation: &Simulation) -> Result<serde_json::Value, String> {
+    let sample = simulation
+        .world_tone_cycle
+        .as_ref()
+        .and_then(|cycle| cycle.sample(0))
+        .ok_or_else(|| "world-tone source sample unavailable at tick zero".to_string())?;
+    Ok(serde_json::json!({
+        "source_x": sample.source_x,
+        "source_y": sample.source_y,
+        "frequency_cycles_per_day": sample.frequency_cycles_per_day,
+        "energy_intensity_per_tick_per_width": sample.energy_intensity_per_tick_per_width,
+        "orbital_phase": sample.orbital_phase,
+        "recipient_semantics": "uniform_per_constituent_source_width; independent of material position",
+    }))
+}
+
+fn candidate_resonance_contribution(
+    simulation: &Simulation,
+    candidate_id: u64,
+    target_id: u64,
+) -> Result<Vec<f64>, String> {
+    let candidate = material_by_identity(simulation, candidate_id)
+        .ok_or_else(|| format!("candidate identity {candidate_id} is missing or duplicated"))?;
+    let target = material_by_identity(simulation, target_id)
+        .ok_or_else(|| format!("target identity {target_id} is missing or duplicated"))?;
+    let receptions = crate::harmonics::material_aura_receptions(
+        candidate,
+        target,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+    .ok_or_else(|| "legacy pairwise candidate-to-target resonance sample unavailable".to_string())?;
+    if receptions.iter().any(|sample| !sample.magnitude.is_finite()) {
+        return Err("legacy pairwise resonance sample is non-finite".to_string());
+    }
+    Ok(receptions.iter().map(|sample| sample.magnitude).collect())
+}
+
 pub(crate) fn build_matched(
     seed: u64,
     config: &MatchedCatalysisConfig,
