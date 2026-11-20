@@ -1,6 +1,6 @@
 # EXP-2026-005 — PLAN-004 paired resource-feed experiment
 
-**Status:** All ten observations complete. Five-pair chemistry/organization comparison recovered from retained artifacts; full specialist-analyzer aggregation pending. See the [five-pair recovery report](2026-11-20-plan-004-five-pair-recovery.md).
+**Status:** All ten observations and the full specialist-analyzer reaggregation completed from retained artifacts; scientific result is inconclusive for a positive feed effect. See the [five-pair recovery report](2026-11-20-plan-004-five-pair-recovery.md) and [analysis-only recovery run #44833658626](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44833658626).
 
 **GitHub Actions:** [Run #44784506988](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44784506988).
 
@@ -113,7 +113,7 @@ The organization indicators also disagree between seeds. The extra active materi
 
 ## Final result
 
-Pending completion and analysis of all five matched seed pairs.
+All five matched pairs are now represented in the retained per-seed reports and the full specialist aggregate artifact from recovery run #44833658626. The recovered comparison remains inconclusive for a positive resource-feed effect. The experiment's scientific status and interpretation are recorded in the five-pair recovery report; no new simulation was run during aggregation.
 
 
 ## Five-pair observation closeout
@@ -122,4 +122,4 @@ All ten observation jobs (five seeds × two arms) completed successfully. The ag
 
 The retained per-seed chemistry and organization reports were independently recovered and compared across all five pairs. The direction of the committed-reaction rate was lower in feed for three seeds and higher for two; the mean paired difference was -4.02 committed reactions per 1,000 observed ticks. Recurrent-family counts were lower in feed for four seeds and higher for one. These data do not support a consistent positive resource-feed effect. See the [five-pair recovery report](2026-11-20-plan-004-five-pair-recovery.md) for the full table, feed-pulse verification, limits, and recovery details.
 
-**Updated status:** observation complete; partial five-pair analysis recovered; complete network/contact/temporal aggregation still pending. Do not repeat the ten one-hour simulations to fix the aggregation defect.
+**Updated status:** observations and full batch, reaction-network, geometry-aware, contact-opportunity, and temporal-complexity analysis completed. The recovered report artifact is `plan004-resource-feed-combined` (run #44833658626, artifact ID 14676499429; 90-day retention). No observation was repeated.
