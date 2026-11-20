@@ -2,11 +2,11 @@
 
 These plans define questions and evidence standards, not claims that the behaviors already exist. The research objective is to discover naturally arising organization in the general chemistry engine. No plan authorizes special-case reactions, organism-specific logic, forced reactions, artificial energy grants, or threshold changes.
 
-The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 is now in progress.
+The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLAN-001 artifact analysis is complete; subsequent work must use the archived findings rather than repeat the generic baseline.
 
 ## PLAN-001 — Existing pathway and molecular-lineage analysis
 
-**Status:** In progress; existing-artifact analysis only.
+**Status:** Completed for EXP-2026-004; existing-artifact analysis only.
 
 **Question:** Which instance-level reaction sequences demonstrate reusable intermediates, reversible transformations, multistep synthesis, or plausible facilitation?
 
@@ -26,7 +26,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-002 — Catalytic facilitation
 
-**Status:** Planned; depends on PLAN-001 identifying a defensible candidate.
+**Status:** Infrastructure implementation in progress; experiment remains blocked pending a defensible candidate and a valid exposure-matched control.
 
 **Question:** Does a molecule increase the likelihood or rate of a reaction while remaining chemically available, rather than being consumed as a reactant?
 
@@ -40,7 +40,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 **Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed in a reaction and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
 
-**Infrastructure prerequisite:** the current environmental workflow runs one fixed baseline condition and has no paired facilitator control. Comparative setup execution and comparable opportunity diagnostics must be implemented or supplied by a suitable laboratory workflow before a controlled run.
+**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, an offline comparison analyzer, and a manual-only GitHub Actions workflow. Automated analyzer tests and CI validation remain pending.
+
+**Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only and is not an approved candidate. The initial paired setup translates the candidate molecule, which can also change its local flow, resonance, and hotspot exposure. Therefore the first paired workflow is only a placement-screening capability; it is not an exposure-matched causal test. Do not run it as a catalytic experiment until candidate selection and field/flow exposure controls are justified.
 
 ## PLAN-003 — Autocatalysis
 
@@ -109,9 +111,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## Research sequence
 
-1. Complete PLAN-001 from EXP-2026-004 artifacts; do not repeat the generic baseline.
+1. Complete PLAN-001 from EXP-2026-004 artifacts; this is complete for the current dataset, so do not repeat the generic baseline.
 2. Select the strongest instance-level pathways and distinguish reusable substrates from possible facilitators.
-3. Build the minimum controlled-comparison capability needed for PLAN-002.
+3. Finish and validate the PLAN-002 comparison infrastructure, then resolve spatial-field and flow exposure confounds before selecting or running a candidate.
 4. Test autocatalysis only if a plausible self-production mechanism emerges.
 5. Evaluate pseudo-metabolism after repeated pathway turnover and regeneration are demonstrated.
 6. Investigate cross-catalysis after individual facilitation is operationally established.
