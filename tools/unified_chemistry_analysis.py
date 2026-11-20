@@ -92,7 +92,7 @@ def run_cached_stage(
     output_md = output_dir / f"seed-{seed}-{stage_id}.md"
     metadata_path = output_dir / f"seed-{seed}-{stage_id}.stage.json"
     analyzer_sha = sha256_file(script)
-    if stage_cache_valid(metadata_path, output_json, input_sha, analyzer_sha):
+    if output_md.is_file() and stage_cache_valid(metadata_path, output_json, input_sha, analyzer_sha):
         return {
             "stage": stage_id, "status": "cached", "analyzer": str(script.relative_to(ROOT)),
             "analyzer_sha256": analyzer_sha, "outputs": [str(output_json), str(output_md)],
@@ -195,6 +195,7 @@ def compose_report(index: dict[str, Any], batch_path: Path | None) -> str:
 def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
             include_heavy_contact: bool = False) -> dict[str, Any]:
     input_dir = input_dir.resolve()
+    output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     runs = [validate_run(input_dir, seed) for seed in seeds]
     experiment_id = research_plan = condition_id = None
@@ -256,6 +257,20 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
             "stage": "contact_opportunities", "status": "deferred_heavy",
             "reason": "Detailed sample CSV is opt-in due to potentially multi-gigabyte output; coverage/funnel counters remain in core chemistry reports.",
         })
+    # Store derived artifact paths relative to the index, with checksums for each
+    # completed output. This makes the index portable when the analysis folder moves.
+    for stage in stages:
+        portable_outputs = []
+        output_hashes = {}
+        for value in stage.get("outputs", []):
+            path = Path(value).resolve()
+            if path.is_file():
+                relative = str(path.relative_to(output_dir.resolve()))
+                portable_outputs.append(relative)
+                output_hashes[relative] = sha256_file(path)
+        stage["outputs"] = portable_outputs
+        if output_hashes:
+            stage["output_sha256"] = output_hashes
     index = {
         "schema": "evosim.unified_chemistry_analysis",
         "schema_version": 1,
