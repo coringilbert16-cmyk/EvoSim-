@@ -36,6 +36,7 @@ A record is emitted per independent seed plus one compact experiment-level compa
 6. Record any excluded seed and the exact incompatibility reason.
 7. The experiment-level record contains compact per-seed references and descriptive aggregates; it does not duplicate detailed per-seed payloads.
 8. Between-condition differences are descriptive only; retain per-seed values and do not infer causality or statistical significance from event counts.
+9. The same seed ID may appear in multiple conditions for a paired design; duplicate seed records within one condition are invalid. Report paired per-seed differences when matching seed IDs are available.
 
 ## Retention classes
 
