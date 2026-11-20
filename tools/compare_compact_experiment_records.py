@@ -78,6 +78,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             key: [numeric(row.get("energy", {}).get(key)) for row in records]
             for key in ("last_balance_residual", "maximum_absolute_snapshot_residual")
         },
+        "organization_by_seed": [row.get("organization") for row in records],
         "opportunity_coverage_by_seed": [
             row.get("opportunity_coverage") for row in records
         ],
