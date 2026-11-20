@@ -61,7 +61,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-004 — Pseudo-metabolism
 
-**Status:** Planned; depends on validated pathways and intermediate regeneration from PLAN-001, with relevant facilitation/self-production tests from PLAN-002/003 where applicable.
+**Status:** In progress — exact-instance multistep lineage trace completed; resource-fed persistence experiment blocked by missing timed resource-input capability.
 
 **Question:** Can a connected chemical network repeatedly transform environmental resources, turn over intermediates, and regenerate compounds needed by earlier stages?
 
@@ -74,6 +74,12 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 - Evidence that persistence follows from general chemistry and environmental physics, not an organism-specific controller.
 
 **Initial candidates:** H–O–P ⇌ H + O–P and N–O–P ⇌ N + O–P are candidate reversible intermediate transformations. They are not yet metabolism.
+
+**Current evidence (2026-11-20):** The EXP-2026-004 artifact screen found recurrent family-level turnover and three H–O–P / sulfur association-dissociation sequences. A deeper exact-instance trace identified an eight-event connected sequence in seed 45 (ticks 13,639–20,850) in which O–P₂ is transformed through N–O–P₂ and C–O branches and regenerated as new O–P₂ identities. This establishes connected multistage chemistry and family/state regeneration with identity turnover, not pseudo-metabolism. See [initial screen](../results/2026-11-20-plan-004-006-initial-screens.md) and [exact-instance lineage trace](../results/2026-11-20-plan-004-lineage-trace.md).
+
+**Critical limitation:** EXP-2026-004 used a finite starting inventory and no recurrent external resource input. Its energy validation is run-level, not pathway-specific. The standard experiment runner builds a fixed initial state and exposes no timed resource-feed option or matched no-feed arm.
+
+**Next step:** design a paired experiment with identical initial inventories and seeds: existing no-feed control versus ordinary chemistry with a predeclared deterministic schedule adding only free base resources. Keep all existing diagnostics unchanged. Declare elemental composition, feed quantity, and timing before execution; analyze connected pathway persistence, intermediate turnover, elemental inventory, and whole-run energy/heat/losses. The timed environmental input and paired-arm runner are a new experiment capability. No such code change or simulation has been started.
 
 ## PLAN-005 — Cross-catalysis and cooperative chemical networks
 
@@ -107,14 +113,16 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 **Infrastructure prerequisite:** the current lab exposes flow and source controls and supports deterministic tick-zero placement, but does not provide automated matched multi-condition runs. The existing environmental workflow is baseline-only. Build the comparison and spatial-diagnostic capability before interpreting a spatial intervention experiment.
 
+**Current status (2026-11-20):** A descriptive baseline screen of EXP-2026-004 geometry is complete. Of 4,305 committed events, 2,811 have complete participant geometry; those events show a possible spatial concentration, but substantial seed-to-seed variation. The data lack complete local opportunity denominators and matched environmental conditions, so causal spatial organization and exposure-normalized rates cannot be inferred. See [PLAN-006 initial screen](../results/2026-11-20-plan-004-006-initial-screens.md).
+
 ## Research sequence
 
 1. Complete PLAN-001 from EXP-2026-004 artifacts; do not repeat the generic baseline.
 2. Select the strongest instance-level pathways and distinguish reusable substrates from possible facilitators.
 3. Build the minimum controlled-comparison capability needed for PLAN-002.
 4. Test autocatalysis only if a plausible self-production mechanism emerges.
-5. Evaluate pseudo-metabolism after repeated pathway turnover and regeneration are demonstrated.
+5. Continue PLAN-004 with a paired resource-feed experiment once its input schedule and execution capability are explicitly designed and approved.
 6. Investigate cross-catalysis after individual facilitation is operationally established.
-7. Pursue spatial organization once spatially resolved opportunity and rate comparisons are available.
+7. Use the PLAN-006 baseline spatial concentration as a hypothesis only; pursue causal spatial comparisons only when matched conditions and adequate local opportunity denominators are available.
 
 All future experiments must be registered before execution and receive a dedicated result record at closeout. Plans do not authorize simulator behavior changes; implementation requires a separate explicit design decision and approval.
