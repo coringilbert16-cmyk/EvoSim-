@@ -36,6 +36,7 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
+      should_run: ${{ steps.parameters.outputs.should_run }}
       seeds: ${{ steps.parameters.outputs.seeds }}
       duration_seconds: ${{ steps.parameters.outputs.duration_seconds }}
       analysis_only: ${{ steps.parameters.outputs.analysis_only }}
@@ -60,7 +61,12 @@ jobs:
               with open("experiments/plan-004-run.json", encoding="utf-8") as source:
                   config = json.load(source)
               if config.get("run") is not True:
-                  raise SystemExit("PLAN-004 run request is inactive.")
+                  with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                      output.write("should_run=false" + chr(10))
+                      output.write("analysis_only=false" + chr(10))
+                      output.write("source_run_id=" + chr(10))
+                  print("PLAN-004 request is inactive; no simulation or analysis jobs launched.")
+                  raise SystemExit(0)
               seeds = config.get("seeds", [])
               duration = int(config.get("duration_seconds", 0))
               analysis_only = bool(config.get("analysis_only", False))
@@ -85,6 +91,7 @@ jobs:
           elif source_run_id:
               raise SystemExit("source_run_id is only valid when analysis_only is true.")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("should_run=true" + chr(10))
               output.write("seeds=" + json.dumps(seeds) + chr(10))
               output.write("duration_seconds=3600" + chr(10))
               output.write("analysis_only=" + str(analysis_only).lower() + chr(10))
@@ -93,7 +100,7 @@ jobs:
           PY
 
   observe:
-    if: needs.prepare.outputs.analysis_only != 'true'
+    if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.analysis_only != 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -149,7 +156,7 @@ jobs:
           retention-days: 30
 
   aggregate:
-    if: ${{ always() && needs.prepare.result == 'success' && (needs.observe.result == 'success' || needs.prepare.outputs.analysis_only == 'true') }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.should_run == 'true' && (needs.observe.result == 'success' || needs.prepare.outputs.analysis_only == 'true') }}
     needs: [prepare, observe]
     runs-on: ubuntu-latest
     steps:
