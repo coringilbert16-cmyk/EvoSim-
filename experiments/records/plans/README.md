@@ -2,11 +2,11 @@
 
 These plans define questions and evidence standards, not claims that the behaviors already exist. The objective is to discover naturally arising organization in the general chemistry engine. No plan authorizes special-case reactions, organism-specific logic, forced reactions, artificial energy grants, or threshold changes.
 
-The EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 is in progress.
+The EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 artifact analysis is complete; no new simulation was required.
 
 ## PLAN-001 — Existing pathway and molecular-lineage analysis
 
-**Status:** In progress; existing-artifact analysis only.
+**Status:** Completed for EXP-2026-004 artifact analysis; no new simulation.
 
 **Question:** Which instance-level reaction sequences demonstrate reusable intermediates, reversible transformations, multistep synthesis, or plausible facilitation?
 
@@ -22,7 +22,7 @@ The EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze reta
 
 ## PLAN-002 — Catalytic facilitation
 
-**Status:** Planned; depends on PLAN-001 identifying a defensible candidate.
+**Status:** Planned; blocked pending a defensible facilitator candidate and local-neighborhood/opportunity diagnostics. PLAN-001 found reusable pathway intermediates but no evidence identifying a molecule that facilitates a separate reaction while remaining available.
 
 **Question:** Does a molecule increase the likelihood or rate of a reaction while remaining chemically available, rather than being consumed as a reactant?
 
