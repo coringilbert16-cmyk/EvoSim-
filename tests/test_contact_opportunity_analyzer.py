@@ -6,45 +6,126 @@ from pathlib import Path
 from tools.contact_opportunity_analyzer import analyze
 
 
+def write_tick(root: Path, reaction_work: dict) -> dict:
+    row = {
+        "event": "environmental_chemistry_tick",
+        "tick": 10,
+        "reaction_work": reaction_work,
+    }
+    (root / "seed-42.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    return row
+
+
 class ContactOpportunityAnalyzerTests(unittest.TestCase):
-    def test_aggregates_broad_phase_to_reaction_funnel(self):
+    def test_aggregates_bounded_combine_search_as_partial(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            row = {
-                "event": "environmental_chemistry_tick",
-                "tick": 10,
-                "reaction_work": {
-                    "combine_search": {
-                        "constituent_pairs_available": 12,
-                        "constituent_pairs_inspected": 10,
-                        "constituent_pairs_uninspected_by_window": 2,
-                        "constituent_pairs_with_valid_interfaces": 4,
-                        "constituent_pairs_without_valid_interfaces": 6,
-                        "physically_evaluable_interfaces": 5,
-                        "endpoint_pair_candidates_generated": 7,
-                        "endpoint_pair_candidates_rejected_by_evaluation": 2,
-                        "interfaces_sent_to_chemistry": 5,
-                        "budget_exhausted": True,
-                    },
-                    "combine_ready_candidates": 1,
-                    "combine_scheduled": 1,
-                    "combine_committed": 1,
+            write_tick(root, {
+                "combine_search": {
+                    "constituent_pairs_available": 12,
+                    "constituent_pairs_inspected": 10,
+                    "constituent_pairs_uninspected_by_window": 2,
+                    "constituent_pairs_with_valid_interfaces": 4,
+                    "constituent_pairs_without_valid_interfaces": 6,
+                    "physically_evaluable_interfaces": 5,
+                    "endpoint_pair_candidates_generated": 7,
+                    "endpoint_pair_candidates_rejected_by_evaluation": 2,
+                    "interfaces_sent_to_chemistry": 5,
+                    "budget_exhausted": True,
                 },
-            }
-            (root / "seed-42.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
-            report = analyze(root, [42], 1500)
+                "combine_ready_candidates": 1,
+                "combine_scheduled": 1,
+                "combine_committed": 1,
+            })
+            report = analyze(root, [42], 60)
 
         self.assertEqual(report["pooled_totals"]["constituent_pairs_available"], 12)
         self.assertEqual(report["pooled_totals"]["constituent_pairs_without_valid_interfaces"], 6)
         self.assertEqual(report["pooled_totals"]["endpoint_pair_candidates_rejected_by_evaluation"], 2)
         self.assertEqual(report["pooled_totals"]["combine_committed"], 1)
         self.assertEqual(report["conversion"]["inspected_pairs_with_valid_interfaces"], 4)
-        self.assertEqual(report["tick_diagnostics"][0]["discovery_budget_exhausted"], True)
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["combine"]["state"], "partial")
+
+    def test_complete_combine_search_requires_reconciled_counters_and_budget_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"combine_search": {
+                "constituent_pairs_available": 0,
+                "constituent_pairs_inspected": 0,
+                "constituent_pairs_uninspected_by_window": 0,
+                "budget_exhausted": False,
+            }})
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["combine"]["state"], "complete")
+        self.assertEqual(report["pooled_totals"]["constituent_pairs_available"], 0)
+        self.assertIsNone(report["conversion"]["valid_interface_fraction_of_inspected_pairs"])
+
+    def test_missing_legacy_fields_remain_unknown_not_zero(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"combine_search": {"budget_exhausted": False}})
+            report = analyze(root, [42], 60)
+
+        self.assertIsNone(report["tick_diagnostics"][0]["constituent_pairs_available"])
+        self.assertIsNone(report["pooled_totals"]["constituent_pairs_available"])
+        self.assertEqual(report["pooled_known_subtotals"]["constituent_pairs_available"], 0)
+        self.assertEqual(report["missing_tick_counts"]["constituent_pairs_available"], 1)
+        self.assertIsNone(report["conversion"]["valid_interface_fraction_of_inspected_pairs"])
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["combine"]["state"], "unknown")
+
+    def test_break_coverage_uses_complete_bond_index_domain(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"break_discovery": {
+                "scan_entries_inspected": 300,
+                "bond_candidates_inspected": 300,
+                "bond_candidates_checked": 298,
+            }})
+            report = analyze(root, [42], 60)
+
+        coverage = report["tick_diagnostics"][0]["coverage"]["break"]
+        self.assertEqual(coverage["state"], "complete")
+        self.assertEqual(coverage["domain_count"], 300)
+
+    def test_break_mismatch_cannot_claim_complete_coverage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"break_discovery": {
+                "scan_entries_inspected": 300,
+                "bond_candidates_inspected": 299,
+            }})
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["break"]["state"], "unknown")
+
+    def test_displacement_budget_exhaustion_is_partial_not_complete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {
+                "displacement_discovery": {
+                    "replacement_contact_searches": 4,
+                    "replacement_contacts_found": 0,
+                },
+                "displacement_discovery_work_remaining": 0,
+            })
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "partial")
+        self.assertEqual(report["pooled_totals"]["replacement_contacts_found"], 0)
+
+    def test_displacement_with_remaining_budget_is_still_unknown(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"displacement_discovery_work_remaining": 7})
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "unknown")
 
     def test_missing_seed_artifact_fails_clearly(self):
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(ValueError, "missing raw observation"):
-                analyze(Path(temporary), [42], 1500)
+                analyze(Path(temporary), [42], 60)
 
 
 if __name__ == "__main__":
