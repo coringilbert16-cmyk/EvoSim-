@@ -174,6 +174,9 @@ class ChemistryAnalyzerTests(unittest.TestCase):
              "molecule_id": 1, "reaction": "COMBINE", "molecule": carbon},
             {"event": "molecular_lifecycle", "action": "destroyed", "tick": 1,
              "molecule_id": 2, "reaction": "COMBINE", "molecule": hydrogen},
+            {"event": "molecular_lifecycle", "action": "created", "tick": 2,
+             "molecule_id": 4, "parent_ids": [], "reaction_id": "resource-feed-pulse-1",
+             "reaction": "INITIAL", "external_source": True, "molecule": carbon},
         ])
         attribution = analyze(records)["reactions"]["elemental_bond_pairs"]
         self.assertEqual(attribution["initial_bond_inventory"]["Carbon-Hydrogen"], 0)
@@ -182,7 +185,7 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(attribution["reaction_delta"]["Carbon-Hydrogen"], 1)
         self.assertTrue(attribution["inventory_reconciliation"]["matches"])
         self.assertEqual(attribution["inventory_reconciliation"]["initial_lifecycle_material_count"], 2)
-        self.assertEqual(attribution["inventory_reconciliation"]["final_lifecycle_material_count"], 1)
+        self.assertEqual(attribution["inventory_reconciliation"]["final_lifecycle_material_count"], 2)
         self.assertEqual(attribution["inventory_reconciliation"]["mismatches"], {})
 
     def test_bond_pair_inventory_reconciliation_is_not_claimed_without_lifecycle_data(self):
