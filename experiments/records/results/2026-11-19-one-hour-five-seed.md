@@ -1,7 +1,5 @@
 # EXP-2026-004 — Five-seed one-hour environmental chemistry observation
 
-<text omitted>
-
 ## Run identity
 
 - Date: 2026-11-19
