@@ -3,14 +3,9 @@
   "experiment_id": "EXP-2026-005",
   "research_plan": "PLAN-004",
   "condition_id": "paired-resource-feed",
-  "seeds": [
-    42,
-    43,
-    44,
-    45,
-    46
-  ],
+  "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 3600,
   "analysis_only": false,
-  "source_run_id": ""
+  "source_run_id": "",
+  "note": "All observations and aggregation completed; request intentionally inactive."
 }
