@@ -40,7 +40,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. PLA
 
 **Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed in a reaction and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
 
-**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, an offline comparison analyzer, and a manual-only GitHub Actions workflow. Automated analyzer tests and CI validation remain pending.
+**Infrastructure progress:** PR #392 adds bounded local-neighborhood telemetry, reaction-source traceability, paired candidate-near/remote fixture construction, an offline comparison analyzer, and a manual-only GitHub Actions workflow. Automated analyzer tests are implemented and included in routine Rust CI; full validation remains pending.
 
 **Current experimental blocker:** no facilitator candidate has been scientifically selected. The checked-in example configuration is illustrative only and is not an approved candidate. The initial paired setup translates the candidate molecule, which can also change its local flow, resonance, and hotspot exposure. Therefore the first paired workflow is only a placement-screening capability; it is not an exposure-matched causal test. Do not run it as a catalytic experiment until candidate selection and field/flow exposure controls are justified.
 
