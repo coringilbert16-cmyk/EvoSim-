@@ -55,6 +55,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   prepare:
@@ -201,14 +202,26 @@ jobs:
           SEED: ${{ matrix.seed }}
         run: |
           python3 tools/chemistry_organization_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-organization.json" --markdown-out "observations/seed-$SEED-organization.md"
-      - name: Upload raw observation and per-seed analysis
+      - name: Build compact permanent experiment record
+        if: always() && hashFiles('observations/seed-*.jsonl') != ''
+        env:
+          SEED: ${{ matrix.seed }}
+        run: |
+          set -euo pipefail
+          python3 tools/compact_experiment_record.py \
+            --seed "$SEED" \
+            --chemistry "observations/seed-$SEED-chemistry.json" \
+            --organization "observations/seed-$SEED-organization.json" \
+            --manifest "observations/seed-$SEED.jsonl.manifest.json" \
+            --output "observations/seed-$SEED-record.json"
+      - name: Upload temporary source data for aggregation
         if: always() && hashFiles('observations/seed-*.jsonl') != ''
         uses: actions/upload-artifact@v4
         with:
           name: chemistry-observation-seed-${{ matrix.seed }}
           path: observations/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   aggregate:
     if: needs.prepare.outputs.should_run == 'true'
@@ -222,31 +235,57 @@ jobs:
           pattern: chemistry-observation-seed-*
           path: observations
           merge-multiple: true
-      - name: Build pooled chemistry and molecular-development report
+      - name: Compare compact per-seed records
+        env:
+          SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
+        run: |
+          set -euo pipefail
+          mkdir -p compact-records
+          RECORD_ARGS=()
+          IFS=',' read -ra SEED_LIST <<< "$SEEDS"
+          for SEED in "${SEED_LIST[@]}"; do
+            cp "observations/seed-$SEED-record.json" compact-records/
+            RECORD_ARGS+=("compact-records/seed-$SEED-record.json")
+          done
+          python3 tools/compare_compact_experiment_records.py "${RECORD_ARGS[@]}" --output compact-record-comparison.json
+      - name: Run explicitly requested deep analyses
+        if: needs.prepare.outputs.deep_diagnostics == 'true'
         env:
           SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
           set -euo pipefail
-          python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
-          python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
-          python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
-          if [[ "${{ needs.prepare.outputs.deep_diagnostics }}" == "true" ]]; then
-            python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
-          else
-            echo "Detailed contact-opportunity analysis skipped (deep diagnostics disabled)."
-          fi
-          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir temporal-chemical-complexity
-      - name: Upload combined experiment report
+          python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir deep/reaction-network
+          python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir deep/geometry-aware-network
+          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir deep/contact-opportunities
+          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir deep/temporal-chemical-complexity
+      - name: Upload permanent compact comparison record
         uses: actions/upload-artifact@v4
         with:
-          name: chemistry-experiment-combined
+          name: chemistry-experiment-compact-records
           path: |
-            chemistry-experiment-combined.json
-            chemistry-experiment-combined.md
-            reaction-network/
-            geometry-aware-network/
-            contact-opportunities/
-            temporal-chemical-complexity/
+            compact-records/
+            compact-record-comparison.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
+      - name: Upload temporary deep analysis
+        if: needs.prepare.outputs.deep_diagnostics == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chemistry-experiment-deep-temporary
+          path: deep/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Delete temporary source artifacts
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("chemistry-observation-seed-")) | .id' |
+          while read -r ARTIFACT_ID; do
+            [[ -n "$ARTIFACT_ID" ]] || continue
+            gh api --method DELETE "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID"
+          done
+          rm -rf observations deep
