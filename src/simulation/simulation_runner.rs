@@ -12,6 +12,8 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
+    let mut matched_catalysis_config_path: Option<String> = None;
+    let mut matched_catalysis_condition: Option<String> = None;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -48,6 +50,12 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(REPORT_INTERVAL);
             }
+            "--matched-catalysis-config" => {
+                matched_catalysis_config_path = args.next();
+            }
+            "--matched-catalysis-condition" => {
+                matched_catalysis_condition = args.next();
+            }
             _ => {}
         }
     }
@@ -58,6 +66,32 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         } else {
             24_000
         };
+        let matched_setup = match (
+            matched_catalysis_config_path.as_deref(),
+            matched_catalysis_condition.as_deref(),
+        ) {
+            (None, None) => None,
+            (Some(config_path), Some(condition)) => {
+                let contents = std::fs::read_to_string(config_path).unwrap_or_else(|error| {
+                    panic!("failed to read matched-catalysis config {config_path}: {error}")
+                });
+                let config = serde_json::from_str::<
+                    crate::environment_chemistry_experiment::MatchedCatalysisConfig,
+                >(&contents)
+                .unwrap_or_else(|error| {
+                    panic!("invalid matched-catalysis config {config_path}: {error}")
+                });
+                let condition =
+                    crate::environment_chemistry_experiment::MatchedCatalysisCondition::parse(
+                        condition,
+                    )
+                    .unwrap_or_else(|error| panic!("{error}"));
+                Some((config, condition))
+            }
+            _ => panic!(
+                "--matched-catalysis-config and --matched-catalysis-condition must be supplied together"
+            ),
+        };
         run_environment_chemistry_experiment(
             seed,
             ticks,
@@ -66,6 +100,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
             diagnostic_interval,
+            matched_setup,
         );
         return;
     }
@@ -143,8 +178,18 @@ fn run_environment_chemistry_experiment(
     duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
+    matched_setup: Option<(
+        crate::environment_chemistry_experiment::MatchedCatalysisConfig,
+        crate::environment_chemistry_experiment::MatchedCatalysisCondition,
+    )>,
 ) {
-    let fixture = crate::environment_chemistry_experiment::build(seed);
+    let fixture = match matched_setup.as_ref() {
+        Some((config, condition)) => {
+            crate::environment_chemistry_experiment::build_matched(seed, config, *condition)
+                .unwrap_or_else(|error| panic!("failed to build matched-catalysis fixture: {error}"))
+        }
+        None => crate::environment_chemistry_experiment::build(seed),
+    };
     let mut simulation = fixture.simulation;
     simulation.record_local_resonance_diagnostics = true;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
@@ -160,6 +205,13 @@ fn run_environment_chemistry_experiment(
     .unwrap_or_else(|error| {
         panic!("failed to create environmental chemistry diagnostics {diagnostics_path}: {error}")
     });
+    if let Some(metadata) = fixture.experiment_metadata.as_ref() {
+        diagnostics
+            .record_experiment_setup(metadata)
+            .unwrap_or_else(|error| {
+                panic!("failed to record matched-catalysis setup metadata: {error}")
+            });
+    }
 
     let (physical_objects, independent_resources, molecules, constituents) = simulation
         .environment
