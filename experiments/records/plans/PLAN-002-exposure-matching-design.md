@@ -25,6 +25,8 @@ A candidate may be nominated only with a traceable hypothesis that identifies:
 
 A candidate hypothesis is not evidence of facilitation.
 
+EXP-2026-006 adds one exact-instance follow-up trace: seed 45 H–S identity 1526 (created tick 3148; destroyed by BREAK at tick 4413) remained chemically unchanged while it was sampled near three same-pair/tick COMBINE commits at ticks 3639, 3944, and 4145. One commit formed a second H–S molecule from H+S, while the other two formed O–P and H–O. The candidate also appeared near three sampled opportunities without a same-pair/tick COMBINE commit. This is a specific, chemically available third-molecule hypothesis; it is not causal evidence. All events were in a right-boundary spatial cluster, so density, transport, and boundary effects remain plausible alternatives.
+
 **Supplemental observational screen (EXP-2026-006):** The five-seed neighborhood data show descriptive associations for nearby H–S, H–O, S–S, O–P, and several other families among bounded COMBINE opportunity samples. These families can be prioritized for a controlled follow-up hypothesis, but the data do not select a catalyst: local density, flow, hotspot exposure, resonance, and sample selection remain confounded. H–S remains an illustrative fixture, not a validated candidate.
 
 ## Required exposure controls
