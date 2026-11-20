@@ -50,7 +50,7 @@ The no-feed arm receives no external matter after tick zero. Both arms retain th
 
 - Dedicated workflow: `.github/workflows/plan-004-resource-feed.yml`.
 - Feed flag: `--plan004-resource-feed`.
-- Feed pulse event type: `environmental_resource_feed`; each introduced material is also recorded as a `molecular_lifecycle` creation with reaction `RESOURCE_FEED`.
+- Feed pulse event type: `environmental_resource_feed`; each introduced material is also recorded as an `INITIAL`-classified `molecular_lifecycle` source identity with `external_source=true`, so analyzers do not misclassify feed atoms as reaction-created products.
 - Run configuration: `experiments/plan-004-run.json` (will be activated only after code validation).
 - Combined artifact: pending.
 - GitHub Actions run: pending.
