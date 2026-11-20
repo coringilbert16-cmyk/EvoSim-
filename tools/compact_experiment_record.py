@@ -106,7 +106,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
-        "record_status": "complete" if not lifecycle_errors and not organization_errors else "partial",
+        "record_status": "complete" if not lifecycle_errors and not organization_errors and seed_coverage is not None else "partial",
         "identity": {
             "experiment_id": experiment.get("experiment_id"),
             "research_plan": experiment.get("research_plan"),
