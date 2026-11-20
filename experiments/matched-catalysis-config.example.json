@@ -1,0 +1,17 @@
+{
+  "candidate_parts": [
+    "Hydrogen",
+    "Sulfur"
+  ],
+  "target_reactant_a_parts": [
+    "Oxygen",
+    "Phosphorus"
+  ],
+  "target_reactant_b_parts": [
+    "Carbon",
+    "Hydrogen"
+  ],
+  "near_distance": 20,
+  "max_target_pair_distance": 50,
+  "minimum_remote_distance": 80
+}
