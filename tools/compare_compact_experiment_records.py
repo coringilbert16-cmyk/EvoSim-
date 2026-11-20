@@ -22,14 +22,24 @@ def load_record(path: Path) -> dict[str, Any]:
     return value
 
 
-def compatibility_key(record: dict[str, Any]) -> tuple[Any, ...]:
+def measurement_compatibility_key(record: dict[str, Any]) -> tuple[Any, ...]:
     conditions = record.get("conditions", {})
-    provenance = record.get("provenance", {})
     return (
-        provenance.get("comparison_configuration_sha256"),
+        record.get("schema_version"),
         tuple(conditions.get("active_resources") or []),
         conditions.get("requested_duration_seconds"),
         conditions.get("diagnostic_interval"),
+    )
+
+
+def condition_group_key(record: dict[str, Any]) -> tuple[Any, ...]:
+    identity = record.get("identity", {})
+    provenance = record.get("provenance", {})
+    return (
+        identity.get("experiment_id"),
+        identity.get("condition_id"),
+        provenance.get("comparison_configuration_sha256"),
+        *measurement_compatibility_key(record),
     )
 
 
@@ -77,6 +87,12 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def mean_if_complete(values: list[int | float | None]) -> float | None:
+    if not values or any(value is None for value in values):
+        return None
+    return sum(values) / len(values)
+
+
 def compare(paths: list[Path]) -> dict[str, Any]:
     records = [load_record(path) for path in paths]
     if not records:
@@ -84,29 +100,75 @@ def compare(paths: list[Path]) -> dict[str, Any]:
     seeds = [record["identity"]["seed"] for record in records]
     if len(seeds) != len(set(seeds)):
         raise ValueError("duplicate independent seed records supplied")
-    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    measurement_groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    condition_groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for record in records:
-        groups.setdefault(compatibility_key(record), []).append(record)
-    compatible = len(groups) == 1
+        measurement_groups.setdefault(measurement_compatibility_key(record), []).append(record)
+        condition_groups.setdefault(condition_group_key(record), []).append(record)
+
+    rendered_groups = []
+    for index, (key, group) in enumerate(condition_groups.items(), 1):
+        summary = summarize(group)
+        rendered_groups.append({
+            "group_id": index,
+            "experiment_id": key[0],
+            "condition_id": key[1],
+            "comparison_configuration_sha256": key[2],
+            "active_resources": list(key[3]),
+            "requested_duration_seconds": key[4],
+            "diagnostic_interval": key[5],
+            "summary": summary,
+        })
+
+    comparisons = []
+    if len(measurement_groups) == 1 and len(rendered_groups) > 1:
+        baseline = rendered_groups[0]
+        metric_vectors: dict[str, list[int | float | None]] = {}
+        for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
+            metric_vectors[f"{reaction}.committed"] = baseline["summary"]["reaction_totals"][reaction]["committed_by_seed"]
+        for metric, values in baseline["summary"]["molecular_development"].items():
+            metric_vectors[f"molecular_development.{metric}"] = values
+        for metric, values in baseline["summary"]["energy"].items():
+            metric_vectors[f"energy.{metric}"] = values
+        baseline_means = {name: mean_if_complete(values) for name, values in metric_vectors.items()}
+        for candidate in rendered_groups[1:]:
+            candidate_vectors: dict[str, list[int | float | None]] = {}
+            for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
+                candidate_vectors[f"{reaction}.committed"] = candidate["summary"]["reaction_totals"][reaction]["committed_by_seed"]
+            for metric, values in candidate["summary"]["molecular_development"].items():
+                candidate_vectors[f"molecular_development.{metric}"] = values
+            for metric, values in candidate["summary"]["energy"].items():
+                candidate_vectors[f"energy.{metric}"] = values
+            differences = {}
+            for name, values in candidate_vectors.items():
+                left_mean = baseline_means.get(name)
+                right_mean = mean_if_complete(values)
+                differences[name] = {
+                    "baseline_mean": left_mean,
+                    "comparison_mean": right_mean,
+                    "difference": right_mean - left_mean
+                        if left_mean is not None and right_mean is not None else None,
+                }
+            comparisons.append({
+                "baseline_group_id": baseline["group_id"],
+                "comparison_group_id": candidate["group_id"],
+                "descriptive_differences_only": True,
+                "metrics": differences,
+            })
+
+    compatible = len(measurement_groups) == 1
     return {
         "schema": "evosim.compact_record_comparison",
         "schema_version": 1,
         "source": "compact_permanent_records_only",
-        "compatible": compatible,
-        "compatibility_groups": [
-            {
-                "comparison_configuration_sha256": key[0],
-                "active_resources": list(key[1]),
-                "requested_duration_seconds": key[2],
-                "diagnostic_interval": key[3],
-                "summary": summarize(group),
-            }
-            for key, group in groups.items()
-        ],
-        "excluded_or_separated_records": (
+        "measurement_compatible": compatible,
+        "measurement_compatibility_group_count": len(measurement_groups),
+        "condition_groups": rendered_groups,
+        "condition_comparisons": comparisons,
+        "separated_records": (
             [] if compatible else [
                 {"seed": record["identity"]["seed"],
-                 "reason": "record conditions/configuration differ; retained in a separate compatibility group"}
+                 "reason": "measurement conditions differ (active resources, duration, diagnostic interval, or schema)"}
                 for record in records
             ]
         ),
@@ -115,6 +177,7 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             "within_seed_events_treated_as_independent": False,
             "pooled_rates_emitted": False,
             "raw_diagnostics_required": False,
+            "between_condition_differences_are_descriptive_only": True,
         },
     }
 
