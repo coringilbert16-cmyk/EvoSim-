@@ -19,11 +19,11 @@
 
 Use a named schema family with explicit integer versions:
 - `evosim.experiment_manifest`, version 1.
-- `evosim.environmental_chemistry_jsonl`, version 3 for the first event extension (current JSONL header is version 2; old v2 remains readable).
+- `evosim.environmental_chemistry_jsonl`, version 3 for the complete normalized event/settlement contract (current JSONL header is version 2; old v2 remains readable).
 - `evosim.opportunity_coverage`, version 1.
 - `evosim.analysis_index`, version 1.
 
-The environmental JSONL header version is proposed to move from 2 to 3 when the first event-contract extension ships, because stable IDs, participant IDs, and settlement payloads change the record contract. The raw JSONL envelope remains one JSON object per line with its existing `event` discriminator. New fields are additive, but readers must still validate the header's declared version.
+The identity-only event fields in PR #398 are additive to the current v2 envelope and remain readable by existing readers that ignore unknown fields. Move the environmental JSONL header version from 2 to 3 when the complete normalized event/settlement contract is adopted (including the event-linked settlement and coverage semantics). The raw JSONL envelope remains one JSON object per line with its existing `event` discriminator. New fields are additive, but readers must still validate the header's declared version.
 
 Semantics:
 - A numeric zero means the quantity was measured and equals zero.
