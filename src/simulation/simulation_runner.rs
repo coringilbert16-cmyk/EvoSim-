@@ -14,6 +14,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut duration_seconds: Option<u64> = None;
     let mut matched_catalysis_config_path: Option<String> = None;
     let mut matched_catalysis_condition: Option<String> = None;
+    let mut matched_catalysis_preflight = false;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -50,6 +51,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(REPORT_INTERVAL);
             }
+            "--matched-catalysis-preflight" => {
+                matched_catalysis_preflight = true;
+            }
             "--matched-catalysis-config" => {
                 matched_catalysis_config_path = args.next();
             }
@@ -58,6 +62,23 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             }
             _ => {}
         }
+    }
+
+    if matched_catalysis_preflight {
+        let config_path = matched_catalysis_config_path
+            .as_deref()
+            .expect("--matched-catalysis-preflight requires --matched-catalysis-config");
+        let contents = std::fs::read_to_string(config_path)
+            .unwrap_or_else(|error| panic!("failed to read matched-catalysis config {config_path}: {error}"));
+        let config = serde_json::from_str::<
+            crate::environment_chemistry_experiment::MatchedCatalysisConfig,
+        >(&contents)
+        .unwrap_or_else(|error| panic!("invalid matched-catalysis config {config_path}: {error}"));
+        match crate::environment_chemistry_experiment::preflight_matched_pair(seed, &config) {
+            Ok(report) => println!("MATCHED CATALYSIS EXPOSURE PREFLIGHT PASSED: {report}"),
+            Err(error) => panic!("MATCHED CATALYSIS EXPOSURE PREFLIGHT BLOCKED: {error}"),
+        }
+        return;
     }
 
     if environment_chemistry_experiment {
