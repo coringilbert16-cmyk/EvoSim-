@@ -690,6 +690,49 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         Ok(recorder)
     }
 
+    pub(crate) fn record_resource_feed(
+        &mut self,
+        tick: u64,
+        elapsed_wall_seconds: f64,
+        pulse_index: usize,
+        particles: &[crate::environment_resource_feed::ResourceFeedParticle],
+    ) -> std::io::Result<()> {
+        let mut elemental_counts = BTreeMap::new();
+        let material_ids = particles
+            .iter()
+            .map(|particle| {
+                *elemental_counts.entry(particle.element.clone()).or_insert(0_usize) += 1;
+                particle.material.environmental_identity
+            })
+            .collect::<Vec<_>>();
+        self.write_event(json!({
+            "event": "environmental_resource_feed",
+            "source": "external_environmental_matter",
+            "tick": tick,
+            "elapsed_wall_seconds": elapsed_wall_seconds,
+            "pulse_index": pulse_index,
+            "pulse_count": crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT,
+            "pulse_interval_seconds": crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_INTERVAL_SECONDS,
+            "resource_count": particles.len(),
+            "elemental_counts": elemental_counts,
+            "material_ids": material_ids
+        }))?;
+        for particle in particles {
+            self.write_event(json!({
+                "event": "molecular_lifecycle",
+                "action": "created",
+                "tick": tick,
+                "molecule_id": particle.material.environmental_identity,
+                "parent_ids": [],
+                "reaction_id": format!("resource-feed-pulse-{pulse_index}"),
+                "reaction": "RESOURCE_FEED",
+                "molecule": particle.material,
+                "external_source": true
+            }))?;
+        }
+        self.writer.flush()
+    }
+
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         for sample in &simulation.environmental_local_resonance_samples {
             self.write_event(sample.clone())?;
