@@ -415,9 +415,222 @@ fn seed_randomized_molecular_resources(
     assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
+/// Generic setup for a paired catalytic-facilitation comparison. The part
+/// lists describe exact molecule compositions, not privileged reaction rules.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MatchedCatalysisConfig {
+    pub(crate) candidate_parts: Vec<String>,
+    pub(crate) target_reactant_a_parts: Vec<String>,
+    pub(crate) target_reactant_b_parts: Vec<String>,
+    #[serde(default = "default_candidate_near_distance")]
+    pub(crate) near_distance: f64,
+    #[serde(default = "default_max_target_pair_distance")]
+    pub(crate) max_target_pair_distance: f64,
+    #[serde(default = "default_minimum_remote_distance")]
+    pub(crate) minimum_remote_distance: f64,
+}
+
+fn default_candidate_near_distance() -> f64 { 8.0 }
+fn default_max_target_pair_distance() -> f64 { 30.0 }
+fn default_minimum_remote_distance() -> f64 { 60.0 }
+
+impl MatchedCatalysisConfig {
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        for (label, parts) in [
+            ("candidate_parts", &self.candidate_parts),
+            ("target_reactant_a_parts", &self.target_reactant_a_parts),
+            ("target_reactant_b_parts", &self.target_reactant_b_parts),
+        ] {
+            if parts.len() < 2 || parts.iter().any(|part| part.trim().is_empty()) {
+                return Err(format!("{label} must contain at least two non-empty element names"));
+            }
+        }
+        if self.near_distance <= 0.0
+            || self.max_target_pair_distance <= 0.0
+            || self.minimum_remote_distance <= self.near_distance
+            || !self.near_distance.is_finite()
+            || !self.max_target_pair_distance.is_finite()
+            || !self.minimum_remote_distance.is_finite()
+        {
+            return Err("control distances must be finite and positive, with remote distance greater than near distance".to_string());
+        }
+        if canonical_part_names(&self.candidate_parts)
+            == canonical_part_names(&self.target_reactant_a_parts)
+            || canonical_part_names(&self.candidate_parts)
+                == canonical_part_names(&self.target_reactant_b_parts)
+        {
+            return Err("candidate molecule must differ from each target reactant composition".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MatchedCatalysisCondition {
+    CandidateNear,
+    CandidateRemote,
+}
+
+impl MatchedCatalysisCondition {
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "candidate_near" => Ok(Self::CandidateNear),
+            "candidate_remote" => Ok(Self::CandidateRemote),
+            _ => Err("matched-catalysis condition must be candidate_near or candidate_remote".to_string()),
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::CandidateNear => "candidate_near",
+            Self::CandidateRemote => "candidate_remote",
+        }
+    }
+}
+
+#[derive(Clone)]
+struct MatchedMoleculeLocation {
+    identity: u64,
+    parts: Vec<String>,
+    center: (f64, f64),
+}
+
+fn canonical_part_names(parts: &[String]) -> Vec<String> {
+    let mut names = parts.to_vec();
+    names.sort();
+    names
+}
+
+fn material_part_names(material: &PhysicalMaterial) -> Option<Vec<String>> {
+    if material.material.parts.iter().any(|(_, amount)| {
+        !amount.is_finite() || (*amount - 1.0).abs() > 1e-9
+    }) {
+        return None;
+    }
+    Some(canonical_part_names(
+        &material.material.parts.iter().map(|(name, _)| name.clone()).collect::<Vec<_>>(),
+    ))
+}
+
+fn physical_material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty()
+        || placements.iter().any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
+    {
+        return None;
+    }
+    let count = placements.len() as f64;
+    Some((
+        placements.iter().map(|placement| placement.x).sum::<f64>() / count,
+        placements.iter().map(|placement| placement.y).sum::<f64>() / count,
+    ))
+}
+
+fn matched_molecule_locations(simulation: &Simulation) -> Vec<MatchedMoleculeLocation> {
+    simulation.environment.field.cells.iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter_map(|material| {
+            Some(MatchedMoleculeLocation {
+                identity: material.environmental_identity,
+                parts: material_part_names(material)?,
+                center: physical_material_center(material)?,
+            })
+        })
+        .filter(|molecule| molecule.identity != 0 && molecule.parts.len() >= 2)
+        .collect()
+}
+
+fn point_distance(left: (f64, f64), right: (f64, f64)) -> f64 {
+    (left.0 - right.0).hypot(left.1 - right.1)
+}
+
+fn non_candidate_layout_signature(simulation: &Simulation, candidate_id: u64) -> u64 {
+    let mut rows = simulation.environment.field.cells.iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| material.environmental_identity != candidate_id)
+        .map(|material| {
+            let placements = material.placements.as_deref().unwrap_or_default();
+            format!(
+                "{}|{:?}|{:?}",
+                material.environmental_identity,
+                material.material.parts,
+                placements.iter().map(|p| (p.x.to_bits(), p.y.to_bits(), p.rotation_radians.to_bits())).collect::<Vec<_>>()
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.sort();
+    rows.join("\n").bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+    })
+}
+
+fn relocate_candidate_near_target(
+    simulation: &mut Simulation,
+    candidate_id: u64,
+    candidate_center: (f64, f64),
+    target_center: (f64, f64),
+    near_distance: f64,
+) -> Result<(f64, f64), String> {
+    // Try deterministic angular positions at the requested separation. Each
+    // movement uses the environment's atomic geometry/collision validator.
+    for ring_scale in [1.0, 0.85, 1.15] {
+        let radius = near_distance * ring_scale;
+        if radius > near_distance + 1e-9 { continue; }
+        for step in 0..64 {
+            let angle = std::f64::consts::TAU * step as f64 / 64.0;
+            let destination = (
+                target_center.0 + radius * angle.cos(),
+                target_center.1 + radius * angle.sin(),
+            );
+            let dx = destination.0 - candidate_center.0;
+            let dy = destination.1 - candidate_center.1;
+            if simulation.environment.field.move_physical_material_by_identity(
+                candidate_id, dx, dy, &simulation.environment.catalog
+            ) {
+                return Ok(destination);
+            }
+        }
+    }
+    Err("could not place candidate molecule near the target pair without overlap or boundary violation".to_string())
+}
+
+fn relocate_candidate_remote(
+    simulation: &mut Simulation,
+    candidate_id: u64,
+    candidate_center: (f64, f64),
+    target_center: (f64, f64),
+    minimum_remote_distance: f64,
+) -> Result<(f64, f64), String> {
+    let field = &simulation.environment.field;
+    let mut destinations = (0..field.cells.len())
+        .map(|index| field.cell_center(index))
+        .filter(|point| point_distance(*point, target_center) >= minimum_remote_distance)
+        .collect::<Vec<_>>();
+    destinations.sort_by(|left, right| {
+        point_distance(*right, target_center)
+            .partial_cmp(&point_distance(*left, target_center))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.0.partial_cmp(&right.0).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| left.1.partial_cmp(&right.1).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    for destination in destinations {
+        if simulation.environment.field.move_physical_material_by_identity(
+            candidate_id,
+            destination.0 - candidate_center.0,
+            destination.1 - candidate_center.1,
+            &simulation.environment.catalog,
+        ) {
+            return Ok(destination);
+        }
+    }
+    Err("could not place candidate molecule at the configured remote distance without overlap or boundary violation".to_string())
+}
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
+    pub(crate) experiment_metadata: Option<serde_json::Value>,
 }
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
@@ -483,7 +696,144 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     EnvironmentalChemistryFixture {
         simulation,
         pile_sizes,
+        experiment_metadata: None,
     }
+}
+
+/// Build one arm of a paired facilitator-placement comparison. Both arms use
+/// the exact same seed and initial inventory; only the configured candidate
+/// molecule is translated after the deterministic tick-zero fixture is built.
+pub(crate) fn build_matched(
+    seed: u64,
+    config: &MatchedCatalysisConfig,
+    condition: MatchedCatalysisCondition,
+) -> Result<EnvironmentalChemistryFixture, String> {
+    config.validate()?;
+    let mut fixture = build(seed);
+    let molecules = matched_molecule_locations(&fixture.simulation);
+    let candidate_parts = canonical_part_names(&config.candidate_parts);
+    let target_a_parts = canonical_part_names(&config.target_reactant_a_parts);
+    let target_b_parts = canonical_part_names(&config.target_reactant_b_parts);
+
+    let target_a = molecules.iter()
+        .filter(|molecule| molecule.parts == target_a_parts)
+        .collect::<Vec<_>>();
+    let target_b = molecules.iter()
+        .filter(|molecule| molecule.parts == target_b_parts)
+        .collect::<Vec<_>>();
+    let mut target_pair: Option<(&MatchedMoleculeLocation, &MatchedMoleculeLocation, f64)> = None;
+    for left in &target_a {
+        for right in &target_b {
+            if left.identity == right.identity { continue; }
+            let distance = point_distance(left.center, right.center);
+            if distance > config.max_target_pair_distance { continue; }
+            let replace = target_pair.as_ref().is_none_or(|(_, _, current)| distance < *current);
+            if replace {
+                target_pair = Some((left, right, distance));
+            }
+        }
+    }
+    let (target_a, target_b, target_separation) = target_pair.ok_or_else(|| {
+        format!(
+            "seed {seed} has no distinct target-reactant pair within {:.3} world units",
+            config.max_target_pair_distance
+        )
+    })?;
+    let target_center = (
+        0.5 * (target_a.center.0 + target_b.center.0),
+        0.5 * (target_a.center.1 + target_b.center.1),
+    );
+    let candidate = molecules.iter()
+        .filter(|molecule| {
+            molecule.parts == candidate_parts
+                && molecule.identity != target_a.identity
+                && molecule.identity != target_b.identity
+        })
+        .min_by(|left, right| {
+            point_distance(left.center, target_center)
+                .partial_cmp(&point_distance(right.center, target_center))
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| left.identity.cmp(&right.identity))
+        })
+        .ok_or_else(|| format!("seed {seed} has no molecule matching candidate_parts"))?;
+    let candidate_id = candidate.identity;
+    let candidate_before = candidate.center;
+
+    let initial_inventory = fixture.simulation.environment.field.total_material();
+    let initial_energy = fixture.simulation.energy_inventory_snapshot();
+    let non_candidate_layout_before =
+        non_candidate_layout_signature(&fixture.simulation, candidate_id);
+
+    let candidate_after = match condition {
+        MatchedCatalysisCondition::CandidateNear => relocate_candidate_near_target(
+            &mut fixture.simulation,
+            candidate_id,
+            candidate_before,
+            target_center,
+            config.near_distance,
+        )?,
+        MatchedCatalysisCondition::CandidateRemote => relocate_candidate_remote(
+            &mut fixture.simulation,
+            candidate_id,
+            candidate_before,
+            target_center,
+            config.minimum_remote_distance,
+        )?,
+    };
+    let actual_distance = point_distance(candidate_after, target_center);
+    match condition {
+        MatchedCatalysisCondition::CandidateNear if actual_distance > config.near_distance + 1e-6 => {
+            return Err("near candidate placement exceeded the configured distance".to_string());
+        }
+        MatchedCatalysisCondition::CandidateRemote if actual_distance + 1e-6 < config.minimum_remote_distance => {
+            return Err("remote candidate placement fell inside the configured minimum distance".to_string());
+        }
+        _ => {}
+    }
+
+    let final_inventory = fixture.simulation.environment.field.total_material();
+    let final_energy = fixture.simulation.energy_inventory_snapshot();
+    if initial_inventory != final_inventory {
+        return Err("matched control relocation changed elemental inventory".to_string());
+    }
+    if initial_energy.current_usable_energy != final_energy.current_usable_energy
+        || initial_energy.current_resonant_energy != final_energy.current_resonant_energy
+        || initial_energy.current_structural_energy != final_energy.current_structural_energy
+    {
+        return Err("matched control relocation changed the initial energy inventory".to_string());
+    }
+    if non_candidate_layout_before
+        != non_candidate_layout_signature(&fixture.simulation, candidate_id)
+    {
+        return Err("matched control relocation changed a non-candidate molecule's geometry".to_string());
+    }
+
+    fixture.experiment_metadata = Some(serde_json::json!({
+        "schema_version": 1,
+        "seed": seed,
+        "condition": condition.label(),
+        "candidate_identity": candidate_id,
+        "candidate_parts": candidate_parts,
+        "candidate_position_before": {"x": candidate_before.0, "y": candidate_before.1},
+        "candidate_position_after": {"x": candidate_after.0, "y": candidate_after.1},
+        "candidate_distance_to_target_midpoint": actual_distance,
+        "target_reactant_a_identity": target_a.identity,
+        "target_reactant_a_parts": target_a_parts,
+        "target_reactant_a_position": {"x": target_a.center.0, "y": target_a.center.1},
+        "target_reactant_b_identity": target_b.identity,
+        "target_reactant_b_parts": target_b_parts,
+        "target_reactant_b_position": {"x": target_b.center.0, "y": target_b.center.1},
+        "target_pair_separation": target_separation,
+        "target_pair_midpoint": {"x": target_center.0, "y": target_center.1},
+        "near_distance_limit": config.near_distance,
+        "minimum_remote_distance": config.minimum_remote_distance,
+        "max_target_pair_distance": config.max_target_pair_distance,
+        "initial_elemental_inventory_unchanged": true,
+        "initial_energy_inventory_unchanged": true,
+        "all_non_candidate_molecule_geometry_unchanged": true,
+        "interpretation": "The candidate is not established as a facilitator. Target reactants are selected by composition and proximity only; this setup does not establish an eligible endpoint contact or causal facilitation."
+    }));
+    Ok(fixture)
 }
 
 fn randomized_pile_centers(
