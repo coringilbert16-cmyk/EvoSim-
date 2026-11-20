@@ -431,9 +431,15 @@ pub(crate) struct MatchedCatalysisConfig {
     pub(crate) minimum_remote_distance: f64,
 }
 
-fn default_candidate_near_distance() -> f64 { 8.0 }
-fn default_max_target_pair_distance() -> f64 { 30.0 }
-fn default_minimum_remote_distance() -> f64 { 60.0 }
+fn default_candidate_near_distance() -> f64 {
+    8.0
+}
+fn default_max_target_pair_distance() -> f64 {
+    30.0
+}
+fn default_minimum_remote_distance() -> f64 {
+    60.0
+}
 
 impl MatchedCatalysisConfig {
     pub(crate) fn validate(&self) -> Result<(), String> {
@@ -443,7 +449,9 @@ impl MatchedCatalysisConfig {
             ("target_reactant_b_parts", &self.target_reactant_b_parts),
         ] {
             if parts.len() != 2 || parts.iter().any(|part| part.trim().is_empty()) {
-                return Err(format!("{label} must contain exactly two non-empty element names"));
+                return Err(format!(
+                    "{label} must contain exactly two non-empty element names"
+                ));
             }
         }
         if self.near_distance <= 0.0
@@ -460,7 +468,9 @@ impl MatchedCatalysisConfig {
             || canonical_part_names(&self.candidate_parts)
                 == canonical_part_names(&self.target_reactant_b_parts)
         {
-            return Err("candidate molecule must differ from each target reactant composition".to_string());
+            return Err(
+                "candidate molecule must differ from each target reactant composition".to_string(),
+            );
         }
         Ok(())
     }
@@ -477,7 +487,10 @@ impl MatchedCatalysisCondition {
         match value {
             "candidate_near" => Ok(Self::CandidateNear),
             "candidate_remote" => Ok(Self::CandidateRemote),
-            _ => Err("matched-catalysis condition must be candidate_near or candidate_remote".to_string()),
+            _ => Err(
+                "matched-catalysis condition must be candidate_near or candidate_remote"
+                    .to_string(),
+            ),
         }
     }
 
@@ -503,20 +516,30 @@ fn canonical_part_names(parts: &[String]) -> Vec<String> {
 }
 
 fn material_part_names(material: &PhysicalMaterial) -> Option<Vec<String>> {
-    if material.material.parts.iter().any(|(_, amount)| {
-        !amount.is_finite() || (*amount - 1.0).abs() > 1e-9
-    }) {
+    if material
+        .material
+        .parts
+        .iter()
+        .any(|(_, amount)| !amount.is_finite() || (*amount - 1.0).abs() > 1e-9)
+    {
         return None;
     }
     Some(canonical_part_names(
-        &material.material.parts.iter().map(|(name, _)| name.clone()).collect::<Vec<_>>(),
+        &material
+            .material
+            .parts
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>(),
     ))
 }
 
 fn physical_material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
     if placements.is_empty()
-        || placements.iter().any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
+        || placements
+            .iter()
+            .any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
     {
         return None;
     }
@@ -528,7 +551,11 @@ fn physical_material_center(material: &PhysicalMaterial) -> Option<(f64, f64)> {
 }
 
 fn matched_molecule_locations(simulation: &Simulation) -> Vec<MatchedMoleculeLocation> {
-    simulation.environment.field.cells.iter()
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .flat_map(|cell| cell.physical_materials.iter())
         .filter_map(|material| {
             Some(MatchedMoleculeLocation {
@@ -552,7 +579,11 @@ fn canonical_inventory(simulation: &Simulation) -> Vec<(String, f64)> {
 }
 
 fn non_candidate_layout_signature(simulation: &Simulation, candidate_id: u64) -> u64 {
-    let mut rows = simulation.environment.field.cells.iter()
+    let mut rows = simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .flat_map(|cell| cell.physical_materials.iter())
         .filter(|material| material.environmental_identity != candidate_id)
         .map(|material| {
@@ -561,14 +592,19 @@ fn non_candidate_layout_signature(simulation: &Simulation, candidate_id: u64) ->
                 "{}|{:?}|{:?}",
                 material.environmental_identity,
                 material.material.parts,
-                placements.iter().map(|p| (p.x.to_bits(), p.y.to_bits(), p.rotation_radians.to_bits())).collect::<Vec<_>>()
+                placements
+                    .iter()
+                    .map(|p| (p.x.to_bits(), p.y.to_bits(), p.rotation_radians.to_bits()))
+                    .collect::<Vec<_>>()
             )
         })
         .collect::<Vec<_>>();
     rows.sort();
-    rows.join("\n").bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
-    })
+    rows.join("\n")
+        .bytes()
+        .fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        })
 }
 
 fn relocate_candidate_near_target(
@@ -582,7 +618,9 @@ fn relocate_candidate_near_target(
     // movement uses the environment's atomic geometry/collision validator.
     for ring_scale in [1.0, 0.85, 1.15] {
         let radius = near_distance * ring_scale;
-        if radius > near_distance + 1e-9 { continue; }
+        if radius > near_distance + 1e-9 {
+            continue;
+        }
         for step in 0..64 {
             let angle = std::f64::consts::TAU * step as f64 / 64.0;
             let destination = (
@@ -591,9 +629,16 @@ fn relocate_candidate_near_target(
             );
             let dx = destination.0 - candidate_center.0;
             let dy = destination.1 - candidate_center.1;
-            if simulation.environment.field.move_physical_material_by_identity(
-                candidate_id, dx, dy, &simulation.environment.catalog
-            ) {
+            if simulation
+                .environment
+                .field
+                .move_physical_material_by_identity(
+                    candidate_id,
+                    dx,
+                    dy,
+                    &simulation.environment.catalog,
+                )
+            {
                 return Ok(destination);
             }
         }
@@ -617,16 +662,28 @@ fn relocate_candidate_remote(
         point_distance(*right, target_center)
             .partial_cmp(&point_distance(*left, target_center))
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.0.partial_cmp(&right.0).unwrap_or(std::cmp::Ordering::Equal))
-            .then_with(|| left.1.partial_cmp(&right.1).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| {
+                left.0
+                    .partial_cmp(&right.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| {
+                left.1
+                    .partial_cmp(&right.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     });
     for destination in destinations {
-        if simulation.environment.field.move_physical_material_by_identity(
-            candidate_id,
-            destination.0 - candidate_center.0,
-            destination.1 - candidate_center.1,
-            &simulation.environment.catalog,
-        ) {
+        if simulation
+            .environment
+            .field
+            .move_physical_material_by_identity(
+                candidate_id,
+                destination.0 - candidate_center.0,
+                destination.1 - candidate_center.1,
+                &simulation.environment.catalog,
+            )
+        {
             return Ok(destination);
         }
     }
@@ -721,19 +778,27 @@ pub(crate) fn build_matched(
     let target_a_parts = canonical_part_names(&config.target_reactant_a_parts);
     let target_b_parts = canonical_part_names(&config.target_reactant_b_parts);
 
-    let target_a = molecules.iter()
+    let target_a = molecules
+        .iter()
         .filter(|molecule| molecule.parts == target_a_parts)
         .collect::<Vec<_>>();
-    let target_b = molecules.iter()
+    let target_b = molecules
+        .iter()
         .filter(|molecule| molecule.parts == target_b_parts)
         .collect::<Vec<_>>();
     let mut target_pair: Option<(&MatchedMoleculeLocation, &MatchedMoleculeLocation, f64)> = None;
     for left in &target_a {
         for right in &target_b {
-            if left.identity == right.identity { continue; }
+            if left.identity == right.identity {
+                continue;
+            }
             let distance = point_distance(left.center, right.center);
-            if distance > config.max_target_pair_distance { continue; }
-            let replace = target_pair.as_ref().is_none_or(|(_, _, current)| distance < *current);
+            if distance > config.max_target_pair_distance {
+                continue;
+            }
+            let replace = target_pair
+                .as_ref()
+                .is_none_or(|(_, _, current)| distance < *current);
             if replace {
                 target_pair = Some((left, right, distance));
             }
@@ -749,7 +814,8 @@ pub(crate) fn build_matched(
         0.5 * (target_a.center.0 + target_b.center.0),
         0.5 * (target_a.center.1 + target_b.center.1),
     );
-    let candidate = molecules.iter()
+    let candidate = molecules
+        .iter()
         .filter(|molecule| {
             molecule.parts == candidate_parts
                 && molecule.identity != target_a.identity
@@ -788,11 +854,18 @@ pub(crate) fn build_matched(
     };
     let actual_distance = point_distance(candidate_after, target_center);
     match condition {
-        MatchedCatalysisCondition::CandidateNear if actual_distance > config.near_distance + 1e-6 => {
+        MatchedCatalysisCondition::CandidateNear
+            if actual_distance > config.near_distance + 1e-6 =>
+        {
             return Err("near candidate placement exceeded the configured distance".to_string());
         }
-        MatchedCatalysisCondition::CandidateRemote if actual_distance + 1e-6 < config.minimum_remote_distance => {
-            return Err("remote candidate placement fell inside the configured minimum distance".to_string());
+        MatchedCatalysisCondition::CandidateRemote
+            if actual_distance + 1e-6 < config.minimum_remote_distance =>
+        {
+            return Err(
+                "remote candidate placement fell inside the configured minimum distance"
+                    .to_string(),
+            );
         }
         _ => {}
     }
@@ -811,7 +884,9 @@ pub(crate) fn build_matched(
     if non_candidate_layout_before
         != non_candidate_layout_signature(&fixture.simulation, candidate_id)
     {
-        return Err("matched control relocation changed a non-candidate molecule's geometry".to_string());
+        return Err(
+            "matched control relocation changed a non-candidate molecule's geometry".to_string(),
+        );
     }
 
     fixture.experiment_metadata = Some(serde_json::json!({
@@ -915,18 +990,10 @@ mod tests {
             max_target_pair_distance: 50.0,
             minimum_remote_distance: 80.0,
         };
-        let near = build_matched(
-            42,
-            &config,
-            MatchedCatalysisCondition::CandidateNear,
-        )
-        .expect("the standard seed should support the near control placement");
-        let remote = build_matched(
-            42,
-            &config,
-            MatchedCatalysisCondition::CandidateRemote,
-        )
-        .expect("the standard seed should support the remote control placement");
+        let near = build_matched(42, &config, MatchedCatalysisCondition::CandidateNear)
+            .expect("the standard seed should support the near control placement");
+        let remote = build_matched(42, &config, MatchedCatalysisCondition::CandidateRemote)
+            .expect("the standard seed should support the remote control placement");
 
         assert_eq!(near.pile_sizes, remote.pile_sizes);
         assert_eq!(
