@@ -150,7 +150,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
 
     def test_unified_comparison_uses_compact_records_across_conditions(self) -> None:
         records = []
-        for seed, digest in ((42, "a" * 64), (43, "a" * 64), (44, "c" * 64)):
+        for seed, digest in ((42, "a" * 64), (43, "a" * 64), (42, "c" * 64), (43, "c" * 64)):
             chemistry, organization, manifest = self.seed_inputs(seed, digest)
             record = build_record(seed, chemistry, organization, manifest)
             path = self.root / f"record-{seed}.json"
@@ -174,6 +174,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertTrue(result["measurement_compatible"])
         self.assertEqual(len(result["condition_groups"]), 2)
         self.assertEqual(len(result["condition_comparisons"]), 1)
+        self.assertEqual(result["condition_groups"][1]["summary"]["seeds"], [42, 43])
         first_group = result["condition_groups"][0]["summary"]
         self.assertEqual(first_group["reaction_totals"]["COMBINE"]["committed_by_seed"], [None, None])
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
