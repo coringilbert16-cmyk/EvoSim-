@@ -1,0 +1,9 @@
+{
+  "_comment": "Demonstration configuration only. H-S is not a scientifically validated catalyst candidate. Select and justify candidate and target compositions from PLAN-001 evidence before any actual experiment.",
+  "candidate_parts": ["Hydrogen", "Sulfur"],
+  "target_reactant_a_parts": ["Oxygen", "Phosphorus"],
+  "target_reactant_b_parts": ["Carbon", "Hydrogen"],
+  "near_distance": 8.0,
+  "max_target_pair_distance": 30.0,
+  "minimum_remote_distance": 60.0
+}
