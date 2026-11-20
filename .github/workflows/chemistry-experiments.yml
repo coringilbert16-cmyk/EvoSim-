@@ -240,7 +240,7 @@ jobs:
           name: chemistry-compact-record-seed-${{ matrix.seed }}
           path: compact-records/seed-${{ matrix.seed }}-record.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 1
       - name: Upload temporary deep analysis
         if: needs.prepare.outputs.deep_diagnostics == 'true'
         uses: actions/upload-artifact@v4
