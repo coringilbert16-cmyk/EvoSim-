@@ -65,7 +65,10 @@ def validate_manifest(path: Path, verify_artifacts: bool = True) -> dict[str, An
             raise ValueError("artifact.path is missing")
         if not isinstance(expected_size, int) or expected_size < 0:
             raise ValueError(f"artifact {artifact_path}: invalid size_bytes")
-        if not SHA256_PATTERN.fullmatch(str(expected_hash or "")):
+        if run["status"] == "completed":
+            if not SHA256_PATTERN.fullmatch(str(expected_hash or "")):
+                raise ValueError(f"artifact {artifact_path}: invalid sha256")
+        elif expected_hash is not None and not SHA256_PATTERN.fullmatch(str(expected_hash)):
             raise ValueError(f"artifact {artifact_path}: invalid sha256")
         if verify_artifacts:
             resolved = Path(artifact_path)
@@ -73,14 +76,15 @@ def validate_manifest(path: Path, verify_artifacts: bool = True) -> dict[str, An
                 resolved = path.parent / resolved
             if not resolved.is_file():
                 raise ValueError(f"artifact does not exist: {resolved}")
-            if resolved.stat().st_size != expected_size:
-                raise ValueError(f"artifact size mismatch: {resolved}")
-            digest = hashlib.sha256()
-            with resolved.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            if digest.hexdigest() != expected_hash:
-                raise ValueError(f"artifact checksum mismatch: {resolved}")
+            if run["status"] == "completed":
+                if resolved.stat().st_size != expected_size:
+                    raise ValueError(f"artifact size mismatch: {resolved}")
+                digest = hashlib.sha256()
+                with resolved.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                if digest.hexdigest() != expected_hash:
+                    raise ValueError(f"artifact checksum mismatch: {resolved}")
 
     quality = manifest.get("quality")
     if not isinstance(quality, dict) or not isinstance(quality.get("warnings"), list):
