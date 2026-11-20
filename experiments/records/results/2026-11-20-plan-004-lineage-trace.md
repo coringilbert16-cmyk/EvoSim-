@@ -13,16 +13,18 @@
 
 The strongest clear multistage example follows an oxygen–phosphorus-rich intermediate through two cycles of transformation and regeneration. It spans ticks 13,639–20,850.
 
-| Tick / reaction ID | Event | Exact parents | Exact children |
+| Tick / reaction ID | Event | Exact parents | Exact children | Recorded `work_required` |
 |---|---|---|---|
-| 13,639 / `13639-16` | DISPLACEMENT | 2357 (O–P₂), 2388 (P) | 2412 (O–P), 2413 (P₂) |
-| 14,649 / `14649-16` | COMBINE | 2413 (P₂), 2442 (O) | 2483 (O–P₂) |
-| 15,541 / `15541-16` | DISPLACEMENT | 2483 (O–P₂), 2136 (N) | 2581 (P₂), 2582 (N–O) |
-| 15,649 / `15649-16` | COMBINE | 2581 (P₂), 2582 (N–O) | 2589 (N–O–P₂) |
-| 15,679 / `15679-10` | BREAK | 2589 (N–O–P₂) | 2599 (O–P₂), 2600 (N) |
-| 20,037 / `20037-16` | DISPLACEMENT | 2599 (O–P₂), 2356 (C) | 2857 (P₂), 2858 (C–O) |
-| 20,599 / `20599-6` | BREAK | 2858 (C–O) | 2914 (O), 2915 (C) |
-| 20,850 / `20850-16` | COMBINE | 2857 (P₂), 2914 (O) | 2938 (O–P₂) |
+| 13,639 / `13639-16` | DISPLACEMENT | 2357 (O–P₂), 2388 (P) | 2412 (O–P), 2413 (P₂) | 0.106793 |
+| 14,649 / `14649-16` | COMBINE | 2413 (P₂), 2442 (O) | 2483 (O–P₂) | 0.350000 |
+| 15,541 / `15541-16` | DISPLACEMENT | 2483 (O–P₂), 2136 (N) | 2581 (P₂), 2582 (N–O) | 0.114849 |
+| 15,649 / `15649-16` | COMBINE | 2581 (P₂), 2582 (N–O) | 2589 (N–O–P₂) | 0.350000 |
+| 15,679 / `15679-10` | BREAK | 2589 (N–O–P₂) | 2599 (O–P₂), 2600 (N) | 0.264575 |
+| 20,037 / `20037-16` | DISPLACEMENT | 2599 (O–P₂), 2356 (C) | 2857 (P₂), 2858 (C–O) | 0.113472 |
+| 20,599 / `20599-6` | BREAK | 2858 (C–O) | 2914 (O), 2915 (C) | 0.308221 |
+| 20,850 / `20850-16` | COMBINE | 2857 (P₂), 2914 (O) | 2938 (O–P₂) | 0.350000 |
+
+The eight matched raw `environmental_reaction` records report a combined `work_required` of 1.957910 simulation energy units (per-event values shown above). This is the recorded work requirement for these committed transformations, **not** a pathway energy balance: the records do not attribute actual energy withdrawals, resonance funding, stored-energy changes, heat, or losses to this lineage.
 
 The exact lineage links are:
 - 2413 → 2483 → 2581 → 2589 → 2599 → 2857 → 2938.
