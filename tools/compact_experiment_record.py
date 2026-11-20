@@ -68,6 +68,11 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     run = manifest.get("run", {})
     conditions = manifest.get("conditions", {})
     config = conditions.get("configuration", {})
+    comparison_config = dict(config) if isinstance(config, dict) else {}
+    comparison_config.pop("seed", None)
+    comparison_configuration_sha256 = hashlib.sha256(
+        json.dumps(comparison_config, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest() if comparison_config else None
     reactions = chemistry.get("reactions", {})
     totals = reactions.get("diagnostic_totals", {})
     event_counts = reactions.get("event_counts", {})
@@ -103,6 +108,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "manifest_schema_version": manifest.get("schema_version"),
             "enabled_diagnostic_tiers": nested(manifest, "diagnostics", "enabled_tiers"),
             "configuration_sha256": conditions.get("configuration_sha256"),
+            "comparison_configuration_sha256": comparison_configuration_sha256,
             "raw_diagnostics_sha256": next(
                 (item.get("sha256") for item in manifest.get("artifacts", [])
                  if item.get("role") == "raw_observation"), None),
