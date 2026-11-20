@@ -766,10 +766,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
 /// Build one arm of a paired facilitator-placement comparison. Both arms use
 /// the exact same seed and initial inventory; only the configured candidate
 /// molecule is translated after the deterministic tick-zero fixture is built.
-fn material_by_identity(
-    simulation: &Simulation,
-    identity: u64,
-) -> Option<&PhysicalMaterial> {
+fn material_by_identity(simulation: &Simulation, identity: u64) -> Option<&PhysicalMaterial> {
     let mut matches = simulation
         .environment
         .field
@@ -793,7 +790,9 @@ fn material_local_exposure(
     let placements = material
         .placements
         .as_ref()
-        .filter(|placements| !placements.is_empty() && placements.len() == material.material.parts.len())
+        .filter(|placements| {
+            !placements.is_empty() && placements.len() == material.material.parts.len()
+        })
         .ok_or_else(|| format!("material identity {identity} has incomplete geometry"))?;
     let flow = crate::environment_flow::material_flow_velocity_samples(
         &simulation.environment.field,
@@ -856,8 +855,13 @@ fn candidate_resonance_contribution(
         &simulation.environment.catalog,
         simulation.tick,
     )
-    .ok_or_else(|| "legacy pairwise candidate-to-target resonance sample unavailable".to_string())?;
-    if receptions.iter().any(|sample| !sample.magnitude.is_finite()) {
+    .ok_or_else(|| {
+        "legacy pairwise candidate-to-target resonance sample unavailable".to_string()
+    })?;
+    if receptions
+        .iter()
+        .any(|sample| !sample.magnitude.is_finite())
+    {
         return Err("legacy pairwise resonance sample is non-finite".to_string());
     }
     Ok(receptions.iter().map(|sample| sample.magnitude).collect())
