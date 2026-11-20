@@ -1,6 +1,6 @@
 # OBS-001 Opportunity-Coverage Audit
 
-**Status:** implementation audit, 2026-11-20  
+**Status:** implementation in progress, 2026-11-20  
 **Scope:** environmental COMBINE, BREAK, and DISPLACEMENT discovery telemetry  
 **Behavior boundary:** observation only; no changes to reaction rules, search order, budgets, activation, scheduling, or energy settlement.
 
@@ -107,3 +107,37 @@ Do not force every reaction type to populate a stage it does not have. Use `not_
 - Existing specialist counters and raw artifacts remain available.
 - Tests demonstrate that bounded or legacy/incomplete records cannot be misreported as complete opportunity coverage.
 - No chemistry behavior, reaction scheduling, activation, or energy accounting changes.
+
+## Implementation progress — opportunity coverage slice
+
+### Confirmed search semantics
+
+- BREAK's discovery helper materializes the complete maintained environmental bond-index candidate list, records its length as inspected entries, then inspects every yielded candidate. The loop has no candidate-inspection budget or early-exit path. Its per-tick coverage can therefore be marked complete when the two authoritative counts reconcile, including an explicitly measured empty index.
+- COMBINE retains its existing bounded broad-phase pair counts and explicit budget/truncation counters. Coverage is complete only when available = inspected + uninspected, uninspected is zero, and the budget status is explicitly false. Otherwise it is partial or unknown.
+- DISPLACEMENT now records anchor-cell domain size, cells entered, cells excluded by the fixed 64-cell rotating window, selected-window cells not reached before the scan stopped, target-cell query count, and target queries that returned their requested limit. These are observation-only counters.
+
+### Analyzer changes
+
+- Missing, null, malformed, and negative counters remain unknown; they are no longer silently converted to zero.
+- Pooled totals are null if any contributing tick lacks that field. A separate known-subtotal and missing-tick count preserve partial historical evidence without presenting it as a complete total.
+- BREAK, COMBINE, and DISPLACEMENT now have independent normalized coverage states.
+- Reaction-specific BREAK and DISPLACEMENT counters are namespaced in output to prevent overlapping field names (such as activation counters) from being combined.
+- Conversion ratios are withheld if any required numerator or denominator is missing or the denominator is zero.
+- DISPLACEMENT is never labeled complete on the basis of a remaining-work counter alone. Known skipped anchor cells or an exhausted work allowance make it partial; target-window limit hits without an exact omitted-cell count remain unknown.
+
+### Tests added
+
+- Reconciled complete COMBINE search, including a measured empty search.
+- Partial bounded COMBINE search.
+- Missing legacy counters remain unknown, not zero.
+- Complete BREAK bond-index scan and mismatch fail-closed behavior.
+- DISPLACEMENT budget exhaustion and skipped anchor-window coverage.
+- Target-cell limit hits do not falsely claim complete coverage.
+- Missing raw seed artifact error handling.
+
+### Remaining validation
+
+- Run the Python analyzer test suite and Rust tests/Clippy through CI.
+- Validate the analyzer against retained historical JSONL artifacts, including legacy records.
+- Review the exact target-cell query semantics before ever adding an omitted-target-cell denominator. A reached limit is recorded, but not treated as proof of truncation because the exact domain size is not yet measured.
+- No new simulation experiment has been launched. No chemistry rules, activation thresholds, reaction ordering, scheduling, or energy settlement have been changed.
