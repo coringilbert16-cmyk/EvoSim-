@@ -1045,7 +1045,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
             );
             diagnostics.target_cell_windows_inspected =
                 diagnostics.target_cell_windows_inspected.saturating_add(1);
-            if target_cells.len() == target_cell_limit {
+            if target_cell_limit > 0 && target_cells.len() == target_cell_limit {
                 diagnostics.target_cell_window_limit_reached =
                     diagnostics.target_cell_window_limit_reached.saturating_add(1);
             }
