@@ -82,9 +82,39 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             row.get("opportunity_coverage") for row in records
         ],
         "settlement_by_seed": [row.get("settlement") for row in records],
+        "settlement_totals_by_seed": {
+            reaction: {
+                field: [
+                    numeric(row.get("settlement", {}).get(reaction, {}).get(field, {}).get("sum"))
+                    for row in records
+                ]
+                for field in ("usable_energy_delta", "resonance_withdrawn",
+                              "structural_energy_delta", "physical_work", "heat_dissipated")
+            }
+            for reaction in ("BREAK", "COMBINE", "DISPLACEMENT")
+        },
         "bond_accounting_by_seed": [row.get("bond_accounting") for row in records],
+        "bond_deltas_by_seed": {
+            field: [numeric(row.get("bond_accounting", {}).get(field)) for row in records]
+            for field in ("formed_total", "broken_total")
+        },
         "inventory_by_seed": [row.get("inventory") for row in records],
     }
+
+
+def comparison_vectors(summary: dict[str, Any]) -> dict[str, list[int | float | None]]:
+    vectors: dict[str, list[int | float | None]] = {}
+    for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
+        vectors[f"{reaction}.committed"] = summary["reaction_totals"][reaction]["committed_by_seed"]
+        for field, values in summary["settlement_totals_by_seed"][reaction].items():
+            vectors[f"{reaction}.settlement.{field}"] = values
+    for metric, values in summary["molecular_development"].items():
+        vectors[f"molecular_development.{metric}"] = values
+    for metric, values in summary["energy"].items():
+        vectors[f"energy.{metric}"] = values
+    for metric, values in summary["bond_deltas_by_seed"].items():
+        vectors[f"bond_accounting.{metric}"] = values
+    return vectors
 
 
 def mean_if_complete(values: list[int | float | None]) -> float | None:
@@ -123,22 +153,10 @@ def compare(paths: list[Path]) -> dict[str, Any]:
     comparisons = []
     if len(measurement_groups) == 1 and len(rendered_groups) > 1:
         baseline = rendered_groups[0]
-        metric_vectors: dict[str, list[int | float | None]] = {}
-        for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
-            metric_vectors[f"{reaction}.committed"] = baseline["summary"]["reaction_totals"][reaction]["committed_by_seed"]
-        for metric, values in baseline["summary"]["molecular_development"].items():
-            metric_vectors[f"molecular_development.{metric}"] = values
-        for metric, values in baseline["summary"]["energy"].items():
-            metric_vectors[f"energy.{metric}"] = values
-        baseline_means = {name: mean_if_complete(values) for name, values in metric_vectors.items()}
+        baseline_vectors = comparison_vectors(baseline["summary"])
+        baseline_means = {name: mean_if_complete(values) for name, values in baseline_vectors.items()}
         for candidate in rendered_groups[1:]:
-            candidate_vectors: dict[str, list[int | float | None]] = {}
-            for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
-                candidate_vectors[f"{reaction}.committed"] = candidate["summary"]["reaction_totals"][reaction]["committed_by_seed"]
-            for metric, values in candidate["summary"]["molecular_development"].items():
-                candidate_vectors[f"molecular_development.{metric}"] = values
-            for metric, values in candidate["summary"]["energy"].items():
-                candidate_vectors[f"energy.{metric}"] = values
+            candidate_vectors = comparison_vectors(candidate["summary"])
             differences = {}
             for name, values in candidate_vectors.items():
                 left_mean = baseline_means.get(name)
