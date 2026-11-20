@@ -240,6 +240,7 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["coverage"]["combine"]["complete_ticks"], 1)
         self.assertEqual(report["coverage"]["combine"]["partial_ticks"], 1)
         self.assertEqual(report["coverage"]["combine"]["state"], "partial")
+        self.assertEqual(report["coverage"]["combine"]["search_domain"], "broad_phase_constituent_pairs")
         self.assertEqual(report["coverage"]["break"]["complete_ticks"], 1)
         self.assertEqual(report["coverage"]["break"]["unknown_ticks"], 1)
         self.assertEqual(report["coverage"]["break"]["state"], "unknown")
