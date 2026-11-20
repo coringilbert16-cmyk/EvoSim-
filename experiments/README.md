@@ -32,7 +32,7 @@ A separate workflow, `.github/workflows/matched-catalysis-screen.yml`, can run p
 
 The example file `experiments/matched-catalysis-config.example.json` is illustrative only: its H–S candidate is not a scientifically validated facilitator. Select and justify candidate and target compositions from the PLAN-001 evidence before any experiment. The runner accepts exactly two constituent element names for each configured molecule.
 
-**Important limitation:** the present near/remote setup relocates the candidate molecule. This changes its position-dependent flow, resonance, and hotspot exposure as well as its distance from target reactants. Consequently, any result is a placement-screen observation, not evidence of catalytic facilitation. A scientifically interpretable experiment requires an exposure-matched control or a justified design that independently measures and controls those spatial exposures. Do not dispatch the workflow as a catalytic test until that design is approved and the experiment is registered.
+**Important limitation:** the present near/remote setup relocates the candidate molecule. This can change flow/wake, source/hotspot exposure, and incoming resonance as well as distance from target reactants. Its output is a placement-screen observation, not evidence of catalysis. The required matching variables, fail-closed placement gate, candidate-selection criteria, and opportunity-denominator requirements are specified in [PLAN-002 exposure-matching design](records/plans/PLAN-002-exposure-matching-design.md). Do not dispatch this workflow as a catalytic test. PR #392's full CI passed on `a9fdc384`; the PR remains draft and unmerged while the scientific control design is implemented.
 
 ## Fixed experimental conditions
 
