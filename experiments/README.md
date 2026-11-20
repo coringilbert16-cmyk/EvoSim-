@@ -59,7 +59,7 @@ the experiment registry and dedicated result record authoritative.
 
 ## Outputs
 
-Each seed produces a compact permanent record from the reaction/energy and molecular-organization analyzers. Raw JSONL, manifests, and intermediate reports are uploaded only as one-day temporary source artifacts for aggregation, then deleted after successful aggregation. The compact comparison artifact contains only per-seed records and the comparison index. The repository result record is the permanent archive. Routine runs do not retain detailed network, geometry, contact, or temporal traces. Deep analysis is explicit opt-in.
+Each seed produces a compact permanent record from the reaction/energy, molecular-organization, and summary-only opportunity analyzers. Raw JSONL, manifests, and intermediate reports stay on the runner, are used to build and validate the record, and are deleted locally; they are not uploaded. The compact comparison artifact contains only per-seed records and the comparison report. The repository result record is the permanent archive. Routine runs do not retain detailed network, geometry, contact, or temporal traces. Deep analysis is explicit opt-in and its artifacts expire after one day.
 
 - BREAK, COMBINE, and DISPLACEMENT candidate/commit/rejection totals and
   failure reasons.
@@ -71,7 +71,7 @@ Each seed produces a compact permanent record from the reaction/energy and molec
 - Time-resolved chemical complexity is an explicitly requested deep analysis, not a routine permanent output.
 - Energy-balance residuals and per-seed validation.
 
-Temporary source artifacts expire after one day and are deleted after successful aggregation. Compact record transport artifacts are retained for 90 days; permanent records belong in `experiments/records/results/`. Deep diagnostic artifacts are opt-in and expire after one day. Routine Rust CI remains separate and keeps its short 60-second
+Raw source data and intermediate analyzer files are deleted from the runner after record generation; they are never uploaded in routine runs. Compact record transport artifacts are retained for 90 days; permanent records belong in `experiments/records/results/`. Deep diagnostic artifacts are opt-in and expire after one day. Routine Rust CI remains separate and keeps its short 60-second
 seed-42 chemistry smoke baseline and focused correctness/feasibility tests.
 
 ## Time-resolved complexity analysis (deep diagnostics only)
