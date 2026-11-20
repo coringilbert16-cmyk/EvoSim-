@@ -4,12 +4,14 @@ import hashlib
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from tools.compact_experiment_record import build_record
 from tools.compare_compact_experiment_records import compare
 from tools.chemistry_analyzer import summarize_settlements
 from tools.contact_opportunity_analyzer import analyze as analyze_opportunities
+from tools.unified_chemistry_analysis import main as unified_analysis_main
 
 
 class CompactExperimentRecordTests(unittest.TestCase):
@@ -155,7 +157,18 @@ class CompactExperimentRecordTests(unittest.TestCase):
             for source in (chemistry, organization, manifest, self.root / f"seed-{seed}.jsonl"):
                 source.unlink()
             records.append(path)
-        result = compare(records)
+        output = self.root / "comparison.json"
+        markdown = self.root / "comparison.md"
+        with patch("sys.argv", [
+            "unified_chemistry_analysis.py", "--compare-records",
+            *(str(record) for record in records),
+            "--comparison-json-out", str(output),
+            "--comparison-markdown-out", str(markdown),
+        ]):
+            self.assertEqual(unified_analysis_main(), 0)
+        result = json.loads(output.read_text(encoding="utf-8"))
+        self.assertTrue(markdown.is_file())
+        self.assertFalse(result["quality"]["raw_diagnostics_required"])
         self.assertFalse(result["compatible"])
         self.assertEqual(len(result["compatibility_groups"]), 2)
         first_group = result["compatibility_groups"][0]["summary"]
