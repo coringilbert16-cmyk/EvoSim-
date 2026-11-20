@@ -69,6 +69,16 @@ class CompactExperimentRecordTests(unittest.TestCase):
             "scope": {"lifecycle_validation_errors": []},
             "organization": {
                 "unique_exact_structural_families": 2, "recurrent_families": 1,
+                "top_families": [{"signature": "sig-a", "occurrences": 3,
+                                  "reaction_created_occurrences": 2,
+                                  "reaction_created_reaction_events": 2,
+                                  "reaction_created_active_at_end": 1,
+                                  "active_at_end": 1, "composition": {"Carbon": 2, "Hydrogen": 1},
+                                  "mean_observed_lifetime_ticks": 5.0,
+                                  "median_observed_lifetime_ticks": 5.0,
+                                  "completed_lifetimes": 2, "right_censored_lifetimes": 1,
+                                  "recurrent_from_reactions": True,
+                                  "molecule_ids": [1, 2, 3]}],
                 "families_active_at_end": 1,
                 "molecules_with_multi_resource_or_bonded_structure": 1,
                 "families": [{"large": "array that must not be copied"}],
@@ -144,6 +154,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(record["molecular_development"]["lineage_edge_count"], 1)
         self.assertEqual(record["molecular_development"]["lineage_validation_status"], "valid")
         self.assertEqual(record["organization"]["family_transition_summary"]["top_family_pairs"][0]["count"], 2)
+        self.assertEqual(record["organization"]["top_structural_families"][0]["signature"], "sig-a")
+        self.assertNotIn("molecule_ids", record["organization"]["top_structural_families"][0])
         self.assertNotIn("families", record["molecular_development"])
         self.assertNotIn("lineage_edges", record["molecular_development"])
         self.assertEqual(record["record_status"], "complete")
