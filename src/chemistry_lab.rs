@@ -509,8 +509,11 @@ impl Laboratory {
                 let existing_shapes = existing
                     .realized_shapes_for_parts(catalog)
                     .ok_or("existing material has invalid constituent geometry")?;
-                for (part_index, (placement, shape)) in
-                    existing_placements.iter().copied().zip(existing_shapes).enumerate()
+                for (part_index, (placement, shape)) in existing_placements
+                    .iter()
+                    .copied()
+                    .zip(existing_shapes)
+                    .enumerate()
                 {
                     let existing_part = crate::material_geometry::PlacedMaterialPart {
                         part_index,
@@ -1174,7 +1177,10 @@ mod tests {
         assert!(laboratory.place_element("Carbon", 20.0, 20.0).is_err());
         let snapshot = laboratory.snapshot();
         assert_eq!(snapshot.material_count, 1);
-        assert_eq!(snapshot.materials[0].parts, vec![("Carbon".to_string(), 1.0)]);
+        assert_eq!(
+            snapshot.materials[0].parts,
+            vec![("Carbon".to_string(), 1.0)]
+        );
     }
 
     #[test]
