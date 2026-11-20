@@ -5,8 +5,8 @@
 
 use crate::state::Simulation;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -903,11 +903,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         self.write_run_manifest(simulation, "completed")
     }
 
-    fn write_run_manifest(
-        &self,
-        simulation: &Simulation,
-        status: &str,
-    ) -> std::io::Result<()> {
+    fn write_run_manifest(&self, simulation: &Simulation, status: &str) -> std::io::Result<()> {
         let artifact_metadata = std::fs::metadata(&self.diagnostics_path)?;
         let artifact_sha256 = if status == "completed" {
             let mut artifact = File::open(&self.diagnostics_path)?;
@@ -936,29 +932,39 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         let workflow_name = std::env::var("GITHUB_WORKFLOW").ok();
         let mut warnings = Vec::new();
         if commit_sha.is_none() {
-            warnings.push("repository commit SHA was not supplied by the execution environment".to_string());
+            warnings.push(
+                "repository commit SHA was not supplied by the execution environment".to_string(),
+            );
         }
         if workflow_run_id.is_none() {
-            warnings.push("workflow run identity is unavailable outside a configured CI environment".to_string());
+            warnings.push(
+                "workflow run identity is unavailable outside a configured CI environment"
+                    .to_string(),
+            );
         }
         if status != "completed" {
-            warnings.push("observation did not reach the recorder's completed state".to_string());
+            warnings.push(
+                "observation did not reach the recorder's completed state".to_string(),
+            );
         }
         if std::env::var("EVOSIM_EXPERIMENT_ID").is_err() {
-            warnings.push("experiment registry identity was not supplied to the run".to_string());
+            warnings.push(
+                "experiment registry identity was not supplied to the run".to_string(),
+            );
         }
-        let workflow_run_url = repository
-            .as_ref()
-            .zip(workflow_run_id.as_ref())
-            .map(|(repo, run_id)| {
-                format!(
-                    "{}/{}/actions/runs/{}",
-                    std::env::var("GITHUB_SERVER_URL")
-                        .unwrap_or_else(|_| "https://github.com".to_string()),
-                    repo,
-                    run_id
-                )
-            });
+        let workflow_run_url =
+            repository
+                .as_ref()
+                .zip(workflow_run_id.as_ref())
+                .map(|(repo, run_id)| {
+                    format!(
+                        "{}/{}/actions/runs/{}",
+                        std::env::var("GITHUB_SERVER_URL")
+                            .unwrap_or_else(|_| "https://github.com".to_string()),
+                        repo,
+                        run_id
+                    )
+                });
         let manifest = json!({
             "schema": "evosim.experiment_manifest",
             "schema_version": 1,
