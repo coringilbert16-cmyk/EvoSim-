@@ -1072,10 +1072,14 @@ pub(crate) struct EnvironmentalMoleculeLifecycleEvent {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryEvent {
+    /// Stable within a run; the run manifest scopes this tick/ordinal identifier.
+    pub(crate) reaction_id: String,
     pub(crate) tick: u64,
     pub(crate) reaction: String,
     pub(crate) source_cells: Vec<usize>,
     pub(crate) source_material_indices: Vec<usize>,
+    /// Participant identities in the same order as source_materials. None means unavailable.
+    pub(crate) source_material_ids: Vec<Option<u64>>,
     pub(crate) source_materials: Vec<Vec<(String, f64)>>,
     pub(crate) work_required: f64,
     pub(crate) reaction_frequency_hz: Option<f64>,
