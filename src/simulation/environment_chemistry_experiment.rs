@@ -1303,6 +1303,24 @@ mod tests {
     }
 
     #[test]
+    fn matched_pair_preflight_blocks_incomplete_temporal_exposure_coverage() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Hydrogen".into(), "Sulfur".into()],
+            target_reactant_a_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 20.0,
+            max_target_pair_distance: 50.0,
+            minimum_remote_distance: 80.0,
+        };
+        let error = preflight_matched_pair(42, &config)
+            .expect_err("tick-zero-only exposure must not authorize a catalytic run");
+        assert!(
+            error.contains("flow exposure is tick-zero only"),
+            "unexpected preflight blocker: {error}"
+        );
+    }
+
+    #[test]
     fn matched_config_rejects_candidate_that_is_a_target_reactant() {
         let config = MatchedCatalysisConfig {
             candidate_parts: vec!["Oxygen".into(), "Phosphorus".into()],
