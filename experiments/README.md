@@ -84,3 +84,8 @@ edges for every seed; missing lifecycle graphs or any mismatch are reported rath
 than silently treated as zero. This is elemental-pair attribution, not endpoint-
 geometry or bond-energy calibration. Committed events without complete lifecycle graph
 snapshots are reported as missing rather than inferred from composition.
+
+
+## Experiment research records
+
+The durable research registry is in [`experiments/records/`](records/README.md). It tracks completed runs, historical configuration caveats, planned research, and detailed results. Update the registry and a result record whenever an experiment completes; do not overwrite historical conditions or treat family cycles as proof of catalysis.
