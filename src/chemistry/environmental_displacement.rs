@@ -1477,7 +1477,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     operation: EnvironmentalDisplacementOperation,
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
-) -> Result<(), &'static str> {
+) -> Result<crate::state::EnvironmentalEnergySettlement, &'static str> {
     let Some(source_a) = environment
         .field
         .cells
@@ -1757,7 +1757,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     environment.chemistry_usable_energy = staged_usable_energy;
     environment.resonant_energy = staged_resonance;
     *ledger = staged_ledger;
-    Ok(())
+    Ok(crate::state::EnvironmentalEnergySettlement::settled(usable_delta,resonant_funding,structural_delta,transaction.work_expended,transaction.heat_dissipated))
 }
 
 fn resonance_withdrawal_rounding_tolerance(before: f64, after: f64, components: usize) -> f64 {
@@ -1769,7 +1769,7 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
     accumulation: &mut BTreeMap<String, f64>,
-) -> Result<(), &'static str> {
+) -> Result<crate::state::EnvironmentalEnergySettlement, &'static str> {
     let key = operation.accumulation_key.clone();
     let accumulated_reaction = operation.accumulated_reaction;
     let result = resolve_environmental_diagnosed(operation, environment, ledger);
