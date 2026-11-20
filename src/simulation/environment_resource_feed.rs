@@ -123,7 +123,7 @@ pub(crate) fn inject_plan004_resource_pulse(
     }
     assert!(ACTIVE_ELEMENTS
         .iter()
-        .all(|element| counts.get(element) == Some(&PLAN004_RESOURCES_PER_ELEMENT_PER_PULSE)));
+        .all(|element| counts.get(*element) == Some(&PLAN004_RESOURCES_PER_ELEMENT_PER_PULSE)));
 
     let inventory = simulation.energy_inventory_snapshot();
     assert!(
@@ -164,7 +164,7 @@ mod tests {
         }
         assert!(ACTIVE_ELEMENTS
             .iter()
-            .all(|element| counts.get(element) == Some(&12)));
+            .all(|element| counts.get(*element) == Some(&12)));
         let ids = particles
             .iter()
             .map(|particle| particle.material.environmental_identity)
