@@ -11,6 +11,8 @@ class ExperimentManifestTests(unittest.TestCase):
     def make_manifest(self, root: Path) -> Path:
         artifact = root / "seed-42.jsonl"
         artifact.write_bytes(b'{"event":"environmental_chemistry_header"}\n')
+        configuration = {"seed": 42}
+        canonical_configuration = json.dumps(configuration, sort_keys=True, separators=(",", ":"))
         manifest = {
             "schema": "evosim.experiment_manifest",
             "schema_version": 1,
@@ -26,8 +28,9 @@ class ExperimentManifestTests(unittest.TestCase):
             "build": {"repository": None, "commit_sha": None},
             "conditions": {
                 "configuration_schema_version": 1,
-                "configuration_sha256": "0" * 64,
-                "configuration": {"seed": 42},
+                "configuration_sha256": hashlib.sha256(canonical_configuration.encode("utf-8")).hexdigest(),
+                "configuration_canonical_json": canonical_configuration,
+                "configuration": configuration,
             },
             "diagnostics": {"raw_schema_versions": {"environmental_chemistry_header": 2}},
             "analyzers": {"source_commit_sha": None},
@@ -62,6 +65,16 @@ class ExperimentManifestTests(unittest.TestCase):
             manifest = validate_manifest(path)
 
         self.assertEqual(manifest["run"]["status"], "running")
+
+    def test_rejects_configuration_hash_mismatch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = self.make_manifest(root)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["conditions"]["configuration_sha256"] = "f" * 64
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "configuration checksum mismatch"):
+                validate_manifest(path)
 
     def test_rejects_artifact_checksum_mismatch(self):
         with tempfile.TemporaryDirectory() as temporary:
