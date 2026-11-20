@@ -76,7 +76,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
             "material_distribution": {
                 "reaction_created_compound_constituent_amount_by_resource": {"Carbon": 1}
             },
-            "reaction_network": {"family_to_family_transitions": [{"edge": 1}]},
+            "reaction_network": {"family_to_family_transitions": [{"reaction": "COMBINE", "parent_family": "family-a", "child_family": "family-b", "count": 2}]},
         }
         raw_path = self.root / f"seed-{seed}.jsonl"
         raw_bytes = b'{"event":"environmental_chemistry_header"}\\n'
@@ -142,6 +142,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(record["reactions"]["BREAK"]["diagnostics"]["committed"], 1)
         self.assertIsNone(record["molecular_development"]["mean_observed_lifetime_ticks"])
         self.assertEqual(record["molecular_development"]["lineage_edge_count"], 1)
+        self.assertEqual(record["molecular_development"]["lineage_validation_status"], "valid")
+        self.assertEqual(record["organization"]["family_transition_summary"]["top_family_pairs"][0]["count"], 2)
         self.assertNotIn("families", record["molecular_development"])
         self.assertNotIn("lineage_edges", record["molecular_development"])
         self.assertEqual(record["record_status"], "complete")
