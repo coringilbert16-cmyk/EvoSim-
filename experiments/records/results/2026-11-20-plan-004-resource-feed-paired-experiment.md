@@ -30,7 +30,7 @@ The feed arm receives six pulses at 5, 15, 25, 35, 45, and 55 minutes of elapsed
 | Sulfur | 12 | 72 |
 | **Total** | **72** | **432** |
 
-The total feed is 432 atoms, exactly 36% of the 1,200-atom initial free-resource inventory. This is a controlled, equimolar six-element feed, not an attempt to reproduce a measured net-depletion ratio. Each pulse is placed at deterministic randomized positions using a separate RNG stream derived from the run seed, so feed placement does not consume the simulation's random-number stream. The actual elapsed time and simulation tick of each pulse are recorded; delivery occurs at the first simulation-loop boundary after the scheduled wall-clock time.
+The total feed is 432 atoms, exactly 36% of the 1,200-atom initial free-resource inventory. This is a controlled, equimolar six-element feed, not an attempt to reproduce a measured net-depletion ratio. Each pulse samples the fixed tick-zero spatial distribution of the 1,200 initial free resources, with small deterministic position jitter from a separate RNG stream derived from the run seed. This preserves the initial resource-pile distribution instead of introducing a uniform-spatial feed treatment, and does not consume the simulation's random-number stream. The actual elapsed time and simulation tick of each pulse are recorded; delivery occurs at the first simulation-loop boundary after the scheduled wall-clock time.
 
 The no-feed arm receives no external matter after tick zero. Both arms retain the same initial seed, inventory construction, hotspot, environment, and normal physics.
 
