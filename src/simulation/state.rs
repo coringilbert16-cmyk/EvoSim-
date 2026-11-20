@@ -769,6 +769,25 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) opportunity_samples: [Option<EnvironmentalContactOpportunitySample>; 8],
     #[serde(default)]
     pub(crate) opportunity_sample_count: usize,
+    /// Total field cells in the anchor-search domain for each discovery pass.
+    #[serde(default)]
+    pub(crate) anchor_cells_available: u64,
+    /// Field cells actually entered by the rotating anchor scan.
+    #[serde(default)]
+    pub(crate) anchor_cells_inspected: u64,
+    /// Cells outside the fixed per-pass anchor-cell window.
+    #[serde(default)]
+    pub(crate) anchor_cells_unvisited_by_window: u64,
+    /// Cells in the selected window not reached before the per-pass scan stopped.
+    #[serde(default)]
+    pub(crate) anchor_cells_not_reached_in_selected_window: u64,
+    /// Number of target-cell spatial queries performed.
+    #[serde(default)]
+    pub(crate) target_cell_windows_inspected: u64,
+    /// Number of target-cell queries that returned a full requested limit.
+    /// This indicates a reached limit, not a proven count of omitted cells.
+    #[serde(default)]
+    pub(crate) target_cell_window_limit_reached: u64,
     /// Environmental source materials visited by the displacement anchor scan.
     pub(crate) anchor_materials_inspected: u64,
     /// Anchors that contain at least one internal bond and can be displaced.
@@ -836,6 +855,12 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
 
 impl EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) fn accumulate(&mut self, tick: Self) {
+        self.anchor_cells_available = self.anchor_cells_available.saturating_add(tick.anchor_cells_available);
+        self.anchor_cells_inspected = self.anchor_cells_inspected.saturating_add(tick.anchor_cells_inspected);
+        self.anchor_cells_unvisited_by_window = self.anchor_cells_unvisited_by_window.saturating_add(tick.anchor_cells_unvisited_by_window);
+        self.anchor_cells_not_reached_in_selected_window = self.anchor_cells_not_reached_in_selected_window.saturating_add(tick.anchor_cells_not_reached_in_selected_window);
+        self.target_cell_windows_inspected = self.target_cell_windows_inspected.saturating_add(tick.target_cell_windows_inspected);
+        self.target_cell_window_limit_reached = self.target_cell_window_limit_reached.saturating_add(tick.target_cell_window_limit_reached);
         self.anchor_materials_inspected = self
             .anchor_materials_inspected
             .saturating_add(tick.anchor_materials_inspected);
