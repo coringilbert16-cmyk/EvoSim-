@@ -324,7 +324,7 @@ def main() -> int:
         result = compare_compact_records(args.compare_records)
         args.comparison_json_out.parent.mkdir(parents=True, exist_ok=True)
         args.comparison_json_out.write_text(
-            json.dumps(result, sort_keys=True, indent=2) + "\\n", encoding="utf-8"
+            json.dumps(result, sort_keys=True, indent=2) + "\n", encoding="utf-8"
         )
         if args.comparison_markdown_out:
             args.comparison_markdown_out.parent.mkdir(parents=True, exist_ok=True)
