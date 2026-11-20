@@ -207,7 +207,7 @@ def _series_match(left: Any, right: Any, fields: tuple[str, ...] | None = None,
                     a, b = float(left_item[field]), float(right_item[field])
                 except (KeyError, TypeError, ValueError):
                     return False, None
-                if not (a == a and b == b):
+                if not (math.isfinite(a) and math.isfinite(b)):
                     return False, None
                 maximum_delta = max(maximum_delta, abs(a - b))
     return maximum_delta <= tolerance, maximum_delta
@@ -253,6 +253,9 @@ def _exposure_match_gate(near_setup: dict[str, Any],
             try:
                 delta = abs(float(near_tone[field]) - float(remote_tone[field]))
             except (KeyError, TypeError, ValueError):
+                tone_match = False
+                break
+            if not math.isfinite(delta):
                 tone_match = False
                 break
             tone_delta = max(tone_delta, delta)
