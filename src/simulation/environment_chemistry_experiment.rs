@@ -893,6 +893,83 @@ mod tests {
     use super::*;
 
     #[test]
+    fn matched_fixture_conditions_move_only_candidate_and_preserve_inventory() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Hydrogen".into(), "Sulfur".into()],
+            target_reactant_a_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 20.0,
+            max_target_pair_distance: 50.0,
+            minimum_remote_distance: 80.0,
+        };
+        let near = build_matched(
+            42,
+            &config,
+            MatchedCatalysisCondition::CandidateNear,
+        )
+        .expect("the standard seed should support the near control placement");
+        let remote = build_matched(
+            42,
+            &config,
+            MatchedCatalysisCondition::CandidateRemote,
+        )
+        .expect("the standard seed should support the remote control placement");
+
+        assert_eq!(near.pile_sizes, remote.pile_sizes);
+        assert_eq!(
+            canonical_inventory(&near.simulation),
+            canonical_inventory(&remote.simulation)
+        );
+        let near_metadata = near.experiment_metadata.expect("near metadata");
+        let remote_metadata = remote.experiment_metadata.expect("remote metadata");
+        assert_eq!(
+            near_metadata["candidate_identity"],
+            remote_metadata["candidate_identity"]
+        );
+        assert_eq!(
+            near_metadata["target_reactant_a_identity"],
+            remote_metadata["target_reactant_a_identity"]
+        );
+        assert_eq!(
+            near_metadata["target_reactant_b_identity"],
+            remote_metadata["target_reactant_b_identity"]
+        );
+        assert!(
+            near_metadata["candidate_distance_to_target_midpoint"]
+                .as_f64()
+                .expect("near distance")
+                <= config.near_distance
+        );
+        assert!(
+            remote_metadata["candidate_distance_to_target_midpoint"]
+                .as_f64()
+                .expect("remote distance")
+                >= config.minimum_remote_distance
+        );
+        assert_eq!(
+            near_metadata["all_non_candidate_molecule_geometry_unchanged"],
+            true
+        );
+        assert_eq!(
+            remote_metadata["all_non_candidate_molecule_geometry_unchanged"],
+            true
+        );
+    }
+
+    #[test]
+    fn matched_config_rejects_candidate_that_is_a_target_reactant() {
+        let config = MatchedCatalysisConfig {
+            candidate_parts: vec!["Oxygen".into(), "Phosphorus".into()],
+            target_reactant_a_parts: vec!["Phosphorus".into(), "Oxygen".into()],
+            target_reactant_b_parts: vec!["Carbon".into(), "Hydrogen".into()],
+            near_distance: 8.0,
+            max_target_pair_distance: 30.0,
+            minimum_remote_distance: 60.0,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
     fn molecular_history_recording_does_not_change_chemistry_or_energy() {
         let fixture = build(42);
         let mut recorded = fixture.simulation;
