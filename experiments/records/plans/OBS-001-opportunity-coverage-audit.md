@@ -170,6 +170,6 @@ This pass parsed the raw records and evaluated coverage/missingness in a streami
 
 - Source semantics traced.
 - Reaction-specific coverage counters and normalized analyzer states implemented.
-- Analyzer tests, Rust tests, smoke validation, and Clippy passed in PR CI run #14637.
+- Analyzer tests, Rust tests, shared chemistry smoke validation, and Clippy passed in PR CI run [#14647](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44817686779) on final code head `58a2ba7414427bb1249fb7135e0a8856e083485`.
 - Historical EXP-2026-004 raw-artifact compatibility checked across all five seeds.
 - Remaining: exact omitted-target-domain accounting for DISPLACEMENT is intentionally unresolved; the current analyzer reports partial/unknown rather than inventing an omitted-work count. Unified run manifest and cross-analyzer report index remain later OBS-001 stages.
