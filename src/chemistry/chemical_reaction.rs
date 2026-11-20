@@ -1485,8 +1485,8 @@ mod material_identity_tests {
             &mut discovery_budget,
         );
         assert!(
-            accumulation[&stale_key] < 0.75,
-            "revisiting a material must dissipate progress for a bond no longer present"
+            !accumulation.contains_key(&stale_key),
+            "exhaustive discovery must discard progress for a bond no longer present"
         );
     }
 
