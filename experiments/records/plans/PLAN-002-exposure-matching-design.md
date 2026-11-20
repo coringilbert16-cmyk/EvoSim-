@@ -77,3 +77,17 @@ A positive result requires a reproducible increase across independent seeds whil
 7. Dispatch only after the design and candidate are explicitly approved. Archive raw artifacts and a dedicated result document.
 
 No reaction rules, thresholds, resonance physics, energy grants, or organism-specific logic may be changed to make a candidate pass.
+
+## Implementation progress — first exposure telemetry increment
+
+The current implementation branch now records tick-zero local exposure metadata for each matched fixture:
+- Per-constituent flow velocity sampled through the same ambient S-flow and complete obstacle-adjusted velocity calculation used by production transport, excluding the sampled material's own obstacle.
+- Per-constituent localized-hotspot intensity from the live hotspot source function.
+- The tick-zero world-tone source sample. Its current production recipient semantics are spatially uniform per constituent, so moving a material does not change that source input.
+- Candidate-to-target legacy pairwise aura boundary magnitudes, explicitly separated from the unmeasured background contribution.
+
+The offline comparison analyzer compares paired candidate and target flow/hotspot samples and the world-tone source sample with a fixed predeclared absolute tolerance of 1e-9. It reports any mismatch and marks causal interpretation ineligible. Tests cover missing telemetry and a candidate-induced flow mismatch.
+
+**This increment is deliberately not a pass gate for running chemistry.** Flow and hotspot measurements are tick-zero only; source-cycle exposure is not integrated over time; background resonance from other materials is not yet measured; and complete eligible target-pair opportunity denominators are still absent. The analyzer therefore cannot mark causal interpretation eligible. The existing paired-run workflow remains unsuitable as a catalytic test and must not be dispatched.
+
+The legacy pairwise aura is measured only as a candidate-specific diagnostic. It is not a persistent field, does not propagate at finite speed, and does not represent field energy.
