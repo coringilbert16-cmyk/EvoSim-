@@ -32,6 +32,9 @@ BREAK_FIELDS = (
     "progress_dissipated_checked",
 )
 DISPLACEMENT_FIELDS = (
+    "anchor_cells_available", "anchor_cells_inspected",
+    "anchor_cells_unvisited_by_window", "anchor_cells_not_reached_in_selected_window",
+    "target_cell_windows_inspected", "target_cell_window_limit_reached",
     "anchor_materials_inspected", "bonded_anchor_materials", "target_cells_inspected",
     "target_materials_inspected", "bonds_inspected", "replacement_contact_searches",
     "replacement_contacts_found", "activation_updates", "activation_threshold_met",
@@ -109,14 +112,23 @@ def _break_coverage(discovery: dict[str, Any]) -> dict[str, Any]:
 
 def _displacement_coverage(discovery: dict[str, Any], work: dict[str, Any]) -> dict[str, Any]:
     remaining = _counter(work, "displacement_discovery_work_remaining")
+    anchor_window_unvisited = _counter(discovery, "anchor_cells_unvisited_by_window")
+    anchor_selected_unvisited = _counter(discovery, "anchor_cells_not_reached_in_selected_window")
+    target_limit_reached = _counter(discovery, "target_cell_window_limit_reached")
+    if anchor_window_unvisited is None or anchor_selected_unvisited is None or target_limit_reached is None:
+        return _coverage("unknown", "bounded_anchor_target_and_contact_search", None,
+                         "Coverage counters are absent in this record or legacy schema.")
+    if anchor_window_unvisited > 0 or anchor_selected_unvisited > 0 or remaining == 0:
+        return _coverage("partial", "bounded_anchor_target_and_contact_search", None,
+                         "Known anchor cells were skipped by a fixed window or exhausted work allowance; total unvisited target work is not measured.")
+    if target_limit_reached > 0:
+        return _coverage("unknown", "bounded_anchor_target_and_contact_search", None,
+                         "At least one target-cell query reached its requested limit, but the exact omitted-cell count is not measured.")
     if remaining is None:
         return _coverage("unknown", "bounded_anchor_target_and_contact_search", None,
                          "No per-tick remaining-work value is available.")
-    if remaining == 0:
-        return _coverage("partial", "bounded_anchor_target_and_contact_search", None,
-                         "The per-tick discovery work allowance was fully consumed; total unvisited work is not measured.")
     return _coverage("unknown", "bounded_anchor_target_and_contact_search", None,
-                     "Some work allowance remained, but anchor and target-cell caps prevent a completeness claim.")
+                     "Anchor cells were visited, but total target materials and candidate work are not established as a complete domain.")
 
 
 def _sum_known(values: list[int | None]) -> tuple[int, int]:
