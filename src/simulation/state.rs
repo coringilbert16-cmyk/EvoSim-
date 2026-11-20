@@ -993,16 +993,18 @@ impl EnvironmentalLocalNeighborhoodSample {
                     continue;
                 };
                 if placements.is_empty()
-                    || placements.iter().any(|placement| {
-                        !placement.x.is_finite() || !placement.y.is_finite()
-                    })
+                    || placements
+                        .iter()
+                        .any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
                 {
                     missing_geometry_count += 1;
                     continue;
                 }
                 let count = placements.len() as f64;
-                let molecule_x = placements.iter().map(|placement| placement.x).sum::<f64>() / count;
-                let molecule_y = placements.iter().map(|placement| placement.y).sum::<f64>() / count;
+                let molecule_x =
+                    placements.iter().map(|placement| placement.x).sum::<f64>() / count;
+                let molecule_y =
+                    placements.iter().map(|placement| placement.y).sum::<f64>() / count;
                 let dx = molecule_x - center_x;
                 let direct_dy = (molecule_y - center_y).abs();
                 let dy = if field_height.is_finite() && field_height > 0.0 {
@@ -1033,21 +1035,20 @@ impl EnvironmentalLocalNeighborhoodSample {
                         0
                     };
                     if let Some(index) = index {
-                        elemental_counts[index] =
-                            elemental_counts[index].saturating_add(count);
+                        elemental_counts[index] = elemental_counts[index].saturating_add(count);
                     } else {
-                        unclassified_constituents =
-                            unclassified_constituents.saturating_add(count);
+                        unclassified_constituents = unclassified_constituents.saturating_add(count);
                     }
                 }
                 let descriptor = format!(
                     "{:?}|{:?}",
                     material.material.parts, material.material.internal_bonds
                 );
-                let topology_signature = descriptor.bytes().fold(
-                    0xcbf29ce484222325_u64,
-                    |hash, byte| (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3),
-                );
+                let topology_signature = descriptor
+                    .bytes()
+                    .fold(0xcbf29ce484222325_u64, |hash, byte| {
+                        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+                    });
                 candidates.push(EnvironmentalNearbyMoleculeSample {
                     identity,
                     elemental_counts,
