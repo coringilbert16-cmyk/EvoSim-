@@ -289,3 +289,17 @@ The canonical schema proposal is [OBS-001-schema-v1-proposal.md](plans/OBS-001-s
 3. Finish exact energy-settlement source review at the COMBINE/BREAK/DISPLACEMENT commit boundaries before proposing a read-only settlement summary.
 4. Design the opportunity coverage fields against each discovery algorithm's actual search domain; keep all incomplete denominators fail-closed.
 5. Dispatch the new aggregation-only recovery workflow on PR #394's branch to generate the missing specialist reports from the ten retained PLAN-004 artifacts. No observation rerun is required.
+
+
+### First identity-join slice validation — 2026-11-20
+
+Draft [PR #398](https://github.com/coringilbert16-cmyk/EvoSim-/pull/398) now passes its full GitHub Actions validation at head `f590c446935638ab51a7f1542b027e6db5035fc4`:
+- Rust formatting: success (after applying the formatter's two requested layout changes).
+- Repository architecture checks: success.
+- Offline analyzer tests: success.
+- Full Rust tests: success.
+- Shared environmental chemistry smoke simulation: success.
+- Chemistry and organization analysis of the smoke output: success.
+- Clippy: success.
+
+The PR remains draft/open and unmerged pending review. The initial check failed only at formatting; the two formatter changes were applied, and the subsequent full run passed. No chemistry or energy behavior changed. This validates the first identity-only instrumentation slice but does not validate the complete OBS-001 schema or settle the remaining energy/opportunity gaps.
