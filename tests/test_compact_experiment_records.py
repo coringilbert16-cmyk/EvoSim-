@@ -158,6 +158,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
         result = compare(records)
         self.assertFalse(result["compatible"])
         self.assertEqual(len(result["compatibility_groups"]), 2)
+        first_group = result["compatibility_groups"][0]["summary"]
+        self.assertEqual(first_group["reaction_totals"]["COMBINE"]["committed_by_seed"], [None, None])
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
         self.assertFalse(result["quality"]["pooled_rates_emitted"])
 
