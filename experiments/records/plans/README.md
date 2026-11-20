@@ -1,8 +1,10 @@
 # Organized-chemistry research plans
 
-These plans define questions and evidence standards, not claims that the behaviors already exist. The research objective is to discover naturally arising organization in the general chemistry engine. No plan authorizes special-case reactions, organism-specific logic, forced reactions, artificial energy grants, or threshold changes.
+These plans define scientific questions and evidence standards, not claims that the behaviors already exist. The research objective is to discover naturally arising organization in the general chemistry engine. No plan authorizes special-case reactions, organism-specific logic, forced reactions, artificial energy grants, or threshold changes.
 
-The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 is now in progress.
+Engineering/measurement plans are tracked separately under the `OBS-NNN` namespace. They improve reproducibility and analysis infrastructure; they are not reaction hypotheses and do not authorize simulator behavior changes. The approved [OBS-001 chemistry observability plan](OBS-001-chemistry-observability.md) is in Phase 1 audit. Its [first-pass audit and checkpoint](../observability-audit-2026-11-20.md) records existing capabilities, gaps, open-PR dependencies, and the next actions.
+
+The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations.
 
 ## PLAN-001 — Existing pathway and molecular-lineage analysis
 
@@ -38,7 +40,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 - Repeated events and uncertainty across independent seeds.
 - Full material and energy accounting.
 
-**Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed in a reaction and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
+**Controls and interpretation:** Initial inventory, reactant concentrations, geometry, field exposure, and energy conditions must be matched. A molecule consumed and replaced by a same-family product is not a catalyst. Repeated participation or higher raw event counts alone are insufficient.
 
 **Infrastructure prerequisite:** the current environmental workflow runs one fixed baseline condition and has no paired facilitator control. Comparative setup execution and comparable opportunity diagnostics must be implemented or supplied by a suitable laboratory workflow before a controlled run.
 

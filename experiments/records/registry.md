@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-20
 
-This is the master index. Detailed completed-run results live under [results/](results/); planned research lives under [plans/](plans/README.md).
+This is the master index. Detailed completed-run results live under [results/](results/); scientific research lives under [plans/](plans/README.md); approved observability engineering work is listed separately below.
 
 ## Completed experiments
 
@@ -12,6 +12,14 @@ This is the master index. Detailed completed-run results live under [results/](r
 | EXP-2026-002 | Five-seed short chemistry observation | 300 seconds per seed; seeds 42–46; historical inventory metadata is inconsistent | Completed; interpret cautiously | [Historical result summary](results/historical-experiments.md) |
 | EXP-2026-003 | Five-seed extended chemistry observation | 25 minutes per seed; seeds 42–46 | Completed; reanalyzed | [Historical result summary](results/historical-experiments.md) |
 | EXP-2026-004 | Five-seed one-hour chemistry observation | 3,600 seconds per seed; seeds 42–46; 1,200 independent resources + 80 two-constituent molecules; six active elements | Completed; validated | [Full result and analysis](results/2026-11-19-one-hour-five-seed.md) |
+
+## Engineering and observability plans
+
+These plans improve experiment reproducibility and analysis infrastructure. They are not scientific reaction hypotheses and do not authorize chemistry behavior changes.
+
+| ID | Objective | Status | Tracking / plan |
+|---|---|---|---|
+| OBS-001 | Install compact, versioned chemistry diagnostics and a reusable offline experiment-analysis/reporting pipeline | **Approved; Phase 1 audit in progress** | [GitHub issue #396](https://github.com/coringilbert16-cmyk/EvoSim-/issues/396); [implementation plan](plans/OBS-001-chemistry-observability.md); [first-pass audit](observability-audit-2026-11-20.md) |
 
 ## Planned research
 
