@@ -26,7 +26,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 ## Current PLAN-001 progress
 
-Four exact-instance reversible fragment-reuse cycles have been confirmed across seeds 43–45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. Three additional exact-instance sequences show H–O–P temporarily incorporated into an H–O–P–S product and released again. A broader scan found 192 exact-pair fragment reunifications across seeds 42–46. These support reusable intermediate chemistry, not catalysis. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
+Four exact-instance reversible fragment-reuse cycles have been confirmed across seeds 43–45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. Three additional exact-instance sequences show H–O–P temporarily incorporated into H–O–P–S and released again in seed 45. A broader scan found 192 exact-pair fragment reunifications across seeds 42–46, dominated by simple two-constituent families. Longest connected identity-lineage walks range from 12 to 39 events across seeds. No facilitator can be identified from the available event/opportunity records. These support reusable intermediate chemistry, not catalysis. See [initial findings and second-pass audit](results/2026-11-20-plan-001-initial-findings.md).
 
 ## Interpretation guardrails
 
