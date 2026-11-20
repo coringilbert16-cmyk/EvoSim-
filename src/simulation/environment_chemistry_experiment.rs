@@ -878,8 +878,17 @@ pub(crate) fn build_matched(
     if initial_energy.current_usable_energy != final_energy.current_usable_energy
         || initial_energy.current_resonant_energy != final_energy.current_resonant_energy
         || initial_energy.current_structural_energy != final_energy.current_structural_energy
+        || initial_energy.current_pair_interaction_potential
+            != final_energy.current_pair_interaction_potential
     {
-        return Err("matched control relocation changed the initial energy inventory".to_string());
+        return Err(format!(
+            "matched control relocation changed the initial energy inventory: usable_delta={:.17e}, resonant_delta={:.17e}, structural_delta={:.17e}, pair_potential_delta={:.17e}",
+            final_energy.current_usable_energy - initial_energy.current_usable_energy,
+            final_energy.current_resonant_energy - initial_energy.current_resonant_energy,
+            final_energy.current_structural_energy - initial_energy.current_structural_energy,
+            final_energy.current_pair_interaction_potential
+                - initial_energy.current_pair_interaction_potential,
+        ));
     }
     if non_candidate_layout_before
         != non_candidate_layout_signature(&fixture.simulation, candidate_id)
