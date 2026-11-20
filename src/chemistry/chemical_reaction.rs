@@ -280,6 +280,7 @@ pub(crate) fn accumulate(
     let mut operations = Vec::new();
     let mut updated_keys = std::collections::BTreeSet::new();
     let indices = discovery_indices(bond_count, *remaining_discovery_work, tick);
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
 
     for index in indices {
         let Some(bond) = organism.structure.bonds.get(index).copied() else {
@@ -557,7 +558,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     } else {
         Some(tick as usize % candidates.len())
     };
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
