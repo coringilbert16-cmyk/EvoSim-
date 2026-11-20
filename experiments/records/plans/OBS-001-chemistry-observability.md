@@ -141,6 +141,10 @@ An existing EXP-2026-006 seed-42 artifact was inspected offline (no rerun). Its 
 
 **Next step:** inspect the remaining PR tests and run the existing offline analyzers on retained artifacts (without rerunning simulations) to establish which outputs can be regenerated and how much raw data can be omitted from aggregate uploads. Then draft the versioned manifest/event schema and propose bounded/opt-in detailed sampling. Current CI for documentation PR #397 is running; no merge has been performed.
 
+### Open-PR test review checkpoint
+
+Focused tests from PR #345 and PR #392 were inspected. #345 validates funnel aggregation and matched-run metadata but does not prove opportunity-denominator completeness. #392 validates a successful exact COMBINE sample-to-event join and fail-closed paired-arm inventory/energy/exposure gates; it does not yet test a successful causal eligibility path or comprehensive BREAK/DISPLACEMENT joins. The audit lists the additional regression cases needed before adopting this schema. Continue with artifact reanalysis and field-level schema drafting; do not assume these open PRs are production-ready or duplicate their implementation.
+
 ## Current checkpoint
 
 - Approval received: 2026-11-20.
