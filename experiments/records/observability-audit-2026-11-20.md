@@ -266,3 +266,26 @@ Resource-feed paired workflow [#44784506988](https://github.com/coringilbert16-c
 ### Documentation PR status
 
 After the audit update, PR #397 head is `fa7fc56fdcb72024ea84e9f239b37c76a65cec4e`. Its Rust workflow [#44803567727](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44803567727) was still in progress at the latest check. No merge was performed.
+
+
+## Source-level schema confirmation and first instrumentation slice (2026-11-20)
+
+The exact event-construction paths in `src/simulation/simulation.rs` were reviewed after drafting OBS-001 schema v1:
+
+- The environmental chemistry event vector is cleared at the beginning of each chemistry tick, then the tick is incremented before event resolution. Each reaction event is appended in deterministic resolution order.
+- COMBINE and DISPLACEMENT operations retain cloned `source_a` and `source_b` physical materials; BREAK retains its `source_material`. Their `environmental_identity` values are available before the resolver mutates the live field. These are the right source for event participant IDs even when molecular-history recording is disabled.
+- The current lifecycle ID `tick-ordinal` is generated before the event is appended. Promoting that exact value to the enclosing reaction event is a minimal compatible join. The run manifest will scope it to one run.
+- The event's cell/material indices remain useful location diagnostics but must not be used as identity.
+- The chemistry-lab test fixture had one source-composition entry despite two parent IDs; it was corrected to represent two source participants and now asserts the event ID, ordered participant IDs, and lifecycle ID agree.
+
+**First implementation slice:** draft PR [#398](https://github.com/coringilbert16-cmyk/EvoSim-/pull/398) adds `reaction_id` and ordered nullable `source_material_ids` to environmental reaction events for COMBINE, DISPLACEMENT, and BREAK. It reuses the existing lifecycle ID; it does not change reaction behavior, scheduling, energy calculations, or diagnostic volume. The PR is draft and CI is running. Do not treat it as validated or merge it until all checks are green and the diff is reviewed.
+
+The canonical schema proposal is [OBS-001-schema-v1-proposal.md](plans/OBS-001-schema-v1-proposal.md). Its next open questions are exact per-reaction energy funding capture and denominator/coverage semantics; neither should be guessed from activation or existing aggregate counters.
+
+### Current next actions
+
+1. Allow PR #398 full CI to finish; fix any formatting, compile, test, or Clippy failures.
+2. Review analyzer compatibility: the geometry-aware network analyzer already looks for an event-level `reaction_id`, so this addition closes its previously indirect join; add/adjust regression tests if needed.
+3. Finish exact energy-settlement source review at the COMBINE/BREAK/DISPLACEMENT commit boundaries before proposing a read-only settlement summary.
+4. Design the opportunity coverage fields against each discovery algorithm's actual search domain; keep all incomplete denominators fail-closed.
+5. Dispatch the new aggregation-only recovery workflow on PR #394's branch to generate the missing specialist reports from the ten retained PLAN-004 artifacts. No observation rerun is required.
