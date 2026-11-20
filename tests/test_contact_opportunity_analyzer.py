@@ -94,7 +94,7 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
                 },
             }
             (root / "seed-42.jsonl").write_text(
-                json.dumps(reaction) + "\\n" + json.dumps(tick) + "\\n",
+                json.dumps(reaction) + "\n" + json.dumps(tick) + "\n",
                 encoding="utf-8",
             )
             report = analyze(root, [42], 300)
