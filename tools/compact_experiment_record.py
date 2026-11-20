@@ -86,6 +86,24 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     )
     transition_rows = nested(organization, "reaction_network", "family_to_family_transitions", default=None)
     transition_summary = None
+    top_structural_families = [
+        {
+            "signature": row.get("signature"),
+            "occurrences": row.get("occurrences"),
+            "reaction_created_occurrences": row.get("reaction_created_occurrences"),
+            "reaction_created_reaction_events": row.get("reaction_created_reaction_events"),
+            "reaction_created_active_at_end": row.get("reaction_created_active_at_end"),
+            "active_at_end": row.get("active_at_end"),
+            "composition": scalar_tree(row.get("composition", {})),
+            "mean_observed_lifetime_ticks": row.get("mean_observed_lifetime_ticks"),
+            "median_observed_lifetime_ticks": row.get("median_observed_lifetime_ticks"),
+            "completed_lifetimes": row.get("completed_lifetimes"),
+            "right_censored_lifetimes": row.get("right_censored_lifetimes"),
+            "recurrent_from_reactions": row.get("recurrent_from_reactions"),
+        }
+        for row in (org.get("top_families", []) or [])[:25]
+        if isinstance(row, dict)
+    ]
     if isinstance(transition_rows, list):
         ordered_transitions = sorted(
             (row for row in transition_rows if isinstance(row, dict)),
@@ -239,6 +257,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "lineage_reaction_counts": scalar_tree(history.get("lineage_reaction_counts")),
             "mean_observed_lifetime_ticks": history.get("mean_observed_lifetime_ticks"),
             "unique_structural_families": org.get("unique_exact_structural_families"),
+            "top_structural_families": top_structural_families,
             "recurrent_structural_families": org.get("recurrent_families"),
             "families_active_at_end": org.get("families_active_at_end"),
             "compound_identity_count": org.get("molecules_with_multi_resource_or_bonded_structure"),
