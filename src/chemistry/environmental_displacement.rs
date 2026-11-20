@@ -885,7 +885,9 @@ fn best_replacement_contact(
                                     .map(|environment| environment.chemistry_usable_energy)
                                     .unwrap_or(0.0),
                                 environmental_resonant_energy: environment
-                                    .and_then(|environment| environment.resonant_energy.total_energy())
+                                    .and_then(|environment| {
+                                        environment.resonant_energy.total_energy()
+                                    })
                                     .unwrap_or(0.0),
                                 local_neighborhood: environment
                                     .map(|environment| {
