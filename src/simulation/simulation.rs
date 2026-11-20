@@ -5,9 +5,7 @@ use std::collections::HashSet;
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
-use crate::decision_runtime::{
-    select_action_with_developmental_scores, ActionCandidate, DecisionContext,
-};
+use crate::decision_runtime::ActionCandidate;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
@@ -26,8 +24,6 @@ fn should_prepare_transformation(
         _ => remaining_ticks == 1,
     }
 }
-
-const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 fn whole_tick_profiling_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
