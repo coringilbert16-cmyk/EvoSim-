@@ -32,6 +32,16 @@ The EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze reta
 
 **Infrastructure prerequisite:** The current environmental workflow is baseline-only and has no paired facilitator control. Comparative execution and opportunity diagnostics are required before a controlled run.
 
+**Minimum viable controlled protocol (design only; not yet implemented):**
+1. Select a target reaction and a candidate molecule that is not one of its reactant substrates.
+2. Add event-level local-neighborhood records: nearby molecule IDs/families, distances and relative geometry, local field/resonance state, and the exact target-reactant opportunity being evaluated. Record both successful and unsuccessful eligible opportunities, not only committed events.
+3. Run paired deterministic setups with the same target-reactant inventory and environment. In the treatment, place the candidate in the target reaction zone; in the primary control, keep the same candidate and elemental inventory but place it outside the target's interaction neighborhood. If long-range field coupling makes relocation an invalid control, add a separately justified control that preserves elemental inventory while removing the candidate structure.
+4. Compare target-reaction commits per eligible contact/opportunity exposure, with reactant availability, geometry, field exposure, and energy availability reported. Use independent seed pairs and uncertainty intervals.
+5. Trace candidate material through all reactions. A candidate that is consumed as a target substrate is not a facilitator; a temporary intermediate must be regenerated and available for repeated cycles.
+6. Require reproducible rate enhancement, correct material/energy accounting, and no special-case reaction logic before calling the result catalytic facilitation.
+
+This protocol is a design prerequisite only. It does not authorize code changes or a simulation run.
+
 ## PLAN-003 — Autocatalysis
 
 **Status:** Planned; depends on PLAN-001 and a defensible self-production pathway. PLAN-002 may help define the mechanism.
