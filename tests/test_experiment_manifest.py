@@ -49,6 +49,20 @@ class ExperimentManifestTests(unittest.TestCase):
             manifest = validate_manifest(path)
         self.assertEqual(manifest["run"]["end_tick"], 1200)
 
+    def test_running_manifest_allows_incomplete_artifact_checksum(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = self.make_manifest(root)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["run"]["status"] = "running"
+            data["run"]["completed_at_unix_ms"] = None
+            data["run"]["actual_elapsed_wall_seconds"] = None
+            data["artifacts"][0]["sha256"] = None
+            path.write_text(json.dumps(data), encoding="utf-8")
+            manifest = validate_manifest(path)
+
+        self.assertEqual(manifest["run"]["status"], "running")
+
     def test_rejects_artifact_checksum_mismatch(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
