@@ -1,6 +1,9 @@
-#![expect(
-    dead_code,
-    reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+#![cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+    )
 )]
 /// Shared generic mathematics used by physical transformation and geometry.
 pub fn complexity(n: f64) -> f64 {
