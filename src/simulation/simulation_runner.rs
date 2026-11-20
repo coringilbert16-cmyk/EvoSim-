@@ -2,12 +2,10 @@ use crate::state::Simulation;
 use std::time::{Duration, Instant};
 
 const DEFAULT_MAX_TICKS: u64 = 10_000;
-const DEFAULT_TARGET_BIRTHS: u64 = 3;
 const REPORT_INTERVAL: u64 = 100;
 
 pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut max_ticks = DEFAULT_MAX_TICKS;
-    let mut target_births = DEFAULT_TARGET_BIRTHS;
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
@@ -38,10 +36,8 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 duration_seconds = args.next().and_then(|value| value.parse().ok());
             }
             "--births" => {
-                target_births = args
-                    .next()
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or(DEFAULT_TARGET_BIRTHS);
+                let _ = args.next();
+                eprintln!("--births is disabled while organism rules are dormant.");
             }
             "--diagnostics" => {
                 diagnostics_path = args.next();
@@ -74,116 +70,68 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         return;
     }
 
-    let mut simulation = Simulation::new(42, 10.0);
-    let initial_id = simulation
-        .organisms
-        .first()
-        .map(|organism| organism.id.clone())
-        .unwrap_or_default();
-
-    println!(
-        "HEADLESS SIMULATION START: seed=42 initial_organism={initial_id}          max_ticks={max_ticks} target_births={target_births}"
-    );
-
+    let mut simulation = Simulation::new(seed, 10.0);
+    simulation.record_environmental_molecular_history = true;
     let mut diagnostics = diagnostics_path.map(|path| {
-        crate::diagnostics::DiagnosticsRecorder::new(
+        crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
             &path,
             diagnostic_interval,
-            &initial_id,
-            &mut simulation,
+            seed,
+            duration_seconds,
+            Some(max_ticks),
+            &simulation,
+            &[],
         )
-        .unwrap_or_else(|error| panic!("failed to create diagnostics file {path}: {error}"))
+        .unwrap_or_else(|error| panic!("failed to create chemistry diagnostics file {path}: {error}"))
     });
 
     report(&simulation, "initial");
 
-    let mut previous_population = simulation.living_population();
-    let mut previous_births = simulation.next_organism_id.saturating_sub(2);
-
     for _ in 0..max_ticks {
-        if let Some(diagnostics) = diagnostics.as_mut() {
-            diagnostics.observe_before(&mut simulation);
-        }
         simulation.step();
         if let Some(diagnostics) = diagnostics.as_mut() {
             diagnostics
-                .observe_after(&mut simulation)
-                .expect("failed to write simulation diagnostics");
+                .observe(&simulation)
+                .expect("failed to write environmental chemistry diagnostics");
         }
 
-        let births = simulation.next_organism_id.saturating_sub(2);
-        if births != previous_births {
-            println!(
-                "BIRTH EVENT: tick={} total_births={} population={} new_organism_ids_starting_at={}",
-                simulation.tick,
-                births,
-                simulation.living_population(),
-                simulation.next_organism_id.saturating_sub(1)
-            );
-            previous_births = births;
-        }
-
-        if simulation.tick % REPORT_INTERVAL == 0
-            || simulation.living_population() != previous_population
-        {
+        if simulation.tick % REPORT_INTERVAL == 0 {
             report(&simulation, "progress");
-            previous_population = simulation.living_population();
         }
-
-        if births >= target_births {
-            report(&simulation, "target reached");
-            if let Some(diagnostics) = diagnostics.as_mut() {
-                diagnostics
-                    .finish(&mut simulation)
-                    .expect("failed to finalize simulation diagnostics");
-            }
-            println!(
-                "HEADLESS SIMULATION END: observed {} completed birth events by tick {}.",
-                births, simulation.tick
-            );
-            return;
-        }
-
-        // Continue the physical world even when no living organisms remain.
     }
 
     if let Some(diagnostics) = diagnostics.as_mut() {
         diagnostics
-            .finish(&mut simulation)
-            .expect("failed to finalize simulation diagnostics");
+            .finish(&simulation)
+            .expect("failed to finalize environmental chemistry diagnostics");
     }
     report(&simulation, "tick limit reached");
     println!(
-        "HEADLESS SIMULATION END: tick limit {} reached with {} completed birth events.",
-        max_ticks,
-        simulation.next_organism_id.saturating_sub(2)
+        "HEADLESS CHEMISTRY SIMULATION END: tick limit {} reached.",
+        max_ticks
     );
 }
 
 fn report(simulation: &Simulation, label: &str) {
-    let reproducing = simulation
-        .organisms
+    let physical_material_count = simulation
+        .environment
+        .field
+        .cells
         .iter()
-        .filter(|organism| {
-            organism.reproductive_construction.is_some()
-                && matches!(
-                    crate::cavity::analyze_genome_cavity(
-                        &organism.structure,
-                        &simulation.environment.catalog,
-                    ),
-                    Ok(Some(ref cavity)) if cavity.qualifies()
-                )
-        })
-        .count();
+        .map(|cell| cell.physical_materials.len())
+        .sum::<usize>();
+    let diagnostics = simulation.environmental_chemistry_diagnostics;
 
     println!(
-        "[{label}] tick={} population={} reproducing={}          decomposing_bodies={} active_transformations={} completed_births={}",
+        "[{label}] tick={} environmental_objects={} environmental_constituents={} environment_resonance={:.6} BREAK={} COMBINE={} DISPLACEMENT={} dormant_organism_holders={}",
         simulation.tick,
-        simulation.living_population(),
-        reproducing,
-        simulation.decomposing_bodies.len(),
-        simulation.active_transformations.len(),
-        simulation.next_organism_id.saturating_sub(2),
+        physical_material_count,
+        simulation.environment.field.total_amount(),
+        simulation.environment.resonant_energy.total_energy().unwrap_or(f64::NAN),
+        diagnostics.break_committed,
+        diagnostics.combine_committed,
+        diagnostics.displacement_committed,
+        simulation.organisms.len(),
     );
 }
 
