@@ -304,3 +304,42 @@ Recommended order, each as a small, separately testable change:
 - Confirm analyzer output version/hash conventions and exact artifact size limits in GitHub Actions.
 
 **No implementation is authorized by this document alone.** This is the field-level proposal for review and focused implementation planning. It changes no code or simulation behavior.
+
+
+## 11. Confirmed energy commit-boundary details (2026-11-20)
+
+The source review now confirms the following exact capture points. These are implementation design findings, not telemetry already emitted.
+
+### Environmental BREAK
+
+`src/chemistry/chemical_reaction.rs::resolve_environmental_diagnosed`:
+- Clones the environment resonance reservoir and withdraws frequency-compatible `resonant_work`.
+- Computes the remaining usable requirement from the stored bond energy plus disruption work not covered by resonance.
+- Calls `prepare_chemical_break_energy_with_resonance`, which constructs and settles the authoritative `EnergyTransaction` on a staged ledger/usable holder.
+- Tracks the actual usable-energy delta, structural delta (the removed bond's stored energy), resonance-holder decrease, and complete disruption work before committing the physical split.
+- Only commits the staged resonance/ledger/usable values after the physical split succeeds.
+
+The smallest faithful summary should be captured from the prepared settlement plus the actual `resonant_work`; do not infer resonance from requested disruption cost. The preparation object currently returns staged usable energy, staged ledger, and heat, but not the transaction itself. A small read-only settlement value can be added at this boundary without changing settlement arithmetic.
+
+### Environmental DISPLACEMENT
+
+`src/chemistry/environmental_displacement.rs::resolve_environmental_diagnosed`:
+- Builds an authoritative `DisplacementTrial` containing `ReactionEnergyBalance` with reactant/product structural energy, physical work, heat, signed net change, required external input, and surplus.
+- Withdraws actual compatible resonance funding, validates the reservoir before/after and the withdrawn amount, and computes any remaining usable-energy deficit.
+- Constructs and settles the conservative `EnergyTransaction` on staged holders/ledger.
+- Updates usable, resonant, structural, and work ledger holdings before committing the products.
+
+This path already has the complete balance and actual resonance funding at the commit boundary. Return or capture a compact immutable summary from this function; do not recalculate the budget in the recorder.
+
+### Environmental COMBINE
+
+`src/chemistry/environmental_combine.rs::resolve_environmental` computes authoritative reactant and product structural potentials and the usable-energy delta around `combine_runtime::form_selected_bond_diagnostic`. That helper constructs and settles the actual `EnergyTransaction`, but currently returns a `CombineAttempt` without the transaction breakdown. The outer environmental resolver already has the structural pre/post values and final usable delta, but work/heat should be surfaced from the exact transaction rather than inferred from cumulative ledger differences. The minimal API change is to carry a small settlement summary out of the COMBINE helper alongside its existing attempt result; review all internal callers before choosing the exact type.
+
+### Common rule
+
+- Capture the settlement only after all staged validation succeeds and the physical mutation commits.
+- A failed resolver returns `not_settled` plus its existing failure reason; it must not emit a planned balance as if it were a transaction.
+- The legacy `EnergyTransaction::potential_released` remains zero and is never a source.
+- COMBINE has no resonance withdrawal in its current environmental resolver; represent zero only if explicitly measured at that boundary.
+- BREAK and DISPLACEMENT must report actual frequency-compatible resonance withdrawn separately from the usable-holder delta.
+- No event-level summary may be computed by subtracting long-lived cumulative f64 ledger counters; use the exact staged transaction/pre-post values already held at the commit boundary.
