@@ -191,6 +191,7 @@ fn run_environment_chemistry_experiment(
     );
 
     let started_at = Instant::now();
+    diagnostics.mark_started();
     while duration_seconds.map_or(simulation.tick < max_ticks, |seconds| {
         started_at.elapsed() < Duration::from_secs(seconds)
     }) {
