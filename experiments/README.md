@@ -15,7 +15,8 @@ the snapshot interval:
   "run": true,
   "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 300,
-  "diagnostic_interval": 100
+  "diagnostic_interval": 100,
+  "deep_diagnostics": false
 }
 ```
 
