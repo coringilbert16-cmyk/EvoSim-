@@ -115,10 +115,55 @@ def compare(paths: list[Path]) -> dict[str, Any]:
     }
 
 
+def render_markdown(result: dict[str, Any]) -> str:
+    lines = [
+        "# Compact EvoSim experiment comparison",
+        "",
+        f"- Compatible conditions: {'yes' if result['compatible'] else 'no'}",
+        f"- Compatibility groups: {len(result['compatibility_groups'])}",
+        "- Source: compact permanent records only",
+        "",
+    ]
+    for index, group in enumerate(result["compatibility_groups"], 1):
+        summary = group["summary"]
+        lines.extend([
+            f"## Condition group {index}",
+            "",
+            f"- Independent seeds: {', '.join(map(str, summary['seeds']))}",
+            f"- Requested duration: {group['requested_duration_seconds']} seconds",
+            f"- Active resources: {', '.join(group['active_resources'] or [])}",
+            "",
+            "| Reaction | Committed by seed | Complete sum |",
+            "|---|---|---:|",
+        ])
+        for reaction, totals in summary["reaction_totals"].items():
+            per_seed = ", ".join("unknown" if value is None else str(value)
+                                 for value in totals["committed_by_seed"])
+            total = totals["committed_sum"]
+            lines.append(f"| {reaction} | {per_seed or 'unknown'} | {total if total is not None else 'unknown'} |")
+        lines.extend(["", "### Molecular development", ""])
+        for metric, values in summary["molecular_development"].items():
+            rendered = ", ".join("unknown" if value is None else str(value) for value in values)
+            lines.append(f"- {metric}: {rendered or 'unknown'}")
+        lines.append("")
+    lines.extend([
+        "## Data-quality rules",
+        "",
+        "- Null values remain unknown; they are not converted to measured zero.",
+        "- Incompatible conditions are separated into distinct groups.",
+        "- Seeds are independent replicates; reaction events within a seed are not independent samples.",
+        "- No pooled reaction rates are emitted by this comparison.",
+        "- Raw diagnostics and specialist intermediate files are not required.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("records", nargs="+", type=Path, help="compact permanent record JSON files")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--markdown-out", type=Path)
     args = parser.parse_args()
     result = compare(args.records)
     args.output.parent.mkdir(parents=True, exist_ok=True)
