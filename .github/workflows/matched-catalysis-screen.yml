@@ -93,6 +93,17 @@ jobs:
           print(f"Two conditions per seed; {duration}s each; config={config_path}")
           PY
 
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run fail-closed paired exposure preflight before any simulation
+        env:
+          SEEDS: ${{ steps.parameters.outputs.seeds }}
+          CONFIG_PATH: ${{ steps.parameters.outputs.config_path }}
+        run: |
+          set -euo pipefail
+          for seed in $(python3 -c 'import json,os; print(" ".join(map(str,json.loads(os.environ["SEEDS"]))))'); do
+            cargo run --locked --quiet -- --headless --matched-catalysis-preflight --matched-catalysis-config "$CONFIG_PATH" --seed "$seed"
+          done
+
   observe:
     needs: prepare
     runs-on: ubuntu-latest
