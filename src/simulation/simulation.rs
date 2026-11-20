@@ -1108,6 +1108,14 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let source_material_ids = [
+                operation.source_a.environmental_identity,
+                operation.source_b.environmental_identity,
+            ]
+            .into_iter()
+            .map(|identity| (identity != 0).then_some(identity))
+            .collect();
+            let reaction_id = format!("{}-{}", self.tick, self.environmental_chemistry_events.len());
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1152,11 +1160,7 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
+                    reaction_id.clone(),
                     "COMBINE",
                     &parent_materials,
                     &product_materials,
@@ -1181,10 +1185,12 @@ impl Simulation {
             }
             self.environmental_chemistry_events.push(
                 crate::state::EnvironmentalChemistryEvent {
+                    reaction_id,
                     tick: self.tick,
                     reaction: "COMBINE".to_string(),
                     source_cells,
                     source_material_indices,
+                    source_material_ids,
                     source_materials,
                     work_required,
                     reaction_frequency_hz: None,
@@ -1284,11 +1290,7 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
+                    reaction_id.clone(),
                     "DISPLACEMENT",
                     &parent_materials,
                     &product_materials,
@@ -1318,10 +1320,12 @@ impl Simulation {
             }
             self.environmental_chemistry_events
                 .push(crate::state::EnvironmentalChemistryEvent {
+                    reaction_id,
                     tick: self.tick,
                     reaction: "DISPLACEMENT".to_string(),
                     source_cells,
                     source_material_indices,
+                    source_material_ids,
                     source_materials,
                     work_required,
                     reaction_frequency_hz,
@@ -1404,6 +1408,11 @@ impl Simulation {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
+            let source_material_ids = vec![
+                (operation.source_material.environmental_identity != 0)
+                    .then_some(operation.source_material.environmental_identity),
+            ];
+            let reaction_id = format!("{}-{}", self.tick, self.environmental_chemistry_events.len());
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_material.clone()]
@@ -1437,11 +1446,7 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
+                    reaction_id.clone(),
                     "BREAK",
                     &parent_materials,
                     &product_materials,
@@ -1472,10 +1477,12 @@ impl Simulation {
             };
             self.environmental_chemistry_events
                 .push(crate::state::EnvironmentalChemistryEvent {
+                    reaction_id,
                     tick: self.tick,
                     reaction: "BREAK".to_string(),
                     source_cells: vec![source_cell],
                     source_material_indices: vec![source_material_index],
+                    source_material_ids,
                     source_materials,
                     work_required,
                     reaction_frequency_hz,
