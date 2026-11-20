@@ -143,7 +143,7 @@ def _sum_known(values: list[int | None]) -> tuple[int, int]:
     return sum(value for value in values if value is not None), sum(value is None for value in values)
 
 
-def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
+def analyze(root: Path, seeds: list[int], duration: int, summary_only: bool = False) -> dict[str, Any]:
     per_seed: list[dict[str, Any]] = []
     all_ticks: list[dict[str, Any]] = []
     opportunity_samples: list[dict[str, Any]] = []
@@ -156,6 +156,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             raise ValueError(f"seed {seed}: missing raw observation {path}")
         seed_values: dict[str, list[int | None]] = {field: [] for field in ALL_FIELDS}
         ticks = 0
+        seed_coverage_ticks = {"combine": [], "break": [], "displacement": []}
         with path.open(encoding="utf-8") as stream:
             for line_number, line in enumerate(stream, 1):
                 if not line.strip():
@@ -219,6 +220,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                 }
                 for reaction in coverage_ticks:
                     coverage_ticks[reaction].append(row["coverage"][reaction])
+                    seed_coverage_ticks[reaction].append(row["coverage"][reaction])
                 ticks += 1
                 all_ticks.append(row)
 
@@ -226,7 +228,23 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         for field, values in seed_values.items():
             subtotal, missing = _sum_known(values)
             seed_totals[field] = subtotal if values and missing == 0 else None
-        per_seed.append({"seed": seed, "diagnostic_ticks": ticks, "totals": seed_totals})
+        seed_coverage = {}
+        for reaction, rows in seed_coverage_ticks.items():
+            states = [row["state"] for row in rows]
+            state = ("complete" if states and all(item == "complete" for item in states)
+                     else "partial" if "partial" in states
+                     else "unknown")
+            seed_coverage[reaction] = {
+                "state": state,
+                "search_domain": rows[0]["search_domain"] if rows else None,
+                "ticks": len(states),
+                "complete_ticks": states.count("complete"),
+                "partial_ticks": states.count("partial"),
+                "unknown_ticks": states.count("unknown"),
+                "not_applicable_ticks": states.count("not_applicable"),
+            }
+        per_seed.append({"seed": seed, "diagnostic_ticks": ticks,
+                         "totals": seed_totals, "coverage": seed_coverage})
 
     pooled_totals: dict[str, int | None] = {}
     known_subtotals: dict[str, int] = {}
@@ -310,8 +328,9 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             "Rates are emitted only when every required counter is present and its measured denominator is nonzero.",
             "DISPLACEMENT currently has no authoritative total-unvisited-work denominator, so complete coverage cannot be claimed.",
         ],
-        "tick_diagnostics": all_ticks,
-        "opportunity_samples": opportunity_samples,
+        "summary_only": summary_only,
+        "tick_diagnostics": [] if summary_only else all_ticks,
+        "opportunity_samples": [] if summary_only else opportunity_samples,
         "opportunity_sample_outcomes": {
             "physically_valid": sum(bool(row.get("physically_valid")) for row in opportunity_samples),
             "physically_rejected": sum(not bool(row.get("physically_valid")) for row in opportunity_samples),
@@ -325,11 +344,12 @@ def main() -> int:
     parser.add_argument("--seeds", required=True)
     parser.add_argument("--duration-seconds", type=int, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--summary-only", action="store_true", help="omit per-tick rows and detailed opportunity samples")
     args = parser.parse_args()
     seeds = [int(part.strip()) for part in args.seeds.split(",") if part.strip()]
     if not seeds or len(seeds) != len(set(seeds)):
         parser.error("--seeds must be a nonempty list of unique integers")
-    report = analyze(args.input_dir, seeds, args.duration_seconds)
+    report = analyze(args.input_dir, seeds, args.duration_seconds, args.summary_only)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "contact-opportunity-analysis.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
