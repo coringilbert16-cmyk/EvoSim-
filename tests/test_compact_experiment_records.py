@@ -9,6 +9,7 @@ from pathlib import Path
 from tools.compact_experiment_record import build_record
 from tools.compare_compact_experiment_records import compare
 from tools.chemistry_analyzer import summarize_settlements
+from tools.contact_opportunity_analyzer import analyze as analyze_opportunities
 
 
 class CompactExperimentRecordTests(unittest.TestCase):
@@ -135,6 +136,19 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(len(result["compatibility_groups"]), 2)
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
         self.assertFalse(result["quality"]["pooled_rates_emitted"])
+
+    def test_summary_only_opportunity_analysis_omits_tick_and_sample_arrays(self) -> None:
+        raw = self.root / "seed-42.jsonl"
+        raw.write_text(json.dumps({
+            "event": "environmental_chemistry_tick",
+            "tick": 1,
+            "reaction_work": {},
+        }) + "\\n", encoding="utf-8")
+        result = analyze_opportunities(self.root, [42], 60, summary_only=True)
+        self.assertTrue(result["summary_only"])
+        self.assertEqual(result["tick_diagnostics"], [])
+        self.assertEqual(result["opportunity_samples"], [])
+        self.assertEqual(result["per_seed"][0]["coverage"]["break"]["state"], "unknown")
 
     def test_settlement_summary_preserves_unsettled_and_missing_values(self) -> None:
         summary = summarize_settlements([
