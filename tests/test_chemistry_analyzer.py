@@ -148,7 +148,9 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         }
         records = fixture_records()
         records[0]["initial_physical_material_count"] = 2
-        records[1]["physical_material_count"] = 1
+        records[1]["physical_material_count"] = 2
+        records[1]["label"] = "final"
+        records[1]["tick"] = 2
         records[2] = {
             "event": "environmental_reaction",
             "reaction": {
