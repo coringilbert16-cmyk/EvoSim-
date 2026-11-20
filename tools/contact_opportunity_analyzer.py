@@ -225,7 +225,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         seed_totals = {}
         for field, values in seed_values.items():
             subtotal, missing = _sum_known(values)
-            seed_totals[field] = subtotal if missing == 0 else None
+            seed_totals[field] = subtotal if values and missing == 0 else None
         per_seed.append({"seed": seed, "diagnostic_ticks": ticks, "totals": seed_totals})
 
     pooled_totals: dict[str, int | None] = {}
@@ -235,7 +235,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         subtotal, missing = _sum_known(values)
         known_subtotals[field] = subtotal
         missing_counts[field] = missing
-        pooled_totals[field] = subtotal if missing == 0 else None
+        pooled_totals[field] = subtotal if values and missing == 0 else None
 
     inspected = pooled_totals["constituent_pairs_inspected"]
     valid_pairs = pooled_totals["constituent_pairs_with_valid_interfaces"]
