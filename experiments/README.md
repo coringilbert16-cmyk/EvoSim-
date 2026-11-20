@@ -26,6 +26,23 @@ once, with up to five seeds in parallel. Supported limits are 1–25 unique
 nonnegative seeds, 30–3,600 seconds per seed, and a diagnostic interval of
 1–100,000 ticks.
 
+## Experiment identity and provenance
+
+For a registered research run, provide the optional identity fields in the
+workflow-dispatch form or in `experiments/chemistry-run.json`:
+
+- `experiment_id`: registry ID such as `EXP-2026-007`.
+- `research_plan`: supporting plan ID such as `PLAN-006` or engineering
+  observability plan `OBS-001`.
+- `condition_id`: concise condition label such as `baseline` or
+  `resource-feed`.
+
+The workflow passes these values to each simulation as
+`EVOSIM_EXPERIMENT_ID`, `EVOSIM_RESEARCH_PLAN`, and
+`EVOSIM_CONDITION_ID`. The manifest records them as supplied; it does not
+invent missing identities or treat an unregistered run as registered. Keep
+the experiment registry and dedicated result record authoritative.
+
 ## Fixed experimental conditions
 
 - Starting inventory: 1,200 independent single-constituent resources and
