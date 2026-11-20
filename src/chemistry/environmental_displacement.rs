@@ -818,6 +818,7 @@ fn best_replacement_contact(
     diagnostics: Option<&mut crate::state::EnvironmentalDisplacementDiscoveryDiagnostics>,
     sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
     sample_this_search: bool,
+    environment: Option<&Environment>,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
     topology_trial.break_matching_bond(old_bond)?;
@@ -880,6 +881,23 @@ fn best_replacement_contact(
                                 physically_valid,
                                 reaction_kind: 1,
                                 old_bond_energy: old_bond.bond_energy,
+                                environmental_usable_energy: environment
+                                    .map(|environment| environment.chemistry_usable_energy)
+                                    .unwrap_or(0.0),
+                                environmental_resonant_energy: environment
+                                    .and_then(|environment| environment.resonant_energy.total_energy())
+                                    .unwrap_or(0.0),
+                                local_neighborhood: environment
+                                    .map(|environment| {
+                                        crate::state::EnvironmentalLocalNeighborhoodSample::capture(
+                                            environment,
+                                            0.5 * (anchor.placement.x + incoming.placement.x),
+                                            0.5 * (anchor.placement.y + incoming.placement.y),
+                                            source_a.environmental_identity,
+                                            source_b.environmental_identity,
+                                        )
+                                    })
+                                    .unwrap_or_default(),
                             });
                         diagnostics.opportunity_sample_count += 1;
                     }
@@ -1155,6 +1173,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     Some(&mut *diagnostics),
                                     Some((&source_a, &source_b)),
                                     sample_this_search,
+                                    Some(environment),
                                 ) else {
                                     continue;
                                 };
@@ -2223,7 +2242,7 @@ mod tests {
         );
 
         let (production_selected, _) =
-            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false)
+            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false, None)
                 .expect("the production selector must find a valid replacement");
         let selected_alternative = complete
             .alternatives
@@ -2555,6 +2574,7 @@ mod tests {
             None,
             None,
             false,
+            None,
         )
         .expect("incoming source should contact a compatible available anchor endpoint");
         let first_activation = accumulate_incoming_activation(
