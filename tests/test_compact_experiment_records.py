@@ -146,7 +146,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertNotIn("lineage_edges", record["molecular_development"])
         self.assertEqual(record["record_status"], "complete")
 
-    def test_comparison_uses_compact_records_and_separates_incompatible_conditions(self) -> None:
+    def test_unified_comparison_uses_compact_records_across_conditions(self) -> None:
         records = []
         for seed, digest in ((42, "a" * 64), (43, "a" * 64), (44, "c" * 64)):
             chemistry, organization, manifest = self.seed_inputs(seed, digest)
