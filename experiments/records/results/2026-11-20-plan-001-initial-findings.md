@@ -39,6 +39,18 @@ The exact two-edge family transformations are distributed across all five seeds:
 
 These are event counts for the stated exact family transformations. They are not independent statistical replicates; the five seeds are the independent runs.
 
+## Additional first-pass pathway: H–O–P participation in sulfur-containing products
+
+A further exact-ID trace in seed 45 found three sequences where an H–O–P instance was consumed by COMBINE with sulfur, entered an H–O–P–S product, and was then released as a new H–O–P instance by BREAK:
+
+| Initial H–O–P ID | COMBINE with sulfur | H–O–P–S product ID | BREAK | Regenerated H–O–P ID |
+|---:|---|---:|---|---:|
+| 2,296 | `12558-16` at tick 12,558 | 2,327 | `12753-7` at tick 12,753 | 2,350 |
+| 2,544 | `16052-16` at tick 16,052 | 2,615 | `16395-9` at tick 16,395 | 2,641 |
+| 2,772 | `19457-16` at tick 19,457 | 2,794 | `19458-15` at tick 19,458 | 2,795 |
+
+This is a repeated reversible association/dissociation pattern in one seed. The H–O–P family reappears, but each regenerated molecule has a new identity. The evidence supports reversible intermediate turnover and temporary incorporation into a larger structure; it does not show that H–O–P catalyzes an independent reaction or remains unchanged while doing so.
+
 ## Interpretation
 
 **Established by this first pass**
