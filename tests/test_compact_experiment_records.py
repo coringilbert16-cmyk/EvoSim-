@@ -114,8 +114,28 @@ class CompactExperimentRecordTests(unittest.TestCase):
 
     def test_builder_emits_compact_record_and_preserves_null(self) -> None:
         chemistry, organization, manifest = self.seed_inputs(42)
-        record = build_record(42, chemistry, organization, manifest)
+        coverage = self.write("coverage.json", {
+            "schema_version": 2,
+            "per_seed": [{
+                "seed": 42,
+                "diagnostic_ticks": 10,
+                "totals": {"break_scan_entries_inspected": 4},
+                "coverage": {
+                    "break": {"state": "complete", "search_domain": "bond_index",
+                              "ticks": 10, "complete_ticks": 10, "partial_ticks": 0,
+                              "unknown_ticks": 0, "not_applicable_ticks": 0},
+                    "combine": {"state": "partial", "search_domain": "broad_phase_pairs",
+                                "ticks": 10, "complete_ticks": 0, "partial_ticks": 10,
+                                "unknown_ticks": 0, "not_applicable_ticks": 0},
+                    "displacement": {"state": "partial", "search_domain": "bounded_search",
+                                     "ticks": 10, "complete_ticks": 0, "partial_ticks": 10,
+                                     "unknown_ticks": 0, "not_applicable_ticks": 0},
+                },
+            }],
+        })
+        record = build_record(42, chemistry, organization, manifest, coverage)
         self.assertEqual(record["schema"], "evosim.permanent_experiment_record")
+        self.assertEqual(record["opportunity_coverage"]["by_reaction"]["break"]["state"], "complete")
         self.assertEqual(record["reactions"]["BREAK"]["diagnostics"]["committed"], 1)
         self.assertIsNone(record["molecular_development"]["mean_observed_lifetime_ticks"])
         self.assertEqual(record["molecular_development"]["lineage_edge_count"], 1)
