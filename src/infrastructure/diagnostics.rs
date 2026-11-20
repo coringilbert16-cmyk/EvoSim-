@@ -6,8 +6,11 @@
 use crate::state::Simulation;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
+use sha2::{Digest, Sha256};
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
+use std::path::Path;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// Event-oriented diagnostic recorder for exploratory simulation runs.
 ///
@@ -582,6 +585,11 @@ pub(crate) struct EnvironmentalChemistryDiagnosticsRecorder {
     writer: BufWriter<File>,
     interval: u64,
     totals: EnvironmentalChemistryDiagnosticTotals,
+    diagnostics_path: String,
+    manifest_path: String,
+    started_at: Instant,
+    started_at_unix_ms: u128,
+    manifest_context: Value,
 }
 
 #[derive(Default)]
@@ -619,10 +627,19 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         pile_sizes: &[usize],
     ) -> std::io::Result<Self> {
         let file = File::create(path)?;
+        let initial_material_inventory = environmental_material_inventory(simulation);
+        let initial_physical_material_count = physical_material_count(simulation);
+        let started_at = Instant::now();
+        let started_at_unix_ms = unix_timestamp_ms();
         let mut recorder = Self {
             writer: BufWriter::new(file),
             interval: interval.max(1),
             totals: EnvironmentalChemistryDiagnosticTotals::default(),
+            diagnostics_path: path.to_string(),
+            manifest_path: format!("{path}.manifest.json"),
+            started_at,
+            started_at_unix_ms,
+            manifest_context: Value::Null,
         };
         let (initial_independent_resource_count, initial_molecule_count, initial_constituent_count) =
             simulation
@@ -642,6 +659,20 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                         )
                     },
                 );
+        recorder.manifest_context = json!({
+            "seed": seed,
+            "requested_duration_seconds": duration_seconds,
+            "planned_ticks": planned_ticks,
+            "diagnostic_interval_ticks": recorder.interval,
+            "biology_enabled": false,
+            "initial_physical_material_count": initial_physical_material_count,
+            "initial_independent_resource_count": initial_independent_resource_count,
+            "initial_molecule_count": initial_molecule_count,
+            "initial_constituent_count": initial_constituent_count,
+            "initial_material_inventory": initial_material_inventory,
+            "pile_sizes": pile_sizes,
+            "hotspot": simulation.hotspot
+        });
         recorder.write_event(json!({
             "event": "environmental_chemistry_header",
             "version": 2,
@@ -651,11 +682,11 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "planned_ticks": planned_ticks,
             "biology_enabled": false,
             "dormant_organism_holder_count": simulation.organisms.len(),
-            "initial_physical_material_count": physical_material_count(simulation),
+            "initial_physical_material_count": initial_physical_material_count,
             "initial_independent_resource_count": initial_independent_resource_count,
             "initial_molecule_count": initial_molecule_count,
             "initial_constituent_count": initial_constituent_count,
-            "initial_material_inventory": environmental_material_inventory(simulation),
+            "initial_material_inventory": initial_material_inventory,
             "excluded_resources": [],
             "pile_sizes": pile_sizes,
             "hotspot": simulation.hotspot,
@@ -863,7 +894,110 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "final_physical_material_count": physical_material_count(simulation),
             "energy_balance_residual": simulation.energy_inventory_snapshot().residual()
         }))?;
-        self.writer.flush()
+        self.writer.flush()?;
+        self.write_run_manifest(simulation)
+    }
+
+    fn write_run_manifest(&self, simulation: &Simulation) -> std::io::Result<()> {
+        let artifact_metadata = std::fs::metadata(&self.diagnostics_path)?;
+        let mut artifact = File::open(&self.diagnostics_path)?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let bytes_read = artifact.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..bytes_read]);
+        }
+        let artifact_sha256 = format!("{:x}", hasher.finalize());
+        let context_bytes = serde_json::to_vec(&self.manifest_context)?;
+        let configuration_sha256 = format!("{:x}", Sha256::digest(context_bytes));
+        let completed_at_unix_ms = unix_timestamp_ms();
+        let commit_sha = std::env::var("GITHUB_SHA")
+            .or_else(|_| std::env::var("EVOSIM_COMMIT_SHA"))
+            .ok();
+        let repository = std::env::var("GITHUB_REPOSITORY").ok();
+        let workflow_run_id = std::env::var("GITHUB_RUN_ID").ok();
+        let workflow_run_attempt = std::env::var("GITHUB_RUN_ATTEMPT").ok();
+        let workflow_name = std::env::var("GITHUB_WORKFLOW").ok();
+        let mut warnings = Vec::new();
+        if commit_sha.is_none() {
+            warnings.push("repository commit SHA was not supplied by the execution environment".to_string());
+        }
+        if workflow_run_id.is_none() {
+            warnings.push("workflow run identity is unavailable outside a configured CI environment".to_string());
+        }
+        let workflow_run_url = repository
+            .as_ref()
+            .zip(workflow_run_id.as_ref())
+            .map(|(repo, run_id)| {
+                format!(
+                    "{}/{}/actions/runs/{}",
+                    std::env::var("GITHUB_SERVER_URL")
+                        .unwrap_or_else(|_| "https://github.com".to_string()),
+                    repo,
+                    run_id
+                )
+            });
+        let manifest = json!({
+            "schema": "evosim.experiment_manifest",
+            "schema_version": 1,
+            "experiment": {
+                "experiment_id": std::env::var("EVOSIM_EXPERIMENT_ID").ok(),
+                "research_plan": std::env::var("EVOSIM_RESEARCH_PLAN").ok(),
+                "condition_id": std::env::var("EVOSIM_CONDITION_ID").ok(),
+                "seed": self.manifest_context["seed"]
+            },
+            "run": {
+                "run_id": workflow_run_id,
+                "run_attempt": workflow_run_attempt,
+                "workflow": workflow_name,
+                "workflow_url": workflow_run_url,
+                "status": "completed",
+                "started_at_unix_ms": self.started_at_unix_ms,
+                "completed_at_unix_ms": completed_at_unix_ms,
+                "requested_duration_seconds": self.manifest_context["requested_duration_seconds"],
+                "actual_elapsed_wall_seconds": self.started_at.elapsed().as_secs_f64(),
+                "start_tick": 0,
+                "end_tick": simulation.tick
+            },
+            "build": {
+                "repository": repository,
+                "commit_sha": commit_sha,
+                "executable_version": env!("CARGO_PKG_VERSION"),
+                "dirty": std::env::var("EVOSIM_BUILD_DIRTY").ok()
+                    .and_then(|value| value.parse::<bool>().ok())
+            },
+            "conditions": {
+                "configuration_schema_version": 1,
+                "configuration_sha256": configuration_sha256,
+                "configuration": self.manifest_context
+            },
+            "diagnostics": {
+                "raw_schema_versions": { "environmental_chemistry_header": 2 },
+                "diagnostic_interval_ticks": self.manifest_context["diagnostic_interval_ticks"],
+                "enabled_tiers": ["core", "standard"]
+            },
+            "analyzers": {
+                "source_commit_sha": commit_sha,
+                "version_basis": "same repository commit as the simulation build"
+            },
+            "artifacts": [{
+                "role": "raw_observation",
+                "path": self.diagnostics_path,
+                "sha256": artifact_sha256,
+                "size_bytes": artifact_metadata.len()
+            }],
+            "quality": {
+                "observation_complete": true,
+                "diagnostic_coverage": "reaction_specific",
+                "warnings": warnings
+            }
+        });
+        let manifest_file = File::create(&self.manifest_path)?;
+        serde_json::to_writer_pretty(manifest_file, &manifest)?;
+        Ok(())
     }
 
     fn write_snapshot(&mut self, simulation: &Simulation, label: &str) -> std::io::Result<()> {
@@ -911,6 +1045,13 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         serde_json::to_writer(&mut self.writer, &event)?;
         self.writer.write_all(b"\n")
     }
+}
+
+fn unix_timestamp_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 
 fn physical_material_count(simulation: &Simulation) -> usize {
