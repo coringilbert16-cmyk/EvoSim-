@@ -2659,10 +2659,9 @@ mod tests {
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         );
-        assert_eq!(
-            committed,
-            Ok(()),
-            "environmental displacement commit failed"
+        assert!(
+            committed.is_ok(),
+            "environmental displacement commit failed: {committed:?}"
         );
 
         let products = &simulation.environment.field.cells[field_cell].physical_materials;
