@@ -68,14 +68,14 @@ molecular-organization reports. A final aggregate artifact combines:
 - Structural-family recurrence across independent seeds and family transitions.
 - Exact formed and broken bond counts for all 21 unordered active-element pairs, separated by BREAK, COMBINE, and DISPLACEMENT.
 - Elemental material incorporated into reaction-created compounds.
-- Time-resolved chemical complexity across twelve equal-duration windows: molecular size and topology, structural novelty and recurrence, reaction-pattern novelty, and candidate cycles in the family-transition network.
+- Time-resolved chemical complexity is an explicitly requested deep analysis, not a routine permanent output.
 - Energy-balance residuals and per-seed validation.
 
 Per-seed artifacts are retained for 30 days; the combined report is retained
 for 90 days. Routine Rust CI remains separate and keeps its short 60-second
 seed-42 chemistry smoke baseline and focused correctness/feasibility tests.
 
-## Time-resolved complexity analysis
+## Time-resolved complexity analysis (deep diagnostics only)
 
 The aggregate workflow also runs `tools/temporal_chemical_complexity_analyzer.py` over the per-seed chemistry reports. It divides each run into twelve equal-duration windows and reports newly observed compound fingerprints, cumulative compound diversity, repeated compound products, all reaction-created identities, active-compound size and topology, reaction-pattern novelty, and strongly connected components in the cumulative compound-to-compound family-transition graph. Unbonded single-resource fragments are counted as reaction-created identities but excluded from compound novelty and active-compound complexity. The analysis is offline and does not change simulation behavior.
 
