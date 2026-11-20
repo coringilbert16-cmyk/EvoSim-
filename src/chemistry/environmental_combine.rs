@@ -1350,14 +1350,14 @@ pub(crate) fn resolve_environmental_with_settlement(
     };
     let strength = crate::combine::bond_strength(properties_a, properties_b);
     let barrier = crate::chemistry::activation_barrier_from_bond_strength(strength)?;
-    let activation_signal =
-        crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)?;
+    let activation_signal = crate::chemistry::normalized_chemistry_to_activation_signal(
+        operation.accumulated_reaction,
+    )?;
     if !crate::chemistry::activated(activation_signal, barrier) {
         return None;
     }
 
-    let reactant_structural_energy =
-        crate::energy_ledger::structural_potential(&trial_structure)?;
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)?;
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy;
     let mut cache = ConnectionCompatibilityCache::new();
@@ -1383,8 +1383,7 @@ pub(crate) fn resolve_environmental_with_settlement(
     ) {
         return None;
     }
-    let product_structural_energy =
-        crate::energy_ledger::structural_potential(&trial_structure)?;
+    let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)?;
     let structural_delta = product_structural_energy - reactant_structural_energy;
     if !structural_delta.is_finite() {
         return None;
