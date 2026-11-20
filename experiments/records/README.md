@@ -10,6 +10,7 @@ This folder is the durable research record for completed, active, and planned Ev
 - [Engineering/observability plan](plans/OBS-001-unified-analysis-implementation.md) — OBS-001's implementation sequence and acceptance criteria.
 - [OBS-001 analyzer inventory](plans/OBS-001-analyzer-inventory.md) — current-main analyzer capabilities, input/output contracts, and integration gaps.
 - [OBS-001 permanent experiment record](plans/OBS-001-permanent-experiment-record.md) — versioned compact-record schema and retention policy.
+- [Reference dataset allowlist](reference-datasets.json) — intentionally empty until a dataset is selected and approved for long-term preservation.
 
 ## Record-keeping rules
 
