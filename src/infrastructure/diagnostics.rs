@@ -9,7 +9,6 @@ use std::collections::{BTreeMap, HashMap};
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
-use std::path::Path;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// Event-oriented diagnostic recorder for exploratory simulation runs.
@@ -719,6 +718,11 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         recorder.write_snapshot(simulation, "initial")?;
         recorder.writer.flush()?;
         Ok(recorder)
+    }
+
+    pub(crate) fn mark_started(&mut self) {
+        self.started_at = Instant::now();
+        self.started_at_unix_ms = unix_timestamp_ms();
     }
 
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
