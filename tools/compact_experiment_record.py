@@ -118,6 +118,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
         },
         "provenance": {
             "source_commit": nested(manifest, "build", "commit_sha"),
+            "simulator_version": nested(manifest, "build", "executable_version"),
             "workflow_run_id": nested(manifest, "run", "run_id"),
             "workflow_run_url": nested(manifest, "run", "workflow_url"),
             "manifest_schema_version": manifest.get("schema_version"),
@@ -194,6 +195,25 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
                 nested(organization, "material_distribution",
                        "reaction_created_compound_constituent_amount_by_resource", default={})
             ),
+            "family_transition_count": len(nested(
+                organization, "reaction_network", "family_to_family_transitions", default=[]
+            )),
+        },
+        "organization": {
+            "unique_structural_families": org.get("unique_exact_structural_families"),
+            "recurrent_product_families": org.get("recurrent_families"),
+            "recurrent_fraction": org.get("recurrence_fraction"),
+            "active_families_at_end": org.get("families_active_at_end"),
+            "compound_identity_count": org.get("molecules_with_multi_resource_or_bonded_structure"),
+            "mean_observed_lifetime_ticks": nested(organization, "persistence", "mean_observed_lifetime_ticks"),
+            "median_observed_lifetime_ticks": nested(organization, "persistence", "median_observed_lifetime_ticks"),
+            "compound_material_by_resource": scalar_tree(nested(
+                organization, "material_distribution", "compound_constituent_amount_by_resource", default={}
+            )),
+            "reaction_created_compound_material_by_resource": scalar_tree(nested(
+                organization, "material_distribution",
+                "reaction_created_compound_constituent_amount_by_resource", default={}
+            )),
             "family_transition_count": len(nested(
                 organization, "reaction_network", "family_to_family_transitions", default=[]
             )),
