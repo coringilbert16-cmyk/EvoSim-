@@ -321,3 +321,23 @@ The three commit paths have distinct API shapes:
 - For all three, only a committed operation may carry `settlement_status: "settled"`. Resolver errors remain `not_settled`; do not expose a preflight estimate as a settled transaction. Capture is observational and must not change arithmetic or commit ordering.
 
 No energy instrumentation was added in this follow-up. The next code slice should introduce the minimal serializable summary and focused conservation/join tests, then thread it through the three resolver APIs without changing settlement calculations.
+
+
+## Pull-request consolidation checkpoint (2026-11-20)
+
+Two stale PRs were closed after confirming their intended behavior is already superseded on `main`:
+
+- **PR #343 — Run environmental chemistry baseline on pull requests.** Closed as superseded. Current `.github/workflows/rust.yml` already runs the shared environmental chemistry smoke simulation and chemistry/organization analyzers for pull requests, in addition to push/manual triggers. The old branch was 819 commits behind and contained only one workflow-file change.
+- **PR #345 — Chemistry opportunity funnels and starting-mixture experiments.** Closed as superseded, not merged. The branch was 716 commits behind and 36 commits ahead, with conflicts across ten files. Its opportunity-funnel implementation is not being carried forward wholesale: current main has since gained the contact-opportunity analyzer and richer reaction-specific search counters, while OBS-001 now defines a common manifest/event/coverage/report-index architecture. Its controlled dispersion and starting-mixture designs remain useful experiment ideas; the closed PR retains the exact conditions and rationale, and those designs can be re-registered later against the unified pipeline.
+
+### Remaining open PR disposition
+
+- **#392 — PLAN-002 neighborhood/matched-catalyst controls:** retain as draft for now. It contains the five-seed neighborhood-screen evidence and useful bounded-neighborhood/exposure/preflight work. Its matched causal experiment correctly remains blocked; do not merge wholesale. OBS-001 should absorb only the reusable event identity, exposure, and coverage contracts, after which we can decide whether any implementation remains unique.
+- **#394 — PLAN-004 resource feed:** retain. It contains the experiment-only feed implementation and the ten completed observations; aggregation repair is still outstanding. Do not rerun the observations.
+- **#391 and #393 — research plans/results:** retain as historical scientific records, not diagnostic infrastructure. Their findings and limits should remain in the experiment registry/results system.
+- **#375 — isolated displacement-carrier test:** retain pending a separate scientific review. It is a focused test-only hypothesis, not a duplicate diagnostic framework.
+- **#397 and #398 — OBS-001:** retain. These are the documentation/schema and first validated identity-instrumentation slices.
+
+### Cleanup policy going forward
+
+Closing a PR does not imply deleting its branch, removing files from `main`, or discarding scientific records. Before removing any existing analyzer, recorder field, workflow, or fixture, the audit must establish that it has no active workflow caller, no unique artifact consumer, and no irreplaceable historical evidence. The unified report index should orchestrate specialist analyzers rather than replace them merely for stylistic consistency. Redundant output copies and dead entry points are cleanup candidates; unique specialist measurements remain until their replacements are validated.
