@@ -27,6 +27,7 @@ def records(seed, condition, committed):
         "target_reactant_b_identity": target_b_id,
         "initial_elemental_inventory_unchanged": True,
         "initial_energy_inventory_unchanged": True,
+        "initial_energy_inventory": {"usable": 12.0, "resonant": 3.0, "structural": 7.0},
         "all_non_candidate_molecule_geometry_unchanged": True,
     }
     rows = [
@@ -96,6 +97,20 @@ class MatchedCatalysisComparisonAnalyzerTests(unittest.TestCase):
         self.assertEqual(pair["remote"]["target_samples_with_candidate_nearby"], 0)
         self.assertEqual(report["pooled"]["near"]["target_committed_reactions"], 1)
         self.assertIn("not proof", " ".join(report["interpretation_limits"]))
+
+    def test_rejects_paired_arms_with_different_initial_energy_inventory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            near, remote = root / "near", root / "remote"
+            self._write_arm(near, 42, "candidate_near", True)
+            self._write_arm(remote, 42, "candidate_remote", False)
+            path = remote / "seed-42.jsonl"
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            rows[1]["metadata"]["initial_energy_inventory"]["resonant"] = 999.0
+            path.write_text("".join(json.dumps(row) + "\\n" for row in rows), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "different or missing initial energy inventories"):
+                analyze(near, remote, [42], 60, CONFIG)
 
     def test_rejects_paired_arms_with_different_initial_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
