@@ -117,7 +117,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: plan004-${{ matrix.condition }}-seed-${{ matrix.seed }}
-          path: observations/${{ matrix.condition }}/
+          path: observations/
           if-no-files-found: error
           retention-days: 30
 
@@ -131,7 +131,7 @@ jobs:
         with:
           pattern: plan004-*
           path: observations
-          merge-multiple: false
+          merge-multiple: true
       - name: Assemble matched arm reports
         env:
           SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
@@ -140,11 +140,11 @@ jobs:
           set -euo pipefail
           for condition in no-feed resource-feed; do
             mkdir -p "analysis/$condition"
-            python3 tools/chemistry_experiment_batch_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out "analysis/$condition/chemistry-batch.json" --markdown-out "analysis/$condition/chemistry-batch.md"
-            python3 tools/reaction_network_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/reaction-network"
-            python3 tools/geometry_aware_reaction_network.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/geometry-aware-network"
-            python3 tools/contact_opportunity_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/contact-opportunities"
-            python3 tools/temporal_chemical_complexity_analyzer.py "observations/plan004-$condition-seed-"* --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir "analysis/$condition/temporal-chemical-complexity"
+            python3 tools/chemistry_experiment_batch_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out "analysis/$condition/chemistry-batch.json" --markdown-out "analysis/$condition/chemistry-batch.md"
+            python3 tools/reaction_network_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/reaction-network"
+            python3 tools/geometry_aware_reaction_network.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/geometry-aware-network"
+            python3 tools/contact_opportunity_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir "analysis/$condition/contact-opportunities"
+            python3 tools/temporal_chemical_complexity_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir "analysis/$condition/temporal-chemical-complexity"
           done
       - name: Upload paired experiment reports
         uses: actions/upload-artifact@v4
