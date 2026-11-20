@@ -196,6 +196,8 @@ def render_markdown(result: dict[str, Any]) -> str:
         lines.extend([
             f"## Condition group {index}",
             "",
+            f"- Experiment: {group['experiment_id'] or 'unregistered'}",
+            f"- Condition: {group['condition_id'] or 'unspecified'}",
             f"- Independent seeds: {', '.join(map(str, summary['seeds']))}",
             f"- Requested duration: {group['requested_duration_seconds']} seconds",
             f"- Active resources: {', '.join(group['active_resources'] or [])}",
