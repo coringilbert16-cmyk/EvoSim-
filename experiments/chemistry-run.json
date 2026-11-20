@@ -1,15 +1,10 @@
 {
-  "run": true,
-  "seeds": [
-    42,
-    43,
-    44,
-    45,
-    46
-  ],
+  "run": false,
+  "aggregate_existing_run_id": 44776501166,
+  "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 3600,
   "diagnostic_interval": 100,
-  "request_note": "PLAN-002 neighborhood diagnostic screen using existing chemistry and energy rules; same five seeds and one-hour conditions as EXP-2026-004. No forced reactions or chemistry changes.",
+  "request_note": "Analysis-only reaggregation of existing five-seed PLAN-002 neighborhood diagnostic artifacts from workflow run 44776501166. Do not launch or repeat simulations.",
   "profile_movement": false,
   "profile_tick": false
 }
