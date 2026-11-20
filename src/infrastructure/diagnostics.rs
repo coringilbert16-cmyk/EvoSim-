@@ -690,6 +690,17 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         Ok(recorder)
     }
 
+    pub(crate) fn record_experiment_setup(
+        &mut self,
+        metadata: &Value,
+    ) -> std::io::Result<()> {
+        self.write_event(json!({
+            "event": "environmental_chemistry_experiment_setup",
+            "metadata": metadata
+        }))?;
+        self.writer.flush()
+    }
+
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         for sample in &simulation.environmental_local_resonance_samples {
             self.write_event(sample.clone())?;
