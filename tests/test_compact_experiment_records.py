@@ -83,8 +83,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
         raw_path.write_bytes(raw_bytes)
         configuration = {
             "seed": seed,
-            "active_elements": (["Carbon", "Hydrogen", "Oxygen"]
-                                if config_hash.startswith("c") else ["Carbon", "Hydrogen"]),
+            "active_elements": ["Carbon", "Hydrogen"],
+            "flow_speed": 2.0 if config_hash.startswith("c") else 1.0,
         }
         canonical_configuration = json.dumps(configuration, separators=(",", ":"))
         manifest = {
@@ -169,9 +169,10 @@ class CompactExperimentRecordTests(unittest.TestCase):
         result = json.loads(output.read_text(encoding="utf-8"))
         self.assertTrue(markdown.is_file())
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
-        self.assertFalse(result["compatible"])
-        self.assertEqual(len(result["compatibility_groups"]), 2)
-        first_group = result["compatibility_groups"][0]["summary"]
+        self.assertTrue(result["measurement_compatible"])
+        self.assertEqual(len(result["condition_groups"]), 2)
+        self.assertEqual(len(result["condition_comparisons"]), 1)
+        first_group = result["condition_groups"][0]["summary"]
         self.assertEqual(first_group["reaction_totals"]["COMBINE"]["committed_by_seed"], [None, None])
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
         self.assertFalse(result["quality"]["pooled_rates_emitted"])
