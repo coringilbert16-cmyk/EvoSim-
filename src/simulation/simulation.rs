@@ -1,3 +1,7 @@
+#![expect(
+    dead_code,
+    reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+)]
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
@@ -5,9 +9,7 @@ use std::collections::HashSet;
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
-use crate::decision_runtime::{
-    select_action_with_developmental_scores, ActionCandidate, DecisionContext,
-};
+use crate::decision_runtime::ActionCandidate;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
@@ -26,8 +28,6 @@ fn should_prepare_transformation(
         _ => remaining_ticks == 1,
     }
 }
-
-const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 fn whole_tick_profiling_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -923,6 +923,31 @@ impl Simulation {
     pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
         &mut self,
     ) {
+        // Biology is dormant while the simulator establishes chemistry-first
+        // behavior. Preserve every biological holder, but remove it from the
+        // active tick so no lifecycle, organism-owned reaction, decision,
+        // movement, reproduction, maintenance, or death rule can execute.
+        // Environmental material remains in place and continues through the
+        // ordinary physical and chemical tick below.
+        let dormant_organisms = std::mem::take(&mut self.organisms);
+        let dormant_transformations = std::mem::take(&mut self.active_transformations);
+        let dormant_decomposing_bodies = std::mem::take(&mut self.decomposing_bodies);
+
+        self.step_environmental_chemistry_with_transport_reuse::<REUSE_SINGLETON_CENTER_VELOCITY>();
+
+        self.organisms = dormant_organisms;
+        self.active_transformations = dormant_transformations;
+        self.decomposing_bodies = dormant_decomposing_bodies;
+        // Reconcile once, after the environmental tick and after every dormant
+        // holder has been restored to the authoritative inventory.
+        self.reconcile_energy_inventory_holders();
+    }
+
+    fn step_environmental_chemistry_with_transport_reuse<
+        const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+    >(
+        &mut self,
+    ) {
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
@@ -951,82 +976,10 @@ impl Simulation {
             }
         };
 
-        // Divide the realization budget across owners; the remainder rotates by tick.
-        let chemistry_owner_count = self.organisms.len();
-
-        let mut still_active = Vec::new();
-        let mut completed = Vec::new();
-        for mut transformation in self.active_transformations.drain(..) {
-            if transformation.remaining_ticks > 0 {
-                transformation.remaining_ticks -= 1
-            }
-            if should_prepare_transformation(&transformation.kind, transformation.remaining_ticks) {
-                if let Some(organism) = self
-                    .organisms
-                    .iter_mut()
-                    .find(|o| o.id == transformation.organism_id)
-                {
-                    if !Self::prepare_transformation(
-                        &mut transformation,
-                        organism,
-                        &mut self.environment,
-                        &mut self.energy_ledger,
-                        self.seed_scale_reference,
-                    ) {
-                        restore_failed_transformation_material(
-                            &transformation,
-                            Some(organism),
-                            &mut self.environment,
-                        );
-                        continue;
-                    }
-                } else {
-                    if !restore_failed_transformation_material(
-                        &transformation,
-                        None,
-                        &mut self.environment,
-                    ) {
-                        // Stored material has no world-space location. Keep the
-                        // transaction and its escrow intact until its owner can
-                        // be resolved instead of silently dropping the material.
-                        still_active.push(transformation);
-                    }
-                    continue;
-                }
-            }
-            if transformation.remaining_ticks == 0 {
-                completed.push(transformation)
-            } else {
-                still_active.push(transformation)
-            }
-        }
-        self.active_transformations = still_active;
-        let mut completed_organisms = HashSet::new();
-        for transformation in &completed {
-            completed_organisms.insert(transformation.organism_id.clone());
-            if let Some(organism) = self
-                .organisms
-                .iter_mut()
-                .find(|o| o.id == transformation.organism_id)
-            {
-                crate::transformation::resolve_transformation(
-                    transformation,
-                    organism,
-                    &mut self.environment,
-                    &mut self.energy_ledger,
-                );
-            }
-        }
-        // A completed physical/chemical transformation may itself breach the
-        // core, so refresh the observed living set before any biological work.
-        let mut living_ids: HashSet<String> = self
-            .organisms
-            .iter_mut()
-            .filter_map(|organism| {
-                Self::has_intact_genome_core(organism, &self.environment.catalog)
-                    .then(|| organism.id.clone())
-            })
-            .collect();
+        // Organism and in-flight biological holders are detached by the
+        // outer tick boundary. Keep the living-owner set empty so universal
+        // environmental material input cannot route energy into biology.
+        let living_ids: HashSet<String> = HashSet::new();
 
         if profile_tick {
             finish_profile_phase("tick_prelude");
@@ -1058,11 +1011,6 @@ impl Simulation {
             finish_profile_phase("resonance_movement");
         }
 
-        let decision_parameters = self.decision_parameters;
-        // The confirmed seed scale is deterministic for the catalog. Compute it
-        // once per simulation tick instead of rebuilding the calibration
-        // structure for every organism.
-        let seed_reference = self.seed_scale_reference;
         let world_tone_sample = self
             .world_tone_cycle
             .as_ref()
@@ -1080,7 +1028,7 @@ impl Simulation {
             );
         }
         if profile_tick {
-            finish_profile_phase("world_tone_organism_settlement");
+            finish_profile_phase("world_tone_environment_settlement");
         }
         if let Some(hotspot) = self.hotspot {
             self.environmental_chemistry_diagnostics
@@ -1540,667 +1488,15 @@ impl Simulation {
             finish_profile_phase("environmental_displacement_resolution");
         }
 
-        let mut carried_chemistry_work = 0;
-        let mut carried_chemistry_discovery_work = 0;
-        for (organism_index, organism) in self.organisms.iter_mut().enumerate() {
-            let chemistry_work_remaining =
-                crate::chemical_reaction::work_budget_for_owner_with_carry(
-                    crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 2,
-                    chemistry_owner_count,
-                    organism_index,
-                    self.tick,
-                    carried_chemistry_work,
-                );
-            let chemistry_discovery_work_remaining =
-                crate::chemical_reaction::work_budget_for_owner_with_carry(
-                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
-                    chemistry_owner_count,
-                    organism_index,
-                    self.tick,
-                    carried_chemistry_discovery_work,
-                );
-            let is_living = living_ids.contains(&organism.id);
-            if is_living {
-                organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-                crate::harmonics::update_organism_harmonics(
-                    organism,
-                    &self.environment,
-                    world_tone_sample,
-                    self.tick,
-                );
-                crate::memory::update_experience_memory(organism, &self.environment);
-                let budding_available = seed_reference
-                    .and_then(|reference| {
-                        organism.developmental_realization_cached_for_reference(
-                            &self.environment.catalog,
-                            reference,
-                        )
-                    })
-                    .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
-                if budding_available && organism.reproductive_construction.is_none() {
-                    let _ = crate::reproduction::begin_reproduction(
-                        organism,
-                        &mut self.rng,
-                        &self.environment.catalog,
-                        &mut self.energy_ledger,
-                    );
-                }
-            }
-            // Chemical reactions remain part of the physical world after
-            // organism status ends; biological maintenance and memory do not.
-            // Split discovery work between graph and environmental targets so
-            // a large structural graph cannot permanently starve local field
-            // chemistry (and vice versa). Unused budget carries to later owners.
-            let graph_discovery_budget = if organism_index == 0 {
-                chemistry_discovery_work_remaining / 2
-            } else {
-                chemistry_discovery_work_remaining
-            };
-            let mut graph_discovery_remaining = graph_discovery_budget;
-            let chemical_operations = crate::chemical_reaction::accumulate(
-                organism,
-                &self.environment.catalog,
-                &mut self.chemical_reaction_accumulation,
-                &mut self.chemistry_library,
-                self.tick,
-                &mut graph_discovery_remaining,
-            );
-            // The environment is one chemistry owner, not one owner per
-            // organism. Discover each field-owned bond at most once per tick;
-            // its geometry and progress keys are independent of organism graphs.
-            carried_chemistry_discovery_work = graph_discovery_remaining;
-            let mut graph_work_remaining = chemistry_work_remaining;
-            let chemical_operations = crate::chemical_reaction::schedule_operations(
-                chemical_operations,
-                self.tick,
-                &mut graph_work_remaining,
-                &mut self.chemical_reaction_accumulation,
-            );
-            // The shared per-tick budget bounds physical reaction realization.
-            // Deferred activations retain progress only; they must be discovered
-            // and validated against live geometry again before a later commit.
-            for operation in chemical_operations {
-                let _ = crate::chemical_reaction::resolve_preserving_accumulation(
-                    operation,
-                    organism,
-                    &mut self.energy_ledger,
-                    &mut self.chemical_reaction_accumulation,
-                );
-            }
-            // Carry unused graph slots forward, but never exceed the
-            // graph half-budget reserved for this tick.
-            carried_chemistry_work = graph_work_remaining;
-
-            // Recheck immediately after chemistry: if a reaction breached the
-            // genome core this tick, do not perform any later biological work.
-            let core_intact_after_chemistry =
-                Self::has_intact_genome_core(organism, &self.environment.catalog);
-            if !core_intact_after_chemistry {
-                living_ids.remove(&organism.id);
-            }
-            if core_intact_after_chemistry {
-                let stored_amount_before_transfer = organism.stored_material.total_amount();
-                Self::transfer_contained_environmental_material(organism, &mut self.environment);
-                let acquired_amount = (organism.stored_material.total_amount()
-                    - stored_amount_before_transfer)
-                    .max(0.0);
-                if organism.active_movement.is_none() {
-                    Self::finalize_pending_movement_experience(
-                        organism,
-                        &self.environment,
-                        acquired_amount,
-                    );
-                }
-            }
-        }
-        if profile_tick {
-            finish_profile_phase("organism_chemistry_and_maintenance");
-        }
-
-        {
-            let (organisms, environment) = (&mut self.organisms, &mut self.environment);
-            let mut movement_spatial_index =
-                crate::movement::MovementSpatialIndex::new(organisms, environment);
-            for index in 0..organisms.len() {
-                if !living_ids.contains(&organisms[index].id)
-                    || completed_organisms.contains(&organisms[index].id)
-                    || organisms[index].active_transformation_id.is_some()
-                {
-                    continue;
-                }
-                let developmental = seed_reference.and_then(|reference| {
-                    crate::developmental_decision::context(
-                        &mut organisms[index],
-                        environment,
-                        reference,
-                    )
-                });
-                let needs = Self::current_needs(
-                    &mut organisms[index],
-                    environment,
-                    decision_parameters,
-                    developmental.as_ref(),
-                );
-                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
-                // Movement is a persistent operation. A decision starts it;
-                // each later progress tick advances exactly one world unit.
-                let mut movement_operation_active = false;
-                {
-                    let (before, rest) = organisms.split_at_mut(index);
-                    let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-
-                    if let Some(mut active) = organism.active_movement.take() {
-                        movement_operation_active = true;
-                        let before_energy = active.before_energy;
-                        let before_stress = active.before_stress;
-                        let before_realization = active.before_developmental_realization;
-                        let progress = Self::advance_movement(
-                            before,
-                            organism,
-                            after,
-                            &mut movement_spatial_index,
-                            environment,
-                            &mut self.energy_ledger,
-                            self.tick,
-                            &mut active,
-                        );
-                        match progress {
-                            Ok(crate::movement::MovementProgress::Waiting)
-                            | Ok(crate::movement::MovementProgress::Moved) => {
-                                organism.active_movement = Some(active);
-                            }
-                            Ok(crate::movement::MovementProgress::Complete) => {
-                                let consequence = Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
-                                    organism,
-                                    environment,
-                                );
-                                let move_candidate = ActionCandidate {
-                                    action: ActionKind::Move,
-                                    context_key: Some(format!(
-                                        "distance:{:.0}",
-                                        active.decision_distance
-                                    )),
-                                };
-                                crate::decision_runtime::record_consequence(
-                                    &mut organism.decision_history,
-                                    &move_candidate,
-                                    consequence,
-                                );
-                                if let Some(pending) = organism.pending_movement_experience.as_mut()
-                                {
-                                    pending.consequence =
-                                        crate::memory::memory_consequence_from_action(consequence);
-                                }
-                            }
-                            Err(_) => {
-                                let consequence = Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
-                                    organism,
-                                    environment,
-                                );
-                                let move_candidate = ActionCandidate {
-                                    action: ActionKind::Move,
-                                    context_key: Some(format!(
-                                        "distance:{:.0}",
-                                        active.decision_distance
-                                    )),
-                                };
-                                crate::decision_runtime::record_consequence(
-                                    &mut organism.decision_history,
-                                    &move_candidate,
-                                    consequence,
-                                );
-                                organism.pending_movement_experience = None;
-                            }
-                        }
-                    } else if eligibility.can_move {
-                        let perceptions = crate::harmonics::organism_resonance_perceptions(
-                            organism,
-                            environment,
-                            self.tick,
-                        );
-                        let before_energy = organism.usable_energy;
-                        let before_stress = organism.stress;
-                        let before_realization = developmental
-                            .as_ref()
-                            .map(|context| context.current_growth_fraction)
-                            .unwrap_or_else(|| {
-                                organism
-                                    .developmental_realization_cached(&environment.catalog)
-                                    .map(|realization| realization.overall)
-                                    .unwrap_or(0.0)
-                            });
-                        match Self::start_movement(
-                            organism,
-                            environment,
-                            &mut self.rng,
-                            &perceptions,
-                            needs,
-                        ) {
-                            Ok(mut active) => {
-                                active.before_energy = before_energy;
-                                active.before_stress = before_stress;
-                                active.before_developmental_realization = before_realization;
-                                let consequence = crate::decision::ActionConsequence::default();
-                                organism.pending_movement_experience =
-                                    Some(crate::memory::PendingMovementExperience {
-                                        perceptions,
-                                        consequence: crate::memory::memory_consequence_from_action(
-                                            consequence,
-                                        ),
-                                        needs,
-                                    });
-                                organism.active_movement = Some(active);
-                                movement_operation_active = true;
-                            }
-                            Err(reason) => {
-                                organism.last_movement_attempt =
-                                    Some(crate::state::MovementAttemptDiagnostic {
-                                        tick: self.tick,
-                                        direction_x: None,
-                                        direction_y: None,
-                                        step: None,
-                                        usable_energy: organism.usable_energy,
-                                        active_transformation_id: organism.active_transformation_id,
-                                        result: Err(reason),
-                                        old_position: organism.occupied_cells.first().cloned(),
-                                        new_position: None,
-                                    });
-                            }
-                        }
-                    }
-                }
-                if movement_operation_active {
-                    continue;
-                }
-                let context = DecisionContext { needs, eligibility };
-                let candidates =
-                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
-                let competing_indices = crate::decision_runtime::developmental_competition_indices(
-                    context,
-                    &organisms[index].decision_history,
-                    &candidates,
-                );
-                let developmental_scores =
-                    crate::developmental_decision::developmental_action_scores(
-                        &organisms[index],
-                        environment,
-                        needs,
-                        &candidates,
-                        &competing_indices,
-                        developmental.as_ref(),
-                        &self.energy_ledger,
-                    );
-                if let Some(selected) = select_action_with_developmental_scores(
-                    context,
-                    &organisms[index].decision_history,
-                    &candidates,
-                    &developmental_scores,
-                    &mut self.rng,
-                ) {
-                    match selected.action {
-                        ActionKind::Combine => {
-                            let perceptions = crate::harmonics::organism_resonance_perceptions(
-                                &organisms[index],
-                                environment,
-                                self.tick,
-                            );
-                            let before_energy = organisms[index].usable_energy;
-                            let before_stress = organisms[index].stress;
-                            let before_realization = developmental
-                                .as_ref()
-                                .map(|context| context.current_growth_fraction)
-                                .unwrap_or_else(|| {
-                                    organisms[index]
-                                        .developmental_realization_cached(&environment.catalog)
-                                        .map(|realization| realization.overall)
-                                        .unwrap_or(0.0)
-                                });
-                            let mut cache = crate::contact::ConnectionCompatibilityCache;
-                            let mut ledger = self.energy_ledger;
-                            let developmental_context = developmental.as_ref().map(|context| {
-                                (
-                                    &context.blueprint,
-                                    context.origin,
-                                    context.orientation,
-                                    context.preferred_length,
-                                )
-                            });
-                            let attempt = crate::combine_runtime::try_combine(
-                                &mut organisms[index],
-                                environment,
-                                &mut cache,
-                                &mut ledger,
-                                developmental_context,
-                            );
-                            if let Some(attempt) = attempt {
-                                self.energy_ledger = ledger;
-                                let consequence = Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
-                                    &mut organisms[index],
-                                    environment,
-                                );
-                                crate::decision_runtime::record_consequence(
-                                    &mut organisms[index].decision_history,
-                                    &selected,
-                                    consequence,
-                                );
-                                Self::record_action_experience(
-                                    &mut organisms[index],
-                                    environment,
-                                    &perceptions,
-                                    ActionKind::Combine,
-                                    consequence,
-                                    needs,
-                                    attempt
-                                        .environmental_source
-                                        .as_ref()
-                                        .map(|(_, source)| source.material.total_amount())
-                                        .unwrap_or(0.0),
-                                );
-                            }
-                        }
-                        ActionKind::Break => {
-                            let perceptions = crate::harmonics::organism_resonance_perceptions(
-                                &organisms[index],
-                                environment,
-                                self.tick,
-                            );
-                            let before_energy = organisms[index].usable_energy;
-                            let before_stress = organisms[index].stress;
-                            let before_developmental_realization = developmental
-                                .as_ref()
-                                .map(|context| context.current_growth_fraction)
-                                .unwrap_or_else(|| {
-                                    organisms[index]
-                                        .developmental_realization_cached(&environment.catalog)
-                                        .map(|realization| realization.overall)
-                                        .unwrap_or(0.0)
-                                });
-                            if let Some(mut transformation) =
-                                crate::transformation::try_start_environmental_break(
-                                    &mut organisms[index],
-                                    environment,
-                                    &mut self.next_transformation_id,
-                                    &selected,
-                                )
-                                .or_else(|| {
-                                    Self::try_start_transformation(
-                                        &mut organisms[index],
-                                        &environment.catalog,
-                                        &mut self.next_transformation_id,
-                                        &selected,
-                                    )
-                                })
-                            {
-                                transformation.pending_experience =
-                                    Some(crate::memory::PendingTransformationExperience {
-                                        perceptions,
-                                        needs,
-                                        before_energy,
-                                        before_stress,
-                                        before_developmental_realization,
-                                        material_transformed: transformation
-                                            .stored_material
-                                            .as_ref()
-                                            .map(|instance| instance.material.total_amount())
-                                            .unwrap_or(0.0),
-                                    });
-                                self.active_transformations.push(transformation);
-                            }
-                        }
-                        ActionKind::Expel => {
-                            let perceptions = crate::harmonics::organism_resonance_perceptions(
-                                &organisms[index],
-                                environment,
-                                self.tick,
-                            );
-                            let before_energy = organisms[index].usable_energy;
-                            let before_stress = organisms[index].stress;
-                            let before_realization = developmental
-                                .as_ref()
-                                .map(|context| context.current_growth_fraction)
-                                .unwrap_or_else(|| {
-                                    organisms[index]
-                                        .developmental_realization_cached(&environment.catalog)
-                                        .map(|realization| realization.overall)
-                                        .unwrap_or(0.0)
-                                });
-                            let expelled = selected
-                                .context_key
-                                .as_deref()
-                                .and_then(|key| key.strip_prefix("stored:"))
-                                .and_then(|index| index.parse::<usize>().ok())
-                                .map(|storage_index| {
-                                    crate::expulsion::expel_physical_material(
-                                        &mut organisms[index],
-                                        environment,
-                                        storage_index,
-                                    )
-                                })
-                                .unwrap_or(false);
-                            let consequence = if expelled {
-                                Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
-                                    &mut organisms[index],
-                                    environment,
-                                )
-                            } else {
-                                crate::decision::ActionConsequence::default()
-                            };
-                            crate::decision_runtime::record_consequence(
-                                &mut organisms[index].decision_history,
-                                &selected,
-                                consequence,
-                            );
-                            if expelled {
-                                Self::record_action_experience(
-                                    &mut organisms[index],
-                                    environment,
-                                    &perceptions,
-                                    ActionKind::Expel,
-                                    consequence,
-                                    needs,
-                                    0.0,
-                                );
-                            }
-                        }
-                        ActionKind::Move => unreachable!("movement is evaluated independently"),
-                    }
-                } else {
-                    let before_energy = organisms[index].usable_energy;
-                    let before_stress = organisms[index].stress;
-                    let before_realization = developmental
-                        .as_ref()
-                        .map(|context| context.current_growth_fraction)
-                        .unwrap_or_else(|| {
-                            organisms[index]
-                                .developmental_realization_cached(&environment.catalog)
-                                .map(|realization| realization.overall)
-                                .unwrap_or(0.0)
-                        });
-                    let expulsion_candidates =
-                        Self::expulsion_candidates(&organisms[index], needs, eligibility);
-                    let expulsion_competition =
-                        crate::decision_runtime::developmental_competition_indices(
-                            context,
-                            &organisms[index].decision_history,
-                            &expulsion_candidates,
-                        );
-                    let expulsion_scores =
-                        crate::developmental_decision::developmental_action_scores(
-                            &organisms[index],
-                            environment,
-                            needs,
-                            &expulsion_candidates,
-                            &expulsion_competition,
-                            developmental.as_ref(),
-                            &self.energy_ledger,
-                        );
-                    if let Some(selected) = select_action_with_developmental_scores(
-                        context,
-                        &organisms[index].decision_history,
-                        &expulsion_candidates,
-                        &expulsion_scores,
-                        &mut self.rng,
-                    ) {
-                        let expelled = selected
-                            .context_key
-                            .as_deref()
-                            .and_then(|key| key.strip_prefix("stored:"))
-                            .and_then(|index| index.parse::<usize>().ok())
-                            .map(|storage_index| {
-                                crate::expulsion::expel_physical_material(
-                                    &mut organisms[index],
-                                    environment,
-                                    storage_index,
-                                )
-                            })
-                            .unwrap_or(false);
-                        let consequence = if expelled {
-                            Self::action_consequence(
-                                before_energy,
-                                before_stress,
-                                before_realization,
-                                &mut organisms[index],
-                                environment,
-                            )
-                        } else {
-                            crate::decision::ActionConsequence::default()
-                        };
-                        crate::decision_runtime::record_consequence(
-                            &mut organisms[index].decision_history,
-                            &selected,
-                            consequence,
-                        );
-                    }
-                }
-            }
-        }
-        if profile_tick {
-            finish_profile_phase("organism_decisions_and_movement");
-        }
-
-        let mut offspring = Vec::new();
-        let mut next_organism_id = self.next_organism_id;
-        for organism in &mut self.organisms {
-            if !living_ids.contains(&organism.id) {
-                continue;
-            }
-            // Construction consumes the same stored-material holder used by
-            // BREAK/COMBINE transactions. Pause it while a transformation owns
-            // an escrow or prepared storage snapshot; resume after resolution.
-            if organism.reproductive_construction.is_some()
-                && organism.active_transformation_id.is_none()
-            {
-                let Some(parent_body) =
-                    crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
-                else {
-                    continue;
-                };
-                let (status, stress, structure_changed) = {
-                    let construction = organism
-                        .reproductive_construction
-                        .as_mut()
-                        .expect("reproductive construction exists");
-                    crate::reproduction::advance_construction(
-                        &mut organism.structure,
-                        &mut organism.stored_material,
-                        construction,
-                        &self.environment,
-                        &mut self.energy_ledger,
-                        &mut organism.usable_energy,
-                        &mut self.rng,
-                        &parent_body,
-                        self.seed_scale_reference,
-                    )
-                };
-                if structure_changed {
-                    organism.mark_structure_changed();
-                }
-                if let Some(stress) = stress {
-                    organism.add_transaction_stress(stress);
-                }
-                if status == crate::reproduction::ConstructionStatus::Ready {
-                    // Only a construction that passed the complete readiness
-                    // gate may detach into an offspring. Detached/dead states
-                    // must never be reinterpreted as successful division by
-                    // rechecking geometry alone in finish_reproduction.
-                    // Reserve the next ID before detaching; exhaustion leaves
-                    // the construction attached to the parent.
-                    let Some(next_id_after) = checked_next_organism_id(next_organism_id) else {
-                        continue;
-                    };
-                    let child_id = next_organism_id.to_string();
-                    if let Some(child) = crate::reproduction::finish_reproduction(
-                        organism,
-                        child_id,
-                        &self.environment.catalog,
-                        &mut self.energy_ledger,
-                        self.seed_scale_reference,
-                    ) {
-                        next_organism_id = next_id_after;
-                        offspring.push(child);
-                    }
-                }
-            }
-        }
-        self.next_organism_id = next_organism_id;
-        self.organisms.extend(offspring);
-        // Apply biological stress bookkeeping only while the genome core is
-        // intact. A core breach is an observed life-state transition, not a
-        // separate stress-driven bond-breaking mechanism.
-        for organism in &mut self.organisms {
-            if living_ids.contains(&organism.id) {
-                let _ = Self::apply_survival_damage(
-                    organism,
-                    &self.environment,
-                    &mut self.energy_ledger,
-                    &mut self.rng,
-                );
-            }
-        }
-        // Death changes biological eligibility, not physical ownership. The
-        // breached organism remains the sole owner of its graph, stored
-        // material, and in-flight transactions. The ordinary shared chemistry
-        // pass above continues to evaluate its physical graph. Do not run the
-        // legacy DecomposingBody bond-yield loop: decomposition must emerge from
-        // the same chemical BREAK path and only then release material.
-
-        // Keep in-flight physical/chemical transactions even if their organism's
-        // core has since been breached. Dropping one here could discard reserved
-        // material or energy held by the transaction. New transformations cannot
-        // be initiated by breached organisms because the decision loop is gated
-        // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
-        self.release_finished_dead_organisms(&living_ids);
-        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
-            &self.organisms,
-            &self.decomposing_bodies,
-        ) + self.environment.chemistry_usable_energy;
-        self.energy_ledger.total_resonant_energy_held =
-            crate::reproduction::total_resonant_energy_held(&self.organisms)
-                + self
-                    .environment
-                    .resonant_energy
-                    .total_energy()
-                    .unwrap_or(f64::NAN);
-        self.energy_ledger.total_structural_energy_held =
-            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
-                + Self::environmental_structural_energy_held(&self.environment);
+        // Organism-owned BREAK/COMBINE, uptake, decisions, movement,
+        // reproduction, survival, and dead-holder release are intentionally
+        // absent from the chemistry tick. Their implementations remain
+        // available for later redesign against universal material ownership.
         self.environmental_chemistry_diagnostics
             .accumulation_entries = self.chemical_reaction_accumulation.len();
 
         if profile_tick {
-            finish_profile_phase("reproduction_and_tick_finalization");
+            finish_profile_phase("chemistry_tick_finalization");
             drop(finish_profile_phase);
             let total_ns = tick_profile_started.map_or(0, |started| started.elapsed().as_nanos());
             eprintln!(
@@ -2331,6 +1627,25 @@ impl Simulation {
         decomposing_bodies: &[crate::decomposition::DecomposingBody],
     ) -> f64 {
         crate::reproduction::total_structural_energy_held(organisms, decomposing_bodies)
+    }
+
+    /// Reconcile all authoritative energy holders after a tick. This is
+    /// inventory bookkeeping only; it does not invoke biological behavior.
+    fn reconcile_energy_inventory_holders(&mut self) {
+        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        ) + self.environment.chemistry_usable_energy;
+        self.energy_ledger.total_resonant_energy_held =
+            crate::reproduction::total_resonant_energy_held(&self.organisms)
+                + self
+                    .environment
+                    .resonant_energy
+                    .total_energy()
+                    .unwrap_or(f64::NAN);
+        self.energy_ledger.total_structural_energy_held =
+            Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
+                + Self::environmental_structural_energy_held(&self.environment);
     }
 
     /// Signed potential stored in realized physical bonds owned by the field.
@@ -2723,7 +2038,7 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn dead_bonded_graph_uses_ordinary_chemistry_without_forced_decomposition() {
+    fn organism_owned_bonded_graph_is_dormant_during_chemistry_ticks() {
         let mut simulation = Simulation::new(0xD3B5, 10.0);
         // Keep the normal world configuration. Death disables biological
         // activity; it must not install a special decomposition reaction.
@@ -2732,6 +2047,8 @@ mod decomposition_finalization_tests {
         }
 
         let owner_id = simulation.organisms[0].id.clone();
+        let bonds_before = simulation.organisms[0].structure.bonds.clone();
+        let units_before = simulation.organisms[0].structure.units.clone();
         simulation.organisms[0]
             .structure
             .clear_genome_constituent_ids();
@@ -2753,9 +2070,8 @@ mod decomposition_finalization_tests {
             .sum::<f64>();
         let material_before = field_before + structural_amount_before;
 
-        // One ordinary tick exercises the shared scheduler for a dead,
-        // physically bonded aggregate. Do not assume these constructor bonds
-        // are chemically breakable or require them to break within a deadline.
+        // The chemistry-only tick must not run organism-owned BREAK discovery,
+        // lifecycle checks, or dead-material release.
         simulation.step();
 
         let structural_amount_after = simulation
@@ -2769,51 +2085,37 @@ mod decomposition_finalization_tests {
         let material_after = simulation.environment.field.total_amount() + structural_amount_after;
         assert!(
             (material_after - material_before).abs() <= 1e-9,
-            "ordinary chemistry/lifecycle must preserve physical material ownership: before={material_before}, after={material_after}"
+            "chemistry-only ticks must preserve total physical material: before={material_before}, after={material_after}"
         );
-        // This integration check covers ordinary chemistry and material
-        // ownership, not the stricter no-creation release gate. Aggregate
-        // holder summation can leave a sub-ULP signed residual; dedicated
-        // energy-settlement tests enforce the stronger one-sided condition.
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(simulation.organisms[0].structure.units, units_before);
+        assert_eq!(simulation.organisms[0].structure.bonds, bonds_before);
+        assert_eq!(simulation.environment.field.total_amount(), field_before);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-8),
-            "ordinary chemistry on a dead bonded graph must conserve world energy: {:?}",
+            "chemistry-only tick must conserve world energy: {:?}",
             simulation.energy_inventory_snapshot().residual()
         );
-        if simulation
-            .organisms
-            .iter()
-            .any(|organism| organism.id == owner_id)
-        {
-            assert_eq!(
-                simulation.environment.field.total_amount(),
-                field_before,
-                "material still owned by the dead aggregate must not be prematurely released"
-            );
-        } else {
-            assert!(
-                (simulation.environment.field.total_amount()
-                    - (field_before + structural_amount_before))
-                    .abs()
-                    <= 1e-9,
-                "if ordinary chemistry removes all bonds, final release must deposit the structure exactly once"
-            );
-        }
     }
 
     #[test]
-    fn live_tick_releases_a_dead_bondless_graph_into_the_environment() {
+    fn bondless_organism_graph_remains_dormant_during_chemistry_ticks() {
         let mut simulation = Simulation::new(0xD3B0, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
         let field_before = simulation.environment.field.total_amount();
 
+        let organism_units_before = simulation.organisms[0].structure.units.clone();
         simulation.step();
 
-        assert!(simulation.organisms.is_empty());
+        assert_eq!(simulation.organisms.len(), 1);
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            organism_units_before
+        );
         assert_eq!(
             simulation.environment.field.total_amount(),
-            field_before + 1.0,
-            "the live lifecycle must release the dead graph exactly once"
+            field_before,
+            "biology-disabled ticks must not release organism-owned material"
         );
     }
 
@@ -3234,18 +2536,21 @@ mod decomposition_finalization_tests {
             "reserved source must remain counted while held by an in-flight transformation"
         );
 
-        // The first tick reaches preparation, where the persisted target is
-        // malformed. The simulation-level rollback must return the escrow.
+        // Organism-owned transactions are dormant in chemistry-only ticks.
+        // Their escrow and ownership metadata must remain untouched.
+        let transformation_id = simulation.active_transformations[0].id;
+        let owner_id = simulation.organisms[0].active_transformation_id;
         simulation.step();
 
-        assert!(simulation.active_transformations.is_empty());
-        assert_eq!(simulation.organisms[0].active_transformation_id, None);
+        assert_eq!(simulation.active_transformations.len(), 1);
+        assert_eq!(simulation.active_transformations[0].id, transformation_id);
+        assert_eq!(simulation.organisms[0].active_transformation_id, owner_id);
         assert_eq!(
             rollback_material_inventory(&simulation),
             inventory_before,
-            "failed live preparation must preserve all constituent ownership"
+            "a dormant transaction must preserve all constituent ownership"
         );
-        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 1);
+        assert_eq!(simulation.organisms[0].stored_material.physical_count(), 0);
     }
 
     #[test]
@@ -3304,12 +2609,18 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
-    fn live_world_tone_capture_settles_and_reconciles_world_energy() {
+    fn live_world_tone_capture_settles_environmental_material_and_reconciles_energy() {
         let mut simulation = Simulation::new(918, 10.0);
-        for cell in &mut simulation.environment.field.cells {
-            cell.physical_materials.clear();
-        }
         assert!(simulation.world_tone.is_some());
+        assert!(
+            simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .any(|cell| !cell.physical_materials.is_empty()),
+            "fixture must contain environmental physical material"
+        );
 
         let external_before = simulation.energy_ledger.total_external_energy_input;
         simulation.step();

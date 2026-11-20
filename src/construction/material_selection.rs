@@ -1,3 +1,7 @@
+#![expect(
+    dead_code,
+    reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+)]
 use crate::material_storage::{MaterialStorage, StoredMaterial};
 use crate::resources::{BaseResource, Form};
 

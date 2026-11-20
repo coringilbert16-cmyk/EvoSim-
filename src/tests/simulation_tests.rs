@@ -1381,7 +1381,60 @@ mod integration_tests {
     }
 
     #[test]
-    fn break_resolution_changes_state_on_expected_tick() {
+    fn chemistry_tick_preserves_all_dormant_biological_holders() {
+        let mut simulation = Simulation::new(0xC4E0, 10.0);
+        simulation.organisms[0].stress = 3.0;
+        let organisms_before = serde_json::to_value(&simulation.organisms).unwrap();
+        let transformations_before =
+            serde_json::to_value(&simulation.active_transformations).unwrap();
+        let decomposing_before = simulation
+            .decomposing_bodies
+            .iter()
+            .map(|body| {
+                (
+                    body.structure.units.clone(),
+                    body.structure.bonds.clone(),
+                    body.energy_budget,
+                    body.position.x,
+                    body.position.y,
+                )
+            })
+            .collect::<Vec<_>>();
+        let tick_before = simulation.tick;
+
+        simulation.step();
+
+        assert_eq!(simulation.tick, tick_before + 1);
+        assert_eq!(
+            serde_json::to_value(&simulation.organisms).unwrap(),
+            organisms_before,
+            "organism state must remain dormant"
+        );
+        assert_eq!(
+            serde_json::to_value(&simulation.active_transformations).unwrap(),
+            transformations_before,
+            "organism-owned transactions must remain dormant"
+        );
+        assert_eq!(
+            simulation.decomposing_bodies.len(),
+            decomposing_before.len()
+        );
+        for (body, before) in simulation.decomposing_bodies.iter().zip(decomposing_before) {
+            assert_eq!(body.structure.units, before.0);
+            assert_eq!(body.structure.bonds, before.1);
+            assert_eq!(body.energy_budget, before.2);
+            assert_eq!(body.position.x, before.3);
+            assert_eq!(body.position.y, before.4);
+        }
+        assert!(
+            simulation.energy_inventory_snapshot().is_balanced(1e-8),
+            "chemistry-only tick must preserve world energy accounting: {:?}",
+            simulation.energy_inventory_snapshot().residual()
+        );
+    }
+
+    #[test]
+    fn in_flight_organism_break_remains_dormant_during_chemistry_ticks() {
         let mut s = Simulation::new(7, 10.0);
         for cell in &mut s.environment.field.cells {
             cell.physical_materials.clear();
@@ -1389,24 +1442,26 @@ mod integration_tests {
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 100.0;
         start_test_break_transformation(&mut s);
+        let transformation_id = s.active_transformations[0].id;
+        let remaining_ticks = s.active_transformations[0].remaining_ticks;
+        let organism_before = serde_json::to_value(&s.organisms[0]).unwrap();
+
         s.step();
-        assert!(s.organisms[0].active_transformation_id.is_some());
-        assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
         s.step();
-        assert!(s.organisms[0].active_transformation_id.is_none());
-        assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
-        assert!(s.organisms[0].usable_energy <= 100.0);
-        // Uniform world-tone exposure can also fund unrelated ordinary
-        // chemistry during this full-tick integration test. The assertion
-        // below concerns BREAK completion; structural-energy transactions
-        // are checked independently by the focused transformation tests.
-        assert!(
-            s.energy_ledger.total_structural_energy_delta.is_finite(),
-            "full-tick chemistry must leave the structural-energy ledger finite"
+
+        assert_eq!(s.active_transformations.len(), 1);
+        assert_eq!(s.active_transformations[0].id, transformation_id);
+        assert_eq!(s.active_transformations[0].remaining_ticks, remaining_ticks);
+        assert_eq!(
+            s.organisms[0].active_transformation_id,
+            Some(transformation_id)
         );
-        assert!(s.organisms[0]
-            .decision_history
-            .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));
+        assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
+        assert_eq!(
+            serde_json::to_value(&s.organisms[0]).unwrap(),
+            organism_before,
+            "chemistry-only ticks must not mutate organism state"
+        );
     }
 
     #[test]

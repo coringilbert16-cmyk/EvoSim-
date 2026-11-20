@@ -1,3 +1,10 @@
+#![cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+    )
+)]
 //! Viability requirements for a physically realized organism.
 //!
 //! These requirements deliberately do not define a canonical body plan. A

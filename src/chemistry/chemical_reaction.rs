@@ -1,3 +1,10 @@
+#![cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+    )
+)]
 //! Local runtime chemical reaction accumulation.
 
 use crate::chemistry_library::ChemistryLibrary;
