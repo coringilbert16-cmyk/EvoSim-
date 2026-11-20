@@ -196,12 +196,13 @@ def analyze(root: Path, seeds: list[int], duration: int, summary_only: bool = Fa
                     observed[field].append(value)
                     seed_values[field].append(value)
 
-                for sample in search.get("opportunity_samples", []) or []:
-                    if isinstance(sample, dict):
-                        opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
-                for sample in displacement.get("opportunity_samples", []) or []:
-                    if isinstance(sample, dict):
-                        opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
+                if not summary_only:
+                    for sample in search.get("opportunity_samples", []) or []:
+                        if isinstance(sample, dict):
+                            opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
+                    for sample in displacement.get("opportunity_samples", []) or []:
+                        if isinstance(sample, dict):
+                            opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
 
                 row["discovery_budget_exhausted"] = search.get("budget_exhausted")
                 row["displacement_discovery_work_remaining"] = _counter(
@@ -222,7 +223,8 @@ def analyze(root: Path, seeds: list[int], duration: int, summary_only: bool = Fa
                     coverage_ticks[reaction].append(row["coverage"][reaction])
                     seed_coverage_ticks[reaction].append(row["coverage"][reaction])
                 ticks += 1
-                all_ticks.append(row)
+                if not summary_only:
+                    all_ticks.append(row)
 
         seed_totals = {}
         for field, values in seed_values.items():
