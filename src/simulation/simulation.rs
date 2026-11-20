@@ -1091,8 +1091,6 @@ impl Simulation {
             finish_profile_phase("environmental_combine_discovery");
         }
 
-
-
         // Environmental COMBINE receives its own bounded share of the field's
         // work budget. It consumes the same shared reaction ledger and preserves
         // progress if a source snapshot became stale before commit.
@@ -1365,10 +1363,10 @@ impl Simulation {
                 &mut break_discovery,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
-        self.environmental_chemistry_diagnostics.break_ready_candidates =
-            environmental_break_operations.len();
-        self.environmental_chemistry_diagnostics.break_discovery_work_remaining =
-            environmental_break_discovery_remaining;
+        self.environmental_chemistry_diagnostics
+            .break_ready_candidates = environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics
+            .break_discovery_work_remaining = environmental_break_discovery_remaining;
         if profile_tick {
             finish_profile_phase("environmental_break_discovery");
         }
@@ -1490,8 +1488,6 @@ impl Simulation {
         if profile_tick {
             finish_profile_phase("environmental_break_resolution");
         }
-
-
 
         // Organism-owned BREAK/COMBINE, uptake, decisions, movement,
         // reproduction, survival, and dead-holder release are intentionally
