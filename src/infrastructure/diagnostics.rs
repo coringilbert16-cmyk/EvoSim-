@@ -690,10 +690,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         Ok(recorder)
     }
 
-    pub(crate) fn record_experiment_setup(
-        &mut self,
-        metadata: &Value,
-    ) -> std::io::Result<()> {
+    pub(crate) fn record_experiment_setup(&mut self, metadata: &Value) -> std::io::Result<()> {
         self.write_event(json!({
             "event": "environmental_chemistry_experiment_setup",
             "metadata": metadata
