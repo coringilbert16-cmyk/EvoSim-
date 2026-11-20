@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
+use std::path::Path;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// Event-oriented diagnostic recorder for exploratory simulation runs.
@@ -905,6 +906,10 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 
     fn write_run_manifest(&self, simulation: &Simulation, status: &str) -> std::io::Result<()> {
         let artifact_metadata = std::fs::metadata(&self.diagnostics_path)?;
+        let artifact_reference = Path::new(&self.diagnostics_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&self.diagnostics_path);
         let artifact_sha256 = if status == "completed" {
             let mut artifact = File::open(&self.diagnostics_path)?;
             let mut hasher = Sha256::new();
@@ -1008,7 +1013,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             },
             "artifacts": [{
                 "role": "raw_observation",
-                "path": self.diagnostics_path,
+                "path": artifact_reference,
                 "sha256": artifact_sha256,
                 "size_bytes": artifact_metadata.len()
             }],
