@@ -17,18 +17,25 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Research question | Status | Plan |
 |---|---|---|---|
-| PLAN-001 | Which recurring multistep pathways in existing data are candidates for catalytic facilitation or reusable intermediates? | Planned — artifact analysis first | [Pathway and catalysis candidate analysis](plans/README.md#plan-001-existing-pathway-analysis) |
-| PLAN-002 | Can a molecule facilitate repeated reactions while remaining chemically available and not being consumed? | Planned — requires operational definition and controls | [Catalysis investigation](plans/README.md#plan-002-catalysis) |
-| PLAN-003 | Can products promote production of additional instances of their own structure? | Planned — no positive evidence yet | [Autocatalysis investigation](plans/README.md#plan-003-autocatalysis) |
-| PLAN-004 | Can connected reaction cycles sustain resource transformation and regenerate reusable intermediates? | Planned — build on observed reversible pathways | [Pseudo-metabolism investigation](plans/README.md#plan-004-pseudo-metabolism) |
+| PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **In progress — artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
+| PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | Planned — depends on PLAN-001 and matched controls | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
+| PLAN-003 | Does a product promote net production of additional copies of its own structure? | Planned — requires a defined self-production pathway and seeded/unseeded controls | [Autocatalysis](plans/README.md#plan-003-autocatalysis) |
+| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
+| PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
+| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
+
+## Current PLAN-001 progress
+
+The first artifact pass identified four exact-instance reversible fragment-reuse cycles across seeds 43, 44, and 45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. These support reusable intermediate chemistry, not catalysis. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
 
 ## Interpretation guardrails
 
-- The November 19 run is the current strongest multi-seed dataset for chemical organization.
-- Its family-transition graph contains many cycles, but reversible BREAK/COMBINE paths and identity turnover can create graph cycles without a catalyst.
-- Product reuse as a parent is evidence of subsequent chemical participation, not proof that the product catalyzed a reaction.
-- No completed experiment currently confirms catalysis, autocatalysis, or a self-sustaining pseudo-metabolic network.
-- Future experiments should begin with reanalysis of retained artifacts. Do not repeat generic baseline runs or extend observation windows solely to wait for an event.
+- EXP-2026-004 is the strongest validated multi-seed dataset currently recorded.
+- Family-transition cycles can arise from reversible BREAK/COMBINE transformations and identity turnover; they are not proof of catalysis or autocatalysis.
+- Product reuse as a parent is evidence of subsequent chemical participation, not proof that the product facilitated another reaction.
+- No completed experiment currently confirms catalysis, autocatalysis, pseudo-metabolism, cross-catalysis, or self-sustaining chemistry.
+- Do not repeat generic baselines or extend observation windows solely to wait for an event.
+- Future experiments must be registered before execution and receive a dedicated result record at closeout.
 
 ## Historical record policy
 
