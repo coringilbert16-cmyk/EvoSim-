@@ -269,6 +269,7 @@ jobs:
           python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir deep/contact-opportunities
           python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir deep/temporal-chemical-complexity
       - name: Upload compact record transport artifact
+        id: compact_records_upload
         uses: actions/upload-artifact@v4
         with:
           name: chemistry-experiment-compact-records
@@ -287,7 +288,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
       - name: Delete temporary source artifacts
-        if: always()
+        if: always() && steps.compact_records_upload.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
