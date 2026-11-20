@@ -168,6 +168,9 @@ def main() -> int:
     result = compare(args.records)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    if args.markdown_out:
+        args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown_out.write_text(render_markdown(result), encoding="utf-8")
     print(f"Compared {len(args.records)} compact records; compatible={result['compatible']}")
     return 0
 
