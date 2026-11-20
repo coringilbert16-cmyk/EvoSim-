@@ -160,6 +160,15 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
 
         self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "unknown")
 
+
+    def test_legacy_displacement_zero_remaining_is_partial(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"displacement_discovery_work_remaining": 0})
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "partial")
+
     def test_missing_seed_artifact_fails_clearly(self):
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(ValueError, "missing raw observation"):
