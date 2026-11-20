@@ -690,6 +690,48 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         Ok(recorder)
     }
 
+    pub(crate) fn record_resource_feed_plan(
+        &mut self,
+        enabled: bool,
+    ) -> std::io::Result<()> {
+        self.write_event(json!({
+            "event": "environmental_experiment_condition",
+            "experiment": "PLAN-004-resource-feed",
+            "resource_feed_enabled": enabled,
+            "pulse_count": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT
+            } else {
+                0
+            },
+            "pulse_size": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_SIZE
+            } else {
+                0
+            },
+            "total_external_resources": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_TOTAL
+            } else {
+                0
+            },
+            "first_pulse_seconds": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_FIRST_PULSE_SECONDS
+            } else {
+                0
+            },
+            "pulse_interval_seconds": if enabled {
+                crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_INTERVAL_SECONDS
+            } else {
+                0
+            },
+            "composition_per_pulse": if enabled {
+                json!({"Carbon":12,"Hydrogen":12,"Nitrogen":12,"Oxygen":12,"Phosphorus":12,"Sulfur":12})
+            } else {
+                Value::Null
+            }
+        }))?;
+        self.writer.flush()
+    }
+
     pub(crate) fn record_resource_feed(
         &mut self,
         tick: u64,
@@ -726,7 +768,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                 "parent_ids": [],
                 "reaction_id": format!("resource-feed-pulse-{pulse_index}"),
                 "reaction": "RESOURCE_FEED",
-                "molecule": particle.material,
+                "molecule": &particle.material,
                 "external_source": true
             }))?;
         }
