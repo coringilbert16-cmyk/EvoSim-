@@ -19,11 +19,11 @@
 
 Use a named schema family with explicit integer versions:
 - `evosim.experiment_manifest`, version 1.
-- `evosim.environmental_reaction`, version 3 for the first event extension (current JSONL header is version 2; old v2 remains readable).
+- `evosim.environmental_chemistry_jsonl`, version 3 for the first event extension (current JSONL header is version 2; old v2 remains readable).
 - `evosim.opportunity_coverage`, version 1.
 - `evosim.analysis_index`, version 1.
 
-The event schema bump is proposed because adding stable IDs, participant IDs, and settlement payloads changes the event contract. The raw JSONL envelope remains one JSON object per line with its existing `event` discriminator. New fields are additive, but readers must still validate the declared schema version.
+The environmental JSONL header version is proposed to move from 2 to 3 when the first event-contract extension ships, because stable IDs, participant IDs, and settlement payloads change the record contract. The raw JSONL envelope remains one JSON object per line with its existing `event` discriminator. New fields are additive, but readers must still validate the header's declared version.
 
 Semantics:
 - A numeric zero means the quantity was measured and equals zero.
@@ -112,22 +112,13 @@ Proposed event fields:
 ```json
 {
   "event": "environmental_reaction",
-  "schema_version": 3,
   "reaction": {
     "reaction_id": "157-2",
     "tick": 157,
-    "reaction_type": "COMBINE",
+    "reaction": "COMBINE",
+    "source_material_ids": [1001, 1002],
     "outcome": "committed",
     "failure_reason": null,
-    "participants": [
-      {
-        "role": "reactant",
-        "material_id": 1001,
-        "source_cell_index": 17,
-        "source_material_index": 4,
-        "composition": [["Carbon", 1.0]]
-      }
-    ],
     "product_material_ids": [1200],
     "lifecycle_join_status": "complete"
   }
