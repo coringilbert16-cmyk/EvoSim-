@@ -372,3 +372,34 @@ The remaining-work counter is the unspent inspection budget, not a count of unin
 - Existing tick rows are activity-triggered, not a guaranteed row for every tick. Use summary observed-tick count and fixed windows; absence of a row alone is not a measured zero.
 - Existing COMBINE/DISPLACEMENT opportunity samples are capped at eight examples per tick. Their sample size is descriptive only; record sample policy and never substitute it for exhaustive opportunity counts.
 - For a bounded search, a report must state the visited domain and known uninspected/truncated work. Where the engine cannot tell whether further work remained, use `coverage_status: "unknown"` rather than guessing complete or partial.
+
+
+## 13. Concrete settlement summary mapping for implementation
+
+The first implementation should use one shared value type carried by the resolver result and copied into `EnvironmentalChemistryEvent` only after commit. Proposed numeric fields:
+
+| Field | BREAK source | COMBINE source | DISPLACEMENT source |
+|---|---|---|---|
+| `usable_energy_delta` | prepared usable holder minus pre-commit holder | staged holder minus pre-commit holder | staged holder minus pre-commit holder, including resonance transfer |
+| `structural_energy_delta` | exact removed bond energy | product structural potential minus reactant structural potential | `trial.energy.net_reaction_change` |
+| `physical_work` | full `operation.disruption_cost` | exact `EnergyTransaction.work_expended` | `trial.energy.physical_work` |
+| `heat_dissipated` | exact prepared settlement heat (currently zero) | exact `EnergyTransaction.heat_dissipated` | `trial.energy.dissipated_heat` |
+| `resonance_withdrawn` | actual `resonant_work` returned by compatible withdrawal | measured zero; no resonance reservoir is used in this resolver | actual `resonant_funding` |
+| `external_energy_input` | zero | zero | zero; resonance is an internal transfer, not external input |
+| `settlement_status` | settled only after split succeeds | settled only after product insertion succeeds | settled only after all products are inserted |
+
+The usable-holder delta in BREAK is not the complete physical-work value: resonance directly funds part of the disruption work, and the usable holder pays only the remainder plus the bond separation requirement. The summary must therefore preserve the full work and resonance withdrawal as separate quantities.
+
+For COMBINE, the exact `EnergyTransaction` is created and settled in `combine_runtime::form_bond_from_candidate_diagnostic`. Carry its work/heat values alongside `CombineAttempt`; do not infer them from `work_cost`, `net_energy_change`, or cumulative ledger counters. The environmental resolver supplies the exact structural pre/post potential and the holder pre/post values.
+
+For DISPLACEMENT, the `ReactionEnergyBalance` and actual resonance withdrawal are already available in the resolver. The usable delta must be measured across the complete staged operation, not copied from the transaction alone, because resonance is transferred into the usable holder before transaction settlement.
+
+### Required summary invariants
+
+For each committed event, the captured summary must be finite and satisfy the same represented world-level accounting identity as the committed transaction:
+
+`usable_energy_delta - resonance_withdrawn + structural_energy_delta + physical_work + heat_dissipated = 0`
+
+This is the expected signed change for the current three environmental paths, where resonance withdrawal is an internal reservoir decrease. Use a scale-aware numerical tolerance matching the existing energy-ledger validation policy; do not introduce a new energy tolerance or change settlement arithmetic.
+
+The invariant is a diagnostic cross-check only. It must not be used to approve or reject a physical reaction. Failed/stale/unaffordable operations have no committed settlement and must carry `not_settled`, not a synthetic zero-valued settlement. Tests should compare the captured fields to the actual transaction/pre-post holders and existing ledger deltas for each reaction type, and should include a failed physical mutation after energy preparation to prove that staged energy is not reported as committed.
