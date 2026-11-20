@@ -1415,7 +1415,10 @@ mod integration_tests {
             transformations_before,
             "organism-owned transactions must remain dormant"
         );
-        assert_eq!(simulation.decomposing_bodies.len(), decomposing_before.len());
+        assert_eq!(
+            simulation.decomposing_bodies.len(),
+            decomposing_before.len()
+        );
         for (body, before) in simulation.decomposing_bodies.iter().zip(decomposing_before) {
             assert_eq!(body.structure.units, before.0);
             assert_eq!(body.structure.bonds, before.1);
