@@ -175,6 +175,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(len(result["condition_groups"]), 2)
         self.assertEqual(len(result["condition_comparisons"]), 1)
         self.assertEqual(result["condition_groups"][1]["summary"]["seeds"], [42, 43])
+        paired_break = result["condition_comparisons"][0]["metrics"]["BREAK.committed"]["paired_seed_differences"]
+        self.assertEqual([row["seed"] for row in paired_break], [42, 43])
         first_group = result["condition_groups"][0]["summary"]
         self.assertEqual(first_group["reaction_totals"]["COMBINE"]["committed_by_seed"], [None, None])
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
