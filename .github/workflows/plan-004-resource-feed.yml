@@ -13,6 +13,16 @@ on:
         required: true
         default: 3600
         type: number
+      analysis_only:
+        description: "Rebuild reports from a previous completed run; do not launch simulations."
+        required: true
+        default: false
+        type: boolean
+      source_run_id:
+        description: "Completed workflow run ID whose paired artifacts should be reanalyzed."
+        required: false
+        default: ""
+        type: string
   push:
     branches: [experiments/plan-004-resource-feed]
     paths:
@@ -27,6 +37,8 @@ jobs:
     outputs:
       seeds: ${{ steps.parameters.outputs.seeds }}
       duration_seconds: ${{ steps.parameters.outputs.duration_seconds }}
+      analysis_only: ${{ steps.parameters.outputs.analysis_only }}
+      source_run_id: ${{ steps.parameters.outputs.source_run_id }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate paired experiment configuration
@@ -35,6 +47,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           SEEDS_INPUT: ${{ inputs.seeds }}
           DURATION_INPUT: ${{ inputs.duration_seconds }}
+          ANALYSIS_ONLY_INPUT: ${{ inputs.analysis_only }}
+          SOURCE_RUN_ID_INPUT: ${{ inputs.source_run_id }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -48,6 +62,8 @@ jobs:
                   raise SystemExit("PLAN-004 run request is inactive.")
               seeds = config.get("seeds", [])
               duration = int(config.get("duration_seconds", 0))
+              analysis_only = bool(config.get("analysis_only", False))
+              source_run_id = str(config.get("source_run_id") or "").strip()
           else:
               raw = os.environ["SEEDS_INPUT"]
               parts = [part.strip() for part in raw.split(",") if part.strip()]
@@ -55,18 +71,28 @@ jobs:
                   raise SystemExit("Every seed must be a nonnegative integer.")
               seeds = [int(part) for part in parts]
               duration = int(os.environ["DURATION_INPUT"])
+              analysis_only = os.environ.get("ANALYSIS_ONLY_INPUT", "false").lower() == "true"
+              source_run_id = os.environ.get("SOURCE_RUN_ID_INPUT", "").strip()
 
           if seeds != [42, 43, 44, 45, 46]:
               raise SystemExit("EXP-2026-005 is pre-registered for paired seeds 42–46.")
           if duration != 3600:
               raise SystemExit("EXP-2026-005 requires exactly 3,600 wall-clock seconds per run.")
+          if analysis_only:
+              if not source_run_id.isascii() or not source_run_id.isdecimal():
+                  raise SystemExit("Analysis-only mode requires a numeric source workflow run ID.")
+          elif source_run_id:
+              raise SystemExit("source_run_id is only valid when analysis_only is true.")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("seeds=" + json.dumps(seeds) + chr(10))
               output.write("duration_seconds=3600" + chr(10))
-          print("Validated five matched seeds, two arms, and one hour per run.")
+              output.write("analysis_only=" + str(analysis_only).lower() + chr(10))
+              output.write("source_run_id=" + source_run_id + chr(10))
+          print(f"Validated paired seeds and duration; analysis_only={analysis_only}, source_run_id={source_run_id or 'current run'}")
           PY
 
   observe:
+    if: needs.prepare.outputs.analysis_only != 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -122,16 +148,19 @@ jobs:
           retention-days: 30
 
   aggregate:
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.observe.result == 'success' || needs.prepare.outputs.analysis_only == 'true') }}
     needs: [prepare, observe]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download all paired observations
+      - name: Download paired observations from selected run
         uses: actions/download-artifact@v4
         with:
           pattern: plan004-*
           path: observations
           merge-multiple: true
+          run-id: ${{ needs.prepare.outputs.source_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Assemble matched arm reports
         env:
           SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
