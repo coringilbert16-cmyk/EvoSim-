@@ -933,9 +933,7 @@ impl Simulation {
         let dormant_transformations = std::mem::take(&mut self.active_transformations);
         let dormant_decomposing_bodies = std::mem::take(&mut self.decomposing_bodies);
 
-        self.step_environmental_chemistry_with_transport_reuse::<
-            REUSE_SINGLETON_CENTER_VELOCITY,
-        >();
+        self.step_environmental_chemistry_with_transport_reuse::<REUSE_SINGLETON_CENTER_VELOCITY>();
 
         self.organisms = dormant_organisms;
         self.active_transformations = dormant_transformations;
@@ -2350,11 +2348,10 @@ impl Simulation {
     /// Reconcile all authoritative energy holders after a tick. This is
     /// inventory bookkeeping only; it does not invoke biological behavior.
     fn reconcile_energy_inventory_holders(&mut self) {
-        self.energy_ledger.total_usable_energy_held =
-            crate::reproduction::total_usable_energy_held(
-                &self.organisms,
-                &self.decomposing_bodies,
-            ) + self.environment.chemistry_usable_energy;
+        self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
+            &self.organisms,
+            &self.decomposing_bodies,
+        ) + self.environment.chemistry_usable_energy;
         self.energy_ledger.total_resonant_energy_held =
             crate::reproduction::total_resonant_energy_held(&self.organisms)
                 + self
@@ -2827,7 +2824,10 @@ mod decomposition_finalization_tests {
         simulation.step();
 
         assert_eq!(simulation.organisms.len(), 1);
-        assert_eq!(simulation.organisms[0].structure.units, organism_units_before);
+        assert_eq!(
+            simulation.organisms[0].structure.units,
+            organism_units_before
+        );
         assert_eq!(
             simulation.environment.field.total_amount(),
             field_before,
