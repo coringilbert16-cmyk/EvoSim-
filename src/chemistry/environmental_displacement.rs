@@ -962,7 +962,16 @@ pub(crate) fn accumulate_environmental_with_resonance(
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
     let mut local_resonance_sampled_this_tick = false;
-    if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
+    let cell_count = environment.field.cells.len();
+    diagnostics.anchor_cells_available = diagnostics.anchor_cells_available.saturating_add(cell_count as u64);
+    if *remaining_discovery_work == 0 {
+        diagnostics.anchor_cells_not_reached_in_selected_window = diagnostics
+            .anchor_cells_not_reached_in_selected_window
+            .saturating_add(cell_count as u64);
+        dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
+        return Vec::new();
+    }
+    if cell_count == 0 {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
     }
@@ -970,8 +979,11 @@ pub(crate) fn accumulate_environmental_with_resonance(
     let mut anchor_work = (*remaining_discovery_work)
         .min(DISPLACEMENT_FIELD_ANCHOR_LIMIT)
         .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let cell_count = environment.field.cells.len();
     let cell_scan_count = cell_count.min(DISPLACEMENT_FIELD_ANCHOR_LIMIT);
+    diagnostics.anchor_cells_unvisited_by_window = diagnostics
+        .anchor_cells_unvisited_by_window
+        .saturating_add(cell_count.saturating_sub(cell_scan_count) as u64);
+    let mut anchor_cells_inspected_this_call = 0_usize;
     let cell_start = tick as usize % cell_count;
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
@@ -982,6 +994,8 @@ pub(crate) fn accumulate_environmental_with_resonance(
             break;
         }
         let cell_a = (cell_start + cell_offset) % cell_count;
+        diagnostics.anchor_cells_inspected = diagnostics.anchor_cells_inspected.saturating_add(1);
+        anchor_cells_inspected_this_call = anchor_cells_inspected_this_call.saturating_add(1);
         *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
         let material_count = environment.field.cells[cell_a].physical_materials.len();
         if material_count == 0 {
@@ -1018,16 +1032,23 @@ pub(crate) fn accumulate_environmental_with_resonance(
             else {
                 continue;
             };
+            let target_cell_limit = DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work);
             let target_cells = environment.field.cells_intersecting_bounds_limited(
                 body.min_x - 2.1,
                 body.max_x + 2.1,
                 body.min_y - 2.1,
                 body.max_y + 2.1,
-                DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work),
+                target_cell_limit,
                 (tick as usize)
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
+            diagnostics.target_cell_windows_inspected =
+                diagnostics.target_cell_windows_inspected.saturating_add(1);
+            if target_cells.len() == target_cell_limit {
+                diagnostics.target_cell_window_limit_reached =
+                    diagnostics.target_cell_window_limit_reached.saturating_add(1);
+            }
 
             for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
@@ -1428,6 +1449,9 @@ pub(crate) fn accumulate_environmental_with_resonance(
         }
     }
 
+    diagnostics.anchor_cells_not_reached_in_selected_window = diagnostics
+        .anchor_cells_not_reached_in_selected_window
+        .saturating_add(cell_scan_count.saturating_sub(anchor_cells_inspected_this_call) as u64);
     dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
     operations
 }
