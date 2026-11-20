@@ -268,7 +268,7 @@ jobs:
           python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir deep/geometry-aware-network
           python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir deep/contact-opportunities
           python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir deep/temporal-chemical-complexity
-      - name: Upload permanent compact comparison record
+      - name: Upload compact record transport artifact
         uses: actions/upload-artifact@v4
         with:
           name: chemistry-experiment-compact-records
