@@ -186,12 +186,12 @@ def render_markdown(result: dict[str, Any]) -> str:
     lines = [
         "# Compact EvoSim experiment comparison",
         "",
-        f"- Compatible conditions: {'yes' if result['compatible'] else 'no'}",
-        f"- Compatibility groups: {len(result['compatibility_groups'])}",
+        f"- Compatible conditions: {'yes' if result['measurement_compatible'] else 'no'}",
+        f"- Compatibility groups: {len(result['condition_groups'])}",
         "- Source: compact permanent records only",
         "",
     ]
-    for index, group in enumerate(result["compatibility_groups"], 1):
+    for index, group in enumerate(result["condition_groups"], 1):
         summary = group["summary"]
         lines.extend([
             f"## Condition group {index}",
@@ -213,6 +213,20 @@ def render_markdown(result: dict[str, Any]) -> str:
             rendered = ", ".join("unknown" if value is None else str(value) for value in values)
             lines.append(f"- {metric}: {rendered or 'unknown'}")
         lines.append("")
+    if result["condition_comparisons"]:
+        lines.extend(["", "## Descriptive condition differences", "",
+                      "| Metric | Baseline mean | Comparison mean | Difference |",
+                      "|---|---:|---:|---:|"])
+        for comparison in result["condition_comparisons"]:
+            for metric, values in comparison["metrics"].items():
+                left = values["baseline_mean"]
+                right = values["comparison_mean"]
+                delta = values["difference"]
+                lines.append(
+                    f"| {metric} | {left if left is not None else 'unknown'} | "
+                    f"{right if right is not None else 'unknown'} | "
+                    f"{delta if delta is not None else 'unknown'} |"
+                )
     lines.extend([
         "## Data-quality rules",
         "",
