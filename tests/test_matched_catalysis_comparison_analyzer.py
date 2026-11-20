@@ -77,7 +77,7 @@ class MatchedCatalysisComparisonAnalyzerTests(unittest.TestCase):
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / f"seed-{seed}.jsonl"
         path.write_text(
-            "".join(json.dumps(row) + "\\n" for row in records(seed, condition, committed)),
+            "".join(json.dumps(row) + "\n" for row in records(seed, condition, committed)),
             encoding="utf-8",
         )
 
@@ -106,7 +106,7 @@ class MatchedCatalysisComparisonAnalyzerTests(unittest.TestCase):
             path = remote / "seed-42.jsonl"
             rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
             rows[0]["initial_material_inventory"]["Carbon"] = 999
-            path.write_text("".join(json.dumps(row) + "\\n" for row in rows), encoding="utf-8")
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "different initial elemental inventories"):
                 analyze(near, remote, [42], 60, CONFIG)
