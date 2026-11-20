@@ -120,7 +120,7 @@ def comparison_vectors(summary: dict[str, Any], records: list[dict[str, Any]]) -
     for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
         for field in ("formed_total", "broken_total"):
             vectors[f"bond_accounting.{reaction}.{field}"] = [
-                numeric((row.get("bond_accounting") or {}).get("by_reaction", {})
+                numeric(((row.get("bond_accounting") or {}).get("by_reaction") or {})
                         .get(reaction, {}).get(field))
                 for row in records
             ]
