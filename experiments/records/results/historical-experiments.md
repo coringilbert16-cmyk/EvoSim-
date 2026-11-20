@@ -22,8 +22,10 @@ An earlier 600-tick attempt is explicitly excluded: it omitted `--headless`, lau
 - Date: approximately 2026-11-12.
 - Seeds: 42–46.
 - Requested/recorded duration: 300 seconds per seed.
-- Historical analysis reported 361 committed BREAK events and 27 displacement failures; 98,491 of 98,832 scheduled BREAK attempts were reported as insufficient-usable-energy failures.
+- PR #354's audit of the five-minute artifacts recorded 7,624 molecule identities and 704 committed reaction events; all recorded participants in those 704 events had complete physical geometry.
+- A separate summary of the same five-minute experiment reported 361 committed BREAK events and 27 displacement failures; 98,491 of 98,832 scheduled BREAK attempts were reported as insufficient-usable-energy failures.
 - **Configuration discrepancy:** the combined report header showed 1,280 molecules / 2,560 constituents and zero independent resources, while the request description said 1,200 independent resources plus 80 molecules. A stale report also described the latter inventory.
+- Related analysis/implementation reference: [PR #354](https://github.com/coringilbert16-cmyk/EvoSim-/pull/354), which audited the existing five-minute geometry artifacts and integrated geometry-aware network diagnostics.
 - Status: completed, but configuration provenance is inconsistent. Do not compare reaction rates or chemical outcomes directly with EXP-2026-004 until the original artifacts are reconciled.
 
 ## EXP-2026-003 — Five-seed, 25-minute observation
