@@ -45,6 +45,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
                 "event_counts": {"BREAK": 2},
                 "outcome_counts": {"BREAK": {"committed": 1, "rejected": 1}},
                 "diagnostic_totals": {"BREAK": {"ready": 3, "committed": 1, "rejected": 1}},
+                "settlement": {"BREAK": {"settled_event_count": 1, "not_settled_event_count": 1,
+                                        "usable_energy_delta": {"count": 1, "sum": -2.0}}},
                 "elemental_bond_pairs": {
                     "formed_total": 1, "broken_total": 1,
                     "committed_events_with_graph_deltas": 1,
