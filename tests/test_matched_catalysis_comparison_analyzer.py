@@ -107,7 +107,7 @@ class MatchedCatalysisComparisonAnalyzerTests(unittest.TestCase):
             path = remote / "seed-42.jsonl"
             rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
             rows[1]["metadata"]["initial_energy_inventory"]["resonant"] = 999.0
-            path.write_text("".join(json.dumps(row) + "\\n" for row in rows), encoding="utf-8")
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "different or missing initial energy inventories"):
                 analyze(near, remote, [42], 60, CONFIG)
