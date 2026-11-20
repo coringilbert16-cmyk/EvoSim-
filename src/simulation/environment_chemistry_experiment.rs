@@ -1011,6 +1011,28 @@ pub(crate) fn build_matched(
         );
     }
 
+    let local_exposure = serde_json::json!({
+        "sampling_tick": fixture.simulation.tick,
+        "flow_model": "production ambient S-flow plus complete obstacle-adjusted velocity",
+        "candidate": material_local_exposure(&fixture.simulation, candidate_id)?,
+        "target_reactant_a": material_local_exposure(&fixture.simulation, target_a.identity)?,
+        "target_reactant_b": material_local_exposure(&fixture.simulation, target_b.identity)?,
+        "world_tone": world_tone_exposure(&fixture.simulation)?,
+        "legacy_pairwise_resonance": {
+            "candidate_to_target_a_boundary_magnitudes": candidate_resonance_contribution(&fixture.simulation, candidate_id, target_a.identity)?,
+            "candidate_to_target_b_boundary_magnitudes": candidate_resonance_contribution(&fixture.simulation, candidate_id, target_b.identity)?,
+            "background_from_other_materials": "not_measured",
+            "model_status": "legacy instantaneous pairwise aura; not the approved persistent finite-speed wave field"
+        },
+        "coverage": {
+            "flow": "tick-zero constituent-position samples; no time integration",
+            "hotspot": "tick-zero constituent-position intensity; no occlusion model",
+            "world_tone": "uniform per-constituent source input; same source sample for both arms",
+            "resonance": "candidate contribution only; background spectrum not measured"
+        },
+        "pre_run_exposure_gate": "not_eligible_incomplete_temporal_and_background_resonance_coverage"
+    });
+
     fixture.experiment_metadata = Some(serde_json::json!({
         "schema_version": 1,
         "seed": seed,
@@ -1039,6 +1061,7 @@ pub(crate) fn build_matched(
             "structural": initial_energy.current_structural_energy
         },
         "all_non_candidate_molecule_geometry_unchanged": true,
+        "local_exposure": local_exposure,
         "interpretation": "The candidate is not established as a facilitator. Target reactants are selected by composition and proximity only; this setup does not establish an eligible endpoint contact or causal facilitation."
     }));
     Ok(fixture)
