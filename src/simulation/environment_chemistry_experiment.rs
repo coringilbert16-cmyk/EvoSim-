@@ -1075,9 +1075,7 @@ fn exposure_json_matches(left: &serde_json::Value, right: &serde_json::Value) ->
     match (left, right) {
         (serde_json::Value::Number(a), serde_json::Value::Number(b)) => {
             match (a.as_f64(), b.as_f64()) {
-                (Some(a), Some(b)) => {
-                    a.is_finite() && b.is_finite() && (a - b).abs() <= 1e-9
-                }
+                (Some(a), Some(b)) => a.is_finite() && b.is_finite() && (a - b).abs() <= 1e-9,
                 _ => false,
             }
         }
