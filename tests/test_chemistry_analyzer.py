@@ -312,6 +312,9 @@ class ChemistryAnalyzerTests(unittest.TestCase):
                 ],
             },
         })
+        records[2]["reaction"]["reaction_id"] = "1-0"
+        records[3]["reaction"]["reaction_id"] = "2-0"
+        records[4]["reaction"]["reaction_id"] = "3-0"
         attribution = analyze(records)["reactions"]["elemental_bond_pairs"]
         self.assertEqual(attribution["committed_events_with_graph_deltas"], 3)
         self.assertEqual(attribution["committed_events_missing_graph_deltas"], 0)
@@ -341,6 +344,7 @@ class ChemistryAnalyzerTests(unittest.TestCase):
             if record.get("event") == "environmental_reaction"
         )
         event["reaction_id"] = "wrong-event-id"
+        event["reaction"] = "COMBINE"
         event["outcome"] = "committed"
         event["molecular_lifecycle"] = [
             {"action": "destroyed", "molecule_id": 1, "reaction_id": "1-0",
