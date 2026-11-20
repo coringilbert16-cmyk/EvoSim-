@@ -1247,10 +1247,7 @@ mod tests {
                 source_cells: vec![2],
                 source_material_indices: vec![0, 1],
                 source_material_ids: vec![Some(11), Some(12)],
-                source_materials: vec![
-                    vec![("Carbon".into(), 1.0)],
-                    vec![("Carbon".into(), 1.0)],
-                ],
+                source_materials: vec![vec![("Carbon".into(), 1.0)], vec![("Carbon".into(), 1.0)]],
                 work_required: 0.5,
                 reaction_frequency_hz: None,
                 activation_signal: None,
