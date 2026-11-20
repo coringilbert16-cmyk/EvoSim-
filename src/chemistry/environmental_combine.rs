@@ -1304,38 +1304,27 @@ pub(crate) fn resolve_environmental_with_settlement(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> Option<crate::state::EnvironmentalEnergySettlement> {
-    let Some(source_a) = environment
+    let source_a = environment
         .field
         .cells
         .get(operation.cell_a)
-        .and_then(|cell| cell.physical_materials.get(operation.material_a))
-    else {
-        return None;
-    };
-    let Some(source_b) = environment
+        .and_then(|cell| cell.physical_materials.get(operation.material_a))?;
+    let source_b = environment
         .field
         .cells
         .get(operation.cell_b)
-        .and_then(|cell| cell.physical_materials.get(operation.material_b))
-    else {
-        return None;
-    };
+        .and_then(|cell| cell.physical_materials.get(operation.material_b))?;
     if source_a != &operation.source_a || source_b != &operation.source_b {
         return None;
     }
 
-    let Some((mut trial_structure, indices_a)) = restored_source(&operation.source_a, environment)
-    else {
-        return None;
-    };
-    let Some(indices_b) = crate::physical_material::restore_material(
+    let (mut trial_structure, indices_a) = restored_source(&operation.source_a, environment)?;
+    let indices_b = crate::physical_material::restore_material(
         &mut trial_structure,
         &operation.source_b,
         origin(),
         &environment.catalog,
-    ) else {
-        return None;
-    };
+    )?;
     if indices_b.iter().any(|index| {
         crate::construction_runtime::placed_unit_overlaps(
             &trial_structure,
@@ -1346,12 +1335,8 @@ pub(crate) fn resolve_environmental_with_settlement(
     }) {
         return None;
     }
-    let Some(&unit_a) = indices_a.get(operation.unit_a) else {
-        return None;
-    };
-    let Some(&unit_b) = indices_b.get(operation.unit_b) else {
-        return None;
-    };
+    let &unit_a = indices_a.get(operation.unit_a)?;
+    let &unit_b = indices_b.get(operation.unit_b)?;
 
     // Discovery normally schedules only activated pairs, but the commit
     // boundary must enforce that contract too: an operation may be stale or
@@ -1364,23 +1349,15 @@ pub(crate) fn resolve_environmental_with_settlement(
         return None;
     };
     let strength = crate::combine::bond_strength(properties_a, properties_b);
-    let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength) else {
-        return None;
-    };
-    let Some(activation_signal) =
-        crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
-    else {
-        return None;
-    };
+    let barrier = crate::chemistry::activation_barrier_from_bond_strength(strength)?;
+    let activation_signal =
+        crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)?;
     if !crate::chemistry::activated(activation_signal, barrier) {
         return None;
     }
 
-    let Some(reactant_structural_energy) =
-        crate::energy_ledger::structural_potential(&trial_structure)
-    else {
-        return None;
-    };
+    let reactant_structural_energy =
+        crate::energy_ledger::structural_potential(&trial_structure)?;
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy;
     let mut cache = ConnectionCompatibilityCache::new();
@@ -1406,19 +1383,13 @@ pub(crate) fn resolve_environmental_with_settlement(
     ) {
         return None;
     }
-    let Some(product_structural_energy) =
-        crate::energy_ledger::structural_potential(&trial_structure)
-    else {
-        return None;
-    };
+    let product_structural_energy =
+        crate::energy_ledger::structural_potential(&trial_structure)?;
     let structural_delta = product_structural_energy - reactant_structural_energy;
     if !structural_delta.is_finite() {
         return None;
     }
-    let Some(product) = physical_material_from_structure(&trial_structure, &environment.catalog)
-    else {
-        return None;
-    };
+    let product = physical_material_from_structure(&trial_structure, &environment.catalog)?;
 
     // Keep world-held totals synchronized with the environment-owned physical
     // result. Use the authoritative pre/post structure directly: subtracting
