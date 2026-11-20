@@ -1290,6 +1290,15 @@ pub(crate) fn physical_materials_from_structure_components(
     Some(products)
 }
 
+#[cfg(test)]
+pub(crate) fn resolve_environmental(
+    operation: EnvironmentalCombineOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    resolve_environmental_with_settlement(operation, environment, ledger).is_some()
+}
+
 pub(crate) fn resolve_environmental_with_settlement(
     operation: EnvironmentalCombineOperation,
     environment: &mut Environment,
