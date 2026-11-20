@@ -97,10 +97,11 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "independent_replicate_count": None,
         },
         "provenance": {
-            "source_commit": nested(manifest, "provenance", "commit_sha"),
-            "workflow_run_id": nested(manifest, "provenance", "workflow_run_id"),
-            "workflow_run_url": nested(manifest, "provenance", "workflow_run_url"),
+            "source_commit": nested(manifest, "build", "commit_sha"),
+            "workflow_run_id": nested(manifest, "run", "run_id"),
+            "workflow_run_url": nested(manifest, "run", "workflow_url"),
             "manifest_schema_version": manifest.get("schema_version"),
+            "enabled_diagnostic_tiers": nested(manifest, "diagnostics", "enabled_tiers"),
             "configuration_sha256": conditions.get("configuration_sha256"),
             "raw_diagnostics_sha256": next(
                 (item.get("sha256") for item in manifest.get("artifacts", [])
@@ -131,7 +132,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
         },
         "inventory": {
             "initial_by_resource": scalar_tree(nested(chemistry, "resource_coverage", "initial_inventory", default={})),
-            "final_by_resource": scalar_tree(nested(chemistry, "resource_coverage", "final_inventory", default=None)),
+            "final_by_resource": scalar_tree((nested(chemistry, "resource_coverage", "snapshots", default=[]) or [{}])[-1].get("resource_inventory")),
             "initial_physical_material_count": source.get("initial_physical_material_count"),
             "initial_constituent_count": source.get("initial_constituent_count"),
         },
