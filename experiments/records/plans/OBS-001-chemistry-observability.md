@@ -135,6 +135,12 @@ The main standard workflow runs seven specialist analyzers and each has a dedica
 
 The source audit now covers environmental reaction event/lifecycle/tick schemas, recorder behavior, all seven standard analyzers and their test inventory, the workflow orchestration, and environmental COMBINE/BREAK/DISPLACEMENT settlement boundaries. The remaining pre-implementation work is to review the focused PR #345/#392 tests and weakest analyzer suites, reconcile branch divergence, reanalyze retained artifacts, and draft the field-level manifest/event schema. Continue from the “Audit limitations and next work” section in the dated audit; no code or experiment run has been started.
 
+### Artifact-size checkpoint — 2026-11-20
+
+An existing EXP-2026-006 seed-42 artifact was inspected offline (no rerun). Its compressed ZIP is about 28.6 MB, but the raw JSONL expands to 520,625,329 bytes. The largest costs are 19,355 tick records (313 MB) and 310,060 reaction records (202 MB). Bounded COMBINE opportunity samples alone account for about 220 MB; 8,443 ticks carry eight detailed samples each. Of 309,680 BREAK attempts, 309,344 were rejected for insufficient usable energy. This is one seed, not a universal estimate, but it shows where compacting can matter: high-frequency repeated rejection events and detailed sampled geometry. Preserve committed events and coverage; do not discard failed attempts until stable source IDs and repeated-state semantics are understood. Full breakdown is in the dated audit.
+
+**Next step:** inspect the remaining PR tests and run the existing offline analyzers on retained artifacts (without rerunning simulations) to establish which outputs can be regenerated and how much raw data can be omitted from aggregate uploads. Then draft the versioned manifest/event schema and propose bounded/opt-in detailed sampling. Current CI for documentation PR #397 is running; no merge has been performed.
+
 ## Current checkpoint
 
 - Approval received: 2026-11-20.
