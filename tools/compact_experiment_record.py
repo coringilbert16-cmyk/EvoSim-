@@ -50,7 +50,8 @@ def scalar_tree(value: Any) -> Any:
 
 
 def build_record(seed: int, chemistry_path: Path, organization_path: Path,
-                 manifest_path: Path | None = None) -> dict[str, Any]:
+                 manifest_path: Path | None = None,
+                 opportunity_coverage_path: Path | None = None) -> dict[str, Any]:
     chemistry = read_json(chemistry_path)
     organization = read_json(organization_path)
     source = chemistry.get("input", {})
@@ -64,6 +65,11 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
         raise ValueError(f"seed {seed}: lifecycle validation fields must be arrays")
 
     manifest = read_json(manifest_path) if manifest_path else {}
+    coverage_report = read_json(opportunity_coverage_path) if opportunity_coverage_path else {}
+    seed_coverage = next(
+        (row for row in coverage_report.get("per_seed", [])
+         if row.get("seed") == seed), None
+    )
     experiment = manifest.get("experiment", {})
     run = manifest.get("run", {})
     conditions = manifest.get("conditions", {})
@@ -143,7 +149,14 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "initial_constituent_count": source.get("initial_constituent_count"),
         },
         "reactions": reaction_rows,
-        "opportunity_coverage": scalar_tree(nested(reactions, "opportunity_coverage", default=None)),
+        "opportunity_coverage": (
+            {
+                "by_reaction": scalar_tree(seed_coverage.get("coverage", {})),
+                "diagnostic_totals": scalar_tree(seed_coverage.get("totals", {})),
+                "diagnostic_ticks": seed_coverage.get("diagnostic_ticks"),
+                "source_schema_version": coverage_report.get("schema_version"),
+            } if seed_coverage is not None else None
+        ),
         "settlement": scalar_tree(nested(reactions, "settlement", default=None)),
         "bond_accounting": {
             "formed_total": bond_pairs.get("formed_total"),
@@ -187,7 +200,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
                 field for field, value in {
                     "configuration_sha256": conditions.get("configuration_sha256"),
                     "actual_elapsed_wall_seconds": run.get("actual_elapsed_wall_seconds"),
-                    "opportunity_coverage": nested(reactions, "opportunity_coverage", default=None),
+                    "opportunity_coverage": seed_coverage,
                     "settlement": nested(reactions, "settlement", default=None),
                 }.items() if value is None
             ],
@@ -214,9 +227,10 @@ def main() -> int:
     parser.add_argument("--chemistry", type=Path, required=True)
     parser.add_argument("--organization", type=Path, required=True)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--opportunity-coverage", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    record = build_record(args.seed, args.chemistry, args.organization, args.manifest)
+    record = build_record(args.seed, args.chemistry, args.organization, args.manifest, args.opportunity_coverage)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     print(f"Compact permanent record: {args.output} ({args.output.stat().st_size} bytes)")
