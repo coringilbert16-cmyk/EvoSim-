@@ -283,6 +283,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             state = "unknown"
         coverage_summary[reaction] = {
             "state": state,
+            "search_domain": rows[0]["search_domain"] if rows else None,
             "ticks": len(states),
             "complete_ticks": states.count("complete"),
             "partial_ticks": states.count("partial"),
@@ -341,7 +342,7 @@ def main() -> int:
         "", "## Coverage", "",
     ]
     for reaction, coverage in report["coverage"].items():
-        lines.append(f"- {reaction}: {coverage['state']} "
+        lines.append(f"- {reaction} ({coverage['search_domain']}): {coverage['state']} "
                      f"({coverage['complete_ticks']} complete, {coverage['partial_ticks']} partial, "
                      f"{coverage['unknown_ticks']} unknown ticks)")
     lines.extend(["", "## Pooled discovery funnel", ""])
