@@ -2743,7 +2743,6 @@ mod decomposition_finalization_tests {
         );
         let field_before = simulation.environment.field.total_amount();
         let bonds_before = simulation.organisms[0].structure.bonds.clone();
-        let units_before = simulation.organisms[0].structure.units.clone();
         let living = HashSet::new();
 
         simulation.release_finished_dead_organisms(&living);
@@ -2766,6 +2765,9 @@ mod decomposition_finalization_tests {
             cell.physical_materials.clear();
         }
 
+        let owner_id = simulation.organisms[0].id.clone();
+        let bonds_before = simulation.organisms[0].structure.bonds.clone();
+        let units_before = simulation.organisms[0].structure.units.clone();
         simulation.organisms[0]
             .structure
             .clear_genome_constituent_ids();
