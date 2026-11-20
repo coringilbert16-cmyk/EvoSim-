@@ -68,8 +68,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         let config_path = matched_catalysis_config_path
             .as_deref()
             .expect("--matched-catalysis-preflight requires --matched-catalysis-config");
-        let contents = std::fs::read_to_string(config_path)
-            .unwrap_or_else(|error| panic!("failed to read matched-catalysis config {config_path}: {error}"));
+        let contents = std::fs::read_to_string(config_path).unwrap_or_else(|error| {
+            panic!("failed to read matched-catalysis config {config_path}: {error}")
+        });
         let config = serde_json::from_str::<
             crate::environment_chemistry_experiment::MatchedCatalysisConfig,
         >(&contents)
