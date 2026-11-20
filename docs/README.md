@@ -20,6 +20,7 @@ The root [README](../README.md) is the project entry point and getting-started g
 - [Reaction energy semantics](chemistry/reaction-energy-semantics-plan.md) — energy-settlement design.
 - [Fluid coalescence transaction](chemistry/fluid-coalescence-transaction.md) — transaction and restoration notes.
 - [Experiment instructions](../experiments/README.md) — how to request and interpret environmental chemistry runs.
+- [Experiment records](../experiments/records/README.md) — registry of completed experiments, results, and planned organized-chemistry research.
 
 ## Audits and implementation investigations
 
