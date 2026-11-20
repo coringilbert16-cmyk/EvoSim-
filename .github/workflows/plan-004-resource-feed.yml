@@ -138,11 +138,7 @@ jobs:
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
           set -euo pipefail
-          mkdir -p observations/no-feed observations/resource-feed
-          for seed in ${SEEDS//,/ }; do
-            cp "observations/no-feed-seed-$seed.jsonl" "observations/no-feed/seed-$seed.jsonl"
-            cp "observations/resource-feed-seed-$seed.jsonl" "observations/resource-feed/seed-$seed.jsonl"
-          done
+          python3 tools/assemble_paired_chemistry_artifacts.py observations --seeds "$SEEDS"
           for condition in no-feed resource-feed; do
             mkdir -p "analysis/$condition"
             python3 tools/chemistry_experiment_batch_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out "analysis/$condition/chemistry-batch.json" --markdown-out "analysis/$condition/chemistry-batch.md"
