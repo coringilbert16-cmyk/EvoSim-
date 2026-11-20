@@ -17,7 +17,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Experiment | Conditions | Status | Primary record |
 |---|---|---|---|---|
-| EXP-2026-005 | PLAN-004 paired resource-feed comparison | Five paired seeds (42–46); 3,600 seconds per arm; no-feed control versus six pulses of 72 free atoms (12 of each active element) at 5, 15, 25, 35, 45, and 55 minutes | **Running — 5 of 10 jobs active, 5 queued** | [Pre-registration and protocol](results/2026-11-20-plan-004-resource-feed-paired-experiment.md) |
+| EXP-2026-005 | PLAN-004 paired resource-feed comparison | Five paired seeds (42–46); 3,600 seconds per arm; no-feed control versus six pulses of 72 free atoms (12 of each active element) at 5, 15, 25, 35, 45, and 55 minutes | **Running — 4 of 10 jobs completed; two matched pairs have preliminary results, six jobs active** | [Pre-registration and protocol](results/2026-11-20-plan-004-resource-feed-paired-experiment.md) |
 
 ## Planned research
 
@@ -26,7 +26,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 | PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **In progress — artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
 | PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | Planned — depends on PLAN-001 and matched controls | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
 | PLAN-003 | Does a product promote net production of additional copies of its own structure? | Planned — requires a defined self-production pathway and seeded/unseeded controls | [Autocatalysis](plans/README.md#plan-003-autocatalysis) |
-| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
+| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | **In progress — EXP-2026-005 paired feed run; two matched pairs analyzed, interim result inconclusive** | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
 | PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
 | PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
 
