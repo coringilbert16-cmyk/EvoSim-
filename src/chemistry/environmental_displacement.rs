@@ -963,7 +963,9 @@ pub(crate) fn accumulate_environmental_with_resonance(
 ) -> Vec<EnvironmentalDisplacementOperation> {
     let mut local_resonance_sampled_this_tick = false;
     let cell_count = environment.field.cells.len();
-    diagnostics.anchor_cells_available = diagnostics.anchor_cells_available.saturating_add(cell_count as u64);
+    diagnostics.anchor_cells_available = diagnostics
+        .anchor_cells_available
+        .saturating_add(cell_count as u64);
     if *remaining_discovery_work == 0 {
         let selected_cell_window = cell_count.min(DISPLACEMENT_FIELD_ANCHOR_LIMIT);
         diagnostics.anchor_cells_unvisited_by_window = diagnostics
@@ -1050,8 +1052,9 @@ pub(crate) fn accumulate_environmental_with_resonance(
             diagnostics.target_cell_windows_inspected =
                 diagnostics.target_cell_windows_inspected.saturating_add(1);
             if target_cell_limit > 0 && target_cells.len() == target_cell_limit {
-                diagnostics.target_cell_window_limit_reached =
-                    diagnostics.target_cell_window_limit_reached.saturating_add(1);
+                diagnostics.target_cell_window_limit_reached = diagnostics
+                    .target_cell_window_limit_reached
+                    .saturating_add(1);
             }
 
             for &cell_b in &target_cells {
