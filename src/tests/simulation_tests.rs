@@ -1387,8 +1387,7 @@ mod integration_tests {
         let organisms_before = serde_json::to_value(&simulation.organisms).unwrap();
         let transformations_before =
             serde_json::to_value(&simulation.active_transformations).unwrap();
-        let decomposing_before =
-            serde_json::to_value(&simulation.decomposing_bodies).unwrap();
+        let decomposing_before = serde_json::to_value(&simulation.decomposing_bodies).unwrap();
         let tick_before = simulation.tick;
 
         simulation.step();
@@ -1435,7 +1434,10 @@ mod integration_tests {
         assert_eq!(s.active_transformations.len(), 1);
         assert_eq!(s.active_transformations[0].id, transformation_id);
         assert_eq!(s.active_transformations[0].remaining_ticks, remaining_ticks);
-        assert_eq!(s.organisms[0].active_transformation_id, Some(transformation_id));
+        assert_eq!(
+            s.organisms[0].active_transformation_id,
+            Some(transformation_id)
+        );
         assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
         assert_eq!(
             serde_json::to_value(&s.organisms[0]).unwrap(),
