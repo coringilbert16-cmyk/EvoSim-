@@ -28,9 +28,9 @@ nonnegative seeds, 30–3,600 seconds per seed, and a diagnostic interval of
 
 ## Matched catalytic-placement screening (manual-only)
 
-A separate workflow, `.github/workflows/matched-catalysis-comparison.yml`, can run paired candidate-near and candidate-remote placement screens when explicitly dispatched from GitHub Actions. It runs the same seed and configuration in both arms, with a real wall-clock duration per arm, and uploads raw observations plus an offline comparison report. It is separate from the baseline workflow and is never triggered by pushes or routine CI.
+A separate workflow, `.github/workflows/matched-catalysis-screen.yml`, can run paired candidate-near and candidate-remote placement screens when explicitly dispatched from GitHub Actions. It runs the same seed and configuration in both arms, with a real wall-clock duration per arm, and uploads raw observations plus an offline comparison report. It is separate from the baseline workflow and is never triggered by pushes or routine CI.
 
-The example file `experiments/matched-catalysis-example.json` is illustrative only: its H–S candidate is not a scientifically validated facilitator. Select and justify candidate and target compositions from the PLAN-001 evidence before any experiment. The runner accepts exactly two constituent element names for each configured molecule.
+The example file `experiments/matched-catalysis-config.example.json` is illustrative only: its H–S candidate is not a scientifically validated facilitator. Select and justify candidate and target compositions from the PLAN-001 evidence before any experiment. The runner accepts exactly two constituent element names for each configured molecule.
 
 **Important limitation:** the present near/remote setup relocates the candidate molecule. This changes its position-dependent flow, resonance, and hotspot exposure as well as its distance from target reactants. Consequently, any result is a placement-screen observation, not evidence of catalytic facilitation. A scientifically interpretable experiment requires an exposure-matched control or a justified design that independently measures and controls those spatial exposures. Do not dispatch the workflow as a catalytic test until that design is approved and the experiment is registered.
 
