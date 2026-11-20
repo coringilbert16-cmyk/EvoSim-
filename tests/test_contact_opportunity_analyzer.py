@@ -183,6 +183,69 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["pooled_known_subtotals"]["constituent_pairs_available"], 0)
         self.assertEqual(report["coverage"]["combine"]["state"], "unknown")
 
+
+    def test_empty_break_bond_index_is_complete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_tick(root, {"break_discovery": {
+                "scan_entries_inspected": 0,
+                "bond_candidates_inspected": 0,
+            }})
+            report = analyze(root, [42], 60)
+
+        coverage = report["tick_diagnostics"][0]["coverage"]["break"]
+        self.assertEqual(coverage["state"], "complete")
+        self.assertEqual(coverage["domain_count"], 0)
+
+    def test_pooled_coverage_preserves_mixed_tick_states(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            records = [
+                {
+                    "event": "environmental_chemistry_tick",
+                    "tick": 1,
+                    "reaction_work": {
+                        "combine_search": {
+                            "constituent_pairs_available": 0,
+                            "constituent_pairs_inspected": 0,
+                            "constituent_pairs_uninspected_by_window": 0,
+                            "budget_exhausted": False,
+                        },
+                        "break_discovery": {
+                            "scan_entries_inspected": 0,
+                            "bond_candidates_inspected": 0,
+                        },
+                        "displacement_discovery_work_remaining": 0,
+                    },
+                },
+                {
+                    "event": "environmental_chemistry_tick",
+                    "tick": 2,
+                    "reaction_work": {
+                        "combine_search": {
+                            "constituent_pairs_available": 2,
+                            "constituent_pairs_inspected": 1,
+                            "constituent_pairs_uninspected_by_window": 1,
+                            "budget_exhausted": True,
+                        },
+                    },
+                },
+            ]
+            (root / "seed-42.jsonl").write_text(
+                "".join(json.dumps(record) + "\\n" for record in records),
+                encoding="utf-8",
+            )
+            report = analyze(root, [42], 60)
+
+        self.assertEqual(report["coverage"]["combine"]["complete_ticks"], 1)
+        self.assertEqual(report["coverage"]["combine"]["partial_ticks"], 1)
+        self.assertEqual(report["coverage"]["combine"]["state"], "partial")
+        self.assertEqual(report["coverage"]["break"]["complete_ticks"], 1)
+        self.assertEqual(report["coverage"]["break"]["unknown_ticks"], 1)
+        self.assertEqual(report["coverage"]["break"]["state"], "unknown")
+        self.assertEqual(report["coverage"]["displacement"]["partial_ticks"], 1)
+        self.assertEqual(report["coverage"]["displacement"]["unknown_ticks"], 1)
+
     def test_missing_seed_artifact_fails_clearly(self):
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(ValueError, "missing raw observation"):
