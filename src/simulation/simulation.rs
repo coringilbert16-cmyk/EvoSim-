@@ -1048,7 +1048,6 @@ impl Simulation {
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
         // Build the material-origin field once per tick and share it across
         // environmental chemistry discovery.
-        let local_resonance_snapshot_started = std::time::Instant::now();
         // A controlled A/B run can disable only local activation influence. Stored
         // resonance funding and all other environmental chemistry remain unchanged.
         let local_resonance_world =
@@ -1057,11 +1056,6 @@ impl Simulation {
             } else {
                 crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
             };
-        break_discovery.local_resonance_snapshot_build_nanoseconds =
-            local_resonance_snapshot_started
-                .elapsed()
-                .as_nanos()
-                .min(u64::MAX as u128) as u64;
         self.environment.field.ensure_environmental_bond_index();
         if profile_tick {
             finish_profile_phase("resonance_snapshot_and_bond_index");
@@ -1348,8 +1342,20 @@ impl Simulation {
         }
 
         // BREAK discovery runs after transport, world input, COMBINE, and
-        // displacement have completed. It evaluates the final bond graph and
-        // energy state for this tick, exactly once per indexed molecular bond.
+        // displacement have completed. Rebuild its local-resonance snapshot
+        // from the final environmental geometry before checking each bond once.
+        let break_local_resonance_snapshot_started = std::time::Instant::now();
+        let break_local_resonance_world =
+            if std::env::var_os("EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION").is_some() {
+                None
+            } else {
+                crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
+            };
+        break_discovery.local_resonance_snapshot_build_nanoseconds =
+            break_local_resonance_snapshot_started
+                .elapsed()
+                .as_nanos()
+                .min(u64::MAX as u128) as u64;
         let mut environmental_break_discovery_remaining = 0;
         self.environment.field.ensure_environmental_bond_index();
         let environmental_break_operations =
@@ -1359,7 +1365,7 @@ impl Simulation {
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_break_discovery_remaining,
-                local_resonance_world.as_ref(),
+                break_local_resonance_world.as_ref(),
                 &mut break_discovery,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
