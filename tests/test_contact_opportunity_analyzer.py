@@ -169,6 +169,20 @@ class ContactOpportunityAnalyzerTests(unittest.TestCase):
 
         self.assertEqual(report["tick_diagnostics"][0]["coverage"]["displacement"]["state"], "partial")
 
+
+    def test_no_diagnostic_ticks_does_not_become_zero_totals(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "seed-42.jsonl").write_text(
+                json.dumps({"event": "environmental_chemistry_summary"}) + "\\n",
+                encoding="utf-8",
+            )
+            report = analyze(root, [42], 60)
+
+        self.assertIsNone(report["pooled_totals"]["constituent_pairs_available"])
+        self.assertEqual(report["pooled_known_subtotals"]["constituent_pairs_available"], 0)
+        self.assertEqual(report["coverage"]["combine"]["state"], "unknown")
+
     def test_missing_seed_artifact_fails_clearly(self):
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(ValueError, "missing raw observation"):
