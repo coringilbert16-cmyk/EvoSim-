@@ -690,10 +690,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         Ok(recorder)
     }
 
-    pub(crate) fn record_resource_feed_plan(
-        &mut self,
-        enabled: bool,
-    ) -> std::io::Result<()> {
+    pub(crate) fn record_resource_feed_plan(&mut self, enabled: bool) -> std::io::Result<()> {
         self.write_event(json!({
             "event": "environmental_experiment_condition",
             "experiment": "PLAN-004-resource-feed",
@@ -743,7 +740,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         let material_ids = particles
             .iter()
             .map(|particle| {
-                *elemental_counts.entry(particle.element.clone()).or_insert(0_usize) += 1;
+                *elemental_counts
+                    .entry(particle.element.clone())
+                    .or_insert(0_usize) += 1;
                 particle.material.environmental_identity
             })
             .collect::<Vec<_>>();
