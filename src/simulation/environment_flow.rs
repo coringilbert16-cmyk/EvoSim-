@@ -369,13 +369,12 @@ pub(crate) fn material_flow_velocity_samples(
     let mut obstacles = Vec::new();
     for (cell_index, cell) in field.cells.iter().enumerate() {
         for (material_index, material) in cell.physical_materials.iter().enumerate() {
-            if material.environmental_identity == environmental_identity {
-                if target
+            if material.environmental_identity == environmental_identity
+                && target
                     .replace((cell_index, material_index, material))
                     .is_some()
-                {
-                    return None;
-                }
+            {
+                return None;
             }
             if let Some(obstacle) =
                 obstacle_for(cell_index, material_index, material, catalog, height)
