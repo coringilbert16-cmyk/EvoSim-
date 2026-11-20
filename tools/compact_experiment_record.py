@@ -171,7 +171,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
-        "record_status": "complete" if manifest_path is not None and lifecycle_errors is not None and organization_errors is not None and not lifecycle_errors and not organization_errors and seed_coverage is not None else "partial",
+        "record_status": "complete" if manifest_path is not None and lifecycle_errors is not None and organization_errors is not None and not lifecycle_errors and not organization_errors and seed_coverage is not None and nested(reactions, "settlement", default=None) is not None else "partial",
         "identity": {
             "experiment_id": experiment.get("experiment_id"),
             "research_plan": experiment.get("research_plan"),
