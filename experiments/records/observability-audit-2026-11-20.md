@@ -149,6 +149,27 @@ Do not combine all domain-specific analyses into one monolithic script. Keep spe
 
 This is a lower-risk way to make results feel like one coherent lab notebook without discarding existing analytical depth.
 
+## Artifact-size case study: EXP-2026-006, seed 42
+
+A retained seed-42 artifact from workflow [#44776501166](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44776501166) was downloaded and inspected without rerunning the simulation.
+
+- Compressed GitHub artifact: about 28.6 MB.
+- Uncompressed contents: about 526 MB total; the raw JSONL alone is **520,625,329 bytes** (about 497 MiB).
+- The JSONL contained 19,355 `environmental_chemistry_tick` records (313.0 MB) and 310,060 `environmental_reaction` records (202.4 MB). Periodic snapshots, lifecycle records, and local resonance samples together were only about 5.3 MB.
+- The tick records' bounded COMBINE `opportunity_samples` field accounted for about **220.4 MB** by itself. It contains at most eight samples per tick, but 8,443 ticks had all eight sample slots populated (67,532 detailed samples). “Bounded” therefore does not automatically mean small.
+- The 310,060 reaction records included 309,680 BREAK attempts, exactly 16 per diagnostic tick. Of those BREAK attempts, 309,344 were rejected for `insufficient_usable_energy`, 41 for `stale_source_missing`, and 295 committed. COMBINE and DISPLACEMENT contributed 294 and 86 committed events respectively in this seed.
+
+This is one seed from one diagnostic workflow, not a universal size estimate. It demonstrates that the largest data costs are repeated high-frequency records and detailed sampled geometry—not periodic world snapshots or molecule lineage. The compressed artifact size hides the much larger expanded JSONL footprint.
+
+**Data-volume design consequence:**
+1. Preserve every committed reaction and its exact lifecycle/energy transaction.
+2. Preserve each distinct rejection/deferral mechanism and the candidate identity where scientifically meaningful, but consider compact per-tick/per-source aggregation for repeated identical high-frequency failures after validating that no unique state is lost.
+3. Make detailed contact/neighborhood samples explicitly opt-in or objective-triggered; keep compact coverage counters in routine runs and retain a deterministic bounded sample only when useful.
+4. Do not simply discard the 16 BREAK attempts per tick: first add stable source IDs and establish whether these are repeated attempts on the same sources, distinct candidates, or state changes that matter.
+5. Keep raw artifacts compressed and avoid re-uploading the same raw JSONL into aggregate artifacts. The aggregate should contain derived reports and a manifest/index, with raw data referenced by artifact/run URL.
+
+The first-pass case study confirms the original design goal: comprehensive records can be substantially smaller if we retain high-value events and coverage while avoiding repeated copies of detailed diagnostic structures.
+
 ## Test inventory and coverage notes
 
 The seven analyzers used by the standard workflow each have a dedicated Python test file on main:
