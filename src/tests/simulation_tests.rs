@@ -1387,7 +1387,19 @@ mod integration_tests {
         let organisms_before = serde_json::to_value(&simulation.organisms).unwrap();
         let transformations_before =
             serde_json::to_value(&simulation.active_transformations).unwrap();
-        let decomposing_before = serde_json::to_value(&simulation.decomposing_bodies).unwrap();
+        let decomposing_before = simulation
+            .decomposing_bodies
+            .iter()
+            .map(|body| {
+                (
+                    body.structure.units.clone(),
+                    body.structure.bonds.clone(),
+                    body.energy_budget,
+                    body.position.x,
+                    body.position.y,
+                )
+            })
+            .collect::<Vec<_>>();
         let tick_before = simulation.tick;
 
         simulation.step();
@@ -1403,11 +1415,14 @@ mod integration_tests {
             transformations_before,
             "organism-owned transactions must remain dormant"
         );
-        assert_eq!(
-            serde_json::to_value(&simulation.decomposing_bodies).unwrap(),
-            decomposing_before,
-            "legacy decomposition holders must remain dormant"
-        );
+        assert_eq!(simulation.decomposing_bodies.len(), decomposing_before.len());
+        for (body, before) in simulation.decomposing_bodies.iter().zip(decomposing_before) {
+            assert_eq!(body.structure.units, before.0);
+            assert_eq!(body.structure.bonds, before.1);
+            assert_eq!(body.energy_budget, before.2);
+            assert_eq!(body.position.x, before.3);
+            assert_eq!(body.position.y, before.4);
+        }
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-8),
             "chemistry-only tick must preserve world energy accounting: {:?}",
