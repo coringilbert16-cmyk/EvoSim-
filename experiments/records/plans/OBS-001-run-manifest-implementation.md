@@ -24,8 +24,9 @@ The sidecar uses:
 - experiment, research-plan, and condition identifiers when supplied through
   `EVOSIM_EXPERIMENT_ID`, `EVOSIM_RESEARCH_PLAN`, and
   `EVOSIM_CONDITION_ID`
-- captured initial conditions and a SHA-256 hash of the canonical serialized
-  captured-configuration object
+- captured initial conditions, the exact canonical JSON string used for the
+  configuration digest, and its SHA-256 hash (the validator recomputes the hash
+  and verifies that the string decodes to the recorded configuration object)
 - raw JSONL artifact path (relative to the sidecar directory), byte size, and
   SHA-256 checksum after successful completion
 - warnings and explicit captured-configuration scope
@@ -54,7 +55,7 @@ observed.
 ## Validation
 
 `tools/experiment_manifest.py` validates schema/version, time and tick
-ranges, required configuration shape, SHA-256 formatting, and (for completed
+ranges, canonical configuration consistency and SHA-256, and (for completed
 runs) raw artifact existence, size, and checksum. Running manifests are checked
 for structure and artifact presence without requiring a final checksum.
 
