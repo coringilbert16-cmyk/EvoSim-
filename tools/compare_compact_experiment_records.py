@@ -65,6 +65,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             "committed_sum": sum(committed) if all(value is not None for value in committed) else None,
         }
     return {
+        "_records": records,
         "independent_seed_count": len(records),
         "seeds": [row["identity"]["seed"] for row in records],
         "reaction_totals": reaction_totals,
@@ -94,6 +95,9 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             for reaction in ("BREAK", "COMBINE", "DISPLACEMENT")
         },
         "bond_accounting_by_seed": [row.get("bond_accounting") for row in records],
+        "bond_accounting_by_reaction_by_seed": [
+            (row.get("bond_accounting") or {}).get("by_reaction") for row in records
+        ],
         "bond_deltas_by_seed": {
             field: [numeric(row.get("bond_accounting", {}).get(field)) for row in records]
             for field in ("formed_total", "broken_total")
@@ -114,6 +118,13 @@ def comparison_vectors(summary: dict[str, Any]) -> dict[str, list[int | float | 
         vectors[f"energy.{metric}"] = values
     for metric, values in summary["bond_deltas_by_seed"].items():
         vectors[f"bond_accounting.{metric}"] = values
+    for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
+        for field in ("formed_total", "broken_total"):
+            vectors[f"bond_accounting.{reaction}.{field}"] = [
+                numeric((row.get("bond_accounting") or {}).get("by_reaction", {})
+                        .get(reaction, {}).get(field))
+                for row in summary["_records"]
+            ]
     return vectors
 
 
