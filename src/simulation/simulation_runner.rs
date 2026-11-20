@@ -156,6 +156,9 @@ fn run_environment_chemistry_experiment(
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
+    let feed_reference_positions = plan004_resource_feed.then(|| {
+        crate::environment_resource_feed::initial_free_resource_positions(&simulation)
+    });
     simulation.record_local_resonance_diagnostics = true;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
@@ -233,6 +236,9 @@ fn run_environment_chemistry_experiment(
                     &mut simulation,
                     seed,
                     next_feed_pulse,
+                    feed_reference_positions
+                        .as_deref()
+                        .expect("feed arm retains its tick-zero resource placement reference"),
                 );
                 let elapsed_wall_seconds = started_at.elapsed().as_secs_f64();
                 diagnostics
