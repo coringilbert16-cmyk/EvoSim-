@@ -370,17 +370,16 @@ pub(crate) fn material_flow_velocity_samples(
     for (cell_index, cell) in field.cells.iter().enumerate() {
         for (material_index, material) in cell.physical_materials.iter().enumerate() {
             if material.environmental_identity == environmental_identity {
-                if target.replace((cell_index, material_index, material)).is_some() {
+                if target
+                    .replace((cell_index, material_index, material))
+                    .is_some()
+                {
                     return None;
                 }
             }
-            if let Some(obstacle) = obstacle_for(
-                cell_index,
-                material_index,
-                material,
-                catalog,
-                height,
-            ) {
+            if let Some(obstacle) =
+                obstacle_for(cell_index, material_index, material, catalog, height)
+            {
                 obstacles.push(obstacle);
             }
         }
@@ -965,7 +964,9 @@ mod tests {
         .expect("catalog carbon should realize");
         assert!(field.deposit_physical(40.0, 30.0, material, &catalog));
         field.assign_missing_material_identities();
-        let identity = field.cells.iter()
+        let identity = field
+            .cells
+            .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .next()
             .expect("deposited material")
