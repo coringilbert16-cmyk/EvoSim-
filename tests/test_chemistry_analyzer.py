@@ -152,6 +152,7 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         records[2] = {
             "event": "environmental_reaction",
             "reaction": {
+                "reaction_id": "1-0",
                 "reaction": "COMBINE",
                 "outcome": "committed",
                 "tick": 1,
@@ -328,6 +329,28 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(attribution["event_attribution"][1]["formed"]["Carbon-Nitrogen"], 1)
         self.assertEqual(attribution["event_attribution"][1]["broken"]["Carbon-Hydrogen"], 1)
         self.assertEqual(attribution["events_missing_reaction_id"], 0)
+        self.assertEqual(attribution["events_with_reaction_id_mismatch"], 0)
+        self.assertEqual(attribution["event_attribution"][0]["reaction_id"], "1-0")
+
+
+    def test_event_reaction_id_mismatch_fails_closed(self):
+        records = fixture_records()
+        event = next(
+            record["reaction"]
+            for record in records
+            if record.get("event") == "environmental_reaction"
+        )
+        event["reaction_id"] = "wrong-event-id"
+        event["outcome"] = "committed"
+        event["molecular_lifecycle"] = [
+            {"action": "destroyed", "molecule_id": 1, "reaction_id": "1-0",
+             "molecule": {"material": {"parts": [["Carbon", 1.0]]}, "internal_connections": []}},
+            {"action": "created", "molecule_id": 2, "reaction_id": "1-0",
+             "molecule": {"material": {"parts": [["Carbon", 1.0]]}, "internal_connections": []}},
+        ]
+        attribution = analyze(records)["reactions"]["elemental_bond_pairs"]
+        self.assertEqual(attribution["events_with_reaction_id_mismatch"], 1)
+        self.assertIsNone(attribution["event_attribution"][0]["reaction_id"])
 
 if __name__ == "__main__":
     unittest.main()
