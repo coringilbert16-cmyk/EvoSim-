@@ -84,6 +84,7 @@ pub(crate) struct PreparedChemicalBreakEnergy {
     pub(crate) usable_energy: f64,
     pub(crate) ledger: EnergyLedger,
     pub(crate) heat_dissipated: f64,
+    pub(crate) transaction: crate::energy_ledger::EnergyTransaction,
 }
 
 /// Stored-material action BREAK is not a reaction-activated chemical event.
@@ -113,6 +114,7 @@ fn prepare_stored_bond_break_energy(
         usable_energy: prepared_usable_energy,
         ledger: prepared_ledger,
         heat_dissipated: 0.0,
+        transaction,
     })
 }
 
@@ -228,6 +230,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
         usable_energy: prepared_usable_energy,
         ledger: prepared_ledger,
         heat_dissipated: 0.0,
+        transaction,
     })
 }
 
