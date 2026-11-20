@@ -1081,18 +1081,49 @@ pub(crate) struct EnvironmentalEnergySettlement {
 }
 impl Default for EnvironmentalEnergySettlement {
     fn default() -> Self {
-        Self { status:"not_settled".to_string(), usable_energy_delta:None, resonance_withdrawn:None, structural_energy_delta:None, physical_work:None, heat_dissipated:None }
+        Self {
+            status: "not_settled".to_string(),
+            usable_energy_delta: None,
+            resonance_withdrawn: None,
+            structural_energy_delta: None,
+            physical_work: None,
+            heat_dissipated: None,
+        }
     }
 }
 impl EnvironmentalEnergySettlement {
-    pub(crate) fn settled(usable_energy_delta:f64,resonance_withdrawn:f64,structural_energy_delta:f64,physical_work:f64,heat_dissipated:f64)->Self {
-        Self { status:"settled".to_string(), usable_energy_delta:Some(usable_energy_delta), resonance_withdrawn:Some(resonance_withdrawn), structural_energy_delta:Some(structural_energy_delta), physical_work:Some(physical_work), heat_dissipated:Some(heat_dissipated) }
+    pub(crate) fn settled(
+        usable_energy_delta: f64,
+        resonance_withdrawn: f64,
+        structural_energy_delta: f64,
+        physical_work: f64,
+        heat_dissipated: f64,
+    ) -> Self {
+        Self {
+            status: "settled".to_string(),
+            usable_energy_delta: Some(usable_energy_delta),
+            resonance_withdrawn: Some(resonance_withdrawn),
+            structural_energy_delta: Some(structural_energy_delta),
+            physical_work: Some(physical_work),
+            heat_dissipated: Some(heat_dissipated),
+        }
     }
     /// Diagnostic-only world-level conservation residual; never authorizes a reaction.
-    pub(crate) fn accounting_residual(&self)->Option<f64> {
-        if self.status != "settled" { return None; }
-        let (Some(u),Some(r),Some(s),Some(w),Some(h))=(self.usable_energy_delta,self.resonance_withdrawn,self.structural_energy_delta,self.physical_work,self.heat_dissipated) else { return None; };
-        Some(u-r+s+w+h)
+    #[allow(dead_code)]
+    pub(crate) fn accounting_residual(&self) -> Option<f64> {
+        if self.status != "settled" {
+            return None;
+        }
+        let (Some(u), Some(r), Some(s), Some(w), Some(h)) = (
+            self.usable_energy_delta,
+            self.resonance_withdrawn,
+            self.structural_energy_delta,
+            self.physical_work,
+            self.heat_dissipated,
+        ) else {
+            return None;
+        };
+        Some(u - r + s + w + h)
     }
 }
 
@@ -1234,5 +1265,25 @@ mod genome_core_identity_tests {
             moved_key, alternate_key,
             "seed-scale reference changes affect developmental realization"
         );
+    }
+}
+
+#[cfg(test)]
+mod environmental_energy_settlement_tests {
+    use super::EnvironmentalEnergySettlement;
+
+    #[test]
+    fn failed_attempt_is_explicitly_not_settled_and_has_no_synthetic_zeroes() {
+        let settlement = EnvironmentalEnergySettlement::default();
+        assert_eq!(settlement.status, "not_settled");
+        assert_eq!(settlement.accounting_residual(), None);
+        assert_eq!(settlement.usable_energy_delta, None);
+    }
+
+    #[test]
+    fn settled_energy_residual_uses_the_world_level_sign_convention() {
+        let settlement = EnvironmentalEnergySettlement::settled(-3.0, 2.0, 1.0, 4.0, 0.0);
+        assert_eq!(settlement.status, "settled");
+        assert_eq!(settlement.accounting_residual(), Some(0.0));
     }
 }
