@@ -855,12 +855,24 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
 
 impl EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) fn accumulate(&mut self, tick: Self) {
-        self.anchor_cells_available = self.anchor_cells_available.saturating_add(tick.anchor_cells_available);
-        self.anchor_cells_inspected = self.anchor_cells_inspected.saturating_add(tick.anchor_cells_inspected);
-        self.anchor_cells_unvisited_by_window = self.anchor_cells_unvisited_by_window.saturating_add(tick.anchor_cells_unvisited_by_window);
-        self.anchor_cells_not_reached_in_selected_window = self.anchor_cells_not_reached_in_selected_window.saturating_add(tick.anchor_cells_not_reached_in_selected_window);
-        self.target_cell_windows_inspected = self.target_cell_windows_inspected.saturating_add(tick.target_cell_windows_inspected);
-        self.target_cell_window_limit_reached = self.target_cell_window_limit_reached.saturating_add(tick.target_cell_window_limit_reached);
+        self.anchor_cells_available = self
+            .anchor_cells_available
+            .saturating_add(tick.anchor_cells_available);
+        self.anchor_cells_inspected = self
+            .anchor_cells_inspected
+            .saturating_add(tick.anchor_cells_inspected);
+        self.anchor_cells_unvisited_by_window = self
+            .anchor_cells_unvisited_by_window
+            .saturating_add(tick.anchor_cells_unvisited_by_window);
+        self.anchor_cells_not_reached_in_selected_window = self
+            .anchor_cells_not_reached_in_selected_window
+            .saturating_add(tick.anchor_cells_not_reached_in_selected_window);
+        self.target_cell_windows_inspected = self
+            .target_cell_windows_inspected
+            .saturating_add(tick.target_cell_windows_inspected);
+        self.target_cell_window_limit_reached = self
+            .target_cell_window_limit_reached
+            .saturating_add(tick.target_cell_window_limit_reached);
         self.anchor_materials_inspected = self
             .anchor_materials_inspected
             .saturating_add(tick.anchor_materials_inspected);
