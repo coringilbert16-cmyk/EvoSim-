@@ -252,7 +252,7 @@ def main() -> int:
     if args.markdown_out:
         args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
         args.markdown_out.write_text(render_markdown(result), encoding="utf-8")
-    print(f"Compared {len(args.records)} compact records; compatible={result['compatible']}")
+    print(f"Compared {len(args.records)} compact records; compatible={result['measurement_compatible']}")
     return 0
 
 
