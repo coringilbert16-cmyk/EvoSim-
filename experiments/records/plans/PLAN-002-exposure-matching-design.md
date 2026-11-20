@@ -25,6 +25,8 @@ A candidate may be nominated only with a traceable hypothesis that identifies:
 
 A candidate hypothesis is not evidence of facilitation.
 
+**Supplemental observational screen (EXP-2026-006):** The five-seed neighborhood data show descriptive associations for nearby H–S, H–O, S–S, O–P, and several other families among bounded COMBINE opportunity samples. These families can be prioritized for a controlled follow-up hypothesis, but the data do not select a catalyst: local density, flow, hotspot exposure, resonance, and sample selection remain confounded. H–S remains an illustrative fixture, not a validated candidate.
+
 ## Required exposure controls
 
 The matched conditions must use the same seed, target molecule identities, target geometry/orientation, total initial material inventory, and initial energy inventory. All non-candidate starting placements remain identical. Candidate placement selection must be deterministic and fixed before observing outcomes.
@@ -60,7 +62,7 @@ If a placement pair cannot satisfy these controls, stop and design a stronger ma
 
 ## Opportunity denominator and outcome analysis
 
-The current neighborhood telemetry is bounded and deterministically sampled. It is useful for context but is not a complete, unbiased denominator. Before a catalytic rate comparison, add exact aggregate counters for all eligible target-pair opportunities and their physically valid/contact-ready subsets, with candidate-near status and truncation/missing-geometry coverage reported separately. Do not infer a reaction probability from commits divided by sampled opportunities.
+The current neighborhood telemetry is bounded and deterministically sampled. It is useful for context but is not a complete, unbiased denominator. In EXP-2026-006, a strict source/constituent/endpoint transaction join returned no exact matches in seed 42 even though a weaker source-pair-plus-tick join found 197 same-pair/tick COMBINE commits. The sampled endpoint descriptors therefore do not reliably identify the interface used by the committed transaction in that artifact; treat the weaker join as descriptive only until this mapping is resolved. Before a catalytic rate comparison, add exact aggregate counters for all eligible target-pair opportunities and their physically valid/contact-ready subsets, with candidate-near status and truncation/missing-geometry coverage reported separately. Do not infer a reaction probability from commits divided by sampled opportunities.
 
 The primary outcome is the target reaction rate per eligible target-pair opportunity, reported per independent seed with paired differences and uncertainty intervals. Also report wall-clock/tick-normalized event counts, rejection reasons, candidate survival/availability, exact parent/child identities and bond graphs, and full energy accounting. Seeds—not individual reaction events—are the independent replicates.
 
