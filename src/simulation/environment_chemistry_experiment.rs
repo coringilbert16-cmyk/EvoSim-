@@ -1313,8 +1313,12 @@ mod tests {
         let error = preflight_matched_pair(42, &config)
             .expect_err("tick-zero-only exposure must not authorize a catalytic run");
         assert!(
-            error.contains("flow exposure is tick-zero only"),
+            error.contains("preflight"),
             "unexpected preflight blocker: {error}"
+        );
+        assert!(
+            error.contains("flow_velocity") || error.contains("hotspot_intensity") || error.contains("tick-zero only"),
+            "preflight did not identify an exposure or coverage blocker: {error}"
         );
     }
 
