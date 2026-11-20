@@ -89,6 +89,30 @@ The field-level source pass confirmed several important details:
 
 These findings sharpen the implementation priorities: add durable event IDs to reaction events and connect them to lifecycle/energy records; preserve exact source identities for rejected as well as committed events where feasible; formalize bounded-sample and zero-activity semantics; and add a small manifest/analysis index that binds workflow provenance to raw artifacts. Do not add full snapshots each tick.
 
+## Event-identity and analysis-pipeline detail
+
+The environmental event type currently includes tick, reaction name, source cell indices, source material vector indices, source compositions, work requirement, optional activation/frequency/accumulation values, broken-bond index, outcome, a failure label, product summary, post-commit source-cell compositions, and optional lifecycle transitions. Lifecycle transitions carry molecule IDs, parent IDs, reaction IDs, and full material snapshots. The lifecycle reaction ID is currently generated as a tick plus the event's current position in the tick event vector; it is not stored on the enclosing reaction event.
+
+This means:
+- A committed reaction can often be reconstructed through its lifecycle records, but the event-to-lifecycle join is indirect.
+- A rejected event generally has no lifecycle records and no durable source molecule IDs in main's event payload. Source vector indices are not durable identity.
+- COMBINE rejection reasons intentionally collapse stale, invalid, or unfunded resolver failures into one honest but coarse label.
+- Event records contain work required and activation context, but not the exact authoritative energy settlement transaction. The ledger supports signed structural delta, usable-energy delta, work, and heat; JSONL snapshots currently expose these mainly as aggregate run totals.
+- Main's contact-opportunity diagnostic stores a bounded array of up to eight opportunity samples per tick, each with source IDs and detailed endpoint geometry. The sample is useful evidence but cannot supply a full denominator.
+- The current main recorder writes activity tick records only when meaningful diagnostic work/activity is present; zero-activity ticks are not represented as explicit rows. The summary retains total observed tick count, while periodic snapshots provide a coarser timeline.
+
+The standard workflow already orchestrates six useful offline analyses: per-seed chemistry and molecular organization, then cross-seed chemistry summary, reaction network, geometry-aware reaction network, contact opportunities, and temporal chemical complexity. Per-seed artifacts have 30-day retention; aggregate artifacts have 90-day retention. OBS-001 should standardize the outputs and create one manifest/report index rather than replace this pipeline.
+
+The environmental JSONL header includes requested duration and planned ticks but not actual elapsed wall-clock time, commit/build SHA, GitHub workflow/run ID, or analyzer versions. Those values can be attached by the workflow in a compact sidecar manifest.
+
+### PR #392 identity join specifics
+
+The PR adds `source_material_ids`, contact unit indices, and contact endpoints to COMBINE and DISPLACEMENT reaction events, which permits a stronger sample-to-outcome join for those event types. Its BREAK event construction currently supplies an empty source-ID vector and no contact endpoint tuple. Therefore it does not yet provide uniform exact participant identity across all three reaction types. The paired comparison analyzer correctly fails closed on missing or incomplete causal exposure/denominator requirements; preserve that behavior.
+
+### PR #345 analysis specifics
+
+The PR adds an observed-stage funnel to the chemistry analyzer using discovery counters already present in its branch, and adds paired-seed batch analyzers for dispersion and starting-mixture matrices. These are valuable aggregation patterns, but they must not turn stage counters into a denominator unless the search semantics prove exhaustive coverage. The experimental matrices also should remain distinct experiment records with explicit conditions rather than being silently treated as routine baseline telemetry.
+
 ## Audit limitations and next work
 
 This first pass inspected the main environmental recorder, chemistry analyzer, contact-opportunity analyzer, experiment execution guide, experiment registry, and plans guide; it also inspected PR metadata and changed-file inventories for #345 and #392. It did not yet audit every analyzer, event struct, workflow, or energy-ledger call site. No code was changed and no experiment was launched.
