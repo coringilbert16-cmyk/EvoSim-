@@ -170,6 +170,8 @@ This is one seed from one diagnostic workflow, not a universal size estimate. It
 
 The first-pass case study confirms the original design goal: comprehensive records can be substantially smaller if we retain high-value events and coverage while avoiding repeated copies of detailed diagnostic structures.
 
+A workflow review also clarified the aggregate-artifact footprint: the PR #392 reaggregation job does **not** upload the raw JSONL again in its combined artifact. It uploads derived reports. However, the contact-opportunity analyzer writes the same sampled opportunities in the main JSON report and separate JSON/CSV files, and writes tick diagnostics in both the main JSON report and a separate CSV. It does this per seed. The 236,988,261-byte aggregate artifact from workflow #78 therefore deserves a file-level size audit; the likely duplication is among derived sample/tick exports, not a second raw-data upload. Keep one canonical machine-readable representation and render CSV/Markdown on demand or as small summaries where possible.
+
 ## Test inventory and coverage notes
 
 The seven analyzers used by the standard workflow each have a dedicated Python test file on main:
