@@ -200,6 +200,13 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                         opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
 
                 row["discovery_budget_exhausted"] = search.get("budget_exhausted")
+                row["displacement_discovery_work_remaining"] = _counter(
+                    work, "displacement_discovery_work_remaining"
+                )
+                row["displacement_discovery_budget_exhausted"] = (
+                    row["displacement_discovery_work_remaining"] == 0
+                    if row["displacement_discovery_work_remaining"] is not None else None
+                )
                 row["target_cell_windows_capped"] = _counter(search, "target_cell_windows_capped")
                 row["local_resonance_samples"] = _counter(search, "local_resonance_samples")
                 row["coverage"] = {
