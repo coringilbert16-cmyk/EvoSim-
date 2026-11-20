@@ -38,15 +38,40 @@ pub(crate) struct ResourceFeedParticle {
     pub(crate) y: f64,
 }
 
+/// Capture the tick-zero positions of free resources. Feed placements sample
+/// this fixed reference distribution so the intervention does not introduce
+/// a separate uniform-spatial-distribution treatment.
+pub(crate) fn initial_free_resource_positions(simulation: &Simulation) -> Vec<(f64, f64)> {
+    let positions = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| material.material.parts.len() == 1)
+        .flat_map(|material| material.placements.iter().flatten())
+        .map(|placement| (placement.x, placement.y))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        positions.len(),
+        1_200,
+        "PLAN-004 feed placement must sample the standard tick-zero free-resource distribution"
+    );
+    positions
+}
+
 /// Add one deterministic pulse of 72 free atoms: 12 of each active element.
 /// A separate RNG stream ensures feeding does not consume or reseed the
-/// simulation's own random-number stream.
+/// simulation's own random-number stream. Positions are sampled from the
+/// unchanged tick-zero free-resource spatial distribution with small jitter.
 pub(crate) fn inject_plan004_resource_pulse(
     simulation: &mut Simulation,
     seed: u64,
     pulse_index: usize,
+    reference_positions: &[(f64, f64)],
 ) -> Vec<ResourceFeedParticle> {
     assert!(pulse_index < PLAN004_RESOURCE_FEED_PULSE_COUNT);
+    assert!(!reference_positions.is_empty());
     let mut rng = ChaCha8Rng::seed_from_u64(
         seed ^ 0x504c_414e_3030_3400_u64.wrapping_add(pulse_index as u64),
     );
@@ -64,8 +89,10 @@ pub(crate) fn inject_plan004_resource_pulse(
     let mut locations = Vec::with_capacity(PLAN004_RESOURCE_FEED_PULSE_SIZE);
 
     for element in elements {
-        let x = rng.gen_range(1.0..width - 1.0);
-        let y = rng.gen_range(1.0..height - 1.0);
+        let (reference_x, reference_y) =
+            reference_positions[rng.gen_range(0..reference_positions.len())];
+        let x = (reference_x + rng.gen_range(-0.4..0.4)).clamp(1.0, width - 1.0);
+        let y = (reference_y + rng.gen_range(-0.4..0.4)).clamp(1.0, height - 1.0);
         let placement = Placement {
             x,
             y,
@@ -144,7 +171,9 @@ mod tests {
         let mut simulation = crate::environment_chemistry_experiment::build(42).simulation;
         let before_amount = simulation.environment.field.total_amount();
         let before_energy = simulation.energy_inventory_snapshot();
-        let particles = inject_plan004_resource_pulse(&mut simulation, 42, 0);
+        let reference_positions = initial_free_resource_positions(&simulation);
+        assert_eq!(reference_positions.len(), 1_200);
+        let particles = inject_plan004_resource_pulse(&mut simulation, 42, 0, &reference_positions);
 
         assert_eq!(particles.len(), 72);
         assert_eq!(
@@ -190,8 +219,10 @@ mod tests {
     fn feed_pulse_is_reproducible_and_does_not_depend_on_simulation_rng() {
         let mut first = crate::environment_chemistry_experiment::build(43).simulation;
         let mut second = crate::environment_chemistry_experiment::build(43).simulation;
-        let first_particles = inject_plan004_resource_pulse(&mut first, 43, 2);
-        let second_particles = inject_plan004_resource_pulse(&mut second, 43, 2);
+        let first_positions = initial_free_resource_positions(&first);
+        let second_positions = initial_free_resource_positions(&second);
+        let first_particles = inject_plan004_resource_pulse(&mut first, 43, 2, &first_positions);
+        let second_particles = inject_plan004_resource_pulse(&mut second, 43, 2, &second_positions);
         assert_eq!(
             first_particles
                 .iter()
