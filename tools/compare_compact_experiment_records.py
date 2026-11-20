@@ -178,14 +178,33 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             )
             candidate_vectors = comparison_vectors(candidate["summary"], candidate_records)
             differences = {}
+            baseline_seed_order = [row["identity"]["seed"] for row in baseline_records]
+            candidate_seed_order = [row["identity"]["seed"] for row in candidate_records]
+            common_seeds = sorted(set(baseline_seed_order) & set(candidate_seed_order))
             for name, values in candidate_vectors.items():
                 left_mean = baseline_means.get(name)
                 right_mean = mean_if_complete(values)
+                baseline_by_seed = dict(zip(baseline_seed_order, baseline_vectors[name]))
+                candidate_by_seed = dict(zip(candidate_seed_order, values))
+                paired = [
+                    {
+                        "seed": seed,
+                        "difference": (
+                            candidate_by_seed[seed] - baseline_by_seed[seed]
+                            if candidate_by_seed[seed] is not None and baseline_by_seed[seed] is not None
+                            else None
+                        ),
+                    }
+                    for seed in common_seeds
+                ]
+                paired_mean = mean_if_complete([row["difference"] for row in paired])
                 differences[name] = {
                     "baseline_mean": left_mean,
                     "comparison_mean": right_mean,
                     "difference": right_mean - left_mean
                         if left_mean is not None and right_mean is not None else None,
+                    "paired_seed_differences": paired,
+                    "mean_paired_difference": paired_mean,
                 }
             comparisons.append({
                 "baseline_group_id": baseline["group_id"],
