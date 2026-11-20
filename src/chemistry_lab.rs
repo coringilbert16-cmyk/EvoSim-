@@ -1107,10 +1107,12 @@ mod tests {
 
     #[test]
     fn laboratory_rejects_oversized_grid_allocations() {
-        let mut config = LaboratoryConfig::default();
-        config.width = 10_000.0;
-        config.height = 10_000.0;
-        config.cell_size = 1.0;
+        let config = LaboratoryConfig {
+            width: 10_000.0,
+            height: 10_000.0,
+            cell_size: 1.0,
+            ..LaboratoryConfig::default()
+        };
         assert!(Laboratory::new(config).is_err());
     }
 
