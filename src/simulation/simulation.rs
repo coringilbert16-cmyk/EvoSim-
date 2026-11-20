@@ -1113,8 +1113,10 @@ impl Simulation {
                 operation.source_b.environmental_identity,
             ];
             let contact_unit_indices = Some((operation.unit_a, operation.unit_b));
-            let contact_endpoints =
-                Some((operation.candidate.endpoint_a, operation.candidate.endpoint_b));
+            let contact_endpoints = Some((
+                operation.candidate.endpoint_a,
+                operation.candidate.endpoint_b,
+            ));
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
