@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase")]
+#![expect(
+    dead_code,
+    reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+)]
 //! Compact harmonic/world-tone model.
 //!
 //! The harmonic system is deliberately spectral rather than waveform-based.

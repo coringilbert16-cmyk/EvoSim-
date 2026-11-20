@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase")]
+#![expect(
+    dead_code,
+    reason = "Organism-specific runtime is intentionally dormant during the chemistry-first phase"
+)]
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
