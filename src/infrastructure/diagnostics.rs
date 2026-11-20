@@ -925,8 +925,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         } else {
             None
         };
-        let context_bytes = serde_json::to_vec(&self.manifest_context)?;
-        let configuration_sha256 = format!("{:x}", Sha256::digest(context_bytes));
+        let configuration_canonical_json = serde_json::to_string(&self.manifest_context)?;
+        let configuration_sha256 =
+            format!("{:x}", Sha256::digest(configuration_canonical_json.as_bytes()));
         let completed_at_unix_ms = unix_timestamp_ms();
         let commit_sha = std::env::var("GITHUB_SHA")
             .or_else(|_| std::env::var("EVOSIM_COMMIT_SHA"))
@@ -999,6 +1000,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "conditions": {
                 "configuration_schema_version": 1,
                 "configuration_sha256": configuration_sha256,
+                "configuration_canonical_json": configuration_canonical_json,
                 "configuration_completeness": "captured_fields_only",
                 "configuration": self.manifest_context
             },
