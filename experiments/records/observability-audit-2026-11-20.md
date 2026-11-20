@@ -172,6 +172,14 @@ The first-pass case study confirms the original design goal: comprehensive recor
 
 A workflow review also clarified the aggregate-artifact footprint: the PR #392 reaggregation job does **not** upload the raw JSONL again in its combined artifact. It uploads derived reports. However, the contact-opportunity analyzer writes the same sampled opportunities in the main JSON report and separate JSON/CSV files, and writes tick diagnostics in both the main JSON report and a separate CSV. It does this per seed. The 236,988,261-byte aggregate artifact from workflow #78 therefore deserves a file-level size audit; the likely duplication is among derived sample/tick exports, not a second raw-data upload. Keep one canonical machine-readable representation and render CSV/Markdown on demand or as small summaries where possible.
 
+## Open-PR focused-test review
+
+- PR #345's added chemistry-analyzer test verifies that existing BREAK/COMBINE/DISPLACEMENT stage counters appear in the funnel. The two new batch-analyzer suites verify 15-run aggregation and reject dispersion/inventory metadata mismatches. These tests validate aggregation and metadata consistency, but they do not prove that the stage counters are complete opportunity denominators.
+- PR #392's contact-analyzer test verifies one successful exact contact-key join from a sampled COMBINE opportunity to a reaction event and one neighborhood summary. It does not establish exhaustive opportunity coverage or test all reaction kinds.
+- PR #392's matched-catalysis tests verify paired-arm inventory/energy mismatch rejection and fail-closed behavior when time-resolved exposure/background resonance are missing or candidate placement changes flow. The tests intentionally do not demonstrate a successful causal-eligibility gate, consistent with the implementation's current scientific blocker.
+
+**Test reuse decision:** Keep the PR #392 fail-closed behavior and exact-key join approach, but expand tests before treating the schema as general: BREAK identity joins, DISPLACEMENT and COMBINE joins, duplicate/ambiguous matches, missing identity, truncated neighborhoods, zero-sample ticks, complete-vs-incomplete denominators, time-resolved exposure parity, and schema-version mismatch. For PR #345, preserve the funnel as a stage summary, but label rates/denominators ineligible unless search coverage semantics establish the full eligible set.
+
 ## Test inventory and coverage notes
 
 The seven analyzers used by the standard workflow each have a dedicated Python test file on main:
