@@ -23,7 +23,7 @@
 | 44 | 985 | 59 | 617 |
 | 45 | 1,082 | 79 | 712 |
 | 46 | 446 | 40 | 267 |
-| **Total / mean** | **4,305 total** | **67.4 mean per seed** | **637 mean per seed** |
+| **Total / mean** | **4,305 total** | **67.4 mean per seed** | **557 mean per seed** |
 
 ## Reaction totals
 
