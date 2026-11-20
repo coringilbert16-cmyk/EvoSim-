@@ -87,13 +87,13 @@ jobs:
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
           set -euo pipefail
-          mkdir -p "observations/$CONDITION"
+          mkdir -p observations
           args=(
             --headless
             --environment-chemistry-experiment
             --seconds "$DURATION_SECONDS"
             --seed "$SEED"
-            --diagnostics "observations/$CONDITION/seed-$SEED.jsonl"
+            --diagnostics "observations/$CONDITION-seed-$SEED.jsonl"
             --diagnostic-interval 100
           )
           if [[ "$CONDITION" == "resource-feed" ]]; then
@@ -105,15 +105,15 @@ jobs:
           SEED: ${{ matrix.seed }}
           CONDITION: ${{ matrix.condition }}
         run: |
-          python3 tools/chemistry_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION/seed-$SEED-chemistry.json" --markdown-out "observations/$CONDITION/seed-$SEED-chemistry.md"
+          python3 tools/chemistry_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION-seed-$SEED-chemistry.json" --markdown-out "observations/$CONDITION-seed-$SEED-chemistry.md"
       - name: Analyze molecular organization and lineage
         env:
           SEED: ${{ matrix.seed }}
           CONDITION: ${{ matrix.condition }}
         run: |
-          python3 tools/chemistry_organization_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION/seed-$SEED-organization.json" --markdown-out "observations/$CONDITION/seed-$SEED-organization.md"
+          python3 tools/chemistry_organization_analyzer.py "observations/$CONDITION/seed-$SEED.jsonl" --json-out "observations/$CONDITION-seed-$SEED-organization.json" --markdown-out "observations/$CONDITION-seed-$SEED-organization.md"
       - name: Upload raw observation and per-seed analysis
-        if: always() && hashFiles('observations/**/*.jsonl') != ''
+        if: always() && hashFiles('observations/*.jsonl') != ''
         uses: actions/upload-artifact@v4
         with:
           name: plan004-${{ matrix.condition }}-seed-${{ matrix.seed }}
@@ -138,6 +138,11 @@ jobs:
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
           set -euo pipefail
+          mkdir -p observations/no-feed observations/resource-feed
+          for seed in ${SEEDS//,/ }; do
+            cp "observations/no-feed-seed-$seed.jsonl" "observations/no-feed/seed-$seed.jsonl"
+            cp "observations/resource-feed-seed-$seed.jsonl" "observations/resource-feed/seed-$seed.jsonl"
+          done
           for condition in no-feed resource-feed; do
             mkdir -p "analysis/$condition"
             python3 tools/chemistry_experiment_batch_analyzer.py "observations/$condition" --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out "analysis/$condition/chemistry-batch.json" --markdown-out "analysis/$condition/chemistry-batch.md"
