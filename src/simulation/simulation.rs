@@ -1066,8 +1066,8 @@ impl Simulation {
         if profile_tick {
             finish_profile_phase("resonance_snapshot_and_bond_index");
         }
-        // Split the field-owned discovery share between COMBINE and the new
-        // coupled displacement path; BREAK retains its independent quarter.
+        // Keep bounded discovery shares for COMBINE and displacement. BREAK
+        // uses the complete bond index after both reaction phases resolve.
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         self.environmental_chemistry_diagnostics.combine_search =
