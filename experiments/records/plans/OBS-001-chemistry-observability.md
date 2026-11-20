@@ -174,3 +174,11 @@ Focused tests from PR #345 and PR #392 were inspected. #345 validates funnel agg
 - Source confirmation: the current EnergyTransaction contains reason, usable delta, signed structural delta, work, and heat; ReactionEnergyBalance contains reactant/product energy, work, heat, signed net change, required external input, and surplus. Environmental resonance withdrawals/funding must be captured separately at the actual commit boundary; never treat legacy potential_released as a source.
 - No simulator code or chemistry/energy behavior has been changed under OBS-001. No new simulation was launched.
 - Next: review the schema's open questions against exact COMBINE/BREAK/DISPLACEMENT resolution call sites, then implement only the identity join as the first small instrumentation slice with focused tests. Hold energy and opportunity instrumentation until the exact settlement and search semantics are confirmed.
+
+
+### Follow-up source review — energy and opportunity semantics
+
+- Confirmed the exact BREAK, COMBINE, and DISPLACEMENT energy-settlement boundaries and the data already available at each boundary. The field-level capture design is in [schema proposal sections 11–12](OBS-001-schema-v1-proposal.md).
+- Confirmed BREAK's per-tick scan is exhaustive only over the current maintained environmental bond index; COMBINE and DISPLACEMENT are bounded rotating searches with different candidate domains. Bounded samples and work-budget counters cannot be treated as complete denominators.
+- [PR #398](https://github.com/coringilbert16-cmyk/EvoSim-/pull/398) implements the first identity-only event join. Its corrected head passed formatting, architecture checks, offline analyzer tests, full Rust tests, smoke simulation/analysis, and Clippy. It remains draft/open and unmerged.
+- Next implementation slice after PR #398 review: add a compact immutable energy-settlement summary returned from each authoritative commit boundary. Keep opportunity coverage semantics as a subsequent focused slice; do not combine the counters into one generic denominator.
