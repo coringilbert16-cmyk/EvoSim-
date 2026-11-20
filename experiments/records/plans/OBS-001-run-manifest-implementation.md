@@ -26,8 +26,8 @@ The sidecar uses:
   `EVOSIM_CONDITION_ID`
 - captured initial conditions and a SHA-256 hash of the canonical serialized
   captured-configuration object
-- raw JSONL artifact path, byte size, and SHA-256 checksum after successful
-  completion
+- raw JSONL artifact path (relative to the sidecar directory), byte size, and
+  SHA-256 checksum after successful completion
 - warnings and explicit captured-configuration scope
 
 The configuration hash is intentionally labeled
