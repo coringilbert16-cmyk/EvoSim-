@@ -129,6 +129,12 @@ The current standard workflow already runs several offline analyzers (chemistry,
 
 **Audit progress:** first-pass source audit and workflow inventory completed for the main environmental recorder, reaction/lifecycle structs, energy ledger contract, primary chemistry/contact analyzers, and standard experiment workflow. Remaining work: inspect the other analyzers and their schemas, trace energy transaction call sites into environmental COMBINE/BREAK/DISPLACEMENT, and inspect PR #345/#392 detailed patches/tests before defining the final field-level schema.
 
+### Audit checkpoint update — test and workflow inventory
+
+The main standard workflow runs seven specialist analyzers and each has a dedicated test file: chemistry (12 tests), molecular organization (13), cross-seed chemistry batch (2), reaction network (3), geometry-aware network (5), contact opportunities (2), and temporal complexity (7). Contact-opportunity and batch aggregation tests are comparatively small and need focused review for denominator/coverage semantics and malformed or mixed-version artifacts.
+
+The source audit now covers environmental reaction event/lifecycle/tick schemas, recorder behavior, all seven standard analyzers and their test inventory, the workflow orchestration, and environmental COMBINE/BREAK/DISPLACEMENT settlement boundaries. The remaining pre-implementation work is to review the focused PR #345/#392 tests and weakest analyzer suites, reconcile branch divergence, reanalyze retained artifacts, and draft the field-level manifest/event schema. Continue from the “Audit limitations and next work” section in the dated audit; no code or experiment run has been started.
+
 ## Current checkpoint
 
 - Approval received: 2026-11-20.
