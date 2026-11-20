@@ -303,3 +303,21 @@ Draft [PR #398](https://github.com/coringilbert16-cmyk/EvoSim-/pull/398) now pas
 - Clippy: success.
 
 The PR remains draft/open and unmerged pending review. The initial check failed only at formatting; the two formatter changes were applied, and the subsequent full run passed. No chemistry or energy behavior changed. This validates the first identity-only instrumentation slice but does not validate the complete OBS-001 schema or settle the remaining energy/opportunity gaps.
+
+
+## Follow-up validation and analyzer integration (2026-11-20)
+
+- PR #397 documentation workflow completed successfully (Rust workflow run `44806769251`). The PR remains open and unmerged.
+- PR #398 was expanded to make the chemistry analyzer prefer the new event-level `reaction_id`, retain backward compatibility by falling back to the single lifecycle ID for legacy records, and fail closed when event and lifecycle IDs disagree. Added tests for direct event-ID use and mismatch rejection.
+- PR #398 latest workflow run `44807247989`: formatting, architecture checks, and all offline analyzer tests have passed. Full Rust tests are still running; smoke simulation, downstream analysis, and Clippy have not yet run. Do not call this PR fully green until the complete job succeeds.
+- Geometry-aware reaction-network compatibility remains intact: its bond-pair join is keyed by the chemistry analyzer's `event_attribution.reaction_id`. With the new analyzer behavior, that attribution now originates from the event-level ID when present, and legacy data still uses lifecycle IDs. A mismatch is omitted from the join rather than silently paired.
+
+### Energy-settlement implementation boundary review
+
+The three commit paths have distinct API shapes:
+- BREAK's `prepare_chemical_break_energy_with_resonance` stages the usable holder and ledger but does not return the transaction. At the environmental commit boundary, the exact observable values are available: usable-holder pre/post, signed structural increase equal to the removed bond energy, full disruption work, zero dissipated heat in this path, and actual compatible resonance withdrawal. Importantly, the transaction's usable-funded work is only the portion not paid by resonance; report physical disruption work and resonance withdrawal as separate fields.
+- DISPLACEMENT already has a `ReactionEnergyBalance`, the exact conservative `EnergyTransaction`, actual compatible resonance funding, and staged usable-holder pre/post. Its settlement summary can be copied directly from these values after all physical products are committed.
+- COMBINE creates its `EnergyTransaction` inside `combine_runtime::form_bond_from_candidate_diagnostic`, where it is settled against the staged usable holder and ledger. The current `CombineAttempt` returns only a net holder delta and reaction descriptors. To avoid reconstructing work/heat from cumulative counters, carry a compact immutable settlement summary out of that helper with the attempt; the environmental resolver already has exact structural pre/post and usable-holder pre/post values.
+- For all three, only a committed operation may carry `settlement_status: "settled"`. Resolver errors remain `not_settled`; do not expose a preflight estimate as a settled transaction. Capture is observational and must not change arithmetic or commit ordering.
+
+No energy instrumentation was added in this follow-up. The next code slice should introduce the minimal serializable summary and focused conservation/join tests, then thread it through the three resolver APIs without changing settlement calculations.
