@@ -192,7 +192,7 @@ fn run_environment_chemistry_experiment(
         );
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources={independent_resources} molecules={molecules} constituents={constituents} physical_objects={physical_objects} piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources={independent_resources} molecules={molecules} constituents={constituents} physical_objects={physical_objects} resource_feed={plan004_resource_feed} piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         duration_seconds,
         planned_ticks,
         simulation.organisms.len(),
@@ -320,6 +320,16 @@ fn run_environment_chemistry_experiment(
         }
     }
 
+    assert!(
+        !plan004_resource_feed
+            || next_feed_pulse
+                == crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_COUNT,
+        "all six PLAN-004 resource feed pulses must occur during the one-hour run"
+    );
+    println!(
+        "PLAN-004 RESOURCE FEED COMPLETE: enabled={plan004_resource_feed} pulses_delivered={next_feed_pulse} total_resources_delivered={}",
+        next_feed_pulse * crate::environment_resource_feed::PLAN004_RESOURCE_FEED_PULSE_SIZE
+    );
     diagnostics
         .finish(&simulation)
         .expect("failed to finalize environmental chemistry diagnostics");
