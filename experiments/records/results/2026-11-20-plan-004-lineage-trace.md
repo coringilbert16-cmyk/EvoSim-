@@ -30,6 +30,20 @@ The exact lineage links are:
 
 This is more informative than a family-graph cycle alone: the same exact intermediate instance is consumed at each step, and the resulting products are tracked into later reactions. The O–P₂ family is regenerated as new molecule identity 2599 after the N–O–P₂ BREAK, then again as new identity 2938 after the C–O BREAK and subsequent COMBINE. It is therefore family/state regeneration with identity turnover, not persistence of one unchanged molecule.
 
+## Initial free-resource identity turnover
+
+The molecule-instance ledger also allows a limited estimate of how much of the original free-resource inventory entered chemistry at least once. Across the five seeds, **2,167 of 6,000 initial free-resource identities (36.1%)** were consumed as parents in a reaction during the one-hour run. Per seed, the count ranged from 310 to 513 of 1,200 (25.8%–42.8%).
+
+Mean initial free-resource identities consumed per seed, by element:
+- Carbon: 68.8 of 191.2 initially
+- Hydrogen: 93.2 of 201.4
+- Nitrogen: 42.2 of 202.2
+- Oxygen: 108.8 of 203.8
+- Phosphorus: 56.2 of 196.8
+- Sulfur: 64.2 of 204.6
+
+This is an **identity-turnover count**, not net depletion or elemental consumption: an atom may be released again under a new molecule identity after BREAK, and reaction-created identities are not counted as initial free resources. It provides a rough scale for designing a feed intervention, but should not be used alone to set the feed composition or claim a resource requirement.
+
 ## Recurrent turnover evidence
 
 The earlier exact-instance screen also found three seed-45 H–O–P / sulfur association-dissociation sequences:
