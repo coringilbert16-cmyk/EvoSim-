@@ -137,14 +137,18 @@ def compare(paths: list[Path]) -> dict[str, Any]:
     records = [load_record(path) for path in paths]
     if not records:
         raise ValueError("at least one compact record is required")
-    seeds = [record["identity"]["seed"] for record in records]
-    if len(seeds) != len(set(seeds)):
-        raise ValueError("duplicate independent seed records supplied")
     measurement_groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     condition_groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    seeds_by_condition: dict[tuple[Any, ...], set[int]] = {}
     for record in records:
+        condition_key = condition_group_key(record)
+        seed = record["identity"]["seed"]
+        seen = seeds_by_condition.setdefault(condition_key, set())
+        if seed in seen:
+            raise ValueError("duplicate independent seed within the same condition")
+        seen.add(seed)
         measurement_groups.setdefault(measurement_compatibility_key(record), []).append(record)
-        condition_groups.setdefault(condition_group_key(record), []).append(record)
+        condition_groups.setdefault(condition_key, []).append(record)
 
     rendered_groups = []
     for index, (key, group) in enumerate(condition_groups.items(), 1):
