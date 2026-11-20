@@ -1290,18 +1290,20 @@ pub(crate) fn physical_materials_from_structure_components(
     Some(products)
 }
 
-pub(crate) fn resolve_environmental(
+pub(crate) fn resolve_environmental(operation:EnvironmentalCombineOperation,environment:&mut Environment,ledger:&mut EnergyLedger)->bool { resolve_environmental_with_settlement(operation,environment,ledger).is_some() }
+
+pub(crate) fn resolve_environmental_with_settlement(
     operation: EnvironmentalCombineOperation,
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
-) -> bool {
+) -> Option<crate::state::EnvironmentalEnergySettlement> {
     let Some(source_a) = environment
         .field
         .cells
         .get(operation.cell_a)
         .and_then(|cell| cell.physical_materials.get(operation.material_a))
     else {
-        return false;
+        return None;
     };
     let Some(source_b) = environment
         .field
@@ -1309,15 +1311,15 @@ pub(crate) fn resolve_environmental(
         .get(operation.cell_b)
         .and_then(|cell| cell.physical_materials.get(operation.material_b))
     else {
-        return false;
+        return None;
     };
     if source_a != &operation.source_a || source_b != &operation.source_b {
-        return false;
+        return None;
     }
 
     let Some((mut trial_structure, indices_a)) = restored_source(&operation.source_a, environment)
     else {
-        return false;
+        return None;
     };
     let Some(indices_b) = crate::physical_material::restore_material(
         &mut trial_structure,
@@ -1325,7 +1327,7 @@ pub(crate) fn resolve_environmental(
         origin(),
         &environment.catalog,
     ) else {
-        return false;
+        return None;
     };
     if indices_b.iter().any(|index| {
         crate::construction_runtime::placed_unit_overlaps(
@@ -1335,13 +1337,13 @@ pub(crate) fn resolve_environmental(
             &environment.catalog,
         )
     }) {
-        return false;
+        return None;
     }
     let Some(&unit_a) = indices_a.get(operation.unit_a) else {
-        return false;
+        return None;
     };
     let Some(&unit_b) = indices_b.get(operation.unit_b) else {
-        return false;
+        return None;
     };
 
     // Discovery normally schedules only activated pairs, but the commit
@@ -1352,30 +1354,30 @@ pub(crate) fn resolve_environmental(
         trial_structure.units[unit_a].properties(&environment.catalog),
         trial_structure.units[unit_b].properties(&environment.catalog),
     ) else {
-        return false;
+        return None;
     };
     let strength = crate::combine::bond_strength(properties_a, properties_b);
     let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength) else {
-        return false;
+        return None;
     };
     let Some(activation_signal) =
         crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
     else {
-        return false;
+        return None;
     };
     if !crate::chemistry::activated(activation_signal, barrier) {
-        return false;
+        return None;
     }
 
     let Some(reactant_structural_energy) =
         crate::energy_ledger::structural_potential(&trial_structure)
     else {
-        return false;
+        return None;
     };
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy;
     let mut cache = ConnectionCompatibilityCache::new();
-    if crate::combine_runtime::form_selected_bond_diagnostic(
+    let attempt = match crate::combine_runtime::form_selected_bond_diagnostic(
         &mut trial_structure,
         unit_a,
         unit_b,
@@ -1385,31 +1387,30 @@ pub(crate) fn resolve_environmental(
         &mut cache,
         &mut staged_ledger,
         &mut staged_usable_energy,
-    )
-    .is_err()
-    {
-        return false;
-    }
+    ) {
+        Ok(attempt) => attempt,
+        Err(_) => return None,
+    };
     if !crate::combine_runtime::coalesce_fluid_pair_after_bond(
         &mut trial_structure,
         unit_a,
         unit_b,
         &environment.catalog,
     ) {
-        return false;
+        return None;
     }
     let Some(product_structural_energy) =
         crate::energy_ledger::structural_potential(&trial_structure)
     else {
-        return false;
+        return None;
     };
     let structural_delta = product_structural_energy - reactant_structural_energy;
     if !structural_delta.is_finite() {
-        return false;
+        return None;
     }
     let Some(product) = physical_material_from_structure(&trial_structure, &environment.catalog)
     else {
-        return false;
+        return None;
     };
 
     // Keep world-held totals synchronized with the environment-owned physical
@@ -1425,7 +1426,7 @@ pub(crate) fn resolve_environmental(
         || !structural_delta.is_finite()
         || !next_total_structural.is_finite()
     {
-        return false;
+        return None;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
     staged_ledger.total_structural_energy_held = next_total_structural;
@@ -1435,7 +1436,7 @@ pub(crate) fn resolve_environmental(
     // every touched cell exactly once.
     if operation.cell_a == operation.cell_b {
         if operation.material_a >= operation.material_b {
-            return false;
+            return None;
         }
         let cell = &mut environment.field.cells[operation.cell_a];
         cell.physical_materials.remove(operation.material_b);
@@ -1461,24 +1462,18 @@ pub(crate) fn resolve_environmental(
     environment.field.assign_missing_material_identities();
     environment.chemistry_usable_energy = staged_usable_energy;
     *ledger = staged_ledger;
-    true
+    Some(crate::state::EnvironmentalEnergySettlement::settled(usable_delta,0.0,structural_delta,attempt.settlement_transaction.work_expended,attempt.settlement_transaction.heat_dissipated))
 }
-
-pub(crate) fn resolve_environmental_preserving_accumulation(
-    operation: EnvironmentalCombineOperation,
-    environment: &mut Environment,
-    ledger: &mut EnergyLedger,
-    accumulation: &mut BTreeMap<String, f64>,
-) -> bool {
-    let key = operation.accumulation_key.clone();
-    let accumulated_reaction = operation.accumulated_reaction;
-    let success = resolve_environmental(operation, environment, ledger);
-    if !success {
-        accumulation.insert(key, accumulated_reaction);
-    }
-    success
+pub(crate) fn resolve_environmental_preserving_accumulation(operation:EnvironmentalCombineOperation,environment:&mut Environment,ledger:&mut EnergyLedger,accumulation:&mut BTreeMap<String,f64>)->bool {
+    resolve_environmental_preserving_accumulation_with_settlement(operation,environment,ledger,accumulation).is_some()
 }
-
+pub(crate) fn resolve_environmental_preserving_accumulation_with_settlement(operation:EnvironmentalCombineOperation,environment:&mut Environment,ledger:&mut EnergyLedger,accumulation:&mut BTreeMap<String,f64>)->Option<crate::state::EnvironmentalEnergySettlement> {
+    let key=operation.accumulation_key.clone();
+    let accumulated_reaction=operation.accumulated_reaction;
+    let settlement=resolve_environmental_with_settlement(operation,environment,ledger);
+    if settlement.is_none(){accumulation.insert(key,accumulated_reaction);}
+    settlement
+}
 #[cfg(test)]
 mod tests {
     use super::*;
