@@ -545,6 +545,12 @@ fn point_distance(left: (f64, f64), right: (f64, f64)) -> f64 {
     (left.0 - right.0).hypot(left.1 - right.1)
 }
 
+fn canonical_inventory(simulation: &Simulation) -> Vec<(String, f64)> {
+    let mut inventory = simulation.environment.field.total_material();
+    inventory.sort_by(|left, right| left.0.cmp(&right.0));
+    inventory
+}
+
 fn non_candidate_layout_signature(simulation: &Simulation, candidate_id: u64) -> u64 {
     let mut rows = simulation.environment.field.cells.iter()
         .flat_map(|cell| cell.physical_materials.iter())
@@ -759,7 +765,7 @@ pub(crate) fn build_matched(
     let candidate_id = candidate.identity;
     let candidate_before = candidate.center;
 
-    let initial_inventory = fixture.simulation.environment.field.total_material();
+    let initial_inventory = canonical_inventory(&fixture.simulation);
     let initial_energy = fixture.simulation.energy_inventory_snapshot();
     let non_candidate_layout_before =
         non_candidate_layout_signature(&fixture.simulation, candidate_id);
@@ -791,7 +797,7 @@ pub(crate) fn build_matched(
         _ => {}
     }
 
-    let final_inventory = fixture.simulation.environment.field.total_material();
+    let final_inventory = canonical_inventory(&fixture.simulation);
     let final_energy = fixture.simulation.energy_inventory_snapshot();
     if initial_inventory != final_inventory {
         return Err("matched control relocation changed elemental inventory".to_string());
