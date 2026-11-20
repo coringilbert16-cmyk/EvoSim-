@@ -1,6 +1,6 @@
 # PLAN-001 — Initial instance-level pathway findings
 
-**Status:** In progress; first-pass analysis of retained artifacts. No new simulation was run.
+**Status:** Completed artifact analysis of EXP-2026-004. No new simulation was run.
 
 ## Source dataset
 
@@ -107,3 +107,8 @@ The event schema records only the molecules transformed by each committed event:
 Consequently, the current artifact cannot establish that a particular molecule facilitated a separate reaction while remaining chemically available. It can nominate families for controlled follow-up, but it cannot rank catalysts. The H–O–P + sulfur ⇌ H–O–P–S sequences are reversible association/dissociation of the same substrate family, not catalytic facilitation.
 
 **PLAN-001 conclusion remains open:** the artifact supports reusable intermediates and long identity-linked reaction histories. The next useful output is a ranked list of pathway motifs with exact molecule/event references and explicit candidate/control requirements. Catalysis requires a separate matched comparison and better local-opportunity attribution; no new baseline or longer observation window addresses that missing evidence.
+
+
+## PLAN-001 closeout
+
+The success criterion is met for this dataset: exact-instance evidence, identity transitions, a ranked pathway-candidate list, and the material geometry/opportunity limitations are recorded above. The analysis closes with **no validated facilitator candidate**. This is a completed analysis result, not a claim that the project has established catalysis. PLAN-002 remains blocked until a candidate can be observed in a defined local reaction context and suitable matched controls are available.
