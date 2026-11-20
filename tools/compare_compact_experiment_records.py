@@ -85,7 +85,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         "settlement_totals_by_seed": {
             reaction: {
                 field: [
-                    numeric(row.get("settlement", {}).get(reaction, {}).get(field, {}).get("sum"))
+                    numeric((row.get("settlement") or {}).get(reaction, {}).get(field, {}).get("sum"))
                     for row in records
                 ]
                 for field in ("usable_energy_delta", "resonance_withdrawn",
