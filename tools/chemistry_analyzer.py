@@ -156,6 +156,7 @@ def _bond_pair_attribution(
     broken_total: Counter[str] = Counter()
     event_attribution: list[dict[str, Any]] = []
     events_missing_reaction_id = 0
+    events_with_reaction_id_mismatch = 0
     observed = missing = malformed = 0
 
     def complete(counter: Counter[str]) -> dict[str, int]:
@@ -218,15 +219,26 @@ def _bond_pair_attribution(
         broken_by_reaction.setdefault(reaction, Counter()).update(broken)
         formed_total.update(formed)
         broken_total.update(broken)
-        reaction_ids = sorted({
+        lifecycle_reaction_ids = sorted({
             str(record.get("reaction_id"))
             for record in lifecycle
             if record.get("reaction_id") is not None
         })
-        if len(reaction_ids) != 1:
+        event_reaction_id = event.get("reaction_id")
+        if event_reaction_id is not None:
+            reaction_id = str(event_reaction_id)
+            if lifecycle_reaction_ids and lifecycle_reaction_ids != [reaction_id]:
+                events_with_reaction_id_mismatch += 1
+                reaction_id = None
+        elif len(lifecycle_reaction_ids) == 1:
+            # Backward compatibility for schema-v2 records without event-level IDs.
+            reaction_id = lifecycle_reaction_ids[0]
+        else:
+            reaction_id = None
+        if reaction_id is None:
             events_missing_reaction_id += 1
         event_attribution.append({
-            "reaction_id": reaction_ids[0] if len(reaction_ids) == 1 else None,
+            "reaction_id": reaction_id,
             "tick": int(event.get("tick", 0) or 0),
             "reaction": reaction,
             "parent_ids": sorted(
@@ -340,6 +352,7 @@ def _bond_pair_attribution(
         "by_reaction": by_reaction,
         "event_attribution": event_attribution,
         "events_missing_reaction_id": events_missing_reaction_id,
+        "events_with_reaction_id_mismatch": events_with_reaction_id_mismatch,
         "method": (
             "For each committed reaction, compare the multiset of endpoint-element "
             "pairs in destroyed reactant PhysicalMaterial.internal_connections "

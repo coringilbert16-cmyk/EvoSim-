@@ -1071,11 +1071,72 @@ pub(crate) struct EnvironmentalMoleculeLifecycleEvent {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalEnergySettlement {
+    pub(crate) status: String,
+    pub(crate) usable_energy_delta: Option<f64>,
+    pub(crate) resonance_withdrawn: Option<f64>,
+    pub(crate) structural_energy_delta: Option<f64>,
+    pub(crate) physical_work: Option<f64>,
+    pub(crate) heat_dissipated: Option<f64>,
+}
+impl Default for EnvironmentalEnergySettlement {
+    fn default() -> Self {
+        Self {
+            status: "not_settled".to_string(),
+            usable_energy_delta: None,
+            resonance_withdrawn: None,
+            structural_energy_delta: None,
+            physical_work: None,
+            heat_dissipated: None,
+        }
+    }
+}
+impl EnvironmentalEnergySettlement {
+    pub(crate) fn settled(
+        usable_energy_delta: f64,
+        resonance_withdrawn: f64,
+        structural_energy_delta: f64,
+        physical_work: f64,
+        heat_dissipated: f64,
+    ) -> Self {
+        Self {
+            status: "settled".to_string(),
+            usable_energy_delta: Some(usable_energy_delta),
+            resonance_withdrawn: Some(resonance_withdrawn),
+            structural_energy_delta: Some(structural_energy_delta),
+            physical_work: Some(physical_work),
+            heat_dissipated: Some(heat_dissipated),
+        }
+    }
+    /// Diagnostic-only world-level conservation residual; never authorizes a reaction.
+    #[allow(dead_code)]
+    pub(crate) fn accounting_residual(&self) -> Option<f64> {
+        if self.status != "settled" {
+            return None;
+        }
+        let (Some(u), Some(r), Some(s), Some(w), Some(h)) = (
+            self.usable_energy_delta,
+            self.resonance_withdrawn,
+            self.structural_energy_delta,
+            self.physical_work,
+            self.heat_dissipated,
+        ) else {
+            return None;
+        };
+        Some(u - r + s + w + h)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryEvent {
+    /// Stable within a run; the run manifest scopes this tick/ordinal identifier.
+    pub(crate) reaction_id: String,
     pub(crate) tick: u64,
     pub(crate) reaction: String,
     pub(crate) source_cells: Vec<usize>,
     pub(crate) source_material_indices: Vec<usize>,
+    /// Participant identities in the same order as source_materials. None means unavailable.
+    pub(crate) source_material_ids: Vec<Option<u64>>,
     pub(crate) source_materials: Vec<Vec<(String, f64)>>,
     pub(crate) work_required: f64,
     pub(crate) reaction_frequency_hz: Option<f64>,
@@ -1086,6 +1147,8 @@ pub(crate) struct EnvironmentalChemistryEvent {
     /// The resolver currently exposes only a boolean. This label deliberately
     /// avoids inventing a more specific cause until the commit API returns one.
     pub(crate) failure_reason: Option<String>,
+    #[serde(default)]
+    pub(crate) energy_settlement: EnvironmentalEnergySettlement,
     pub(crate) product_material: Option<Vec<(String, f64)>>,
     pub(crate) product_internal_bond_count: Option<usize>,
     pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
@@ -1202,5 +1265,25 @@ mod genome_core_identity_tests {
             moved_key, alternate_key,
             "seed-scale reference changes affect developmental realization"
         );
+    }
+}
+
+#[cfg(test)]
+mod environmental_energy_settlement_tests {
+    use super::EnvironmentalEnergySettlement;
+
+    #[test]
+    fn failed_attempt_is_explicitly_not_settled_and_has_no_synthetic_zeroes() {
+        let settlement = EnvironmentalEnergySettlement::default();
+        assert_eq!(settlement.status, "not_settled");
+        assert_eq!(settlement.accounting_residual(), None);
+        assert_eq!(settlement.usable_energy_delta, None);
+    }
+
+    #[test]
+    fn settled_energy_residual_uses_the_world_level_sign_convention() {
+        let settlement = EnvironmentalEnergySettlement::settled(-3.0, 2.0, 1.0, 4.0, 0.0);
+        assert_eq!(settlement.status, "settled");
+        assert_eq!(settlement.accounting_residual(), Some(0.0));
     }
 }

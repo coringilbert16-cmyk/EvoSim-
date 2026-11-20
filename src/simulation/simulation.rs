@@ -1108,6 +1108,18 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let source_material_ids = [
+                operation.source_a.environmental_identity,
+                operation.source_b.environmental_identity,
+            ]
+            .into_iter()
+            .map(|identity| (identity != 0).then_some(identity))
+            .collect();
+            let reaction_id = format!(
+                "{}-{}",
+                self.tick,
+                self.environmental_chemistry_events.len()
+            );
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1123,13 +1135,15 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
-            let committed =
-                crate::environmental_combine::resolve_environmental_preserving_accumulation(
+            let energy_settlement =
+                crate::environmental_combine::resolve_environmental_preserving_accumulation_with_settlement(
                     operation,
                     &mut self.environment,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let committed = energy_settlement.is_some();
+            let energy_settlement = energy_settlement.unwrap_or_default();
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
             } else {
@@ -1152,11 +1166,7 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
+                    reaction_id.clone(),
                     "COMBINE",
                     &parent_materials,
                     &product_materials,
@@ -1181,10 +1191,12 @@ impl Simulation {
             }
             self.environmental_chemistry_events.push(
                 crate::state::EnvironmentalChemistryEvent {
+                    reaction_id,
                     tick: self.tick,
                     reaction: "COMBINE".to_string(),
                     source_cells,
                     source_material_indices,
+                    source_material_ids,
                     source_materials,
                     work_required,
                     reaction_frequency_hz: None,
@@ -1195,6 +1207,7 @@ impl Simulation {
                     failure_reason: (!committed).then(|| {
                         "resolver rejected stale, invalid, or unfunded settlement; detailed reason is not yet exposed".to_string()
                     }),
+                    energy_settlement,
                     product_material,
                     product_internal_bond_count,
                     post_commit_source_cell_materials,
@@ -1251,6 +1264,18 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let source_material_ids = [
+                operation.source_a.environmental_identity,
+                operation.source_b.environmental_identity,
+            ]
+            .into_iter()
+            .map(|identity| (identity != 0).then_some(identity))
+            .collect();
+            let reaction_id = format!(
+                "{}-{}",
+                self.tick,
+                self.environmental_chemistry_events.len()
+            );
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_a.clone(), operation.source_b.clone()]
@@ -1275,6 +1300,10 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let energy_settlement = match &resolution {
+                Ok(settlement) => settlement.clone(),
+                Err(_) => crate::state::EnvironmentalEnergySettlement::default(),
+            };
             let committed = resolution.is_ok();
             let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
@@ -1284,11 +1313,7 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
+                    reaction_id.clone(),
                     "DISPLACEMENT",
                     &parent_materials,
                     &product_materials,
@@ -1318,10 +1343,12 @@ impl Simulation {
             }
             self.environmental_chemistry_events
                 .push(crate::state::EnvironmentalChemistryEvent {
+                    reaction_id,
                     tick: self.tick,
                     reaction: "DISPLACEMENT".to_string(),
                     source_cells,
                     source_material_indices,
+                    source_material_ids,
                     source_materials,
                     work_required,
                     reaction_frequency_hz,
@@ -1330,6 +1357,7 @@ impl Simulation {
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
                     failure_reason,
+                    energy_settlement,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
@@ -1404,6 +1432,13 @@ impl Simulation {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
+            let source_material_ids = vec![(operation.source_material.environmental_identity != 0)
+                .then_some(operation.source_material.environmental_identity)];
+            let reaction_id = format!(
+                "{}-{}",
+                self.tick,
+                self.environmental_chemistry_events.len()
+            );
             let molecular_history_enabled = self.record_environmental_molecular_history;
             let parent_materials = if molecular_history_enabled {
                 vec![operation.source_material.clone()]
@@ -1428,6 +1463,10 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let energy_settlement = match &resolution {
+                Ok(settlement) => settlement.clone(),
+                Err(_) => crate::state::EnvironmentalEnergySettlement::default(),
+            };
             let committed = resolution.is_ok();
             let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
@@ -1437,11 +1476,7 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!(
-                        "{}-{}",
-                        self.tick,
-                        self.environmental_chemistry_events.len()
-                    ),
+                    reaction_id.clone(),
                     "BREAK",
                     &parent_materials,
                     &product_materials,
@@ -1472,10 +1507,12 @@ impl Simulation {
             };
             self.environmental_chemistry_events
                 .push(crate::state::EnvironmentalChemistryEvent {
+                    reaction_id,
                     tick: self.tick,
                     reaction: "BREAK".to_string(),
                     source_cells: vec![source_cell],
                     source_material_indices: vec![source_material_index],
+                    source_material_ids,
                     source_materials,
                     work_required,
                     reaction_frequency_hz,
@@ -1484,6 +1521,7 @@ impl Simulation {
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
                     failure_reason,
+                    energy_settlement,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,

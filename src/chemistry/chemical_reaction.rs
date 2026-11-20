@@ -1033,7 +1033,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     operation: EnvironmentalChemicalBreakOperation,
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
-) -> Result<(), &'static str> {
+) -> Result<crate::state::EnvironmentalEnergySettlement, &'static str> {
     if !operation.activation_signal.is_finite()
         || operation.activation_signal < 0.0
         || !operation.activation_barrier.is_finite()
@@ -1139,7 +1139,13 @@ pub(crate) fn resolve_environmental_diagnosed(
     ledger.total_usable_energy_held = next_total_usable;
     ledger.total_structural_energy_held = next_total_structural;
     ledger.total_resonant_energy_held = next_total_resonant;
-    Ok(())
+    Ok(crate::state::EnvironmentalEnergySettlement::settled(
+        usable_delta,
+        resonant_work,
+        structural_delta,
+        operation.disruption_cost,
+        prepared.transaction.heat_dissipated,
+    ))
 }
 
 pub(crate) fn resolve_environmental_preserving_accumulation(
@@ -1147,7 +1153,7 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
-) -> Result<(), &'static str> {
+) -> Result<crate::state::EnvironmentalEnergySettlement, &'static str> {
     let key = operation.accumulation_key.clone();
     let accumulated_reaction = operation.accumulated_reaction;
     let result = resolve_environmental_diagnosed(operation, environment, ledger);
