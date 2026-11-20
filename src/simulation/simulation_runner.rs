@@ -82,7 +82,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             &simulation,
             &[],
         )
-        .unwrap_or_else(|error| panic!("failed to create chemistry diagnostics file {path}: {error}"))
+        .unwrap_or_else(|error| {
+            panic!("failed to create chemistry diagnostics file {path}: {error}")
+        })
     });
 
     report(&simulation, "initial");
