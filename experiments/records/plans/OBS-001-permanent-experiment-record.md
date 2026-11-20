@@ -42,11 +42,11 @@ A record is emitted per independent seed plus one compact experiment-level compa
 | Class | Contents | Default retention |
 |---|---|---|
 | Permanent | Per-seed compact record, experiment comparison record, short human-readable result note, checksums/provenance | Repository experiment records; retained with project history |
-| Routine temporary | Raw JSONL, per-seed specialist reports, normalized inputs, intermediate network/temporal outputs | Workflow artifacts: 7 days maximum; delete workspace copies after record validation |
+| Routine working data | Raw JSONL, manifests, per-seed specialist reports, normalized inputs, intermediate analysis files | Runner-local only; delete after compact-record validation; never upload in routine runs |
 | Deep temporary | Exhaustive contact opportunities, detailed local-resonance samples, expanded geometry/time traces | Explicit opt-in only; 1 day by default; no upload unless explicitly requested |
 | Reference evidence | A deliberately selected baseline or exceptional diagnostic evidence required to reproduce/resolve a scientific finding | Explicitly allowlisted; reviewed individually, not retained by default |
 
-Artifact expiration is not a substitute for cleanup: workflow jobs must remove temporary workspace files after successful compact-record validation. Failed or incomplete runs may retain temporary evidence for diagnosis, but must be clearly marked and expire automatically.
+Artifact expiration is not a substitute for cleanup: workflow jobs must remove runner-local source and intermediate files after compact-record generation. Deep artifacts are uploaded only by explicit request and expire automatically after one day. Routine runs do not upload raw source data.
 
 ## Routine versus deep collection
 
