@@ -8,8 +8,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tools.experiment_manifest import validate_manifest
+
 SCHEMA = "evosim.permanent_experiment_record"
 SCHEMA_VERSION = 1
+DROP_KEYS = {
+    "participant_sets", "opportunity_samples", "tick_diagnostics", "molecules",
+    "lineage_edges", "families", "top_families", "family_to_family_transitions",
+    "event_attribution",
+}
 REACTIONS = ("BREAK", "COMBINE", "DISPLACEMENT")
 
 
@@ -41,7 +48,7 @@ def scalar_tree(value: Any) -> Any:
     """Keep numeric/string/bool/null aggregates; drop event arrays and object lists."""
     if isinstance(value, dict):
         return {str(key): scalar_tree(item) for key, item in value.items()
-                if isinstance(item, (dict, int, float, str, bool)) or item is None}
+                if key not in DROP_KEYS and (isinstance(item, (dict, int, float, str, bool)) or item is None)}
     if isinstance(value, list):
         return None
     if isinstance(value, (int, float, str, bool)) or value is None:
@@ -64,7 +71,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     if not isinstance(lifecycle_errors, list) or not isinstance(organization_errors, list):
         raise ValueError(f"seed {seed}: lifecycle validation fields must be arrays")
 
-    manifest = read_json(manifest_path) if manifest_path else {}
+    manifest = validate_manifest(manifest_path) if manifest_path else {}
     coverage_report = read_json(opportunity_coverage_path) if opportunity_coverage_path else {}
     seed_coverage = next(
         (row for row in coverage_report.get("per_seed", [])
@@ -147,6 +154,8 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "final_by_resource": scalar_tree((nested(chemistry, "resource_coverage", "snapshots", default=[]) or [{}])[-1].get("resource_inventory")),
             "initial_physical_material_count": source.get("initial_physical_material_count"),
             "initial_constituent_count": source.get("initial_constituent_count"),
+            "final_physical_material_count": (nested(chemistry, "resource_coverage", "snapshots", default=[{}])[-1].get("physical_material_count") if nested(chemistry, "resource_coverage", "snapshots", default=[]) else None),
+            "final_constituent_count": (nested(chemistry, "resource_coverage", "snapshots", default=[{}])[-1].get("constituent_count") if nested(chemistry, "resource_coverage", "snapshots", default=[]) else None),
         },
         "reactions": reaction_rows,
         "opportunity_coverage": (
