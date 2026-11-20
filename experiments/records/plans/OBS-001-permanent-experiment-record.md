@@ -29,12 +29,13 @@ A record is emitted per independent seed plus one compact experiment-level compa
 ## Comparison rules
 
 1. Seeds are independent replicates; events within a seed are not independent samples.
-2. Compare records only when schema, active-resource set, configuration fingerprint, duration interpretation, and measurement definitions are compatible.
+2. Compare conditions when schema, active-resource set, duration interpretation, diagnostic interval, and measurement definitions are compatible. Configuration fingerprints distinguish conditions; they do not by themselves make two intentionally different conditions incomparable.
 3. Keep per-seed values alongside aggregate descriptive statistics. Never replace seed-level values with pooled event counts alone.
 4. Compute rates only when numerator and denominator are present, complete, and semantically compatible.
 5. Treat null as unknown/unavailable, zero as measured zero, and partial coverage as partial. Never infer missing data.
 6. Record any excluded seed and the exact incompatibility reason.
 7. The experiment-level record contains compact per-seed references and descriptive aggregates; it does not duplicate detailed per-seed payloads.
+8. Between-condition differences are descriptive only; retain per-seed values and do not infer causality or statistical significance from event counts.
 
 ## Retention classes
 
