@@ -97,6 +97,46 @@ class MatchedCatalysisComparisonAnalyzerTests(unittest.TestCase):
         self.assertEqual(pair["remote"]["target_samples_with_candidate_nearby"], 0)
         self.assertEqual(report["pooled"]["near"]["target_committed_reactions"], 1)
         self.assertIn("not proof", " ".join(report["interpretation_limits"]))
+        self.assertFalse(report["causal_interpretation_eligible"])
+        self.assertFalse(pair["exposure_match_gate"]["passed"])
+        self.assertIn("tick-zero local exposure telemetry is missing", pair["exposure_match_gate"]["reasons"])
+
+    def test_exposure_gate_rejects_candidate_induced_flow_change(self):
+        from tools.matched_catalysis_comparison_analyzer import _exposure_match_gate
+
+        def local_exposure(candidate_vx):
+            material = {
+                "flow_velocity": [{"vx": candidate_vx, "vy": 0.0, "speed": abs(candidate_vx)}],
+                "hotspot_intensity_per_tick_per_area": [1.0],
+            }
+            target = {
+                "flow_velocity": [{"vx": 1.0, "vy": 0.0, "speed": 1.0}],
+                "hotspot_intensity_per_tick_per_area": [2.0],
+            }
+            return {
+                "candidate": material,
+                "target_reactant_a": target,
+                "target_reactant_b": target,
+                "world_tone": {
+                    "source_x": 10.0, "source_y": 20.0,
+                    "frequency_cycles_per_day": 440.0,
+                    "energy_intensity_per_tick_per_width": 1.0,
+                    "orbital_phase": 0.0,
+                },
+                "legacy_pairwise_resonance": {
+                    "background_from_other_materials": "not_measured",
+                },
+                "coverage": {"flow": "tick_zero_only", "hotspot": "tick_zero_only"},
+            }
+
+        gate = _exposure_match_gate(
+            {"local_exposure": local_exposure(0.5)},
+            {"local_exposure": local_exposure(0.8)},
+        )
+        self.assertFalse(gate["passed"])
+        self.assertTrue(any("candidate.flow_velocity" in reason for reason in gate["reasons"]))
+        self.assertTrue(any("background resonance" in reason for reason in gate["reasons"]))
+        self.assertTrue(any("time-resolved" in reason for reason in gate["reasons"]))
 
     def test_rejects_paired_arms_with_different_initial_energy_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
