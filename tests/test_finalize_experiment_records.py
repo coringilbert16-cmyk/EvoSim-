@@ -26,7 +26,7 @@ def sample_record(seed):
                            "profile_movement_enabled": True,
                            "profile_tick_enabled": False,
                            "biology_enabled": False,
-                           "initial_material_inventory": {"Carbon": 1200.0},
+                           "initial_material_inventory": {"Carbon": 1360.0},
                            "initial_physical_material_count": 1280,
                            "initial_independent_resource_count": 1200,
                            "initial_molecule_count": 80,
