@@ -32,6 +32,7 @@ class UpdateExperimentRegistryTests(unittest.TestCase):
             condition,
             "results/setup.json",
             "results/consolidated-report.json",
+            self.root,
         )
 
     def test_updates_registered_row_with_two_result_links(self):
