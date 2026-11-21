@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,37 @@ SETUP_SCHEMA = "evosim.experiment_setup"
 REPORT_SCHEMA = "evosim.consolidated_experiment_report"
 REPORT_VERSION = 1
 PERMANENT_RECORD_SCHEMA = "evosim.permanent_experiment_record"
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_stage_outputs(stage: dict[str, Any], stage_id: str, index_path: Path) -> None:
+    outputs = stage.get("outputs")
+    hashes = stage.get("output_sha256")
+    if not isinstance(outputs, list) or not outputs or not isinstance(hashes, dict):
+        raise ValueError(f"required analysis stage {stage_id} has no checksummed outputs")
+    root = index_path.parent.resolve()
+    for relative in outputs:
+        if not isinstance(relative, str) or not relative:
+            raise ValueError(f"required analysis stage {stage_id} has an invalid output path")
+        output_path = (root / relative).resolve()
+        try:
+            output_path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"required analysis stage {stage_id} output escapes the analysis directory") from exc
+        expected = hashes.get(relative)
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise ValueError(f"required analysis stage {stage_id} output lacks a SHA-256 digest: {relative}")
+        if not output_path.is_file():
+            raise ValueError(f"required analysis stage {stage_id} output is missing: {relative}")
+        if sha256_file(output_path) != expected:
+            raise ValueError(f"required analysis stage {stage_id} output checksum mismatch: {relative}")
 
 
 def load_record(path: Path) -> dict[str, Any]:
@@ -78,11 +110,14 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     if not index.get("quality", {}).get("all_runs_have_validated_manifests", False):
         raise ValueError("one or more run manifests were not validated")
     stages = index.get("stages", [])
-    stage_status = {row.get("stage"): row.get("status") for row in stages if isinstance(row, dict)}
+    stage_rows = {row.get("stage"): row for row in stages if isinstance(row, dict)}
+    stage_status = {stage_id: row.get("status") for stage_id, row in stage_rows.items()}
     required_stages = ("chemistry", "organization", "experiment_batch")
     failed_required = [stage for stage in required_stages if stage_status.get(stage) != "completed"]
     if failed_required:
         raise ValueError("required unified analysis stages did not complete: " + ", ".join(failed_required))
+    for stage_id in required_stages:
+        validate_stage_outputs(stage_rows[stage_id], stage_id, analysis_index_path)
     comparison = compare(paths)
     if len(comparison.get("condition_groups", [])) != 1:
         raise ValueError("cross-seed comparison did not produce exactly one condition group")
@@ -192,7 +227,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "measurement_definitions_complete": True,
             "pipeline_stages": [
                 {"stage": row.get("stage"), "status": row.get("status"),
-                 "analyzer": row.get("analyzer"), "analyzer_sha256": row.get("analyzer_sha256")}
+                 "analyzer": row.get("analyzer"), "analyzer_sha256": row.get("analyzer_sha256"),
+                 "output_sha256": row.get("output_sha256")}
                 for row in stages if isinstance(row, dict)
             ],
             "optional_stage_warnings": [f"{stage}: {status}" for stage, status in stage_status.items() if stage not in required_stages and status not in ("completed", "deferred_heavy", "deferred_deep")],
