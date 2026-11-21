@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +108,11 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         )
     if not isinstance(canonical_configuration["initial_material_inventory"], dict):
         raise ValueError("initial material inventory must be a structured mapping")
+    inventory_values = list(canonical_configuration["initial_material_inventory"].values())
+    if (not inventory_values or any(not isinstance(value, (int, float)) or isinstance(value, bool)
+                                    or not math.isfinite(value) or value < 0
+                                    for value in inventory_values)):
+        raise ValueError("initial material inventory must contain finite nonnegative quantities")
     if not isinstance(canonical_configuration["pile_sizes"], list):
         raise ValueError("environment pile sizes must be recorded as a list")
     if not isinstance(canonical_configuration["world_geometry"], dict):
@@ -127,6 +133,9 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             + canonical_configuration["initial_molecule_count"]
             != canonical_configuration["initial_physical_material_count"]):
         raise ValueError("initial resource and molecule counts do not reconcile to physical inventory")
+    if not math.isclose(sum(inventory_values), canonical_configuration["initial_constituent_count"],
+                        rel_tol=0.0, abs_tol=1e-6):
+        raise ValueError("initial elemental inventory does not reconcile to constituent count")
     if (any(not isinstance(size, int) or isinstance(size, bool) or size <= 0
             for size in canonical_configuration["pile_sizes"])
             or sum(canonical_configuration["pile_sizes"])
@@ -141,6 +150,16 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         value = geometry.get(field)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ValueError(f"world geometry requires a positive integer {field}")
+    flow = canonical_configuration["flow_field"]
+    for field in ("direction_degrees", "speed", "strength", "vortex_strength"):
+        value = flow.get(field)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+            raise ValueError(f"ambient flow configuration requires a finite numeric {field}")
+    for field in ("deep_diagnostics_enabled", "profile_movement_enabled", "profile_tick_enabled"):
+        if not isinstance(canonical_configuration[field], bool):
+            raise ValueError(f"{field} must be recorded as a boolean")
+    if canonical_configuration["biology_enabled"] is not False:
+        raise ValueError("environmental chemistry setup must explicitly record biology as disabled")
     if requested_duration is None or diagnostic_interval is None:
         raise ValueError("requested duration and diagnostic interval are required for reproduction")
     if (not isinstance(requested_duration, int) or isinstance(requested_duration, bool)
