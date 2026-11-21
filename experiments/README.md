@@ -59,7 +59,7 @@ the experiment registry and dedicated result record authoritative.
 
 ## Outputs
 
-Each seed produces a compact permanent record from the reaction/energy, molecular-organization, and summary-only opportunity analyzers. Raw JSONL, manifests, and intermediate reports stay on the runner, are used to build and validate the record, and are deleted locally; they are not uploaded. The compact comparison artifact contains only per-seed records and the comparison report. The repository result record is the permanent archive. Routine runs do not retain detailed network, geometry, contact, or temporal traces. Deep analysis is explicit opt-in and its artifacts expire after one day.
+OBS-001 analyzes each seed on the runner, then consolidates all seed-level measurements into one experiment report. The only permanent experiment deliverables are (1) the setup/conditions record and (2) the validated consolidated scientific report. Per-seed values remain as compact sections within the consolidated report; separate per-seed records, analyzer indexes, and comparison artifacts are not permanent deliverables. Raw JSONL, manifests, specialist outputs, caches, and diagnostics are temporary working data and are deleted only after report validation and publication of both permanent files. Failed validation preserves the temporary inputs. Routine runs do not retain detailed network, geometry, contact, or temporal traces. Deep analysis is explicit opt-in and temporary.
 
 - BREAK, COMBINE, and DISPLACEMENT candidate/commit/rejection totals and
   failure reasons.
@@ -71,7 +71,7 @@ Each seed produces a compact permanent record from the reaction/energy, molecula
 - Time-resolved chemical complexity is an explicitly requested deep analysis, not a routine permanent output.
 - Energy-balance residuals and per-seed validation.
 
-Raw source data and intermediate analyzer files are deleted from the runner after record generation; they are never uploaded in routine runs. Compact record transport artifacts are retained for 90 days; permanent records belong in `experiments/records/results/`. Deep diagnostic artifacts are opt-in and expire after one day. Routine Rust CI remains separate and keeps its short 60-second
+Raw source data and intermediate analyzer files are deleted from the runner only after the consolidated report is validated and both permanent files are published. No long-lived compact-record transport artifact is retained. Any unavoidable cross-job transfer is short-lived and removed after consolidation. Deep diagnostic data is opt-in and temporary; it is not a default permanent record. Routine Rust CI remains separate and keeps its short 60-second
 seed-42 chemistry smoke baseline and focused correctness/feasibility tests.
 
 ## Time-resolved complexity analysis (deep diagnostics only)

@@ -1,71 +1,92 @@
-# OBS-001 — Compact permanent experiment record contract
+# OBS-001 — Two-file permanent experiment record contract
 
-**Status:** Proposed implementation contract for routine environmental chemistry runs.  
-**Schema:** `evosim.permanent_experiment_record`, version 1.  
-**Retention principle:** preserve validated scientific results and provenance; treat raw diagnostics and intermediate analyzer products as temporary working data.
+**Status:** Governing retention contract for future EvoSim experiments.  
+**Schemas:** setup `evosim.experiment_setup` version 1; consolidated report `evosim.consolidated_experiment_report` version 1.  
+**Retention principle:** permanently preserve only the reproducibility setup and the validated consolidated scientific report.
 
 ## Purpose
 
-A completed experiment must remain comparable after its raw JSONL and large intermediate files expire. The permanent record is the durable scientific result. It is not a copy of the simulation trace.
+A completed experiment must be reproducible and scientifically reviewable after all raw simulation output and intermediate analysis files have been discarded. This two-file contract supersedes the earlier per-seed `evosim.permanent_experiment_record` version 1 model. The durable record consists of exactly two experiment-specific files:
 
-A record is emitted per independent seed plus one compact experiment-level comparison record. Records are small JSON documents suitable for committing alongside the experiment result note in `experiments/records/results/`. Routine CI artifacts are transport, not the permanent archive.
+1. **Setup record** — every condition and parameter needed to recreate the run.
+2. **Consolidated report** — the validated scientific result, including seed-level measurements and cross-seed summaries.
 
-## Required top-level fields
+Do not create separate permanent per-seed records, comparison records, analyzer indexes, or result-note files. Historical records are not rewritten by this policy.
 
-- `schema`, `schema_version`: exact schema identifier and integer version.
-- `record_status`: `complete`, `partial`, or `invalid`.
-- `identity`: experiment ID, research-plan ID, condition ID, seed, and independent replicate count where applicable. Unknown values remain null.
-- `provenance`: source commit, workflow run ID/URL when available, simulator version, analyzer versions, manifest schema/version, configuration SHA-256, source diagnostic SHA-256, and source byte count. Raw source paths are references only and do not imply permanent retention.
-- `conditions`: requested and actual wall-clock duration, start/end tick and tick count, seed, canonical configuration digest, initial inventory counts, initial constituent count, active resources, and relevant environment/field settings available from the manifest.
-- `inventory`: initial/final counts by resource and material category, total initial/final physical materials and constituents, and explicit missingness.
-- `reactions`: per reaction type (BREAK, COMBINE, DISPLACEMENT), candidate/ready, scheduled, committed, rejected, failure-reason counts, and discovery-work/budget counts where available. Include event counts and committed reaction counts. Do not store full event arrays.
-- `opportunity_coverage`: per reaction type, denominator/domain, visited and skipped counts, coverage state, completeness, and whether a rate is valid. Preserve unknown/null separately from measured zero.
-- `settlement`: compact per-reaction totals for usable-energy delta, resonance withdrawn, structural-energy delta, physical disruption/work, and heat dissipated; count of settled and unsettled events; residual summaries (count, min, max, mean, max absolute). Never substitute zero for unavailable or unsettled values.
-- `molecular_development`: molecule creations/destructions, active molecules at end, lineage edge count, lineage validation status, mean observed lifetime when defined, compound count, unique/recurrent structural-family counts, family transitions summarized by reaction and family pair, and elemental material incorporation totals. Do not retain per-molecule lifecycle snapshots or full lineage edge lists.
-- `organization`: compact aggregate measures needed for cross-seed comparisons, including structural family counts, composition/topology summary statistics, and time-window novelty/complexity summaries where available. Do not retain all per-window event details.
-- `quality`: validation errors, warnings, missing fields, partial/unknown coverage, analyzer failures, and explicit interpretation limitations.
-- `evidence`: references to exceptional retained evidence by artifact ID/path, reason for retention, expiry/review date, and checksum. Empty by default.
+## Permanent file contract
 
-## Comparison rules
+### 1. Experiment setup
 
-1. Seeds are independent replicates; events within a seed are not independent samples.
-2. Compare conditions only when the permanent-record schema, simulator source commit, active-resource set, requested wall-clock duration interpretation, diagnostic interval, manifest schema, chemistry/organization analyzer fingerprints, and enabled diagnostic tiers are compatible. Opportunity-coverage schema is also part of the compatibility key when present. The seed-independent configuration fingerprint distinguishes conditions and must be present. Missing required measurement-definition or condition-identity metadata fails closed and prevents between-condition comparisons. Configuration fingerprints distinguish conditions; they do not by themselves make two intentionally different conditions incomparable.
-3. Keep per-seed values alongside aggregate descriptive statistics. Never replace seed-level values with pooled event counts alone.
+One file per experiment/condition, containing:
+
+- stable experiment ID, research-plan ID, condition ID, and status;
+- exact EvoSim source commit and repository revision;
+- workflow/run identity and execution date;
+- all independent seed IDs and replicate structure;
+- requested and actual wall-clock duration, diagnostic interval, and relevant runtime settings;
+- exact simulator command-line arguments and enabled/disabled features;
+- canonical configuration and its digest;
+- initial inventory counts, constituent counts, active resources, and molecule catalog where applicable;
+- environmental and field parameters, including energy sources and boundary conditions;
+- hardware/runtime details only where they materially affect reproducibility;
+- known deviations, unavailable historical fields, and setup validation status.
+
+The setup must be sufficient to recreate the experiment without relying on a raw diagnostic artifact or a prior conversation. Never invent missing historical values.
+
+### 2. Consolidated scientific report
+
+One file per experiment/condition, containing:
+
+- experiment identity and a reference to the matching setup file;
+- analyzer/tool versions and report-generation source commit;
+- input validation and provenance-check results;
+- per-seed measurements retained as compact rows/sections in this report;
+- cross-seed descriptive statistics and variation;
+- inventory/material balance, reaction identities and outcomes, energy settlements, molecular organization, and opportunity coverage where supported;
+- denominator definitions and coverage completeness for every rate;
+- missing, partial, sampled, unknown, and measured-zero distinctions;
+- discrepancies against specialist analyzers and their resolution;
+- observations, derived metrics, interpretations, hypotheses, and limitations clearly separated;
+- final validation status and explicit exclusions.
+
+The consolidated report is the sole durable scientific result. It must remain useful after every raw and intermediate file has been deleted. It must not claim completeness when a required analyzer or input is unavailable.
+
+## Analysis and validation rules
+
+1. OBS-001 performs analysis and consolidation inside the repository workflow; routine review must not require manually retrieving raw files.
+2. Validate manifests, source checksums, configuration digests, seed coverage, required analyzer outputs, and report consistency before finalizing.
+3. Retain seed-level values inside the consolidated report; seeds are independent replicates and events within a seed are not independent samples.
 4. Compute rates only when numerator and denominator are present, complete, and semantically compatible.
-5. Treat null as unknown/unavailable, zero as measured zero, and partial coverage as partial. Never infer missing data.
-6. Record any excluded seed and the exact incompatibility reason.
-7. The experiment-level record contains compact per-seed references and descriptive aggregates; it does not duplicate detailed per-seed payloads.
-8. Between-condition differences are descriptive only; retain per-seed values and do not infer causality or statistical significance from event counts.
-9. The same seed ID may appear in multiple conditions for a paired design; duplicate seed records within one condition are invalid. Report paired per-seed differences when matching seed IDs are available.
+5. Preserve null/unknown separately from measured zero and partial coverage.
+6. Compare conditions only when measurement definitions and required provenance are compatible; record exclusions and reasons.
+7. Validate the consolidated report against specialist analyzer outputs before cleanup.
+8. If validation fails or is incomplete, preserve temporary inputs for retry/investigation and do not publish a completed report.
+9. After successful validation and durable publication of both permanent files, delete all temporary raw and intermediate data.
+10. Do not rerun a simulation merely to repair report assembly; reuse retained inputs when they are still available.
 
 ## Retention classes
 
-| Class | Contents | Default retention |
+| Class | Contents | Retention |
 |---|---|---|
-| Permanent | Per-seed compact record, experiment comparison record, short human-readable result note, checksums/provenance | Repository experiment records; retained with project history |
-| Routine working data | Raw JSONL, manifests, per-seed specialist reports, normalized inputs, intermediate analysis files | Runner-local only; delete after compact-record validation; never upload in routine runs |
-| Deep temporary | Exhaustive contact opportunities, detailed local-resonance samples, expanded geometry/time traces | Explicit opt-in only; 1 day by default; no upload unless explicitly requested |
-| Reference evidence | A deliberately selected baseline or exceptional diagnostic evidence required to reproduce/resolve a scientific finding | Explicitly allowlisted; reviewed individually, not retained by default |
+| Permanent | One setup file and one consolidated report per experiment/condition | Repository history |
+| Temporary working data | Raw JSONL, manifests, per-seed specialist outputs, normalized inputs, caches, analyzer indexes, temporary JSON, logs, and diagnostics | Runner-local only; delete after validated publication |
+| Exceptional evidence | Raw evidence retained only when explicitly approved for a specific scientific reason | Not part of the default policy; requires explicit approval and documented expiry |
 
-Artifact expiration is not a substitute for cleanup: workflow jobs must remove runner-local source and intermediate files after compact-record generation. Deep artifacts are uploaded only by explicit request and expire automatically after one day. Routine runs do not upload raw source data.
-
-## Routine versus deep collection
-
-Routine collection must retain enough source measurements to produce the fields above, but must not emit exhaustive per-tick local-resonance samples, full inventory snapshots at a high fixed frequency, full lifecycle graph copies beyond what is required by the analyzer, or detailed contact-opportunity CSVs.
-
-Deep diagnostics are explicit opt-in. They may increase sampling/detail and retain selected raw evidence temporarily. A deep run must state its scientific question and retention reason. The default is off.
+Routine workflow runs must not upload raw inputs, manifests, intermediate analyzer outputs, per-seed record artifacts, or 90-day transport bundles. If temporary transfer between jobs is unavoidable, use a short-lived artifact and delete it after consolidation; it is not a permanent experiment deliverable.
 
 ## Acceptance criteria
 
-- A schema validator rejects malformed records and preserves null/zero/partial distinctions.
-- The builder derives records from existing specialist analyzer outputs without inventing values.
-- A comparison command accepts compact records only; it does not require JSONL, manifests, or specialist intermediate reports after the compact record has been validated.
-- Comparison tests cover compatible records, differing conditions, missing fields, partial opportunity coverage, and multiple independent seeds.
-- Routine workflow uploads only compact records and concise reports as its durable artifact; raw JSONL and intermediate files are temporary and expire automatically.
-- Detailed contact output and deep diagnostics are opt-in and temporary.
-- The permanent record remains sufficient to compare new runs after temporary artifacts have expired.
+- The permanent output is exactly two experiment-specific files: setup and consolidated report.
+- No separate per-seed permanent records, analyzer indexes, or comparison artifacts are committed or retained.
+- The setup file is sufficient to reconstruct the experiment conditions and execution.
+- The consolidated report contains compact per-seed and cross-seed findings and remains useful without raw data.
+- A validator rejects malformed/incomplete reports and preserves null/zero/partial distinctions.
+- Specialist-output discrepancies are surfaced and resolved or explicitly left unresolved.
+- Cleanup cannot run before successful validation and durable publication.
+- Failed analysis preserves temporary inputs and cannot be marked complete.
+- Future workflow runs do not upload raw or intermediate data as durable artifacts.
 - No simulator, chemistry, physics, reaction discovery, scheduling, or energy-settlement behavior changes.
 
 ## Versioning
 
-Changes that alter field meaning or comparison semantics require a schema-version increment and migration/compatibility policy. Additive optional fields may remain within version 1 when their missingness semantics are explicit.
+Version 2 replaces the earlier per-seed-record retention model. The schema version must increment again if field meaning or comparison semantics change. Historical v1 records remain historical and are not silently migrated or deleted.

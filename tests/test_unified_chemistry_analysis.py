@@ -69,6 +69,7 @@ class UnifiedChemistryAnalysisTests(unittest.TestCase):
 
             self.assertEqual(index["runs"][0]["manifest_status"], "legacy_manifest_missing")
             self.assertIn("contact_opportunities", index["quality"]["deferred_stages"])
+            self.assertIn("reaction_network", index["quality"]["deferred_stages"])
             self.assertTrue((output / "unified-analysis-index.json").is_file())
             self.assertTrue((output / "unified-chemistry-report.md").is_file())
             self.assertTrue((output / "normalized-input/seed-42.jsonl").is_symlink())
