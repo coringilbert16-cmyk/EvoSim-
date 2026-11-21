@@ -57,6 +57,8 @@ def measurement_compatibility_warnings(record: dict[str, Any]) -> list[str]:
                   "organization_analyzer_sha256"):
         if provenance.get(field) is None:
             missing.append(field)
+    if not isinstance(provenance.get("enabled_diagnostic_tiers"), list):
+        missing.append("enabled diagnostic tiers")
     return missing
 
 
