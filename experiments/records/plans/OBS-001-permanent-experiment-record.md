@@ -1,12 +1,12 @@
 # OBS-001 — Two-file permanent experiment record contract
 
 **Status:** Governing retention contract for future EvoSim experiments.  
-**Schema:** `evosim.permanent_experiment_record`, version 2.  
+**Schemas:** setup `evosim.experiment_setup` version 1; consolidated report `evosim.consolidated_experiment_report` version 1.  
 **Retention principle:** permanently preserve only the reproducibility setup and the validated consolidated scientific report.
 
 ## Purpose
 
-A completed experiment must be reproducible and scientifically reviewable after all raw simulation output and intermediate analysis files have been discarded. The durable record consists of exactly two experiment-specific files:
+A completed experiment must be reproducible and scientifically reviewable after all raw simulation output and intermediate analysis files have been discarded. This two-file contract supersedes the earlier per-seed `evosim.permanent_experiment_record` version 1 model. The durable record consists of exactly two experiment-specific files:
 
 1. **Setup record** — every condition and parameter needed to recreate the run.
 2. **Consolidated report** — the validated scientific result, including seed-level measurements and cross-seed summaries.
