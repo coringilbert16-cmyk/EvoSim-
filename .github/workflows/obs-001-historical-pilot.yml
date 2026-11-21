@@ -10,11 +10,6 @@ on:
         options:
           - EXP-2026-004
           - EXP-2026-006
-      deep_analysis:
-        description: "Opt in to reaction-network, geometry-network, and temporal analysis."
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -116,15 +111,11 @@ jobs:
           RESEARCH_PLAN: ${{ needs.prepare.outputs.research_plan }}
           SEEDS: ${{ needs.prepare.outputs.seeds }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
-          DEEP_ANALYSIS: ${{ inputs.deep_analysis }}
         run: |
           set -euo pipefail
           ARGS=()
           if [[ -n "$RESEARCH_PLAN" ]]; then
             ARGS+=(--research-plan "$RESEARCH_PLAN")
-          fi
-          if [[ "$DEEP_ANALYSIS" == "true" ]]; then
-            ARGS+=(--deep-analysis)
           fi
           python3 tools/unified_chemistry_analysis.py observations \
             --seeds "$SEEDS" \
