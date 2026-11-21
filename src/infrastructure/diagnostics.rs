@@ -669,6 +669,8 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "profile_tick_enabled": std::env::var("EVOSIM_PROFILE_TICK").unwrap_or_default().eq_ignore_ascii_case("true"),
             "rustc_version": std::env::var("EVOSIM_RUSTC_VERSION").ok(),
             "cargo_version": std::env::var("EVOSIM_CARGO_VERSION").ok(),
+            "runner_os": std::env::var("RUNNER_OS").ok(),
+            "runner_arch": std::env::var("RUNNER_ARCH").ok(),
             "world_geometry": {
                 "width": simulation.environment.field.width_cells as f64 * simulation.environment.field.cell_size,
                 "height": simulation.environment.field.height_cells as f64 * simulation.environment.field.cell_size,
