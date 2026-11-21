@@ -134,6 +134,10 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             self.assertEqual(len(report["analysis"]["per_seed_results"]), 2)
             self.assertIn("unified_orchestrator", report["analysis"]["analyzer_fingerprints"])
             self.assertEqual(len(report["conclusions"]), 2)
+            self.assertTrue(any(
+                "not automatically normalized" in item
+                for item in report["analysis"]["limitations"]
+            ))
 
 
     def test_rejects_incomplete_required_pipeline_stage(self):
