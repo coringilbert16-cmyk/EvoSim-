@@ -167,7 +167,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         for seed, digest in ((42, "a" * 64), (43, "a" * 64), (42, "c" * 64), (43, "c" * 64)):
             chemistry, organization, manifest = self.seed_inputs(seed, digest)
             record = build_record(seed, chemistry, organization, manifest)
-            path = self.root / f"record-{seed}.json"
+            path = self.root / f"record-{len(records)}-{seed}.json"
             path.write_text(json.dumps(record), encoding="utf-8")
             # Comparison must remain possible after all source and intermediate files expire.
             for source in (chemistry, organization, manifest, self.root / f"seed-{seed}.jsonl"):
