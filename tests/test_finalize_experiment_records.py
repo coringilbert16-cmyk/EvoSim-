@@ -37,10 +37,17 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             comparison = {"condition_groups": [{"summary": {"independent_seed_count": 2}}],
                           "measurement_definition_missing_records": []}
             index_path = root / "index.json"
-            index_path.write_text(json.dumps({"schema": "evosim.unified_chemistry_analysis", "stages": [
-                {"stage": "chemistry", "status": "completed"},
-                {"stage": "organization", "status": "completed"},
-                {"stage": "experiment_batch", "status": "completed"}]}), encoding="utf-8")
+            index_path.write_text(json.dumps({
+                "schema": "evosim.unified_chemistry_analysis",
+                "experiment_id": "EXP-2026-099",
+                "research_plan": "OBS-001",
+                "condition_id": "baseline",
+                "runs": [{"seed": 42}, {"seed": 43}],
+                "quality": {"all_runs_have_validated_manifests": True},
+                "stages": [
+                    {"stage": "chemistry", "status": "completed"},
+                    {"stage": "organization", "status": "completed"},
+                    {"stage": "experiment_batch", "status": "completed"}]}), encoding="utf-8")
             with patch.object(finalizer, "compare", return_value=comparison):
                 setup, report = finalizer.finalize(paths, [42, 43], index_path)
             self.assertEqual(setup["seeds"], [42, 43])
