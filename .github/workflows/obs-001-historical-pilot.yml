@@ -38,6 +38,10 @@ jobs:
           EXPERIMENT_ID: ${{ inputs.experiment_id }}
         run: |
           set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Historical pilot workflow must run from main." >&2
+            exit 1
+          }
           case "$EXPERIMENT_ID" in
             EXP-2026-004)
               SOURCE_RUN_ID=44582565701
