@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -144,7 +145,7 @@ def run_group_stage(stage_id: str, script_name: str, workspace: Path, seeds: lis
     status = "completed" if result.returncode == 0 else "failed"
     outputs = [str(path) for path in output_files if path.is_file()]
     if output_dir.is_dir():
-        outputs.extend(str(path) for path in sorted(output_dir.rglob("*")) if path.is_file())
+        outputs.extend(str(path) for path in sorted(output_dir.rglob("*")) if path.is_file() and not path.is_symlink())
     row: dict[str, Any] = {
         "stage": stage_id, "status": status, "analyzer": str(script.relative_to(ROOT)),
         "analyzer_sha256": sha256_file(script), "outputs": outputs,
@@ -291,9 +292,20 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
         portable_outputs = []
         output_hashes = {}
         for value in stage.get("outputs", []):
-            path = Path(value).resolve()
+            path = Path(value)
+            # Input observations are linked into the workspace for analyzers.
+            # Never follow those links when indexing outputs: their targets may
+            # live outside output_dir and are source data, not derived artifacts.
+            if path.is_symlink():
+                continue
+            path = Path(os.path.abspath(path))
             if path.is_file():
-                relative = str(path.relative_to(output_dir.resolve()))
+                try:
+                    relative = str(path.relative_to(output_dir))
+                except ValueError as exc:
+                    raise ValueError(
+                        f"analysis output is outside output directory: {path}"
+                    ) from exc
                 portable_outputs.append(relative)
                 output_hashes[relative] = sha256_file(path)
         stage["outputs"] = portable_outputs
