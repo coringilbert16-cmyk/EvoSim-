@@ -223,10 +223,15 @@ jobs:
         env:
           SEEDS_JSON: ${{ needs.prepare.outputs.seeds }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+          DEEP_DIAGNOSTICS: ${{ needs.prepare.outputs.deep_diagnostics }}
         run: |
           set -euo pipefail
           SEEDS=$(python3 -c 'import json,os; print(",".join(map(str,json.loads(os.environ["SEEDS_JSON"]))))')
-          python3 tools/unified_chemistry_analysis.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir work/unified
+          EXTRA_ARGS=()
+          if [[ "$DEEP_DIAGNOSTICS" == "true" ]]; then
+            EXTRA_ARGS+=(--deep-analysis)
+          fi
+          python3 tools/unified_chemistry_analysis.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir work/unified "${EXTRA_ARGS[@]}"
           python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir work/coverage --summary-only
           mkdir -p work/temporary-seed-records
           for SEED in ${SEEDS//,/ }; do
