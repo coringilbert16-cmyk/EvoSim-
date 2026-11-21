@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 
@@ -22,6 +23,10 @@ def update_registry(
     if not (root / setup_file).is_file() or not (root / report_file).is_file():
         raise ValueError("both published result files must exist before registry update")
 
+    registry_absolute = registry_path if registry_path.is_absolute() else root / registry_path
+    registry_parent = registry_absolute.resolve().parent
+    setup_link_path = Path(os.path.relpath((root / setup_file).resolve(), registry_parent)).as_posix()
+    report_link_path = Path(os.path.relpath((root / report_file).resolve(), registry_parent)).as_posix()
     lines = registry_path.read_text(encoding="utf-8").splitlines()
     matches: list[tuple[int, list[str]]] = []
     for index, line in enumerate(lines):
@@ -39,8 +44,8 @@ def update_registry(
     if len(columns) != 5:
         raise ValueError(f"unexpected registry schema for {experiment_id}; expected five columns")
 
-    setup_link = f"[{condition_id} setup]({setup_file.as_posix()})"
-    report_link = f"[{condition_id} report]({report_file.as_posix()})"
+    setup_link = f"[{condition_id} setup]({setup_link_path})"
+    report_link = f"[{condition_id} report]({report_link_path})"
     links = f"{setup_link} · {report_link}"
     if links not in columns[4]:
         columns[4] = f"{columns[4]}; {links}" if columns[4] else links
