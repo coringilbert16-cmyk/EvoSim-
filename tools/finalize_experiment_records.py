@@ -51,6 +51,8 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
     identity = first["identity"]
     provenance = first["provenance"]
     conditions = first["conditions"]
+    canonical_configuration = dict(conditions.get("configuration") or {})
+    canonical_configuration.pop("seed", None)
     for row in records[1:]:
         other = row["identity"]
         if (other.get("experiment_id"), other.get("research_plan"), other.get("condition_id")) != (
@@ -59,7 +61,9 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
             raise ValueError("records contain multiple experiment/plan/condition identities")
         if measurement_compatibility_key(row) != measurement_compatibility_key(first):
             raise ValueError("records have incompatible measurement definitions")
-        if row.get("conditions", {}).get("configuration") != conditions.get("configuration"):
+        other_configuration = dict(row.get("conditions", {}).get("configuration") or {})
+        other_configuration.pop("seed", None)
+        if other_configuration != canonical_configuration:
             raise ValueError("records have different experiment configurations")
     comparison = compare(paths)
     if len(comparison.get("condition_groups", [])) != 1:
@@ -81,8 +85,8 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
             "workflow_run_id": provenance.get("workflow_run_id"),
             "workflow_run_url": provenance.get("workflow_run_url"),
         },
-        "configuration": conditions.get("configuration"),
-        "configuration_sha256": provenance.get("configuration_sha256"),
+        "configuration": canonical_configuration,
+        "configuration_sha256": provenance.get("comparison_configuration_sha256"),
         "comparison_configuration_sha256": provenance.get("comparison_configuration_sha256"),
         "seeds": sorted(seeds),
         "replicate_count": len(seeds),
@@ -99,6 +103,7 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
                 "end_tick": row["conditions"].get("end_tick"),
                 "tick_count": row["conditions"].get("tick_count"),
                 "diagnostic_interval": row["conditions"].get("diagnostic_interval"),
+                "configuration_sha256": row["provenance"].get("configuration_sha256"),
             }
             for row in records
         ],
