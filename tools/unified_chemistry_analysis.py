@@ -292,7 +292,7 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
         "quality": {
             "all_runs_have_validated_manifests": all(row["manifest_status"] == "manifest_validated" for row in runs),
             "failed_stages": [row["stage"] for row in stages if row["status"] == "failed"],
-            "deferred_stages": [row["stage"] for row in stages if row["status"] == "deferred_heavy"],
+            "deferred_stages": [row["stage"] for row in stages if row["status"] in ("deferred_heavy", "deferred_deep")],
             "warnings": ["Historical runs without manifests are checksum-verified but lack full run provenance."]
             if any(row["manifest_status"] != "manifest_validated" for row in runs) else [],
         },
