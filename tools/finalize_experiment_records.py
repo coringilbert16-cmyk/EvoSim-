@@ -68,6 +68,15 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     index = json.loads(analysis_index_path.read_text(encoding="utf-8"))
     if not isinstance(index, dict) or index.get("schema") != "evosim.unified_chemistry_analysis":
         raise ValueError("missing or invalid unified analysis index")
+    if (index.get("experiment_id"), index.get("research_plan"), index.get("condition_id")) != (
+        identity.get("experiment_id"), identity.get("research_plan"), identity.get("condition_id")
+    ):
+        raise ValueError("unified analysis index identity does not match the seed records")
+    index_seeds = [row.get("seed") for row in index.get("runs", []) if isinstance(row, dict)]
+    if len(index_seeds) != len(set(index_seeds)) or set(index_seeds) != set(expected_seeds):
+        raise ValueError("unified analysis index seed coverage does not match the requested seeds")
+    if not index.get("quality", {}).get("all_runs_have_validated_manifests", False):
+        raise ValueError("one or more run manifests were not validated")
     stages = index.get("stages", [])
     stage_status = {row.get("stage"): row.get("status") for row in stages if isinstance(row, dict)}
     required_stages = ("chemistry", "organization", "experiment_batch")
