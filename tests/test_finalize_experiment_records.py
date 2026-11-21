@@ -19,7 +19,8 @@ def sample_record(seed):
                        "workflow_run_id": "123", "workflow_run_url": "https://example.test/run/123",
                        "configuration_sha256": "cfg", "comparison_configuration_sha256": "cmp",
                        "manifest_schema_version": 1, "chemistry_analyzer_sha256": "chem",
-                       "organization_analyzer_sha256": "org", "enabled_diagnostic_tiers": []},
+                       "organization_analyzer_sha256": "org", "enabled_diagnostic_tiers": [],
+                       "raw_diagnostics_sha256": hashlib.sha256(f"seed-{seed}".encode()).hexdigest()},
         "conditions": {"configuration": {
                            "duration": 60,
                            "deep_diagnostics_enabled": True,
@@ -42,6 +43,14 @@ def sample_record(seed):
                        "requested_duration_seconds": 60,
                        "actual_elapsed_wall_seconds": 61.0, "start_tick": 0, "end_tick": 600,
                        "tick_count": 600, "diagnostic_interval": 100, "active_resources": ["C", "H"]},
+    }
+
+
+def sample_index_run(seed):
+    return {
+        "seed": seed,
+        "raw_sha256": sample_record(seed)["provenance"]["raw_diagnostics_sha256"],
+        "manifest_status": "manifest_validated",
     }
 
 
@@ -70,7 +79,7 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 "experiment_id": "EXP-2026-099",
                 "research_plan": "OBS-001",
                 "condition_id": "baseline",
-                "runs": [{"seed": 42}, {"seed": 43}],
+                "runs": [sample_index_run(42), sample_index_run(43)],
                 "quality": {"all_runs_have_validated_manifests": True},
                 "stages": [
                     sample_stage(root, "chemistry"),
