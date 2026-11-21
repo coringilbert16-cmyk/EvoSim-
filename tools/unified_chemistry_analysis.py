@@ -349,7 +349,7 @@ def main() -> int:
         parser.error("duration-seconds must be positive")
     try:
         index = analyze(args.input_dir, seeds, args.duration_seconds, args.output_dir,
-                        args.include_heavy_contact)
+                        args.include_heavy_contact, args.deep_analysis)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"unified analysis failed: {exc}", file=sys.stderr)
         return 2
