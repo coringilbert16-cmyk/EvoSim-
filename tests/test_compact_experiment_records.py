@@ -118,6 +118,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
                 "role": "raw_observation", "path": raw_path.name,
                 "sha256": hashlib.sha256(raw_bytes).hexdigest(), "size_bytes": len(raw_bytes),
             }],
+            "diagnostics": {"enabled_tiers": ["core", "standard"]},
             "quality": {"warnings": []},
         }
         return (
