@@ -40,6 +40,7 @@ def measurement_compatibility_key(record: dict[str, Any]) -> tuple[Any, ...]:
         provenance.get("simulator_version"),
         provenance.get("chemistry_analyzer_sha256"),
         provenance.get("organization_analyzer_sha256"),
+        provenance.get("comparison_configuration_sha256"),
         tuple(sorted(tiers)) if isinstance(tiers, list) else None,
         coverage.get("source_schema_version"),
     )
