@@ -56,6 +56,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_experiment_manifest.py'
           python3 -m unittest discover -s tests -p 'test_unified_chemistry_analysis.py'
           python3 -m unittest discover -s tests -p 'test_compact_experiment_records.py'
+          python3 -m unittest discover -s tests -p 'test_finalize_experiment_records.py'
       - name: Run Rust tests
         if: success()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
