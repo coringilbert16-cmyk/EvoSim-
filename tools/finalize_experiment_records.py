@@ -88,60 +88,76 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     diagnostic_interval = conditions.get("diagnostic_interval")
     if not provenance.get("workflow_run_id") or not provenance.get("workflow_run_url"):
         raise ValueError("validated experiment records must identify their source workflow run")
-    canonical_configuration = dict(conditions.get("configuration") or {})
-    canonical_configuration.pop("seed", None)
-    required_configuration_fields = (
-        "initial_material_inventory", "initial_physical_material_count",
-        "initial_independent_resource_count", "initial_molecule_count",
-        "initial_constituent_count", "pile_sizes", "hotspot", "world_geometry",
-        "flow_field", "deep_diagnostics_enabled", "profile_movement_enabled",
-        "profile_tick_enabled", "biology_enabled",
-    )
-    missing_configuration = [
-        field for field in required_configuration_fields
-        if canonical_configuration.get(field) is None
-    ]
-    if missing_configuration:
-        raise ValueError(
-            "reproducibility setup is missing required environment/configuration fields: "
-            + ", ".join(missing_configuration)
-        )
-    if not isinstance(canonical_configuration["initial_material_inventory"], dict):
-        raise ValueError("initial material inventory must be a structured mapping")
-    inventory_values = list(canonical_configuration["initial_material_inventory"].values())
-    if (not inventory_values or any(not isinstance(value, (int, float)) or isinstance(value, bool)
-                                    or not math.isfinite(value) or value < 0
-                                    for value in inventory_values)):
-        raise ValueError("initial material inventory must contain finite nonnegative quantities")
-    if not isinstance(canonical_configuration["pile_sizes"], list):
-        raise ValueError("environment pile sizes must be recorded as a list")
-    if not isinstance(canonical_configuration["world_geometry"], dict):
-        raise ValueError("world geometry must be recorded as a structured mapping")
-    if not isinstance(canonical_configuration["flow_field"], dict):
-        raise ValueError("ambient flow configuration must be recorded as a structured mapping")
-    if not isinstance(canonical_configuration["hotspot"], dict):
-        raise ValueError("hotspot parameters must be recorded as a structured mapping")
-    count_fields = (
+    seed_configurations: dict[int, dict[str, Any]] = {}
+    for row in records:
+        seed = row["identity"]["seed"]
+        config = dict(row.get("conditions", {}).get("configuration") or {})
+        config.pop("seed", None)
+        seed_configurations[seed] = config
+    canonical_configuration = dict(seed_configurations[identity["seed"]])
+    canonical_configuration.pop("pile_sizes", None)
+    canonical_configuration.pop("initial_material_inventory", None)
+
+    common_required_fields = (
         "initial_physical_material_count", "initial_independent_resource_count",
-        "initial_molecule_count", "initial_constituent_count",
+        "initial_molecule_count", "initial_constituent_count", "hotspot",
+        "world_geometry", "flow_field", "deep_diagnostics_enabled",
+        "profile_movement_enabled", "profile_tick_enabled", "biology_enabled",
     )
-    if any(not isinstance(canonical_configuration[field], int)
-           or isinstance(canonical_configuration[field], bool)
-           or canonical_configuration[field] < 0 for field in count_fields):
-        raise ValueError("initial inventory counts must be nonnegative integers")
-    if (canonical_configuration["initial_independent_resource_count"]
-            + canonical_configuration["initial_molecule_count"]
-            != canonical_configuration["initial_physical_material_count"]):
-        raise ValueError("initial resource and molecule counts do not reconcile to physical inventory")
-    if not math.isclose(sum(inventory_values), canonical_configuration["initial_constituent_count"],
-                        rel_tol=0.0, abs_tol=1e-6):
-        raise ValueError("initial elemental inventory does not reconcile to constituent count")
-    if (any(not isinstance(size, int) or isinstance(size, bool) or size <= 0
-            for size in canonical_configuration["pile_sizes"])
-            or sum(canonical_configuration["pile_sizes"])
-            != canonical_configuration["initial_physical_material_count"]):
-        raise ValueError("initial pile sizes do not reconcile to physical inventory")
+    for row in records:
+        seed = row["identity"]["seed"]
+        config = seed_configurations[seed]
+        required_fields = common_required_fields + ("initial_material_inventory", "pile_sizes")
+        missing_configuration = [field for field in required_fields if config.get(field) is None]
+        if missing_configuration:
+            raise ValueError(
+                f"seed {seed} reproducibility setup is missing required fields: "
+                + ", ".join(missing_configuration)
+            )
+        common_config = dict(config)
+        common_config.pop("pile_sizes", None)
+        common_config.pop("initial_material_inventory", None)
+        if common_config != canonical_configuration:
+            raise ValueError("records have different shared experiment configurations")
+
+        comparison_digest = hashlib.sha256(
+            json.dumps(common_config, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        if row["provenance"].get("comparison_configuration_sha256") != comparison_digest:
+            raise ValueError(f"seed {seed} shared configuration digest does not match its manifest")
+
+        inventory = config["initial_material_inventory"]
+        if not isinstance(inventory, dict):
+            raise ValueError(f"seed {seed} initial material inventory must be a structured mapping")
+        inventory_values = list(inventory.values())
+        if (not inventory_values or any(not isinstance(value, (int, float)) or isinstance(value, bool)
+                                        or not math.isfinite(value) or value < 0
+                                        for value in inventory_values)):
+            raise ValueError(f"seed {seed} initial material inventory must contain finite nonnegative quantities")
+        if not isinstance(config["pile_sizes"], list):
+            raise ValueError(f"seed {seed} pile sizes must be recorded as a list")
+
+        count_fields = (
+            "initial_physical_material_count", "initial_independent_resource_count",
+            "initial_molecule_count", "initial_constituent_count",
+        )
+        if any(not isinstance(config[field], int) or isinstance(config[field], bool)
+               or config[field] < 0 for field in count_fields):
+            raise ValueError(f"seed {seed} initial inventory counts must be nonnegative integers")
+        if (config["initial_independent_resource_count"] + config["initial_molecule_count"]
+                != config["initial_physical_material_count"]):
+            raise ValueError(f"seed {seed} resource and molecule counts do not reconcile to physical inventory")
+        if not math.isclose(sum(inventory_values), config["initial_constituent_count"],
+                            rel_tol=0.0, abs_tol=1e-6):
+            raise ValueError(f"seed {seed} elemental inventory does not reconcile to constituent count")
+        if (any(not isinstance(size, int) or isinstance(size, bool) or size <= 0
+                for size in config["pile_sizes"])
+                or sum(config["pile_sizes"]) != config["initial_physical_material_count"]):
+            raise ValueError(f"seed {seed} pile sizes do not reconcile to physical inventory")
+
     geometry = canonical_configuration["world_geometry"]
+    if not isinstance(geometry, dict):
+        raise ValueError("world geometry must be recorded as a structured mapping")
     for field in ("width", "height", "cell_size"):
         value = geometry.get(field)
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
@@ -151,10 +167,14 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ValueError(f"world geometry requires a positive integer {field}")
     flow = canonical_configuration["flow_field"]
+    if not isinstance(flow, dict):
+        raise ValueError("ambient flow configuration must be recorded as a structured mapping")
     for field in ("direction_degrees", "speed", "strength", "vortex_strength"):
         value = flow.get(field)
         if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
             raise ValueError(f"ambient flow configuration requires a finite numeric {field}")
+    if not isinstance(canonical_configuration["hotspot"], dict):
+        raise ValueError("hotspot parameters must be recorded as a structured mapping")
     for field in ("deep_diagnostics_enabled", "profile_movement_enabled", "profile_tick_enabled"):
         if not isinstance(canonical_configuration[field], bool):
             raise ValueError(f"{field} must be recorded as a boolean")
