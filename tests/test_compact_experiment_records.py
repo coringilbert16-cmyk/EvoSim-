@@ -235,11 +235,11 @@ class CompactExperimentRecordTests(unittest.TestCase):
         path.write_text(json.dumps(record), encoding="utf-8")
         result = compare([path])
         self.assertFalse(result["measurement_compatible"])
-        self.assertIn(42, result["measurement_definition_missing_by_seed"])
-        self.assertIn(
-            "organization_analyzer_sha256",
-            result["measurement_definition_missing_by_seed"][42],
+        missing = next(
+            row for row in result["measurement_definition_missing_records"]
+            if row["seed"] == 42
         )
+        self.assertIn("organization_analyzer_sha256", missing["missing_fields"])
 
     def test_summary_only_opportunity_analysis_omits_tick_and_sample_arrays(self) -> None:
         raw = self.root / "seed-42.jsonl"
