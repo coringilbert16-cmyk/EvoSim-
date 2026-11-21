@@ -177,6 +177,22 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "output checksum mismatch"):
                 finalizer.finalize(records, [42, 43], index_path)
 
+    def test_rejects_records_from_different_workflow_attempts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = []
+            for seed in (42, 43):
+                record = sample_record(seed)
+                if seed == 43:
+                    record["provenance"]["workflow_run_attempt"] = "2"
+                path = root / f"seed-{seed}.json"
+                path.write_text(json.dumps(record), encoding="utf-8")
+                records.append(path)
+            index_path = root / "index.json"
+            index_path.write_text("{}", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "different workflow runs or attempts"):
+                finalizer.finalize(records, [42, 43], index_path)
+
     def test_rejects_unified_analysis_of_different_raw_input(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
