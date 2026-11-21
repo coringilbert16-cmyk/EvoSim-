@@ -19,6 +19,9 @@ class OBS001HistoricalPilotWorkflowTests(unittest.TestCase):
         self.assertNotIn("--environment-chemistry-experiment", workflow)
         self.assertIn("condition_id", workflow)
         self.assertIn("legacy_manifest_missing", workflow)
+        self.assertIn("ordinary environmental chemistry with local resonance enabled", workflow)
+        self.assertIn("not a candidate-near/remote comparison", workflow)
+        self.assertIn("1,200 independent resources plus 80 intact two-constituent molecules", workflow)
         self.assertIn("retention-days: 1", workflow)
 
     def test_uploaded_artifact_contains_only_compact_reports_not_raw_inputs(self):
