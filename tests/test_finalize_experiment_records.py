@@ -107,6 +107,10 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             with patch.object(finalizer, "compare", return_value=comparison):
                 setup, report = finalizer.finalize(paths, [42, 43], index_path)
             self.assertEqual(setup["seeds"], [42, 43])
+            self.assertEqual(setup["source"]["workflow_run_attempt"], "1")
+            self.assertEqual(
+                setup["simulator_invocation"]["environment_by_seed"][0]["GITHUB_RUN_ATTEMPT"], "1"
+            )
             self.assertNotIn("pile_sizes", setup["configuration"])
             self.assertNotIn("initial_material_inventory", setup["configuration"])
             self.assertNotEqual(
