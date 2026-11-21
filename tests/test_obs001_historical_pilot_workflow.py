@@ -13,6 +13,8 @@ class OBS001HistoricalPilotWorkflowTests(unittest.TestCase):
         self.assertIn("actions/download-artifact@v4", workflow)
         self.assertIn("44582565701", workflow)
         self.assertIn("44776501166", workflow)
+        self.assertIn("SOURCE_RUN_ATTEMPT=1", workflow)
+        self.assertIn("SOURCE_RUN_ATTEMPT=2", workflow)
         self.assertIn("8e7cc7d624e3131b2d99889fef02d9d5c3095318", workflow)
         self.assertIn("191069deb65a9f40638e65fe93134eeadde2219c", workflow)
         self.assertNotIn("cargo run", workflow)
