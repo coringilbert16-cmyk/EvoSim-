@@ -23,6 +23,7 @@ jobs:
       source_run_id: ${{ steps.source.outputs.source_run_id }}
       source_commit: ${{ steps.source.outputs.source_commit }}
       source_run_attempt: ${{ steps.source.outputs.source_run_attempt }}
+      source_run_conclusion: ${{ steps.source.outputs.source_run_conclusion }}
       research_plan: ${{ steps.source.outputs.research_plan }}
       duration_seconds: ${{ steps.source.outputs.duration_seconds }}
       seeds: ${{ steps.source.outputs.seeds }}
@@ -43,6 +44,7 @@ jobs:
               SOURCE_RUN_ID=44582565701
               SOURCE_COMMIT=8e7cc7d624e3131b2d99889fef02d9d5c3095318
               SOURCE_RUN_ATTEMPT=1
+              SOURCE_RUN_CONCLUSION=success
               RESEARCH_PLAN=""
               DURATION_SECONDS=3600
               ;;
@@ -50,6 +52,7 @@ jobs:
               SOURCE_RUN_ID=44776501166
               SOURCE_COMMIT=191069deb65a9f40638e65fe93134eeadde2219c
               SOURCE_RUN_ATTEMPT=2
+              SOURCE_RUN_CONCLUSION=failure
               RESEARCH_PLAN=PLAN-002
               DURATION_SECONDS=3600
               ;;
@@ -63,6 +66,7 @@ jobs:
             echo "source_run_id=$SOURCE_RUN_ID"
             echo "source_commit=$SOURCE_COMMIT"
             echo "source_run_attempt=$SOURCE_RUN_ATTEMPT"
+            echo "source_run_conclusion=$SOURCE_RUN_CONCLUSION"
             echo "research_plan=$RESEARCH_PLAN"
             echo "duration_seconds=$DURATION_SECONDS"
             echo "seeds=42,43,44,45,46"
@@ -80,10 +84,14 @@ jobs:
           SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
           SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
           SOURCE_RUN_ATTEMPT: ${{ needs.prepare.outputs.source_run_attempt }}
+          SOURCE_RUN_CONCLUSION: ${{ needs.prepare.outputs.source_run_conclusion }}
+          SEEDS: ${{ needs.prepare.outputs.seeds }}
         run: |
           set -euo pipefail
-          actual_commit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" --jq '.head_sha')
-          actual_attempt=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" --jq '.run_attempt')
+          run_metadata=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")
+          actual_commit=$(jq -r '.head_sha' <<< "$run_metadata")
+          actual_attempt=$(jq -r '.run_attempt' <<< "$run_metadata")
+          actual_conclusion=$(jq -r '.conclusion' <<< "$run_metadata")
           [[ "$actual_commit" == "$SOURCE_COMMIT" ]] || {
             echo "Retained source run commit mismatch: expected $SOURCE_COMMIT, got $actual_commit" >&2
             exit 1
@@ -92,6 +100,23 @@ jobs:
             echo "Retained source run attempt mismatch: expected $SOURCE_RUN_ATTEMPT, got $actual_attempt" >&2
             exit 1
           }
+          [[ "$actual_conclusion" == "$SOURCE_RUN_CONCLUSION" ]] || {
+            echo "Retained source run conclusion mismatch: expected $SOURCE_RUN_CONCLUSION, got $actual_conclusion" >&2
+            exit 1
+          }
+          jobs_json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")
+          prepare_conclusion=$(jq -r '[.jobs[] | select(.name == "prepare")][0].conclusion // empty' <<< "$jobs_json")
+          [[ "$prepare_conclusion" == "success" ]] || {
+            echo "Retained source prepare job did not succeed." >&2
+            exit 1
+          }
+          for seed in ${SEEDS//,/ }; do
+            job_conclusion=$(jq -r --arg job "observe ($seed)" '[.jobs[] | select(.name == $job)][0].conclusion // empty' <<< "$jobs_json")
+            [[ "$job_conclusion" == "success" ]] || {
+              echo "Retained observation job for seed $seed did not succeed." >&2
+              exit 1
+            }
+          done
       - name: Download retained per-seed source artifacts
         uses: actions/download-artifact@v4
         with:
@@ -150,6 +175,7 @@ jobs:
           SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
           SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
           SOURCE_RUN_ATTEMPT: ${{ needs.prepare.outputs.source_run_attempt }}
+          SOURCE_RUN_CONCLUSION: ${{ needs.prepare.outputs.source_run_conclusion }}
           RESEARCH_PLAN: ${{ needs.prepare.outputs.research_plan }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
@@ -183,6 +209,7 @@ jobs:
               f"- Source workflow run: {os.environ['SOURCE_RUN_ID']}",
               f"- Simulation source commit: `{os.environ['SOURCE_COMMIT']}`",
               f"- Source workflow attempt: {os.environ['SOURCE_RUN_ATTEMPT']}",
+              f"- Source workflow conclusion: {os.environ['SOURCE_RUN_CONCLUSION']} (all five observation jobs and prepare succeeded)",
               f"- Research plan: {os.environ['RESEARCH_PLAN'] or 'not established in retained provenance'}",
               f"- Duration: {os.environ['DURATION_SECONDS']} seconds per seed",
               "- Seeds: 42, 43, 44, 45, 46",
