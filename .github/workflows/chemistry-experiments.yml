@@ -281,36 +281,12 @@ jobs:
           mkdir -p "$DEST"
           cp work/final/experiment-setup.json "$DEST/setup.json"
           cp work/final/consolidated-report.json "$DEST/consolidated-report.json"
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          experiment_id = os.environ["EXPERIMENT_ID"]
-          condition_id = os.environ["CONDITION_ID"]
-          destination = Path(os.environ["DEST"])
-          registry_path = Path("experiments/records/registry.md")
-          lines = registry_path.read_text(encoding="utf-8").splitlines()
-          matches = []
-          for index, line in enumerate(lines):
-              if not line.startswith("|"):
-                  continue
-              columns = [column.strip() for column in line.strip().strip("|").split("|")]
-              if columns and columns[0] == experiment_id:
-                  matches.append((index, columns))
-          if len(matches) != 1:
-              raise SystemExit(f"Expected exactly one registry row for {experiment_id}; found {len(matches)}.")
-          index, columns = matches[0]
-          if len(columns) != 5:
-              raise SystemExit(f"Unexpected registry schema for {experiment_id}; expected five columns.")
-          setup_link = f"[{condition_id} setup]({destination.as_posix()}/setup.json)"
-          report_link = f"[{condition_id} report]({destination.as_posix()}/consolidated-report.json)"
-          links = f"{setup_link} · {report_link}"
-          if links not in columns[4]:
-              columns[4] = f"{columns[4]}; {links}" if columns[4] else links
-          columns[3] = f"Results recorded: {condition_id}"
-          lines[index] = "| " + " | ".join(columns) + " |"
-          registry_path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
-          PY
+          python3 tools/update_experiment_registry.py \
+            --registry experiments/records/registry.md \
+            --experiment-id "$EXPERIMENT_ID" \
+            --condition-id "$CONDITION_ID" \
+            --setup-path "$DEST/setup.json" \
+            --report-path "$DEST/consolidated-report.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$DEST/setup.json" "$DEST/consolidated-report.json" experiments/records/registry.md
