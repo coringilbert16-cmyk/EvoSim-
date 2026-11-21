@@ -200,8 +200,13 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             "summary": summary,
         })
 
+    missing_definition_fields = {
+        record["identity"]["seed"]: measurement_compatibility_warnings(record)
+        for record in records
+        if measurement_compatibility_warnings(record)
+    }
     comparisons = []
-    if len(measurement_groups) == 1 and len(rendered_groups) > 1:
+    if len(measurement_groups) == 1 and not missing_definition_fields and len(rendered_groups) > 1:
         baseline = rendered_groups[0]
         baseline_records = condition_groups[condition_group_key(records[0])]
         baseline_vectors = comparison_vectors(baseline["summary"], baseline_records)
@@ -249,11 +254,6 @@ def compare(paths: list[Path]) -> dict[str, Any]:
                 "metrics": differences,
             })
 
-    missing_definition_fields = {
-        record["identity"]["seed"]: measurement_compatibility_warnings(record)
-        for record in records
-        if measurement_compatibility_warnings(record)
-    }
     compatible = len(measurement_groups) == 1 and not missing_definition_fields
     return {
         "schema": "evosim.compact_record_comparison",
