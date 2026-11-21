@@ -105,7 +105,7 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         "initial_molecule_count", "initial_constituent_count", "hotspot",
         "world_geometry", "flow_field", "deep_diagnostics_enabled",
         "profile_movement_enabled", "profile_tick_enabled", "biology_enabled",
-        "rustc_version", "cargo_version",
+        "rustc_version", "cargo_version", "runner_os", "runner_arch",
     )
     for row in records:
         seed = row["identity"]["seed"]
@@ -190,6 +190,9 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     for field in ("rustc_version", "cargo_version"):
         if not isinstance(canonical_configuration[field], str) or not canonical_configuration[field].strip():
             raise ValueError(f"{field} must record the actual toolchain version")
+    for field in ("runner_os", "runner_arch"):
+        if not isinstance(canonical_configuration[field], str) or not canonical_configuration[field].strip():
+            raise ValueError(f"{field} must record the actual CI runner environment")
     if requested_duration is None or diagnostic_interval is None:
         raise ValueError("requested duration and diagnostic interval are required for reproduction")
     if (not isinstance(requested_duration, int) or isinstance(requested_duration, bool)
@@ -301,6 +304,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "toolchain_selector": "stable",
             "rustc_version": canonical_configuration["rustc_version"],
             "cargo_version": canonical_configuration["cargo_version"],
+            "runner_os": canonical_configuration["runner_os"],
+            "runner_arch": canonical_configuration["runner_arch"],
             "arguments_by_seed": simulator_arguments_by_seed,
             "environment_by_seed": [
                 {
