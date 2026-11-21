@@ -210,7 +210,7 @@ jobs:
               "- The detailed contact CSV stage remains disabled; only summary coverage is generated.",
               "",
           ])
-          Path("work/historical-pilot-summary.md").write_text("\\n".join(summary), encoding="utf-8")
+          Path("work/historical-pilot-summary.md").write_text("\n".join(summary), encoding="utf-8")
           PY
       - name: Upload compact historical pilot report only
         uses: actions/upload-artifact@v4
