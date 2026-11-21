@@ -97,6 +97,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         "configuration": canonical_configuration,
         "configuration_sha256": provenance.get("comparison_configuration_sha256"),
         "comparison_configuration_sha256": provenance.get("comparison_configuration_sha256"),
+        "manifest_schema_version": provenance.get("manifest_schema_version"),
+        "enabled_diagnostic_tiers": provenance.get("enabled_diagnostic_tiers"),
         "seeds": sorted(seeds),
         "replicate_count": len(seeds),
         "conditions_common": {
