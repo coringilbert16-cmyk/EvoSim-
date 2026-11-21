@@ -83,6 +83,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     identity = first["identity"]
     provenance = first["provenance"]
     conditions = first["conditions"]
+    requested_duration = conditions.get("requested_duration_seconds")
+    diagnostic_interval = conditions.get("diagnostic_interval")
     if not provenance.get("workflow_run_id") or not provenance.get("workflow_run_url"):
         raise ValueError("validated experiment records must identify their source workflow run")
     canonical_configuration = dict(conditions.get("configuration") or {})
@@ -156,8 +158,6 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     if comparison.get("measurement_definition_missing_records"):
         raise ValueError("required measurement definitions are missing; refusing finalization")
 
-    requested_duration = conditions.get("requested_duration_seconds")
-    diagnostic_interval = conditions.get("diagnostic_interval")
     deep_diagnostics = canonical_configuration.get("deep_diagnostics_enabled") is True
     profile_movement = canonical_configuration.get("profile_movement_enabled") is True
     profile_tick = canonical_configuration.get("profile_tick_enabled") is True
