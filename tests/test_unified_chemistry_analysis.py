@@ -65,8 +65,15 @@ class UnifiedChemistryAnalysisTests(unittest.TestCase):
 
             with patch.object(unified, "run_cached_stage", side_effect=fake_seed_stage), \
                  patch.object(unified, "run_group_stage", side_effect=fake_group_stage):
-                index = unified.analyze(source, [42], 60, output)
+                index = unified.analyze(
+                    source, [42], 60, output,
+                    experiment_id_override="EXP-2026-006",
+                    research_plan_override="PLAN-002",
+                )
 
+            self.assertEqual(index["experiment_id"], "EXP-2026-006")
+            self.assertEqual(index["research_plan"], "PLAN-002")
+            self.assertIsNone(index["condition_id"])
             self.assertEqual(index["runs"][0]["manifest_status"], "legacy_manifest_missing")
             self.assertIn("contact_opportunities", index["quality"]["deferred_stages"])
             self.assertIn("reaction_network", index["quality"]["deferred_stages"])
