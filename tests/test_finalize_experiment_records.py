@@ -146,6 +146,28 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "output checksum mismatch"):
                 finalizer.finalize(records, [42, 43], index_path)
 
+    def test_rejects_unified_analysis_of_different_raw_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = []
+            for seed in (42, 43):
+                path = root / f"seed-{seed}.json"
+                path.write_text(json.dumps(sample_record(seed)), encoding="utf-8")
+                records.append(path)
+            index_runs = [sample_index_run(42), sample_index_run(43)]
+            index_runs[1]["raw_sha256"] = "0" * 64
+            index_path = root / "index.json"
+            index_path.write_text(json.dumps({
+                "schema": "evosim.unified_chemistry_analysis",
+                "experiment_id": "EXP-2026-099",
+                "research_plan": "OBS-001",
+                "condition_id": "baseline",
+                "runs": index_runs,
+                "quality": {"all_runs_have_validated_manifests": True},
+                "stages": []}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "raw-input checksum"):
+                finalizer.finalize(records, [42, 43], index_path)
+
     def test_rejects_records_from_different_workflow_runs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
