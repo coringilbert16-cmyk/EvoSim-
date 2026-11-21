@@ -319,6 +319,7 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
                     "EVOSIM_EXPERIMENT_ID": identity.get("experiment_id"),
                     "EVOSIM_RESEARCH_PLAN": identity.get("research_plan"),
                     "EVOSIM_CONDITION_ID": identity.get("condition_id"),
+                    "GITHUB_RUN_ATTEMPT": provenance.get("workflow_run_attempt"),
                 }
                 for row in records
             ],
