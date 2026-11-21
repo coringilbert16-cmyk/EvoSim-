@@ -84,6 +84,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
         else "invalid" if lifecycle_errors or organization_errors
         else "valid"
     )
+    org = organization.get("organization", {})
     transition_rows = nested(organization, "reaction_network", "family_to_family_transitions", default=None)
     transition_summary = None
     top_structural_families = [
@@ -147,7 +148,6 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     event_counts = reactions.get("event_counts", {})
     outcome_counts = reactions.get("outcome_counts", {})
     history = chemistry.get("molecular_history", {})
-    org = organization.get("organization", {})
     energy = chemistry.get("energy", {})
     bond_pairs = reactions.get("elemental_bond_pairs", {})
 
