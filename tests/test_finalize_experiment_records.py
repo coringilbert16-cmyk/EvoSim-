@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -27,6 +28,14 @@ def sample_record(seed):
     }
 
 
+def sample_stage(root, stage_id, status="completed"):
+    output = root / f"{stage_id}.json"
+    output.write_text(f"{stage_id} output\\n", encoding="utf-8")
+    digest = hashlib.sha256(output.read_bytes()).hexdigest()
+    return {"stage": stage_id, "status": status, "outputs": [output.name],
+            "output_sha256": {output.name: digest}}
+
+
 class FinalizeExperimentRecordsTests(unittest.TestCase):
     def test_emits_one_setup_and_one_consolidated_report(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -47,9 +56,9 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 "runs": [{"seed": 42}, {"seed": 43}],
                 "quality": {"all_runs_have_validated_manifests": True},
                 "stages": [
-                    {"stage": "chemistry", "status": "completed"},
-                    {"stage": "organization", "status": "completed"},
-                    {"stage": "experiment_batch", "status": "completed"}]}), encoding="utf-8")
+                    sample_stage(root, "chemistry"),
+                    sample_stage(root, "organization"),
+                    sample_stage(root, "experiment_batch")]}), encoding="utf-8")
             with patch.object(finalizer, "compare", return_value=comparison):
                 setup, report = finalizer.finalize(paths, [42, 43], index_path)
             self.assertEqual(setup["seeds"], [42, 43])
@@ -87,6 +96,28 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                     {"stage": "organization", "status": "failed"},
                     {"stage": "experiment_batch", "status": "completed"}]}), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "required unified analysis stages"):
+                finalizer.finalize(records, [42, 43], index_path)
+
+    def test_rejects_analysis_output_checksum_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = []
+            for seed in (42, 43):
+                path = root / f"seed-{seed}.json"
+                path.write_text(json.dumps(sample_record(seed)), encoding="utf-8")
+                records.append(path)
+            stages = [sample_stage(root, name) for name in ("chemistry", "organization", "experiment_batch")]
+            (root / "organization.json").write_text("tampered\\n", encoding="utf-8")
+            index_path = root / "index.json"
+            index_path.write_text(json.dumps({
+                "schema": "evosim.unified_chemistry_analysis",
+                "experiment_id": "EXP-2026-099",
+                "research_plan": "OBS-001",
+                "condition_id": "baseline",
+                "runs": [{"seed": 42}, {"seed": 43}],
+                "quality": {"all_runs_have_validated_manifests": True},
+                "stages": stages}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "output checksum mismatch"):
                 finalizer.finalize(records, [42, 43], index_path)
 
     def test_rejects_missing_seed_before_comparison(self):
