@@ -53,7 +53,7 @@ def scalar_tree(value: Any) -> Any:
     """Keep numeric/string/bool/null aggregates; drop event arrays and object lists."""
     if isinstance(value, dict):
         return {str(key): scalar_tree(item) for key, item in value.items()
-                if key not in DROP_KEYS and (isinstance(item, (dict, int, float, str, bool)) or item is None)}
+                if key not in DROP_KEYS and (isinstance(item, (dict, list, int, float, str, bool)) or item is None)}
     if isinstance(value, list):
         if len(value) <= 128 and all(item is None or isinstance(item, (int, float, str, bool)) for item in value):
             return value
