@@ -1,6 +1,6 @@
 # OBS-001 — Unified chemistry analysis implementation
 
-**Status:** Active engineering/observability initiative; foundation merged, historical validation and two-file retention adoption in progress.  
+**Status:** Active engineering/observability initiative; two-file retention implementation in PR #404, historical pilot validation pending.  
 **Baseline:** PRs #398, #400, #401, #402, and #403 are merged.  
 **Scope:** Offline, reproducible analysis of environmental chemistry artifacts.  
 **Behavior boundary:** No changes to chemistry, physics, reaction discovery, scheduling, activation, or energy settlement.
@@ -113,5 +113,8 @@ Compare unified results with existing specialist reports. Investigate discrepanc
 - 2026-11-20: PR #402 merged the unified orchestrator, manifest/raw checksums, cache fingerprints, specialist analysis stages, and portable report/index foundation.
 - 2026-11-21: PR #403 merged the compact-record builder, comparison tool, settlement summaries, and summary-only opportunity coverage. The original per-seed permanent-record design is now superseded by the two-file retention contract.
 - 2026-11-21: User-approved retention decision: future experiments retain only setup/conditions and one validated consolidated report. Raw and intermediate data are temporary and may be removed only after successful validation and publication.
-- 2026-11-21: Two-file retention implementation started in PR #404. The workflow now consolidates short-lived raw inputs in the aggregate job before cleanup; deep reaction-network, geometry, and temporal stages are deferred unless explicitly requested. The finalizer cross-checks seed coverage, condition identity, manifest validation, and required pipeline stages before publication.
-- **Next:** implement the two-file output/publication workflow, then validate the historical EXP-2026-004 and EXP-2026-006 datasets without new simulation runs.
+- 2026-11-21: Two-file retention implementation is in PR #404. The workflow consolidates short-lived raw inputs in the aggregate job; deep reaction-network, geometry, and temporal stages are deferred unless explicitly requested. The finalizer validates seed coverage, condition identity, measurement compatibility, manifests, and required pipeline stages before publication.
+- 2026-11-21: Review found and fixed a missing `--analysis-index` argument in the workflow's finalizer invocation. Workflow permissions were narrowed so only the aggregate publisher receives contents/actions write access.
+- 2026-11-21: The setup record now stores per-seed simulator arguments and profiling environment flags. The manifest records whether movement/tick profiling was enabled, rather than relying on workflow history to reconstruct those settings.
+- 2026-11-21: Historical pilot artifacts were located and confirmed retained: EXP-2026-004 source run #44582565701 (five per-seed observation artifacts plus the specialist aggregate) and EXP-2026-006 source run #44776501166 (five per-seed neighborhood observation artifacts). Both predate canonical run manifests; they must be processed in legacy-compatibility mode and must not be marked as strict manifest-validated future records. No new simulation was launched.
+- **Next:** finish CI on the latest PR head, then run repository-side analysis-only reaggregation of EXP-2026-004 and EXP-2026-006, compare unified outputs with their preserved specialist reports, and record any legacy gaps/discrepancies. Do not merge or launch a new simulation as part of this validation.
