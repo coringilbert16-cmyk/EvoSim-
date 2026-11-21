@@ -83,6 +83,7 @@ Compare unified results with existing specialist reports. Investigate discrepanc
 
 - Update the schema/record builder to emit the consolidated experiment-level report directly; per-seed values belong inside it, not in separate permanent files.
 - Generate the setup record from the validated manifest and workflow inputs.
+- Preserve seed-specific stochastic inventory composition and randomized pile sizes in per-seed setup entries while hashing only the shared experimental design for cross-seed compatibility.
 - Validate the consolidated report against specialist analyzer outputs before publication.
 - Publish exactly the setup file and consolidated report to the repository experiment records.
 - Update the existing shared registry row with links to both files for the published condition; the registry remains an index, not a third experiment-specific result.
