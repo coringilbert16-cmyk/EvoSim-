@@ -71,6 +71,18 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+      - name: Verify retained source workflow commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
+          SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          actual_commit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" --jq '.head_sha')
+          [[ "$actual_commit" == "$SOURCE_COMMIT" ]] || {
+            echo "Retained source run commit mismatch: expected $SOURCE_COMMIT, got $actual_commit" >&2
+            exit 1
+          }
       - name: Download retained per-seed source artifacts
         uses: actions/download-artifact@v4
         with:
@@ -217,4 +229,4 @@ jobs:
       - name: Remove downloaded raw and per-seed intermediate data
         if: success()
         run: |
-          rm -rf historical-artifacts observations original-specialist work/unified/normalized-input work/unified/per-seed
+          rm -rf historical-artifacts observations original-specialist work
