@@ -389,6 +389,7 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "optional_stage_warnings": [f"{stage}: {status}" for stage, status in stage_status.items() if stage not in required_stages and status not in ("completed", "deferred_heavy", "deferred_deep")],
             "limitations": [
                 "Seeds are independent replicates; reaction events within a seed are not independent samples.",
+                "Initial elemental composition and randomized pile sizes vary by seed; they are preserved per seed but cross-seed statistics are not automatically normalized for those initial-state differences.",
                 "Rates require complete, semantically compatible denominators.",
                 "Unknown and partial opportunity coverage do not support complete conversion-rate claims.",
             ],
