@@ -139,7 +139,11 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
     conditions = manifest.get("conditions", {})
     config = conditions.get("configuration", {})
     comparison_config = dict(config) if isinstance(config, dict) else {}
+    # Seed-specific stochastic realizations belong in per-seed setup, not in
+    # the shared measurement-definition digest.
     comparison_config.pop("seed", None)
+    comparison_config.pop("pile_sizes", None)
+    comparison_config.pop("initial_material_inventory", None)
     comparison_configuration_sha256 = hashlib.sha256(
         json.dumps(comparison_config, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest() if comparison_config else None
