@@ -51,6 +51,12 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             with patch.object(finalizer, "compare", return_value=comparison):
                 setup, report = finalizer.finalize(paths, [42, 43], index_path)
             self.assertEqual(setup["seeds"], [42, 43])
+            self.assertEqual(
+                setup["simulator_invocation"]["arguments_by_seed"][0]["command"],
+                ["cargo", "run", "--locked", "--", "--headless",
+                 "--environment-chemistry-experiment", "--seconds", "60", "--seed", "42",
+                 "--diagnostics", "observations/seed-42.jsonl", "--diagnostic-interval", "100"],
+            )
             self.assertEqual(report["status"], "validated")
             self.assertEqual(len(report["analysis"]["per_seed_results"]), 2)
 
