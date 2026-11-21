@@ -665,6 +665,10 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "planned_ticks": planned_ticks,
             "diagnostic_interval_ticks": recorder.interval,
             "deep_diagnostics_enabled": simulation.record_local_resonance_diagnostics,
+            "profile_movement_enabled": std::env::var("EVOSIM_PROFILE_MOVEMENT")
+                .map(|value| value.eq_ignore_ascii_case("true")).unwrap_or(false),
+            "profile_tick_enabled": std::env::var("EVOSIM_PROFILE_TICK")
+                .map(|value| value.eq_ignore_ascii_case("true")).unwrap_or(false),
             "biology_enabled": false,
             "initial_physical_material_count": initial_physical_material_count,
             "initial_independent_resource_count": initial_independent_resource_count,
