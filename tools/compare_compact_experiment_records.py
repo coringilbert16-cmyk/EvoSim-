@@ -36,6 +36,8 @@ def measurement_compatibility_key(record: dict[str, Any]) -> tuple[Any, ...]:
         conditions.get("requested_duration_seconds"),
         conditions.get("diagnostic_interval"),
         provenance.get("manifest_schema_version"),
+        provenance.get("source_commit"),
+        provenance.get("simulator_version"),
         provenance.get("chemistry_analyzer_sha256"),
         provenance.get("organization_analyzer_sha256"),
         tuple(sorted(tiers)) if isinstance(tiers, list) else None,
@@ -53,8 +55,9 @@ def measurement_compatibility_warnings(record: dict[str, Any]) -> list[str]:
         missing.append("requested wall-clock duration")
     if numeric(conditions.get("diagnostic_interval")) is None:
         missing.append("diagnostic interval")
-    for field in ("manifest_schema_version", "chemistry_analyzer_sha256",
-                  "organization_analyzer_sha256"):
+    for field in ("manifest_schema_version", "source_commit",
+                  "chemistry_analyzer_sha256", "organization_analyzer_sha256",
+                  "comparison_configuration_sha256"):
         if provenance.get(field) is None:
             missing.append(field)
     if not isinstance(provenance.get("enabled_diagnostic_tiers"), list):
@@ -195,10 +198,12 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             "requested_duration_seconds": key[6],
             "diagnostic_interval": key[7],
             "manifest_schema_version": key[8],
-            "chemistry_analyzer_sha256": key[9],
-            "organization_analyzer_sha256": key[10],
-            "enabled_diagnostic_tiers": list(key[11]) if key[11] is not None else None,
-            "opportunity_coverage_schema_version": key[12],
+            "source_commit": key[9],
+            "simulator_version": key[10],
+            "chemistry_analyzer_sha256": key[11],
+            "organization_analyzer_sha256": key[12],
+            "enabled_diagnostic_tiers": list(key[13]) if key[13] is not None else None,
+            "opportunity_coverage_schema_version": key[14],
             "summary": summary,
         })
 
