@@ -109,7 +109,7 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
         "schema_version": REPORT_VERSION,
         "status": "validated",
         "experiment": setup["experiment"],
-        "setup_file": "experiment-setup.json",
+        "setup_file": "setup.json",
         "analysis": {
             "analyzer_fingerprints": {
                 "chemistry": provenance.get("chemistry_analyzer_sha256"),
