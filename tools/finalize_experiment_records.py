@@ -305,10 +305,19 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         "status": "validated",
         "experiment": setup["experiment"],
         "setup_file": "setup.json",
+        "conclusions": [
+            f"All {len(records)} expected independent seeds passed provenance, configuration, and required-stage validation; cross-seed measurements are descriptive summaries under one shared measurement definition.",
+            "No causal, catalytic, or organism-level conclusion is inferred by this consolidation pipeline.",
+        ],
         "analysis": {
             "analyzer_fingerprints": {
                 "chemistry": provenance.get("chemistry_analyzer_sha256"),
                 "organization": provenance.get("organization_analyzer_sha256"),
+                "unified_orchestrator": sha256_file(Path(__file__).resolve().parent / "unified_chemistry_analysis.py"),
+                "contact_opportunity": sha256_file(Path(__file__).resolve().parent / "contact_opportunity_analyzer.py"),
+                "compact_record_builder": sha256_file(Path(__file__).resolve().parent / "compact_experiment_record.py"),
+                "cross_seed_comparator": sha256_file(Path(__file__).resolve().parent / "compare_compact_experiment_records.py"),
+                "finalizer": sha256_file(Path(__file__).resolve()),
             },
             "per_seed_results": records,
             "cross_seed_comparison": comparison,
