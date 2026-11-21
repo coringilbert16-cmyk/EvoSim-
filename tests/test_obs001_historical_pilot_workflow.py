@@ -9,6 +9,7 @@ class OBS001HistoricalPilotWorkflowTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn('GITHUB_REF" == "refs/heads/main"', workflow)
         self.assertIn("actions/download-artifact@v4", workflow)
         self.assertIn("44582565701", workflow)
         self.assertIn("44776501166", workflow)
