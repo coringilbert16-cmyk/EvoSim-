@@ -99,6 +99,8 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             self.assertFalse(setup["simulator_invocation"]["environment_by_seed"][0]["EVOSIM_PROFILE_TICK"])
             self.assertEqual(report["status"], "validated")
             self.assertEqual(len(report["analysis"]["per_seed_results"]), 2)
+            self.assertIn("unified_orchestrator", report["analysis"]["analyzer_fingerprints"])
+            self.assertEqual(len(report["conclusions"]), 2)
 
 
     def test_rejects_incomplete_required_pipeline_stage(self):
