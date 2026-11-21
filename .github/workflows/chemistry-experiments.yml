@@ -137,6 +137,14 @@ jobs:
               raise SystemExit("Condition ID may contain only letters, numbers, dots, underscores, and hyphens.")
           if not experiment_id or not condition_id:
               raise SystemExit("Permanent experiment records require a registered experiment_id and condition_id.")
+          with open("experiments/records/registry.md", encoding="utf-8") as registry_file:
+              registered_experiments = {
+                  line.split("|", 2)[1].strip()
+                  for line in registry_file
+                  if line.startswith("|") and line.count("|") >= 2
+              }
+          if experiment_id not in registered_experiments:
+              raise SystemExit(f"Experiment {experiment_id} must be registered in experiments/records/registry.md before execution.")
 
           if not isinstance(seeds, list) or not seeds or len(seeds) > 25:
               raise SystemExit("Provide between 1 and 25 independent seeds.")
