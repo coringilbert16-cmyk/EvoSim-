@@ -189,9 +189,19 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         identity.get("experiment_id"), identity.get("research_plan"), identity.get("condition_id")
     ):
         raise ValueError("unified analysis index identity does not match the seed records")
-    index_seeds = [row.get("seed") for row in index.get("runs", []) if isinstance(row, dict)]
-    if len(index_seeds) != len(set(index_seeds)) or set(index_seeds) != set(expected_seeds):
+    index_runs = {
+        row.get("seed"): row for row in index.get("runs", []) if isinstance(row, dict)
+    }
+    if len(index_runs) != len(index.get("runs", [])) or set(index_runs) != set(expected_seeds):
         raise ValueError("unified analysis index seed coverage does not match the requested seeds")
+    for record in records:
+        seed = record["identity"]["seed"]
+        indexed_run = index_runs[seed]
+        if indexed_run.get("manifest_status") != "manifest_validated":
+            raise ValueError(f"unified analysis did not validate the manifest for seed {seed}")
+        expected_raw_hash = record.get("provenance", {}).get("raw_diagnostics_sha256")
+        if not expected_raw_hash or indexed_run.get("raw_sha256") != expected_raw_hash:
+            raise ValueError(f"unified analysis raw-input checksum does not match seed {seed} record")
     if not index.get("quality", {}).get("all_runs_have_validated_manifests", False):
         raise ValueError("one or more run manifests were not validated")
     stages = index.get("stages", [])
