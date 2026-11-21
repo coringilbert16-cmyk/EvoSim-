@@ -89,6 +89,29 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     if comparison.get("measurement_definition_missing_records"):
         raise ValueError("required measurement definitions are missing; refusing finalization")
 
+    requested_duration = conditions.get("requested_duration_seconds")
+    diagnostic_interval = conditions.get("diagnostic_interval")
+    deep_diagnostics = canonical_configuration.get("deep_diagnostics_enabled") is True
+    profile_movement = canonical_configuration.get("profile_movement_enabled") is True
+    profile_tick = canonical_configuration.get("profile_tick_enabled") is True
+    simulator_arguments_by_seed = []
+    for row in records:
+        seed = row["identity"]["seed"]
+        arguments = [
+            "--headless",
+            "--environment-chemistry-experiment",
+            "--seconds", str(requested_duration),
+            "--seed", str(seed),
+            "--diagnostics", f"observations/seed-{seed}.jsonl",
+            "--diagnostic-interval", str(diagnostic_interval),
+        ]
+        if deep_diagnostics:
+            arguments.append("--deep-diagnostics")
+        simulator_arguments_by_seed.append({
+            "seed": seed,
+            "command": ["cargo", "run", "--locked", "--", *arguments],
+        })
+
     setup = {
         "schema": SETUP_SCHEMA,
         "schema_version": 1,
@@ -104,6 +127,22 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "workflow_run_url": provenance.get("workflow_run_url"),
         },
         "configuration": canonical_configuration,
+        "simulator_invocation": {
+            "workflow_file": ".github/workflows/chemistry-experiments.yml",
+            "toolchain_selector": "stable",
+            "arguments_by_seed": simulator_arguments_by_seed,
+            "environment_by_seed": [
+                {
+                    "seed": row["identity"]["seed"],
+                    "EVOSIM_PROFILE_MOVEMENT": profile_movement,
+                    "EVOSIM_PROFILE_TICK": profile_tick,
+                    "EVOSIM_EXPERIMENT_ID": identity.get("experiment_id"),
+                    "EVOSIM_RESEARCH_PLAN": identity.get("research_plan"),
+                    "EVOSIM_CONDITION_ID": identity.get("condition_id"),
+                }
+                for row in records
+            ],
+        },
         "configuration_sha256": provenance.get("comparison_configuration_sha256"),
         "comparison_configuration_sha256": provenance.get("comparison_configuration_sha256"),
         "manifest_schema_version": provenance.get("manifest_schema_version"),
