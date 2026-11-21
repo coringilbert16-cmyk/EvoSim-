@@ -61,7 +61,11 @@ class UnifiedChemistryAnalysisTests(unittest.TestCase):
                     output_files[1].write_text("batch", encoding="utf-8")
                 else:
                     (outdir / "summary.md").write_text("stage", encoding="utf-8")
-                return {"stage": stage_id, "status": "completed", "outputs": []}
+                # Workspace input symlinks point outside the output tree and are not artifacts.
+                return {
+                    "stage": stage_id, "status": "completed",
+                    "outputs": [str(output / "normalized-input/seed-42.jsonl")],
+                }
 
             with patch.object(unified, "run_cached_stage", side_effect=fake_seed_stage), \
                  patch.object(unified, "run_group_stage", side_effect=fake_group_stage):
@@ -82,6 +86,11 @@ class UnifiedChemistryAnalysisTests(unittest.TestCase):
             self.assertEqual(index["report_path"], "unified-chemistry-report.md")
             self.assertTrue((output / "normalized-input/seed-42.jsonl").is_symlink())
             self.assertTrue(raw.is_file())
+            self.assertTrue(all(
+                "normalized-input/" not in artifact
+                for stage in index["stages"]
+                for artifact in stage.get("outputs", [])
+            ))
 
     def test_failed_stage_does_not_leave_stale_json_as_valid_result(self):
         with tempfile.TemporaryDirectory() as temporary:
