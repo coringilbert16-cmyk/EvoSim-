@@ -35,7 +35,10 @@ def load_record(path: Path) -> dict[str, Any]:
 def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, Any], dict[str, Any]]:
     if not paths:
         raise ValueError("no temporary per-seed records supplied")
-    records = [load_record(path) for path in paths]
+    loaded = [(load_record(path), path) for path in paths]
+    loaded.sort(key=lambda item: item[0]["identity"]["seed"])
+    records = [row for row, _ in loaded]
+    paths = [path for _, path in loaded]
     seeds = [row["identity"]["seed"] for row in records]
     if len(seeds) != len(set(seeds)):
         raise ValueError("duplicate seed record")
