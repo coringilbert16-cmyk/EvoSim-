@@ -91,8 +91,11 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
         "seeds": sorted(seeds),
         "replicate_count": len(seeds),
         "conditions_common": {
-            key: value for key, value in conditions.items()
-            if key not in ("actual_elapsed_wall_seconds", "start_tick", "end_tick", "tick_count")
+            **{
+                key: value for key, value in conditions.items()
+                if key not in ("actual_elapsed_wall_seconds", "start_tick", "end_tick", "tick_count", "configuration")
+            },
+            "configuration": canonical_configuration,
         },
         "execution_by_seed": [
             {
