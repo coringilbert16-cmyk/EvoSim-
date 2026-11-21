@@ -200,6 +200,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             raise ValueError("records originate from different workflow runs")
         other_configuration = dict(row.get("conditions", {}).get("configuration") or {})
         other_configuration.pop("seed", None)
+        other_configuration.pop("pile_sizes", None)
+        other_configuration.pop("initial_material_inventory", None)
         if other_configuration != canonical_configuration:
             raise ValueError("records have different experiment configurations")
     index = json.loads(analysis_index_path.read_text(encoding="utf-8"))
