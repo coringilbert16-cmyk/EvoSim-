@@ -175,7 +175,7 @@ jobs:
               f"- Duration: {os.environ['DURATION_SECONDS']} seconds per seed",
               "- Seeds: 42, 43, 44, 45, 46",
               "- Initial inventory: 1,200 independent resources plus 80 intact two-constituent molecules; 1,360 constituents across C, H, N, O, P, S",
-              "- Environment: no ambient medium, no injected matter, no forced reactions, and no candidate-placement intervention",
+              "- Ambient medium: absent",
               "- Condition ID: unavailable in the historical source; intentionally left null",
               "- Manifest provenance: legacy artifacts without canonical manifests; not strict-record validated",
               "",
@@ -200,6 +200,16 @@ jobs:
                   f"({row.get('complete_ticks')} complete, {row.get('partial_ticks')} partial, "
                   f"{row.get('unknown_ticks')} unknown ticks)"
               )
+          if os.environ["EXPERIMENT_ID"] == "EXP-2026-004":
+              summary.extend([
+                  "- Conditions: ordinary environmental chemistry with local resonance enabled; no forced reactions or comparison/control condition",
+                  "- Diagnostics: snapshots every 100 ticks and twelve equal 300-second temporal-analysis windows",
+              ])
+          else:
+              summary.extend([
+                  "- Conditions: ordinary environmental chemistry; no injected matter, forced reactions, or candidate-placement intervention",
+                  "- Diagnostics: bounded COMBINE/DISPLACEMENT opportunity samples with local-neighborhood identity and geometry context; not a candidate-near/remote comparison",
+              ])
           summary.extend([
               "",
               "## Interpretation limits",
