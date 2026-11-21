@@ -105,7 +105,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
             "experiment": {"experiment_id": "EXP-2026-999", "research_plan": "OBS-001",
                            "condition_id": "baseline", "seed": seed},
             "build": {"commit_sha": "deadbeef"},
-            "run": {"status": "completed", "started_at_unix_ms": 1000,
+            "run": {"status": "completed", "run_attempt": "1", "started_at_unix_ms": 1000,
                     "completed_at_unix_ms": 61000, "actual_elapsed_wall_seconds": 60.1,
                     "start_tick": 0, "end_tick": 600},
             "conditions": {
@@ -182,6 +182,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertNotIn("families", record["molecular_development"])
         self.assertNotIn("lineage_edges", record["molecular_development"])
         self.assertEqual(record["record_status"], "complete")
+        self.assertEqual(record["provenance"]["workflow_run_attempt"], "1")
 
     def test_unified_comparison_uses_compact_records_across_conditions(self) -> None:
         records = []
