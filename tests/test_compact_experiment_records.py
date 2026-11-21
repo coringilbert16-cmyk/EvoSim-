@@ -186,7 +186,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         result = json.loads(output.read_text(encoding="utf-8"))
         self.assertTrue(markdown.is_file())
         self.assertFalse(result["quality"]["raw_diagnostics_required"])
-        self.assertTrue(result["measurement_compatible"])
+        self.assertTrue(result["measurement_compatible"], result["measurement_definition_missing_records"])
         self.assertEqual(len(result["condition_groups"]), 2)
         self.assertEqual(len(result["condition_comparisons"]), 1)
         self.assertEqual(result["condition_groups"][1]["summary"]["seeds"], [42, 43])
@@ -270,7 +270,8 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(summary["BREAK"]["settled_event_count"], 1)
         self.assertEqual(summary["BREAK"]["not_settled_event_count"], 1)
         self.assertEqual(summary["BREAK"]["usable_energy_delta"]["sum"], -2.0)
-        self.assertIsNone(summary["BREAK"]["heat_dissipated"]["mean"])
+        self.assertEqual(summary["BREAK"]["heat_dissipated"]["count"], 1)
+        self.assertEqual(summary["BREAK"]["heat_dissipated"]["mean"], 0.25)
         self.assertEqual(summary["COMBINE"]["event_count"], 0)
         self.assertIsNone(summary["COMBINE"]["physical_work"]["sum"])
 
