@@ -102,6 +102,16 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             with patch.object(finalizer, "compare", return_value=comparison):
                 setup, report = finalizer.finalize(paths, [42, 43], index_path)
             self.assertEqual(setup["seeds"], [42, 43])
+            self.assertNotIn("pile_sizes", setup["configuration"])
+            self.assertNotIn("initial_material_inventory", setup["configuration"])
+            self.assertNotEqual(
+                setup["per_seed_initial_conditions"][0]["pile_sizes"],
+                setup["per_seed_initial_conditions"][1]["pile_sizes"],
+            )
+            self.assertNotEqual(
+                setup["per_seed_initial_conditions"][0]["initial_material_inventory"],
+                setup["per_seed_initial_conditions"][1]["initial_material_inventory"],
+            )
             self.assertEqual(
                 setup["simulator_invocation"]["arguments_by_seed"][0]["command"],
                 ["cargo", "run", "--locked", "--", "--headless",
