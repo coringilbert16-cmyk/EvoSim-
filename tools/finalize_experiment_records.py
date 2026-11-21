@@ -86,8 +86,9 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     conditions = first["conditions"]
     requested_duration = conditions.get("requested_duration_seconds")
     diagnostic_interval = conditions.get("diagnostic_interval")
-    if not provenance.get("workflow_run_id") or not provenance.get("workflow_run_url"):
-        raise ValueError("validated experiment records must identify their source workflow run")
+    if (not provenance.get("workflow_run_id") or not provenance.get("workflow_run_attempt")
+            or not provenance.get("workflow_run_url")):
+        raise ValueError("validated experiment records must identify their source workflow run and attempt")
     seed_configurations: dict[int, dict[str, Any]] = {}
     for row in records:
         seed = row["identity"]["seed"]
@@ -208,9 +209,11 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         if measurement_compatibility_key(row) != measurement_compatibility_key(first):
             raise ValueError("records have incompatible measurement definitions")
         if (row.get("provenance", {}).get("workflow_run_id"),
+                row.get("provenance", {}).get("workflow_run_attempt"),
                 row.get("provenance", {}).get("workflow_run_url")) != (
-                provenance.get("workflow_run_id"), provenance.get("workflow_run_url")):
-            raise ValueError("records originate from different workflow runs")
+                provenance.get("workflow_run_id"), provenance.get("workflow_run_attempt"),
+                provenance.get("workflow_run_url")):
+            raise ValueError("records originate from different workflow runs or attempts")
         other_configuration = dict(row.get("conditions", {}).get("configuration") or {})
         other_configuration.pop("seed", None)
         other_configuration.pop("pile_sizes", None)
@@ -287,6 +290,7 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "repository_commit": provenance.get("source_commit"),
             "simulator_version": provenance.get("simulator_version"),
             "workflow_run_id": provenance.get("workflow_run_id"),
+            "workflow_run_attempt": provenance.get("workflow_run_attempt"),
             "workflow_run_url": provenance.get("workflow_run_url"),
         },
         "configuration": canonical_configuration,
