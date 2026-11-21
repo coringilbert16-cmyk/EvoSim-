@@ -54,7 +54,8 @@ on:
       - experiments/chemistry-run.json
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 jobs:
   prepare:
@@ -191,100 +192,84 @@ jobs:
             EXTRA_ARGS+=(--deep-diagnostics)
           fi
           cargo run --locked -- --headless --environment-chemistry-experiment --seconds "$DURATION_SECONDS" --seed "$SEED" --diagnostics "observations/seed-$SEED.jsonl" --diagnostic-interval "$DIAGNOSTIC_INTERVAL" "${EXTRA_ARGS[@]}"
-      - name: Analyze reactions and energy
-        env:
-          SEED: ${{ matrix.seed }}
-        run: |
-          set -euo pipefail
-          python3 tools/chemistry_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-chemistry.json" --markdown-out "observations/seed-$SEED-chemistry.md"
-      - name: Analyze molecular organization and lineage
-        env:
-          SEED: ${{ matrix.seed }}
-        run: |
-          set -euo pipefail
-          python3 tools/chemistry_organization_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-organization.json" --markdown-out "observations/seed-$SEED-organization.md"
-      - name: Build compact opportunity coverage summary
-        env:
-          SEED: ${{ matrix.seed }}
-          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
-        run: |
-          set -euo pipefail
-          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir observations/coverage --summary-only
-      - name: Build compact per-seed permanent record
-        env:
-          SEED: ${{ matrix.seed }}
-        run: |
-          set -euo pipefail
-          mkdir -p compact-records
-          python3 tools/compact_experiment_record.py \
-            --seed "$SEED" \
-            --chemistry "observations/seed-$SEED-chemistry.json" \
-            --organization "observations/seed-$SEED-organization.json" \
-            --manifest "observations/seed-$SEED.jsonl.manifest.json" \
-            --opportunity-coverage observations/coverage/contact-opportunity-analysis.json \
-            --output "compact-records/seed-$SEED-record.json"
-      - name: Run explicitly requested deep analyses
-        if: needs.prepare.outputs.deep_diagnostics == 'true'
-        env:
-          SEED: ${{ matrix.seed }}
-          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
-        run: |
-          set -euo pipefail
-          python3 tools/reaction_network_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir deep/reaction-network
-          python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir deep/geometry-aware-network
-          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir deep/contact-opportunities
-          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir deep/temporal-chemical-complexity
-      - name: Upload compact per-seed record
+      - name: Upload temporary raw observations for consolidation
         uses: actions/upload-artifact@v4
         with:
-          name: chemistry-compact-record-seed-${{ matrix.seed }}
-          path: compact-records/seed-${{ matrix.seed }}-record.json
-          if-no-files-found: error
-          retention-days: 1
-      - name: Upload temporary deep analysis
-        if: needs.prepare.outputs.deep_diagnostics == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: chemistry-deep-temporary-seed-${{ matrix.seed }}
-          path: deep/
+          name: chemistry-raw-seed-${{ matrix.seed }}
+          path: observations/
           if-no-files-found: error
           retention-days: 1
       - name: Clean local raw diagnostic workspace
         if: always()
-        run: rm -rf observations deep compact-records
-
+        run: rm -rf observations
   aggregate:
     if: needs.prepare.outputs.should_run == 'true'
     needs: [prepare, observe]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download compact per-seed records
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Download short-lived raw observations
         uses: actions/download-artifact@v4
         with:
-          pattern: chemistry-compact-record-seed-*
-          path: compact-records
+          pattern: chemistry-raw-seed-*
+          path: observations
           merge-multiple: true
-      - name: Compare compact records with the unified analyzer
+      - name: Run unified offline analysis and build temporary seed summaries
+        env:
+          SEEDS_JSON: ${{ needs.prepare.outputs.seeds }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
           set -euo pipefail
-          RECORD_ARGS=()
-          for RECORD in compact-records/seed-*-record.json; do
-            [[ -f "$RECORD" ]] || continue
-            RECORD_ARGS+=("$RECORD")
+          SEEDS=$(python3 -c 'import json,os; print(",".join(map(str,json.loads(os.environ["SEEDS_JSON"]))))')
+          python3 tools/unified_chemistry_analysis.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir work/unified
+          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir work/coverage --summary-only
+          mkdir -p work/temporary-seed-records
+          for SEED in ${SEEDS//,/ }; do
+            python3 tools/compact_experiment_record.py \
+              --seed "$SEED" \
+              --chemistry "work/unified/per-seed/seed-$SEED-chemistry.json" \
+              --organization "work/unified/per-seed/seed-$SEED-organization.json" \
+              --manifest "observations/seed-$SEED.jsonl.manifest.json" \
+              --opportunity-coverage work/coverage/contact-opportunity-analysis.json \
+              --output "work/temporary-seed-records/seed-$SEED-record.json"
           done
-          if [[ "${#RECORD_ARGS[@]}" -eq 0 ]]; then
-            echo "No compact per-seed records were downloaded." >&2
-            exit 1
-          fi
-          python3 tools/unified_chemistry_analysis.py --compare-records "${RECORD_ARGS[@]}" --comparison-json-out compact-record-comparison.json --comparison-markdown-out compact-record-comparison.md
-      - name: Upload compact record transport artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: chemistry-experiment-compact-records
-          path: |
-            compact-records/
-            compact-record-comparison.json
-            compact-record-comparison.md
-          if-no-files-found: error
-          retention-days: 90
+      - name: Finalize exactly two permanent experiment files
+        env:
+          SEEDS_JSON: ${{ needs.prepare.outputs.seeds }}
+          EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
+          CONDITION_ID: ${{ needs.prepare.outputs.condition_id }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Permanent experiment publication is restricted to main." >&2; exit 1; }
+          [[ "$EXPERIMENT_ID" =~ ^EXP-[0-9]{4}-[0-9]{3}$ ]] || { echo "A registered EXP-YYYY-NNN identifier is required for permanent publication." >&2; exit 1; }
+          [[ "$CONDITION_ID" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || { echo "A valid condition_id is required for permanent publication." >&2; exit 1; }
+          SEEDS=$(python3 -c 'import json,os; print(",".join(map(str,json.loads(os.environ["SEEDS_JSON"]))))')
+          python3 tools/finalize_experiment_records.py \
+            --records work/temporary-seed-records/seed-*-record.json \
+            --expected-seeds "$SEEDS" \
+            --setup-out work/final/experiment-setup.json \
+            --report-out work/final/consolidated-report.json
+          DEST="experiments/records/results/$EXPERIMENT_ID-$CONDITION_ID"
+          [[ ! -e "$DEST" ]] || { echo "Refusing to overwrite an existing permanent experiment record: $DEST" >&2; exit 1; }
+          mkdir -p "$DEST"
+          cp work/final/experiment-setup.json "$DEST/setup.json"
+          cp work/final/consolidated-report.json "$DEST/consolidated-report.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST/setup.json" "$DEST/consolidated-report.json"
+          git commit -m "Record $EXPERIMENT_ID $CONDITION_ID experiment results"
+          git push origin "HEAD:main"
+      - name: Delete temporary raw and compact-record artifacts
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | select(.name | startswith("chemistry-raw-seed-")) | .id')
+          while IFS= read -r ID; do
+            [[ -n "$ID" ]] && gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID"
+          done <<< "$IDS"
+          rm -rf observations work
