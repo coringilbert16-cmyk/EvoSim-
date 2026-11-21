@@ -54,6 +54,30 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             self.assertEqual(report["status"], "validated")
             self.assertEqual(len(report["analysis"]["per_seed_results"]), 2)
 
+
+    def test_rejects_incomplete_required_pipeline_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = []
+            for seed in (42, 43):
+                path = root / f"seed-{seed}.json"
+                path.write_text(json.dumps(sample_record(seed)), encoding="utf-8")
+                records.append(path)
+            index_path = root / "index.json"
+            index_path.write_text(json.dumps({
+                "schema": "evosim.unified_chemistry_analysis",
+                "experiment_id": "EXP-2026-099",
+                "research_plan": "OBS-001",
+                "condition_id": "baseline",
+                "runs": [{"seed": 42}, {"seed": 43}],
+                "quality": {"all_runs_have_validated_manifests": True},
+                "stages": [
+                    {"stage": "chemistry", "status": "completed"},
+                    {"stage": "organization", "status": "failed"},
+                    {"stage": "experiment_batch", "status": "completed"}]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "required unified analysis stages"):
+                finalizer.finalize(records, [42, 43], index_path)
+
     def test_rejects_missing_seed_before_comparison(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "seed-42.json"
