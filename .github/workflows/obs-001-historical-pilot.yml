@@ -155,6 +155,10 @@ jobs:
               raise SystemExit("Historical research-plan identity does not match the retained record.")
           if index.get("condition_id") is not None:
               raise SystemExit("A condition ID was not established for these legacy artifacts; do not invent one.")
+          if index.get("duration_seconds") != int(os.environ["DURATION_SECONDS"]):
+              raise SystemExit("Historical analysis duration does not match the retained record.")
+          if sorted(row.get("seed") for row in index.get("runs", [])) != [42, 43, 44, 45, 46]:
+              raise SystemExit("Historical analysis did not include the exact five-seed source set.")
           if index.get("quality", {}).get("all_runs_have_validated_manifests") is not False:
               raise SystemExit("Legacy pilot must remain explicitly unvalidated for manifest provenance.")
           if any(row.get("manifest_status") != "legacy_manifest_missing" for row in index.get("runs", [])):
