@@ -115,7 +115,7 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 "experiment_id": "EXP-2026-099",
                 "research_plan": "OBS-001",
                 "condition_id": "baseline",
-                "runs": [{"seed": 42}, {"seed": 43}],
+                "runs": [sample_index_run(42), sample_index_run(43)],
                 "quality": {"all_runs_have_validated_manifests": True},
                 "stages": [
                     {"stage": "chemistry", "status": "completed"},
@@ -140,7 +140,7 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 "experiment_id": "EXP-2026-099",
                 "research_plan": "OBS-001",
                 "condition_id": "baseline",
-                "runs": [{"seed": 42}, {"seed": 43}],
+                "runs": [sample_index_run(42), sample_index_run(43)],
                 "quality": {"all_runs_have_validated_manifests": True},
                 "stages": stages}), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "output checksum mismatch"):
