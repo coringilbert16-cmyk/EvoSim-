@@ -142,7 +142,11 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "expected_seed_count": len(expected_seeds),
             "all_seed_records_complete": True,
             "measurement_definitions_complete": True,
-            "pipeline_stages": stage_status,
+            "pipeline_stages": [
+                {"stage": row.get("stage"), "status": row.get("status"),
+                 "analyzer": row.get("analyzer"), "analyzer_sha256": row.get("analyzer_sha256")}
+                for row in stages if isinstance(row, dict)
+            ],
             "optional_stage_warnings": [f"{stage}: {status}" for stage, status in stage_status.items() if stage not in required_stages and status not in ("completed", "deferred_heavy")],
             "limitations": [
                 "Seeds are independent replicates; reaction events within a seed are not independent samples.",
