@@ -59,9 +59,9 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
         if row.get("conditions", {}).get("configuration") != conditions.get("configuration"):
             raise ValueError("records have different experiment configurations")
     comparison = compare(paths)
-    if len(comparison.get("groups", [])) != 1:
+    if len(comparison.get("condition_groups", [])) != 1:
         raise ValueError("cross-seed comparison did not produce exactly one condition group")
-    if comparison.get("missing_definition_records"):
+    if comparison.get("measurement_definition_missing_records"):
         raise ValueError("required measurement definitions are missing; refusing finalization")
 
     setup = {
