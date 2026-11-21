@@ -277,6 +277,15 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             "workflow_run_url": provenance.get("workflow_run_url"),
         },
         "configuration": canonical_configuration,
+        "per_seed_initial_conditions": [
+            {
+                "seed": row["identity"]["seed"],
+                "configuration_sha256": row["provenance"].get("configuration_sha256"),
+                "initial_material_inventory": row["conditions"]["configuration"].get("initial_material_inventory"),
+                "pile_sizes": row["conditions"]["configuration"].get("pile_sizes"),
+            }
+            for row in records
+        ],
         "simulator_invocation": {
             "workflow_file": ".github/workflows/chemistry-experiments.yml",
             "toolchain_selector": "stable",
