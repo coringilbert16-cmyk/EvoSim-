@@ -87,6 +87,32 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         raise ValueError("validated experiment records must identify their source workflow run")
     canonical_configuration = dict(conditions.get("configuration") or {})
     canonical_configuration.pop("seed", None)
+    required_configuration_fields = (
+        "initial_material_inventory", "initial_physical_material_count",
+        "initial_independent_resource_count", "initial_molecule_count",
+        "initial_constituent_count", "pile_sizes", "hotspot", "world_geometry",
+        "flow_field", "deep_diagnostics_enabled", "profile_movement_enabled",
+        "profile_tick_enabled", "biology_enabled",
+    )
+    missing_configuration = [
+        field for field in required_configuration_fields
+        if canonical_configuration.get(field) is None
+    ]
+    if missing_configuration:
+        raise ValueError(
+            "reproducibility setup is missing required environment/configuration fields: "
+            + ", ".join(missing_configuration)
+        )
+    if not isinstance(canonical_configuration["initial_material_inventory"], dict):
+        raise ValueError("initial material inventory must be a structured mapping")
+    if not isinstance(canonical_configuration["pile_sizes"], list):
+        raise ValueError("environment pile sizes must be recorded as a list")
+    if not isinstance(canonical_configuration["world_geometry"], dict):
+        raise ValueError("world geometry must be recorded as a structured mapping")
+    if not isinstance(canonical_configuration["flow_field"], dict):
+        raise ValueError("ambient flow configuration must be recorded as a structured mapping")
+    if requested_duration is None or diagnostic_interval is None:
+        raise ValueError("requested duration and diagnostic interval are required for reproduction")
     for row in records[1:]:
         other = row["identity"]
         if (other.get("experiment_id"), other.get("research_plan"), other.get("condition_id")) != (
