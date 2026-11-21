@@ -261,6 +261,7 @@ jobs:
           python3 tools/finalize_experiment_records.py \
             --records work/temporary-seed-records/seed-*-record.json \
             --expected-seeds "$SEEDS" \
+            --analysis-index work/unified/unified-analysis-index.json \
             --setup-out work/final/experiment-setup.json \
             --report-out work/final/consolidated-report.json
           DEST="experiments/records/results/$EXPERIMENT_ID-$CONDITION_ID"
