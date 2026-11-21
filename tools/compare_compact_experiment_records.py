@@ -188,9 +188,15 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             "condition_id": key[1],
             "comparison_configuration_sha256": key[2],
             "measurement_schema_version": key[3],
-            "active_resources": list(key[4]),
-            "requested_duration_seconds": key[5],
-            "diagnostic_interval": key[6],
+            "active_resources": list(key[4]) if key[4] is not None else None,
+            "duration_interpretation": key[5],
+            "requested_duration_seconds": key[6],
+            "diagnostic_interval": key[7],
+            "manifest_schema_version": key[8],
+            "chemistry_analyzer_sha256": key[9],
+            "organization_analyzer_sha256": key[10],
+            "enabled_diagnostic_tiers": list(key[11]) if key[11] is not None else None,
+            "opportunity_coverage_schema_version": key[12],
             "summary": summary,
         })
 
