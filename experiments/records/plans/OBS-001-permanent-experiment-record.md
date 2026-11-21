@@ -12,6 +12,7 @@ A completed experiment must be reproducible and scientifically reviewable after 
 2. **Consolidated report** — the validated scientific result, including seed-level measurements and cross-seed summaries.
 
 Do not create separate permanent per-seed records, comparison records, analyzer indexes, or result-note files. Historical records are not rewritten by this policy.
+The shared experiment registry remains the master index. After publication, update the registered experiment row with links to the setup and consolidated report for that condition. This shared index is not a third experiment-specific result file.
 
 ## Permanent file contract
 
