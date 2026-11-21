@@ -194,8 +194,8 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "raw_diagnostics_size_bytes": next(
                 (item.get("size_bytes") for item in manifest.get("artifacts", [])
                  if item.get("role") == "raw_observation"), None),
-            "chemistry_analyzer_sha256": sha256_file(chemistry_path),
-            "organization_analyzer_sha256": sha256_file(organization_path),
+            "chemistry_analyzer_sha256": sha256_file(ROOT / "tools/chemistry_analyzer.py"),
+            "organization_analyzer_sha256": sha256_file(ROOT / "tools/chemistry_organization_analyzer.py"),
         },
         "conditions": {
             "requested_duration_seconds": source.get("requested_duration_seconds"),
@@ -273,6 +273,7 @@ def build_record(seed: int, chemistry_path: Path, organization_path: Path,
             "recurrent_fraction": org.get("recurrence_fraction"),
             "active_families_at_end": org.get("families_active_at_end"),
             "compound_identity_count": org.get("molecules_with_multi_resource_or_bonded_structure"),
+            "top_structural_families": top_structural_families,
             "mean_observed_lifetime_ticks": nested(organization, "persistence", "mean_observed_lifetime_ticks"),
             "median_observed_lifetime_ticks": nested(organization, "persistence", "median_observed_lifetime_ticks"),
             "compound_material_by_resource": scalar_tree(nested(
