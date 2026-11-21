@@ -20,6 +20,8 @@ def sample_record(seed):
         "biology_enabled": False,
         "rustc_version": "rustc 1.91.0 (example)",
         "cargo_version": "cargo 1.91.0 (example)",
+        "runner_os": "Linux",
+        "runner_arch": "X64",
         "initial_physical_material_count": 1280,
         "initial_independent_resource_count": 1200,
         "initial_molecule_count": 80,
