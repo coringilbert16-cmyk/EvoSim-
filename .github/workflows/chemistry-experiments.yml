@@ -186,6 +186,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Record exact Rust toolchain versions
+        run: |
+          echo "EVOSIM_RUSTC_VERSION=$(rustc --version)" >> "$GITHUB_ENV"
+          echo "EVOSIM_CARGO_VERSION=$(cargo --version)" >> "$GITHUB_ENV"
       - name: Run standard six-element environmental chemistry observation
         timeout-minutes: 110
         env:
