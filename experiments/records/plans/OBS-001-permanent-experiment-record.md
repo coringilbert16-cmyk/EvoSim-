@@ -13,6 +13,7 @@ A completed experiment must be reproducible and scientifically reviewable after 
 
 Do not create separate permanent per-seed records, comparison records, analyzer indexes, or result-note files. Historical records are not rewritten by this policy.
 The shared experiment registry remains the master index. After publication, update the registered experiment row with links to the setup and consolidated report for that condition. This shared index is not a third experiment-specific result file.
+Seed-specific stochastic initialization is preserved separately inside the setup file. In particular, per-element initial inventory and randomized pile sizes are recorded per seed and are excluded from the shared measurement-definition digest; they are not discarded or treated as incompatible experiment designs. Fixed conditions such as inventory totals, world geometry, hotspot, and ambient flow remain in the shared configuration.
 
 ## Permanent file contract
 
