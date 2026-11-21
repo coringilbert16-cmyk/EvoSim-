@@ -85,6 +85,7 @@ Compare unified results with existing specialist reports. Investigate discrepanc
 - Generate the setup record from the validated manifest and workflow inputs.
 - Validate the consolidated report against specialist analyzer outputs before publication.
 - Publish exactly the setup file and consolidated report to the repository experiment records.
+- Update the existing shared registry row with links to both files for the published condition; the registry remains an index, not a third experiment-specific result.
 - Only after successful validation and publication, remove raw JSONL, manifests, per-seed specialist outputs, caches, temporary indexes, and diagnostics from the runner.
 - Do not upload raw/intermediate files or retain long-lived compact-record transport artifacts. Any unavoidable cross-job transfer must be short-lived and deleted after consolidation.
 - Preserve exceptional raw evidence only with explicit approval, a scientific reason, and a documented expiry.
@@ -116,5 +117,6 @@ Compare unified results with existing specialist reports. Investigate discrepanc
 - 2026-11-21: Two-file retention implementation is in PR #404. The workflow consolidates short-lived raw inputs in the aggregate job; deep reaction-network, geometry, and temporal stages are deferred unless explicitly requested. The finalizer validates seed coverage, condition identity, measurement compatibility, manifests, and required pipeline stages before publication.
 - 2026-11-21: Review found and fixed a missing `--analysis-index` argument in the workflow's finalizer invocation. Workflow permissions were narrowed so only the aggregate publisher receives contents/actions write access.
 - 2026-11-21: The setup record now stores per-seed simulator arguments and profiling environment flags. The manifest records whether movement/tick profiling was enabled, rather than relying on workflow history to reconstruct those settings.
+- 2026-11-21: Added a tested, idempotent registry updater that preserves links for multiple conditions and writes links relative to the registry document. The workflow updates the shared index only after both permanent files have been generated and validated.
 - 2026-11-21: Historical pilot artifacts were located and confirmed retained: EXP-2026-004 source run #44582565701 (five per-seed observation artifacts plus the specialist aggregate) and EXP-2026-006 source run #44776501166 (five per-seed neighborhood observation artifacts). Both predate canonical run manifests; they must be processed in legacy-compatibility mode and must not be marked as strict manifest-validated future records. No new simulation was launched.
 - **Next:** finish CI on the latest PR head, then run repository-side analysis-only reaggregation of EXP-2026-004 and EXP-2026-006, compare unified outputs with their preserved specialist reports, and record any legacy gaps/discrepancies. Do not merge or launch a new simulation as part of this validation.
