@@ -92,6 +92,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     for row in records:
         seed = row["identity"]["seed"]
         config = dict(row.get("conditions", {}).get("configuration") or {})
+        if config.get("seed") != seed:
+            raise ValueError(f"seed {seed} configuration does not identify the same seed")
         config.pop("seed", None)
         seed_configurations[seed] = config
     canonical_configuration = dict(seed_configurations[identity["seed"]])
@@ -107,6 +109,10 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     for row in records:
         seed = row["identity"]["seed"]
         config = seed_configurations[seed]
+        row_conditions = row["conditions"]
+        if (config.get("requested_duration_seconds") != row_conditions.get("requested_duration_seconds")
+                or config.get("diagnostic_interval_ticks") != row_conditions.get("diagnostic_interval")):
+            raise ValueError(f"seed {seed} manifest configuration disagrees with recorded run settings")
         required_fields = common_required_fields + ("initial_material_inventory", "pile_sizes")
         missing_configuration = [field for field in required_fields if config.get(field) is None]
         if missing_configuration:
