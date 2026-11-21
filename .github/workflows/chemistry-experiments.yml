@@ -49,7 +49,7 @@ on:
         default: ""
         type: string
   push:
-    branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration, movement/05-performance-acceptance, movement/06-performance-optimization]
+    branches: [main]
     paths:
       - experiments/chemistry-run.json
 
@@ -131,6 +131,8 @@ jobs:
               raise SystemExit("Research plan must match PLAN-NNN or OBS-NNN.")
           if condition_id and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", condition_id):
               raise SystemExit("Condition ID may contain only letters, numbers, dots, underscores, and hyphens.")
+          if not experiment_id or not condition_id:
+              raise SystemExit("Permanent experiment records require a registered experiment_id and condition_id.")
 
           if not isinstance(seeds, list) or not seeds or len(seeds) > 25:
               raise SystemExit("Provide between 1 and 25 independent seeds.")
