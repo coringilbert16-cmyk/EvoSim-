@@ -1,0 +1,220 @@
+name: OBS-001 Historical Chemistry Pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_id:
+        description: "Historical dataset to reanalyze; source run and provenance are fixed by this selection."
+        required: true
+        type: choice
+        options:
+          - EXP-2026-004
+          - EXP-2026-006
+      deep_analysis:
+        description: "Opt in to reaction-network, geometry-network, and temporal analysis."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      experiment_id: ${{ steps.source.outputs.experiment_id }}
+      source_run_id: ${{ steps.source.outputs.source_run_id }}
+      source_commit: ${{ steps.source.outputs.source_commit }}
+      research_plan: ${{ steps.source.outputs.research_plan }}
+      duration_seconds: ${{ steps.source.outputs.duration_seconds }}
+      seeds: ${{ steps.source.outputs.seeds }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve immutable historical source
+        id: source
+        env:
+          EXPERIMENT_ID: ${{ inputs.experiment_id }}
+        run: |
+          set -euo pipefail
+          case "$EXPERIMENT_ID" in
+            EXP-2026-004)
+              SOURCE_RUN_ID=44582565701
+              SOURCE_COMMIT=8e7cc7d624e3131b2d99889fef02d9d5c3095318
+              RESEARCH_PLAN=""
+              DURATION_SECONDS=3600
+              ;;
+            EXP-2026-006)
+              SOURCE_RUN_ID=44776501166
+              SOURCE_COMMIT=191069deb65a9f40638e65fe93134eeadde2219c
+              RESEARCH_PLAN=PLAN-002
+              DURATION_SECONDS=3600
+              ;;
+            *)
+              echo "Unsupported historical experiment." >&2
+              exit 1
+              ;;
+          esac
+          {
+            echo "experiment_id=$EXPERIMENT_ID"
+            echo "source_run_id=$SOURCE_RUN_ID"
+            echo "source_commit=$SOURCE_COMMIT"
+            echo "research_plan=$RESEARCH_PLAN"
+            echo "duration_seconds=$DURATION_SECONDS"
+            echo "seeds=42,43,44,45,46"
+          } >> "$GITHUB_OUTPUT"
+
+  analyze:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download retained per-seed source artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ needs.prepare.outputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: chemistry-observation-seed-*
+          path: historical-artifacts
+          merge-multiple: true
+      - name: Stage raw observations and original specialist reports
+        env:
+          SEEDS: ${{ needs.prepare.outputs.seeds }}
+        run: |
+          set -euo pipefail
+          mkdir -p observations original-specialist
+          for seed in ${SEEDS//,/ }; do
+            test -s "historical-artifacts/seed-$seed.jsonl"
+            test -s "historical-artifacts/seed-$seed-chemistry.json"
+            test -s "historical-artifacts/seed-$seed-organization.json"
+            cp "historical-artifacts/seed-$seed.jsonl" observations/
+            cp "historical-artifacts/seed-$seed-chemistry.json" original-specialist/
+            cp "historical-artifacts/seed-$seed-organization.json" original-specialist/
+          done
+          echo "Five retained raw observations and ten original specialist reports staged."
+      - name: Run unified OBS-001 analysis without rerunning simulations
+        env:
+          EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
+          RESEARCH_PLAN: ${{ needs.prepare.outputs.research_plan }}
+          SEEDS: ${{ needs.prepare.outputs.seeds }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+          DEEP_ANALYSIS: ${{ inputs.deep_analysis }}
+        run: |
+          set -euo pipefail
+          ARGS=()
+          if [[ -n "$RESEARCH_PLAN" ]]; then
+            ARGS+=(--research-plan "$RESEARCH_PLAN")
+          fi
+          if [[ "$DEEP_ANALYSIS" == "true" ]]; then
+            ARGS+=(--deep-analysis)
+          fi
+          python3 tools/unified_chemistry_analysis.py observations \
+            --seeds "$SEEDS" \
+            --duration-seconds "$DURATION_SECONDS" \
+            --output-dir work/unified \
+            --experiment-id "$EXPERIMENT_ID" \
+            "${ARGS[@]}"
+          python3 tools/contact_opportunity_analyzer.py observations \
+            --seeds "$SEEDS" \
+            --duration-seconds "$DURATION_SECONDS" \
+            --output-dir work/coverage \
+            --summary-only
+          python3 tools/compare_historical_specialist_outputs.py \
+            --original-dir original-specialist \
+            --recomputed-dir work/unified/per-seed \
+            --seeds "$SEEDS" \
+            --output-json work/comparison/historical-specialist-comparison.json \
+            --output-markdown work/comparison/historical-specialist-comparison.md
+      - name: Validate legacy provenance and write pilot summary
+        env:
+          EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
+          SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
+          SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+          RESEARCH_PLAN: ${{ needs.prepare.outputs.research_plan }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          index = json.loads(Path("work/unified/unified-analysis-index.json").read_text(encoding="utf-8"))
+          if index.get("experiment_id") != os.environ["EXPERIMENT_ID"]:
+              raise SystemExit("Historical experiment identity does not match the selected source.")
+          if index.get("research_plan") != (os.environ["RESEARCH_PLAN"] or None):
+              raise SystemExit("Historical research-plan identity does not match the retained record.")
+          if index.get("condition_id") is not None:
+              raise SystemExit("A condition ID was not established for these legacy artifacts; do not invent one.")
+          if index.get("quality", {}).get("all_runs_have_validated_manifests") is not False:
+              raise SystemExit("Legacy pilot must remain explicitly unvalidated for manifest provenance.")
+          if any(row.get("manifest_status") != "legacy_manifest_missing" for row in index.get("runs", [])):
+              raise SystemExit("Unexpected manifest state in historical pilot inputs.")
+          comparison = json.loads(Path("work/comparison/historical-specialist-comparison.json").read_text(encoding="utf-8"))
+          coverage = json.loads(Path("work/coverage/contact-opportunity-analysis.json").read_text(encoding="utf-8"))
+          summary = [
+              "# OBS-001 historical pilot summary",
+              "",
+              f"- Experiment: {os.environ['EXPERIMENT_ID']}",
+              f"- Source workflow run: {os.environ['SOURCE_RUN_ID']}",
+              f"- Simulation source commit: `{os.environ['SOURCE_COMMIT']}`",
+              f"- Research plan: {os.environ['RESEARCH_PLAN'] or 'not established in retained provenance'}",
+              f"- Duration: {os.environ['DURATION_SECONDS']} seconds per seed",
+              "- Seeds: 42, 43, 44, 45, 46",
+              "- Condition ID: unavailable in the historical source; intentionally left null",
+              "- Manifest provenance: legacy artifacts without canonical manifests; not strict-record validated",
+              "",
+              "## Unified analysis",
+              "",
+              f"- Required stage failures: {len(index.get('quality', {}).get('failed_stages', []))}",
+              f"- Validated manifests: {index.get('quality', {}).get('all_runs_have_validated_manifests')}",
+              f"- Legacy warnings: {len(index.get('quality', {}).get('warnings', []))}",
+              "",
+              "## Specialist-output comparison",
+              "",
+              f"- Reports compared: {comparison['report_count']}",
+              f"- Exact matches: {comparison['exact_match_count']}",
+              f"- Reports with differences: {comparison['reports_with_differences']}",
+              "",
+              "## Opportunity coverage",
+              "",
+          ]
+          for reaction, row in coverage.get("coverage", {}).items():
+              summary.append(
+                  f"- {reaction}: {row.get('state')} "
+                  f"({row.get('complete_ticks')} complete, {row.get('partial_ticks')} partial, "
+                  f"{row.get('unknown_ticks')} unknown ticks)"
+              )
+          summary.extend([
+              "",
+              "## Interpretation limits",
+              "",
+              "- This is offline reanalysis of retained artifacts; no simulation was launched.",
+              "- Original specialist reports are compared strictly with current analyzer outputs; differences require investigation and are not automatically errors.",
+              "- Missing historical manifest fields remain unknown. This pilot does not emit or validate a new permanent experiment setup/report pair.",
+              "- The detailed contact CSV stage remains disabled; only summary coverage is generated.",
+              "",
+          ])
+          Path("work/historical-pilot-summary.md").write_text("\\n".join(summary), encoding="utf-8")
+          PY
+      - name: Upload compact historical pilot report only
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-001-${{ needs.prepare.outputs.experiment_id }}-historical-pilot
+          path: |
+            work/historical-pilot-summary.md
+            work/unified/unified-analysis-index.json
+            work/unified/unified-chemistry-report.md
+            work/unified/experiment-batch.json
+            work/unified/experiment-batch.md
+            work/coverage/contact-opportunity-analysis.json
+            work/coverage/contact-opportunity-analysis.md
+            work/comparison/historical-specialist-comparison.json
+            work/comparison/historical-specialist-comparison.md
+          retention-days: 1
+      - name: Remove downloaded raw and per-seed intermediate data
+        if: success()
+        run: |
+          rm -rf historical-artifacts observations original-specialist work/unified/normalized-input work/unified/per-seed
