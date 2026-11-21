@@ -320,7 +320,7 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
     index_path.write_text(json.dumps(index, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     report_path = output_dir / "unified-chemistry-report.md"
     report_path.write_text(compose_report(index, batch_json), encoding="utf-8")
-    index["report_path"] = str(report_path)
+    index["report_path"] = report_path.name
     index_path.write_text(json.dumps(index, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return index
 
