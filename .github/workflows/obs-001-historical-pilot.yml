@@ -174,6 +174,8 @@ jobs:
               f"- Research plan: {os.environ['RESEARCH_PLAN'] or 'not established in retained provenance'}",
               f"- Duration: {os.environ['DURATION_SECONDS']} seconds per seed",
               "- Seeds: 42, 43, 44, 45, 46",
+              "- Initial inventory: 1,200 independent resources plus 80 intact two-constituent molecules; 1,360 constituents across C, H, N, O, P, S",
+              "- Environment: no ambient medium, no injected matter, no forced reactions, and no candidate-placement intervention",
               "- Condition ID: unavailable in the historical source; intentionally left null",
               "- Manifest provenance: legacy artifacts without canonical manifests; not strict-record validated",
               "",
