@@ -24,12 +24,40 @@ def load_record(path: Path) -> dict[str, Any]:
 
 def measurement_compatibility_key(record: dict[str, Any]) -> tuple[Any, ...]:
     conditions = record.get("conditions", {})
+    provenance = record.get("provenance", {})
+    coverage = record.get("opportunity_coverage") or {}
+    active_resources = conditions.get("active_resources")
+    tiers = provenance.get("enabled_diagnostic_tiers")
     return (
         record.get("schema_version"),
-        tuple(conditions.get("active_resources") or []),
+        tuple(sorted(active_resources)) if isinstance(active_resources, list) else None,
+        "requested_wall_clock_seconds"
+            if numeric(conditions.get("requested_duration_seconds")) is not None else None,
         conditions.get("requested_duration_seconds"),
         conditions.get("diagnostic_interval"),
+        provenance.get("manifest_schema_version"),
+        provenance.get("chemistry_analyzer_sha256"),
+        provenance.get("organization_analyzer_sha256"),
+        tuple(sorted(tiers)) if isinstance(tiers, list) else None,
+        coverage.get("source_schema_version"),
     )
+
+
+def measurement_compatibility_warnings(record: dict[str, Any]) -> list[str]:
+    conditions = record.get("conditions", {})
+    provenance = record.get("provenance", {})
+    missing = []
+    if not isinstance(conditions.get("active_resources"), list):
+        missing.append("active-resource set")
+    if numeric(conditions.get("requested_duration_seconds")) is None:
+        missing.append("requested wall-clock duration")
+    if numeric(conditions.get("diagnostic_interval")) is None:
+        missing.append("diagnostic interval")
+    for field in ("manifest_schema_version", "chemistry_analyzer_sha256",
+                  "organization_analyzer_sha256"):
+        if provenance.get(field) is None:
+            missing.append(field)
+    return missing
 
 
 def condition_group_key(record: dict[str, Any]) -> tuple[Any, ...]:
@@ -215,19 +243,30 @@ def compare(paths: list[Path]) -> dict[str, Any]:
                 "metrics": differences,
             })
 
-    compatible = len(measurement_groups) == 1
+    missing_definition_fields = {
+        record["identity"]["seed"]: measurement_compatibility_warnings(record)
+        for record in records
+        if measurement_compatibility_warnings(record)
+    }
+    compatible = len(measurement_groups) == 1 and not missing_definition_fields
     return {
         "schema": "evosim.compact_record_comparison",
         "schema_version": 1,
         "source": "compact_permanent_records_only",
         "measurement_compatible": compatible,
         "measurement_compatibility_group_count": len(measurement_groups),
+        "measurement_definition_missing_by_seed": missing_definition_fields,
         "condition_groups": rendered_groups,
         "condition_comparisons": comparisons,
         "separated_records": (
             [] if compatible else [
                 {"seed": record["identity"]["seed"],
-                 "reason": "measurement conditions differ (active resources, duration, diagnostic interval, or schema)"}
+                 "reason": (
+                     "measurement definitions are incomplete: "
+                     + ", ".join(measurement_compatibility_warnings(record))
+                     if measurement_compatibility_warnings(record)
+                     else "measurement conditions differ (active resources, duration interpretation, diagnostic interval, analyzer definitions, diagnostic tier, coverage schema, or record schema)"
+                 )}
                 for record in records
             ]
         ),
@@ -246,8 +285,9 @@ def render_markdown(result: dict[str, Any]) -> str:
         "# Compact EvoSim experiment comparison",
         "",
         f"- Compatible conditions: {'yes' if result['measurement_compatible'] else 'no'}",
-        f"- Compatibility groups: {len(result['condition_groups'])}",
+        f"- Compatibility groups: {result['measurement_compatibility_group_count']}",
         "- Source: compact permanent records only",
+        f"- Measurement definitions complete: {'yes' if not result['measurement_definition_missing_by_seed'] else 'no'}",
         "",
     ]
     for index, group in enumerate(result["condition_groups"], 1):
