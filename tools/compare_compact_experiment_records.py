@@ -202,13 +202,18 @@ def compare(paths: list[Path]) -> dict[str, Any]:
             "summary": summary,
         })
 
-    missing_definition_fields = {
-        record["identity"]["seed"]: measurement_compatibility_warnings(record)
+    missing_definition_records = [
+        {
+            "experiment_id": record["identity"].get("experiment_id"),
+            "condition_id": record["identity"].get("condition_id"),
+            "seed": record["identity"]["seed"],
+            "missing_fields": measurement_compatibility_warnings(record),
+        }
         for record in records
         if measurement_compatibility_warnings(record)
-    }
+    ]
     comparisons = []
-    if len(measurement_groups) == 1 and not missing_definition_fields and len(rendered_groups) > 1:
+    if len(measurement_groups) == 1 and not missing_definition_records and len(rendered_groups) > 1:
         baseline = rendered_groups[0]
         baseline_records = condition_groups[condition_group_key(records[0])]
         baseline_vectors = comparison_vectors(baseline["summary"], baseline_records)
@@ -256,14 +261,14 @@ def compare(paths: list[Path]) -> dict[str, Any]:
                 "metrics": differences,
             })
 
-    compatible = len(measurement_groups) == 1 and not missing_definition_fields
+    compatible = len(measurement_groups) == 1 and not missing_definition_records
     return {
         "schema": "evosim.compact_record_comparison",
         "schema_version": 1,
         "source": "compact_permanent_records_only",
         "measurement_compatible": compatible,
         "measurement_compatibility_group_count": len(measurement_groups),
-        "measurement_definition_missing_by_seed": missing_definition_fields,
+        "measurement_definition_missing_records": missing_definition_records,
         "condition_groups": rendered_groups,
         "condition_comparisons": comparisons,
         "separated_records": (
@@ -295,7 +300,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"- Compatible conditions: {'yes' if result['measurement_compatible'] else 'no'}",
         f"- Compatibility groups: {result['measurement_compatibility_group_count']}",
         "- Source: compact permanent records only",
-        f"- Measurement definitions complete: {'yes' if not result['measurement_definition_missing_by_seed'] else 'no'}",
+        f"- Measurement definitions complete: {'yes' if not result['measurement_definition_missing_records'] else 'no'}",
         "",
     ]
     for index, group in enumerate(result["condition_groups"], 1):
