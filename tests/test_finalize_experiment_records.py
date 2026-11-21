@@ -48,7 +48,8 @@ def sample_record(seed):
                      "condition_id": "baseline", "seed": seed},
         "provenance": {
             "source_commit": "abc123", "simulator_version": "1.0",
-            "workflow_run_id": "123", "workflow_run_url": "https://example.test/run/123",
+            "workflow_run_id": "123", "workflow_run_attempt": "1",
+            "workflow_run_url": "https://example.test/run/123",
             "configuration_sha256": hashlib.sha256(compact_json(configuration)).hexdigest(),
             "comparison_configuration_sha256": hashlib.sha256(compact_json(common_configuration)).hexdigest(),
             "manifest_schema_version": 1, "chemistry_analyzer_sha256": "chem",
