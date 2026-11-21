@@ -9,40 +9,54 @@ from tools import finalize_experiment_records as finalizer
 
 
 def sample_record(seed):
+    configuration = {
+        "seed": seed,
+        "requested_duration_seconds": 60,
+        "planned_ticks": 6000,
+        "diagnostic_interval_ticks": 100,
+        "deep_diagnostics_enabled": True,
+        "profile_movement_enabled": True,
+        "profile_tick_enabled": False,
+        "biology_enabled": False,
+        "initial_physical_material_count": 1280,
+        "initial_independent_resource_count": 1200,
+        "initial_molecule_count": 80,
+        "initial_constituent_count": 1360,
+        "initial_material_inventory": (
+            {"Carbon": 1360.0} if seed == 42 else {"Carbon": 1359.0, "Hydrogen": 1.0}
+        ),
+        "pile_sizes": [1280] if seed == 42 else [1279, 1],
+        "hotspot": {"center_x": 125.0, "center_y": 125.0},
+        "world_geometry": {"width": 250.0, "height": 250.0,
+                           "width_cells": 10, "height_cells": 10, "cell_size": 25.0},
+        "flow_field": {"direction_degrees": 0.0, "speed": 1.0,
+                       "strength": 1.0, "vortex_strength": 1.0},
+    }
+    common_configuration = dict(configuration)
+    for field in ("seed", "pile_sizes", "initial_material_inventory"):
+        common_configuration.pop(field)
+    compact_json = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return {
         "schema": "evosim.permanent_experiment_record",
         "schema_version": 1,
         "record_status": "complete",
         "identity": {"experiment_id": "EXP-2026-099", "research_plan": "OBS-001",
                      "condition_id": "baseline", "seed": seed},
-        "provenance": {"source_commit": "abc123", "simulator_version": "1.0",
-                       "workflow_run_id": "123", "workflow_run_url": "https://example.test/run/123",
-                       "configuration_sha256": "cfg", "comparison_configuration_sha256": "cmp",
-                       "manifest_schema_version": 1, "chemistry_analyzer_sha256": "chem",
-                       "organization_analyzer_sha256": "org", "enabled_diagnostic_tiers": [],
-                       "raw_diagnostics_sha256": hashlib.sha256(f"seed-{seed}".encode()).hexdigest()},
-        "conditions": {"configuration": {
-                           "duration": 60,
-                           "deep_diagnostics_enabled": True,
-                           "profile_movement_enabled": True,
-                           "profile_tick_enabled": False,
-                           "biology_enabled": False,
-                           "initial_material_inventory": {"Carbon": 1360.0},
-                           "initial_physical_material_count": 1280,
-                           "initial_independent_resource_count": 1200,
-                           "initial_molecule_count": 80,
-                           "initial_constituent_count": 1360,
-                           "pile_sizes": [1280],
-                           "hotspot": {"center_x": 125.0, "center_y": 125.0},
-                           "world_geometry": {"width": 250.0, "height": 250.0,
-                                              "width_cells": 10, "height_cells": 10,
-                                              "cell_size": 25.0},
-                           "flow_field": {"direction_degrees": 0.0, "speed": 1.0,
-                                          "strength": 1.0, "vortex_strength": 1.0},
-                       },
-                       "requested_duration_seconds": 60,
-                       "actual_elapsed_wall_seconds": 61.0, "start_tick": 0, "end_tick": 600,
-                       "tick_count": 600, "diagnostic_interval": 100, "active_resources": ["C", "H"]},
+        "provenance": {
+            "source_commit": "abc123", "simulator_version": "1.0",
+            "workflow_run_id": "123", "workflow_run_url": "https://example.test/run/123",
+            "configuration_sha256": hashlib.sha256(compact_json(configuration)).hexdigest(),
+            "comparison_configuration_sha256": hashlib.sha256(compact_json(common_configuration)).hexdigest(),
+            "manifest_schema_version": 1, "chemistry_analyzer_sha256": "chem",
+            "organization_analyzer_sha256": "org", "enabled_diagnostic_tiers": [],
+            "raw_diagnostics_sha256": hashlib.sha256(f"seed-{seed}".encode()).hexdigest(),
+        },
+        "conditions": {
+            "configuration": configuration,
+            "requested_duration_seconds": 60,
+            "actual_elapsed_wall_seconds": 61.0, "start_tick": 0, "end_tick": 600,
+            "tick_count": 600, "diagnostic_interval": 100, "active_resources": ["C", "H"],
+        },
     }
 
 
