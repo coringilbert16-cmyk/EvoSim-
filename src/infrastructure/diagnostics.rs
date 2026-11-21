@@ -667,6 +667,14 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "deep_diagnostics_enabled": simulation.record_local_resonance_diagnostics,
             "profile_movement_enabled": std::env::var("EVOSIM_PROFILE_MOVEMENT").unwrap_or_default().eq_ignore_ascii_case("true"),
             "profile_tick_enabled": std::env::var("EVOSIM_PROFILE_TICK").unwrap_or_default().eq_ignore_ascii_case("true"),
+            "world_geometry": {
+                "width": simulation.environment.field.width_cells as f64 * simulation.environment.field.cell_size,
+                "height": simulation.environment.field.height_cells as f64 * simulation.environment.field.cell_size,
+                "width_cells": simulation.environment.field.width_cells,
+                "height_cells": simulation.environment.field.height_cells,
+                "cell_size": simulation.environment.field.cell_size
+            },
+            "flow_field": simulation.flow_field,
             "biology_enabled": false,
             "initial_physical_material_count": initial_physical_material_count,
             "initial_independent_resource_count": initial_independent_resource_count,
