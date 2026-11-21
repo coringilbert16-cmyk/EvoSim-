@@ -197,7 +197,7 @@ def compose_report(index: dict[str, Any], batch_path: Path | None) -> str:
 
 
 def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
-            include_heavy_contact: bool = False) -> dict[str, Any]:
+            include_heavy_contact: bool = False, include_deep_analysis: bool = False) -> dict[str, Any]:
     input_dir = input_dir.resolve()
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -246,13 +246,18 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
     stages.append(run_group_stage("experiment_batch", "chemistry_experiment_batch_analyzer.py",
                                   workspace, seeds, duration, output_dir,
                                   [batch_json, batch_md]))
-    stages.append(run_group_stage("reaction_network", "reaction_network_analyzer.py",
-                                  workspace, seeds, duration, output_dir / "reaction-network", []))
-    stages.append(run_group_stage("geometry_network", "geometry_aware_reaction_network.py",
-                                  workspace, seeds, duration, output_dir / "geometry-aware-network", []))
-    stages.append(run_group_stage("temporal_complexity", "temporal_chemical_complexity_analyzer.py",
-                                  workspace, seeds, duration, output_dir / "temporal-complexity", [],
-                                  ["--windows", "12"]))
+    if include_deep_analysis:
+        stages.append(run_group_stage("reaction_network", "reaction_network_analyzer.py",
+                                      workspace, seeds, duration, output_dir / "reaction-network", []))
+        stages.append(run_group_stage("geometry_network", "geometry_aware_reaction_network.py",
+                                      workspace, seeds, duration, output_dir / "geometry-aware-network", []))
+        stages.append(run_group_stage("temporal_complexity", "temporal_chemical_complexity_analyzer.py",
+                                      workspace, seeds, duration, output_dir / "temporal-complexity", [],
+                                      ["--windows", "12"]))
+    else:
+        for stage_id in ("reaction_network", "geometry_network", "temporal_complexity"):
+            stages.append({"stage": stage_id, "status": "deferred_deep",
+                           "reason": "deep analysis not requested"})
     if include_heavy_contact:
         stages.append(run_group_stage("contact_opportunities", "contact_opportunity_analyzer.py",
                                       workspace, seeds, duration, output_dir / "contact-opportunities", []))
@@ -315,6 +320,8 @@ def main() -> int:
                         help="optional Markdown output path for compact-record-only comparison")
     parser.add_argument("--include-heavy-contact", action="store_true",
                         help="run detailed contact CSV analysis; may produce very large files")
+    parser.add_argument("--deep-analysis", action="store_true",
+                        help="run expanded reaction-network, geometry, and temporal analyzers")
     args = parser.parse_args()
     if args.compare_records:
         if args.input_dir or args.seeds or args.duration_seconds is not None or args.output_dir:
