@@ -32,7 +32,7 @@ def load_record(path: Path) -> dict[str, Any]:
     return value
 
 
-def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, Any], dict[str, Any]]:
+def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if not paths:
         raise ValueError("no temporary per-seed records supplied")
     loaded = [(load_record(path), path) for path in paths]
@@ -65,6 +65,15 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
         other_configuration.pop("seed", None)
         if other_configuration != canonical_configuration:
             raise ValueError("records have different experiment configurations")
+    index = json.loads(analysis_index_path.read_text(encoding="utf-8"))
+    if not isinstance(index, dict) or index.get("schema") != "evosim.unified_chemistry_analysis":
+        raise ValueError("missing or invalid unified analysis index")
+    stages = index.get("stages", [])
+    stage_status = {row.get("stage"): row.get("status") for row in stages if isinstance(row, dict)}
+    required_stages = ("chemistry", "organization", "experiment_batch")
+    failed_required = [stage for stage in required_stages if stage_status.get(stage) != "completed"]
+    if failed_required:
+        raise ValueError("required unified analysis stages did not complete: " + ", ".join(failed_required))
     comparison = compare(paths)
     if len(comparison.get("condition_groups", [])) != 1:
         raise ValueError("cross-seed comparison did not produce exactly one condition group")
@@ -131,6 +140,8 @@ def finalize(paths: list[Path], expected_seeds: list[int]) -> tuple[dict[str, An
             "expected_seed_count": len(expected_seeds),
             "all_seed_records_complete": True,
             "measurement_definitions_complete": True,
+            "pipeline_stages": stage_status,
+            "optional_stage_warnings": [f"{stage}: {status}" for stage, status in stage_status.items() if stage not in required_stages and status not in ("completed", "deferred_heavy")],
             "limitations": [
                 "Seeds are independent replicates; reaction events within a seed are not independent samples.",
                 "Rates require complete, semantically compatible denominators.",
@@ -145,13 +156,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--records", nargs="+", type=Path, required=True)
     parser.add_argument("--expected-seeds", required=True, help="comma-separated requested seed IDs")
+    parser.add_argument("--analysis-index", type=Path, required=True)
     parser.add_argument("--setup-out", type=Path, required=True)
     parser.add_argument("--report-out", type=Path, required=True)
     args = parser.parse_args()
     seeds = [int(value.strip()) for value in args.expected_seeds.split(",") if value.strip()]
     if not seeds or len(seeds) != len(set(seeds)):
         parser.error("--expected-seeds must contain unique seed IDs")
-    setup, report = finalize(args.records, seeds)
+    setup, report = finalize(args.records, seeds, args.analysis_index)
     args.setup_out.parent.mkdir(parents=True, exist_ok=True)
     args.report_out.parent.mkdir(parents=True, exist_ok=True)
     args.setup_out.write_text(json.dumps(setup, sort_keys=True, indent=2) + "\n", encoding="utf-8")
