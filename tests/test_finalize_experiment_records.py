@@ -19,7 +19,9 @@ def sample_record(seed):
                        "configuration_sha256": "cfg", "comparison_configuration_sha256": "cmp",
                        "manifest_schema_version": 1, "chemistry_analyzer_sha256": "chem",
                        "organization_analyzer_sha256": "org", "enabled_diagnostic_tiers": []},
-        "conditions": {"configuration": {"duration": 60}, "requested_duration_seconds": 60,
+        "conditions": {"configuration": {"duration": 60, "deep_diagnostics_enabled": True,
+                                        "profile_movement_enabled": True, "profile_tick_enabled": False},
+                       "requested_duration_seconds": 60,
                        "actual_elapsed_wall_seconds": 61.0, "start_tick": 0, "end_tick": 600,
                        "tick_count": 600, "diagnostic_interval": 100, "active_resources": ["C", "H"]},
     }
@@ -55,8 +57,11 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 setup["simulator_invocation"]["arguments_by_seed"][0]["command"],
                 ["cargo", "run", "--locked", "--", "--headless",
                  "--environment-chemistry-experiment", "--seconds", "60", "--seed", "42",
-                 "--diagnostics", "observations/seed-42.jsonl", "--diagnostic-interval", "100"],
+                 "--diagnostics", "observations/seed-42.jsonl", "--diagnostic-interval", "100",
+                 "--deep-diagnostics"],
             )
+            self.assertTrue(setup["simulator_invocation"]["environment_by_seed"][0]["EVOSIM_PROFILE_MOVEMENT"])
+            self.assertFalse(setup["simulator_invocation"]["environment_by_seed"][0]["EVOSIM_PROFILE_TICK"])
             self.assertEqual(report["status"], "validated")
             self.assertEqual(len(report["analysis"]["per_seed_results"]), 2)
 
