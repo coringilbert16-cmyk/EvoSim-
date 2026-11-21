@@ -1,13 +1,13 @@
 # OBS-001 — Unified chemistry analysis implementation
 
-**Status:** Active engineering/observability initiative; plan registered in this change.  
-**Baseline:** PRs #398, #400, and #401 are merged.  
+**Status:** Active engineering/observability initiative; two-file retention implementation in PR #404, historical pilot validation pending.  
+**Baseline:** PRs #398, #400, #401, #402, and #403 are merged.  
 **Scope:** Offline, reproducible analysis of environmental chemistry artifacts.  
 **Behavior boundary:** No changes to chemistry, physics, reaction discovery, scheduling, activation, or energy settlement.
 
 ## Objective
 
-Turn the existing specialist chemistry analyzers into a coherent, repeatable pipeline that validates experiment provenance, reuses derived outputs, and produces a compact run report plus a cross-seed report. The pipeline must analyze retained artifacts without rerunning simulations.
+Turn the specialist chemistry analyzers into a coherent repository-side pipeline that validates provenance, reuses derived outputs, and produces one consolidated report per experiment/condition. The pipeline must analyze retained artifacts without rerunning simulations and must not require routine manual retrieval of raw files.
 
 OBS-001 is engineering infrastructure, not a scientific hypothesis or experiment. It must not be assigned an EXP identifier or treated as evidence for catalysis, autocatalysis, metabolism, or spatial organization.
 
@@ -16,120 +16,109 @@ OBS-001 is engineering infrastructure, not a scientific hypothesis or experiment
 - **PR #398:** stable reaction identities and event-linked settlement telemetry.
 - **PR #400:** reaction-specific opportunity coverage semantics; missing values and incomplete search coverage remain explicit.
 - **PR #401:** versioned environmental run manifest, configuration digest, artifact checksum, and experiment metadata fields.
-- **OBS-001-opportunity-coverage-audit.md:** authoritative discovery-domain and coverage audit, including historical EXP-2026-004 validation.
+- **PR #402:** unified offline orchestration, manifest/raw-input validation, cached analysis stages, and report/index foundation.
+- **PR #403:** compact record builder, compact comparison tooling, settlement summaries, and summary-only opportunity coverage. Its per-seed permanent-record retention model is superseded by the two-file policy in the [permanent record contract](OBS-001-permanent-experiment-record.md).
+- **OBS-001-opportunity-coverage-audit.md:** discovery-domain and coverage audit, including historical EXP-2026-004 validation.
 - **OBS-001-run-manifest-implementation.md:** manifest contract and known limitations.
 
-These are prerequisites to integration; do not reimplement them.
+## Required permanent outputs
+
+Each future experiment/condition leaves exactly two permanent files in `experiments/records/results/`:
+
+1. A setup/conditions file containing the exact source commit, configuration, seeds, duration, initial inventory, environment, enabled features, command-line/runtime settings, and other information needed to recreate the run.
+2. A consolidated scientific report containing validated per-seed values, cross-seed summaries, provenance, analyzer versions, validation status, missingness, conclusions, and interpretation limits.
+
+Do not preserve separate per-seed JSON records, standalone comparison records, analyzer indexes, or result-note files. Historical records remain unchanged. The complete contract and retention rules are defined in [OBS-001 permanent experiment record](OBS-001-permanent-experiment-record.md).
 
 ## Phases
 
 ### Phase 1 — Analyzer inventory and compatibility matrix
 
-Inspect the current main branch and active/draft PRs. For each analyzer, document:
-
-- CLI/API entry point and required inputs;
-- output artifact and schema/version;
-- provenance and event/lineage keys it preserves;
-- complete, partial, sampled, or unknown coverage;
-- whether results can be cached/reused offline;
-- input/output dependencies and known scaling limits;
-- validation tests and historical artifacts already exercised.
-
-Include the chemistry, molecular-organization, reaction-network, geometry-aware network, contact-opportunity, temporal-complexity, cross-seed, energy/material, and manifest validators that are actually present on main. Do not count draft PR capabilities as merged production behavior. Preserve potentially useful PR #345 work as historical/superseded context; assess PR #392 separately and keep its matched-catalysis gates fail-closed.
-
-Deliverable: a concise capability matrix and prioritized gap list in this plan or a linked audit document.
+Completed on current main. The inventory documents CLI/API entry points, required inputs, output schemas, provenance, coverage, caching, dependencies, scaling limits, and tests. Do not count draft PR capabilities as merged production behavior. Keep matched-catalysis gates fail-closed.
 
 ### Phase 2 — Canonical analysis index and stage contracts
 
-Define a versioned analysis index that links, rather than copies:
-
-run manifest → raw JSONL → validated inputs → specialist outputs → derived datasets → report
-
-The index must include experiment/condition/seed identity, source artifact URI or workflow/artifact references, source checksum, schema version, analyzer version/commit, output checksum, status, and explicit missing/quality warnings. Bind post-run uploaded artifact identifiers here; do not mutate the immutable run manifest.
-
-Specify stable contracts for each pipeline stage. Use structured machine-readable outputs (JSON) with a small human-readable summary. Keep null/unknown distinct from measured zero. Preserve reaction-specific denominator semantics and coverage. Avoid storing huge contact arrays in the index or report.
+The temporary analysis index links manifest → raw JSONL → validated inputs → specialist outputs → derived datasets → consolidated report. It is a working artifact only and must be deleted after report validation. It must record experiment/condition/seed identity, source checksums, schema/analyzer versions, output checksums, stage status, and explicit quality warnings. It must not be committed or retained as a permanent deliverable.
 
 ### Phase 3 — Offline orchestration
 
-Implement a command-line orchestrator (or extend the existing analysis workflow if the inventory shows a suitable entry point) that:
+The orchestrator must:
 
-1. discovers/accepts manifest and artifact inputs;
-2. validates schema, manifest/config digest, and raw artifact checksum;
-3. runs applicable specialist analyzers in dependency order;
-4. records each stage's input fingerprint, version, status, output path/checksum, and errors;
-5. reuses valid derived outputs when inputs and analyzer versions match;
-6. supports analysis-only reaggregation and per-seed processing for memory-heavy analyzers;
-7. emits the analysis index and final reports;
-8. exits nonzero for invalid required inputs, while allowing explicitly optional analyzers to report unavailable/partial status.
+1. accept a directory or experiment artifact set;
+2. validate schema, manifest/config digest, raw artifact checksum, provenance, and seed coverage;
+3. run applicable specialist analyzers in dependency order;
+4. record stage fingerprints, versions, status, output paths/checksums, and errors in temporary working data;
+5. reuse valid derived outputs when inputs and analyzer versions match;
+6. process memory-heavy analyzers per seed/stream where appropriate;
+7. consolidate per-seed findings into one report with cross-seed summaries;
+8. fail closed for invalid required inputs while allowing optional analyzers to report unavailable/partial status;
+9. never launch or alter simulations.
 
-The pipeline must not launch or alter simulations. It must not silently download, overwrite, or delete source evidence.
+### Phase 4 — Standard consolidated report
 
-### Phase 4 — Standard reports
+The single consolidated report must contain:
 
-Produce:
-
-**Per-run report**
-- run provenance, conditions, elapsed wall time and actual ticks;
-- initial/final inventory and material balance;
-- reaction totals and time-series;
-- opportunity funnel by reaction type, with coverage and denominator validity;
-- event/lineage joins and molecular organization/pathways;
+- experiment identity, source commit, setup reference, and analyzer versions;
+- requested/actual duration, tick counts, initial/final inventory, and material balance;
+- per-seed and cross-seed reaction totals, identities, failure reasons, and rates only when denominators are valid;
+- opportunity coverage and search-domain semantics;
 - energy/resonance/physical-work/heat accounting and residuals;
-- spatial/environment context only where supported;
-- analyzer status, missingness, artifact links, and interpretation limits.
+- event/lineage joins and molecular organization/pathways where supported;
+- analyzer status, missingness, discrepancies, and interpretation limits;
+- observations, derived metrics, interpretations, and hypotheses separated clearly.
 
-**Cross-seed report**
-- condition-grouped results and independent seed count;
-- per-seed values and descriptive aggregate/variation;
-- no treatment of within-run events as independent replicates;
-- explicit exclusion/reason for missing or incompatible seed outputs;
-- no pooled conversion rate unless denominators are valid and semantically comparable.
-
-Separate **observations**, **derived metrics**, **interpretations**, and **hypotheses**. A family cycle or neighborhood association is not proof of catalysis.
+Seeds are independent replicates; events within a seed are not independent samples. A family cycle or neighborhood association is not proof of catalysis.
 
 ### Phase 5 — Historical pilot and acceptance
 
-First use retained evidence; no simulation reruns by default:
+Use retained evidence only; no simulation reruns by default:
 
-- EXP-2026-004 five-seed raw artifacts: test manifest/legacy compatibility, coverage, chemistry, lineage, and energy outputs.
-- EXP-2026-006 / PLAN-002 retained per-seed neighborhood artifacts and existing analysis-only reaggregation: test event joins, bounded sampling, geometry, and explicit causal ineligibility.
-- PLAN-004 / EXP-2026-005 resource-feed paired artifacts: test condition metadata, nonzero-tick external material identities, matched-seed aggregation, and filename/layout normalization. Recover and aggregate the ten retained observations; do not repeat the experiment solely to repair report assembly.
+- **EXP-2026-004:** five-seed baseline; test legacy/manifest compatibility, coverage, chemistry, lineage, and energy.
+- **EXP-2026-006 / PLAN-002:** retained neighborhood artifacts and analysis-only reaggregation; test event joins, bounded sampling, geometry, and causal ineligibility.
+- **EXP-2026-005 / PLAN-004:** paired resource-feed artifacts; test condition metadata, matched-seed aggregation, and filename/layout normalization.
 
-Compare unified results with existing specialist reports. Investigate every discrepancy and record any non-reconstructible historical field as unavailable rather than inferred.
+Compare unified results with existing specialist reports. Investigate discrepancies. Historical fields that cannot be reconstructed remain unavailable; never infer them. Pilot outputs are temporary until validated; then retain only the setup and consolidated report.
 
-### Phase 6 — Compact-record adoption
+### Phase 6 — Two-file retention adoption
 
-- Define and validate the permanent record contract before changing retention defaults.
-- Build compact per-seed records directly from the existing specialist analyzer outputs.
-- Compare experiments from compact records alone, without requiring raw JSONL or intermediate analyzer outputs.
-- Make exhaustive local-resonance sampling, contact-opportunity CSVs, reaction-network expansion, and temporal detail explicit deep-analysis options.
-- Do not upload raw JSONL, manifests, or specialist intermediate reports in routine runs; generate and validate compact records in the same per-seed job, then clean the local workspace. Retain only compact transport artifacts separately.
-- Commit validated compact per-seed records and the experiment comparison record with the permanent result note.
-- Preserve selected reference datasets only through an explicit allowlist and documented retention reason.
+- Update the schema/record builder to emit the consolidated experiment-level report directly; per-seed values belong inside it, not in separate permanent files.
+- Generate the setup record from the validated manifest and workflow inputs.
+- Preserve seed-specific stochastic inventory composition and randomized pile sizes in per-seed setup entries while hashing only the shared experimental design for cross-seed compatibility.
+- Validate the consolidated report against specialist analyzer outputs before publication.
+- Publish exactly the setup file and consolidated report to the repository experiment records.
+- Update the existing shared registry row with links to both files for the published condition; the registry remains an index, not a third experiment-specific result.
+- Only after successful validation and publication, remove raw JSONL, manifests, per-seed specialist outputs, caches, temporary indexes, and diagnostics from the runner.
+- Do not upload raw/intermediate files or retain long-lived compact-record transport artifacts. Any unavoidable cross-job transfer must be short-lived and deleted after consolidation.
+- Preserve exceptional raw evidence only with explicit approval, a scientific reason, and a documented expiry.
 - Require each new measurement to state its scientific question, expected data volume, consumer stage, and acceptance test.
 
 ## Acceptance criteria
 
-- A manifest and analysis index provide reproducible links from run to all source and derived artifacts.
-- Raw source artifacts remain immutable and checksum-verified.
-- Each analyzer's version/schema and execution status are recorded.
-- Re-running analysis on unchanged inputs reuses valid outputs and does not rerun simulation.
-- Existing historical artifacts can be analyzed offline; large datasets are processed per seed/streaming where appropriate.
-- Reaction identities, exact participant/lineage joins, settlement data, and opportunity coverage remain intact or are explicitly reported missing.
+- The pipeline accepts experiment directories/artifact sets and performs analysis inside the repository workflow.
+- Manifest, source checksums, configuration digests, required seed coverage, and analyzer outputs are validated.
+- Existing historical artifacts can be analyzed offline; no simulation reruns are required for the pilot.
+- Re-running analysis on unchanged inputs reuses valid temporary outputs and does not rerun simulation.
+- Reaction identities, participant/lineage joins, settlement data, and opportunity coverage remain intact or are explicitly reported missing.
 - Missing, null, sampled, partial, unknown, and measured zero are never conflated.
 - No rate is emitted without a valid, complete, semantically appropriate denominator.
-- Reports distinguish observations from interpretation and retain seed-level results.
-- Compact records can be compared after all raw/intermediate artifacts have expired.
-- Routine workflow uploads no raw JSONL, manifest, specialist report, or detailed contact CSV; local source files are deleted after compact-record generation. Deep artifacts are explicit opt-in and expire automatically.
-- Automated tests cover invalid manifests/checksums, legacy schema, partial coverage, missing analyzer output, stale cache, deterministic index/report assembly, and aggregation naming variants.
-- No simulation behavior or chemistry/physics rules change.
+- The consolidated report contains compact per-seed values and cross-seed statistics and agrees with specialist reports or documents discrepancies.
+- Exactly two permanent files are produced per experiment/condition: setup and consolidated report.
+- No separate permanent per-seed records, analysis indexes, or comparison artifacts are retained.
+- Cleanup is gated on successful validation and durable publication; failed runs preserve inputs.
+- No simulator behavior or chemistry/physics rules change.
 
 ## Execution log
 
 - 2026-11-20: Registered following the merge of PR #401.
-- 2026-11-20: Phase 1 current-main analyzer inventory completed; see [analyzer inventory](OBS-001-analyzer-inventory.md). The initial index/orchestration design can proceed with a deliberate heavy-contact stage boundary.
-- 2026-11-20: PLAN-004 retained artifact assembly failure traced to condition-prefixed artifact names. A tested normalization helper and analysis-only workflow path were added to the PLAN-004 branch; validation and reaggregation remain pending.
-- 2026-11-20: PLAN-004 / EXP-2026-005 analysis-only recovery run #44833658626 passed; its observe matrix was skipped and the full specialist aggregate artifact was uploaded. The ten source observations were not repeated. This validates the paired artifact normalization/aggregation path; historical EXP-2026-004 and EXP-2026-006 remain the next unified-pipeline pilot targets.
-- 2026-11-20: Initial unified orchestrator and tests added in PR #402. It validates manifest/raw checksums, creates per-seed chemistry and organization outputs with cache fingerprints, runs batch/network/geometry/temporal stages, writes a portable versioned index/report, and keeps detailed contact CSV generation opt-in. Rust CI run #44833728704 passed on implementation commit 327b256; the latest plan-log update is documentation-only.
-
-- 2026-11-20: PR #403 opened to implement the compact-retention revision. Added the versioned permanent-record contract, per-seed record builder, compact-only comparison tool, per-reaction settlement summaries, and summary-only opportunity-coverage output. Routine runs never upload raw source artifacts: they are processed and validated on the runner, then deleted locally. Only compact records are transported for 90 days. Deep local-resonance sampling and detailed network/contact/temporal outputs require explicit opt-in and expire after one day. CI validation is pending; historical compact-only comparison validation has not yet been completed.
+- 2026-11-20: Analyzer inventory completed; see [analyzer inventory](OBS-001-analyzer-inventory.md).
+- 2026-11-20: PLAN-004 / EXP-2026-005 analysis-only recovery run #44833658626 passed; ten source observations were reused without rerunning simulations.
+- 2026-11-20: PR #402 merged the unified orchestrator, manifest/raw checksums, cache fingerprints, specialist analysis stages, and portable report/index foundation.
+- 2026-11-21: PR #403 merged the compact-record builder, comparison tool, settlement summaries, and summary-only opportunity coverage. The original per-seed permanent-record design is now superseded by the two-file retention contract.
+- 2026-11-21: User-approved retention decision: future experiments retain only setup/conditions and one validated consolidated report. Raw and intermediate data are temporary and may be removed only after successful validation and publication.
+- 2026-11-21: Two-file retention implementation is in PR #404. The workflow consolidates short-lived raw inputs in the aggregate job; deep reaction-network, geometry, and temporal stages are deferred unless explicitly requested. The finalizer validates seed coverage, condition identity, measurement compatibility, manifests, and required pipeline stages before publication.
+- 2026-11-21: Review found and fixed a missing `--analysis-index` argument in the workflow's finalizer invocation. Workflow permissions were narrowed so only the aggregate publisher receives contents/actions write access.
+- 2026-11-21: The setup record now stores per-seed simulator arguments and profiling environment flags. The manifest records whether movement/tick profiling was enabled, rather than relying on workflow history to reconstruct those settings.
+- 2026-11-21: Added a tested, idempotent registry updater that preserves links for multiple conditions and writes links relative to the registry document. The workflow updates the shared index only after both permanent files have been generated and validated.
+- 2026-11-21: Historical pilot artifacts were located and confirmed retained: EXP-2026-004 source run #44582565701 (five per-seed observation artifacts plus the specialist aggregate) and EXP-2026-006 source run #44776501166 (five per-seed neighborhood observation artifacts). Both predate canonical run manifests; they must be processed in legacy-compatibility mode and must not be marked as strict manifest-validated future records. No new simulation was launched.
+- 2026-11-21: Added a dedicated analysis-only historical pilot workflow, pinned to the retained EXP-2026-004 and EXP-2026-006 source run IDs and verified source commits. It downloads only the five per-seed observation artifacts, reruns offline analyzers, compares current outputs against the retained specialist JSON, produces a compact one-day pilot artifact, and removes local raw/intermediate data. Legacy condition IDs remain null; no permanent two-file record is emitted from these manifest-less historical runs.
+- **Next:** finish CI on the latest PR head. After the workflow is available on main, dispatch it once for EXP-2026-004 and once for EXP-2026-006, then review only the compact pilot summaries and investigate any analyzer discrepancies. No simulation rerun is part of this validation.

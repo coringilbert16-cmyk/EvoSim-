@@ -197,7 +197,10 @@ def compose_report(index: dict[str, Any], batch_path: Path | None) -> str:
 
 
 def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
-            include_heavy_contact: bool = False) -> dict[str, Any]:
+            include_heavy_contact: bool = False, include_deep_analysis: bool = False,
+            experiment_id_override: str | None = None,
+            research_plan_override: str | None = None,
+            condition_id_override: str | None = None) -> dict[str, Any]:
     input_dir = input_dir.resolve()
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -212,7 +215,23 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
                                experiment.get("condition_id")))
         if len(set(identities)) != 1:
             raise ValueError("one invocation must contain a single experiment/plan/condition group")
-        experiment_id, research_plan, condition_id = identities[0]
+        manifest_experiment_id, manifest_research_plan, manifest_condition_id = identities[0]
+        for label, manifest_value, override in (
+            ("experiment_id", manifest_experiment_id, experiment_id_override),
+            ("research_plan", manifest_research_plan, research_plan_override),
+            ("condition_id", manifest_condition_id, condition_id_override),
+        ):
+            if manifest_value is not None and override is not None and manifest_value != override:
+                raise ValueError(f"{label} override conflicts with validated run manifest")
+        experiment_id = manifest_experiment_id or experiment_id_override
+        research_plan = manifest_research_plan or research_plan_override
+        condition_id = manifest_condition_id or condition_id_override
+    else:
+        # Historical inputs may predate manifests. Explicitly supplied identity
+        # fields are retained; unavailable condition identity remains null.
+        experiment_id = experiment_id_override
+        research_plan = research_plan_override
+        condition_id = condition_id_override
     workspace = output_dir / "normalized-input"
     workspace.mkdir(parents=True, exist_ok=True)
     per_seed_dir = output_dir / "per-seed"
@@ -246,13 +265,18 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
     stages.append(run_group_stage("experiment_batch", "chemistry_experiment_batch_analyzer.py",
                                   workspace, seeds, duration, output_dir,
                                   [batch_json, batch_md]))
-    stages.append(run_group_stage("reaction_network", "reaction_network_analyzer.py",
-                                  workspace, seeds, duration, output_dir / "reaction-network", []))
-    stages.append(run_group_stage("geometry_network", "geometry_aware_reaction_network.py",
-                                  workspace, seeds, duration, output_dir / "geometry-aware-network", []))
-    stages.append(run_group_stage("temporal_complexity", "temporal_chemical_complexity_analyzer.py",
-                                  workspace, seeds, duration, output_dir / "temporal-complexity", [],
-                                  ["--windows", "12"]))
+    if include_deep_analysis:
+        stages.append(run_group_stage("reaction_network", "reaction_network_analyzer.py",
+                                      workspace, seeds, duration, output_dir / "reaction-network", []))
+        stages.append(run_group_stage("geometry_network", "geometry_aware_reaction_network.py",
+                                      workspace, seeds, duration, output_dir / "geometry-aware-network", []))
+        stages.append(run_group_stage("temporal_complexity", "temporal_chemical_complexity_analyzer.py",
+                                      workspace, seeds, duration, output_dir / "temporal-complexity", [],
+                                      ["--windows", "12"]))
+    else:
+        for stage_id in ("reaction_network", "geometry_network", "temporal_complexity"):
+            stages.append({"stage": stage_id, "status": "deferred_deep",
+                           "reason": "deep analysis not requested"})
     if include_heavy_contact:
         stages.append(run_group_stage("contact_opportunities", "contact_opportunity_analyzer.py",
                                       workspace, seeds, duration, output_dir / "contact-opportunities", []))
@@ -287,7 +311,7 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
         "quality": {
             "all_runs_have_validated_manifests": all(row["manifest_status"] == "manifest_validated" for row in runs),
             "failed_stages": [row["stage"] for row in stages if row["status"] == "failed"],
-            "deferred_stages": [row["stage"] for row in stages if row["status"] == "deferred_heavy"],
+            "deferred_stages": [row["stage"] for row in stages if row["status"] in ("deferred_heavy", "deferred_deep")],
             "warnings": ["Historical runs without manifests are checksum-verified but lack full run provenance."]
             if any(row["manifest_status"] != "manifest_validated" for row in runs) else [],
         },
@@ -296,7 +320,7 @@ def analyze(input_dir: Path, seeds: list[int], duration: int, output_dir: Path,
     index_path.write_text(json.dumps(index, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     report_path = output_dir / "unified-chemistry-report.md"
     report_path.write_text(compose_report(index, batch_json), encoding="utf-8")
-    index["report_path"] = str(report_path)
+    index["report_path"] = report_path.name
     index_path.write_text(json.dumps(index, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return index
 
@@ -315,6 +339,11 @@ def main() -> int:
                         help="optional Markdown output path for compact-record-only comparison")
     parser.add_argument("--include-heavy-contact", action="store_true",
                         help="run detailed contact CSV analysis; may produce very large files")
+    parser.add_argument("--deep-analysis", action="store_true",
+                        help="run expanded reaction-network, geometry, and temporal analyzers")
+    parser.add_argument("--experiment-id", help="explicit identity for legacy inputs without manifests")
+    parser.add_argument("--research-plan", help="explicit research plan identity for legacy inputs")
+    parser.add_argument("--condition-id", help="explicit condition identity; omit when historically unknown")
     args = parser.parse_args()
     if args.compare_records:
         if args.input_dir or args.seeds or args.duration_seconds is not None or args.output_dir:
@@ -342,7 +371,8 @@ def main() -> int:
         parser.error("duration-seconds must be positive")
     try:
         index = analyze(args.input_dir, seeds, args.duration_seconds, args.output_dir,
-                        args.include_heavy_contact)
+                        args.include_heavy_contact, args.deep_analysis,
+                        args.experiment_id, args.research_plan, args.condition_id)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"unified analysis failed: {exc}", file=sys.stderr)
         return 2

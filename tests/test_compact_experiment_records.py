@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from tools.compact_experiment_record import build_record
+from tools.compact_experiment_record import build_record, shared_configuration_digest
 from tools.compare_compact_experiment_records import compare
 from tools.chemistry_analyzer import summarize_settlements
 from tools.contact_opportunity_analyzer import analyze as analyze_opportunities
@@ -105,7 +105,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
             "experiment": {"experiment_id": "EXP-2026-999", "research_plan": "OBS-001",
                            "condition_id": "baseline", "seed": seed},
             "build": {"commit_sha": "deadbeef"},
-            "run": {"status": "completed", "started_at_unix_ms": 1000,
+            "run": {"status": "completed", "run_attempt": "1", "started_at_unix_ms": 1000,
                     "completed_at_unix_ms": 61000, "actual_elapsed_wall_seconds": 60.1,
                     "start_tick": 0, "end_tick": 600},
             "conditions": {
@@ -126,6 +126,26 @@ class CompactExperimentRecordTests(unittest.TestCase):
             self.write(f"organization-{seed}.json", organization),
             self.write(f"manifest-{seed}.json", manifest),
         )
+
+    def test_shared_configuration_digest_ignores_seed_specific_initialization(self) -> None:
+        first = {
+            "seed": 42,
+            "pile_sizes": [1280],
+            "initial_material_inventory": {"Carbon": 1360.0},
+            "world_geometry": {"width": 250.0, "height": 250.0},
+            "flow_speed": 1.0,
+        }
+        second = {
+            "seed": 43,
+            "pile_sizes": [1279, 1],
+            "initial_material_inventory": {"Carbon": 1359.0, "Hydrogen": 1.0},
+            "world_geometry": {"width": 250.0, "height": 250.0},
+            "flow_speed": 1.0,
+        }
+        changed_design = dict(second)
+        changed_design["flow_speed"] = 2.0
+        self.assertEqual(shared_configuration_digest(first), shared_configuration_digest(second))
+        self.assertNotEqual(shared_configuration_digest(first), shared_configuration_digest(changed_design))
 
     def test_builder_emits_compact_record_and_preserves_null(self) -> None:
         chemistry, organization, manifest = self.seed_inputs(42)
@@ -162,6 +182,7 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertNotIn("families", record["molecular_development"])
         self.assertNotIn("lineage_edges", record["molecular_development"])
         self.assertEqual(record["record_status"], "complete")
+        self.assertEqual(record["provenance"]["workflow_run_attempt"], "1")
 
     def test_unified_comparison_uses_compact_records_across_conditions(self) -> None:
         records = []
