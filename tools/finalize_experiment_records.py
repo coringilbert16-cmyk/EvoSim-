@@ -358,6 +358,10 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         "status": "validated",
         "experiment": setup["experiment"],
         "setup_file": "setup.json",
+        "limitations": [
+            "Cross-seed comparison preserves the recorded measurements and does not automatically normalize values for differing run durations, elapsed wall time, or opportunity exposure.",
+            "The report consolidates analyzer outputs; it does not establish causal mechanisms or organism-level behavior.",
+        ],
         "conclusions": [
             f"All {len(records)} expected independent seeds passed provenance, configuration, and required-stage validation; cross-seed measurements are descriptive summaries under one shared measurement definition.",
             "No causal, catalytic, or organism-level conclusion is inferred by this consolidation pipeline.",
