@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from tools.compact_experiment_record import build_record
+from tools.compact_experiment_record import build_record, shared_configuration_digest
 from tools.compare_compact_experiment_records import compare
 from tools.chemistry_analyzer import summarize_settlements
 from tools.contact_opportunity_analyzer import analyze as analyze_opportunities
@@ -126,6 +126,26 @@ class CompactExperimentRecordTests(unittest.TestCase):
             self.write(f"organization-{seed}.json", organization),
             self.write(f"manifest-{seed}.json", manifest),
         )
+
+    def test_shared_configuration_digest_ignores_seed_specific_initialization(self) -> None:
+        first = {
+            "seed": 42,
+            "pile_sizes": [1280],
+            "initial_material_inventory": {"Carbon": 1360.0},
+            "world_geometry": {"width": 250.0, "height": 250.0},
+            "flow_speed": 1.0,
+        }
+        second = {
+            "seed": 43,
+            "pile_sizes": [1279, 1],
+            "initial_material_inventory": {"Carbon": 1359.0, "Hydrogen": 1.0},
+            "world_geometry": {"width": 250.0, "height": 250.0},
+            "flow_speed": 1.0,
+        }
+        changed_design = dict(second)
+        changed_design["flow_speed"] = 2.0
+        self.assertEqual(shared_configuration_digest(first), shared_configuration_digest(second))
+        self.assertNotEqual(shared_configuration_digest(first), shared_configuration_digest(changed_design))
 
     def test_builder_emits_compact_record_and_preserves_null(self) -> None:
         chemistry, organization, manifest = self.seed_inputs(42)
