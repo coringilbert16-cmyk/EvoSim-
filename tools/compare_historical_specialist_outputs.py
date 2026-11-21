@@ -11,12 +11,16 @@ from typing import Any
 
 def flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     if isinstance(value, dict):
+        if not value:
+            return {prefix: {}}
         flattened: dict[str, Any] = {}
         for key, child in value.items():
             path = f"{prefix}.{key}" if prefix else str(key)
             flattened.update(flatten(child, path))
         return flattened
     if isinstance(value, list):
+        if not value:
+            return {prefix: []}
         flattened = {}
         for index, child in enumerate(value):
             path = f"{prefix}[{index}]"
