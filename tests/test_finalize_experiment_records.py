@@ -34,8 +34,8 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 path = root / f"seed-{seed}.json"
                 path.write_text(json.dumps(sample_record(seed)), encoding="utf-8")
                 paths.append(path)
-            comparison = {"groups": [{"summary": {"independent_seed_count": 2}}],
-                          "missing_definition_records": []}
+            comparison = {"condition_groups": [{"summary": {"independent_seed_count": 2}}],
+                          "measurement_definition_missing_records": []}
             with patch.object(finalizer, "compare", return_value=comparison):
                 setup, report = finalizer.finalize(paths, [42, 43])
             self.assertEqual(setup["seeds"], [42, 43])
