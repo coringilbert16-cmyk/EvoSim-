@@ -22,6 +22,7 @@ jobs:
       experiment_id: ${{ steps.source.outputs.experiment_id }}
       source_run_id: ${{ steps.source.outputs.source_run_id }}
       source_commit: ${{ steps.source.outputs.source_commit }}
+      source_run_attempt: ${{ steps.source.outputs.source_run_attempt }}
       research_plan: ${{ steps.source.outputs.research_plan }}
       duration_seconds: ${{ steps.source.outputs.duration_seconds }}
       seeds: ${{ steps.source.outputs.seeds }}
@@ -41,12 +42,14 @@ jobs:
             EXP-2026-004)
               SOURCE_RUN_ID=44582565701
               SOURCE_COMMIT=8e7cc7d624e3131b2d99889fef02d9d5c3095318
+              SOURCE_RUN_ATTEMPT=1
               RESEARCH_PLAN=""
               DURATION_SECONDS=3600
               ;;
             EXP-2026-006)
               SOURCE_RUN_ID=44776501166
               SOURCE_COMMIT=191069deb65a9f40638e65fe93134eeadde2219c
+              SOURCE_RUN_ATTEMPT=2
               RESEARCH_PLAN=PLAN-002
               DURATION_SECONDS=3600
               ;;
@@ -59,6 +62,7 @@ jobs:
             echo "experiment_id=$EXPERIMENT_ID"
             echo "source_run_id=$SOURCE_RUN_ID"
             echo "source_commit=$SOURCE_COMMIT"
+            echo "source_run_attempt=$SOURCE_RUN_ATTEMPT"
             echo "research_plan=$RESEARCH_PLAN"
             echo "duration_seconds=$DURATION_SECONDS"
             echo "seeds=42,43,44,45,46"
@@ -75,11 +79,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
           SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.prepare.outputs.source_run_attempt }}
         run: |
           set -euo pipefail
           actual_commit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" --jq '.head_sha')
+          actual_attempt=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" --jq '.run_attempt')
           [[ "$actual_commit" == "$SOURCE_COMMIT" ]] || {
             echo "Retained source run commit mismatch: expected $SOURCE_COMMIT, got $actual_commit" >&2
+            exit 1
+          }
+          [[ "$actual_attempt" == "$SOURCE_RUN_ATTEMPT" ]] || {
+            echo "Retained source run attempt mismatch: expected $SOURCE_RUN_ATTEMPT, got $actual_attempt" >&2
             exit 1
           }
       - name: Download retained per-seed source artifacts
@@ -139,6 +149,7 @@ jobs:
           EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
           SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
           SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.prepare.outputs.source_run_attempt }}
           RESEARCH_PLAN: ${{ needs.prepare.outputs.research_plan }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
@@ -171,6 +182,7 @@ jobs:
               f"- Experiment: {os.environ['EXPERIMENT_ID']}",
               f"- Source workflow run: {os.environ['SOURCE_RUN_ID']}",
               f"- Simulation source commit: `{os.environ['SOURCE_COMMIT']}`",
+              f"- Source workflow attempt: {os.environ['SOURCE_RUN_ATTEMPT']}",
               f"- Research plan: {os.environ['RESEARCH_PLAN'] or 'not established in retained provenance'}",
               f"- Duration: {os.environ['DURATION_SECONDS']} seconds per seed",
               "- Seeds: 42, 43, 44, 45, 46",
