@@ -15,7 +15,8 @@ the snapshot interval:
   "run": true,
   "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 300,
-  "diagnostic_interval": 100
+  "diagnostic_interval": 100,
+  "deep_diagnostics": false
 }
 ```
 
@@ -58,8 +59,7 @@ the experiment registry and dedicated result record authoritative.
 
 ## Outputs
 
-Each seed uploads its raw JSONL diagnostics plus separate reaction/energy and
-molecular-organization reports. A final aggregate artifact combines:
+Each seed produces a compact permanent record from the reaction/energy, molecular-organization, and summary-only opportunity analyzers. Raw JSONL, manifests, and intermediate reports stay on the runner, are used to build and validate the record, and are deleted locally; they are not uploaded. The compact comparison artifact contains only per-seed records and the comparison report. The repository result record is the permanent archive. Routine runs do not retain detailed network, geometry, contact, or temporal traces. Deep analysis is explicit opt-in and its artifacts expire after one day.
 
 - BREAK, COMBINE, and DISPLACEMENT candidate/commit/rejection totals and
   failure reasons.
@@ -68,16 +68,15 @@ molecular-organization reports. A final aggregate artifact combines:
 - Structural-family recurrence across independent seeds and family transitions.
 - Exact formed and broken bond counts for all 21 unordered active-element pairs, separated by BREAK, COMBINE, and DISPLACEMENT.
 - Elemental material incorporated into reaction-created compounds.
-- Time-resolved chemical complexity across twelve equal-duration windows: molecular size and topology, structural novelty and recurrence, reaction-pattern novelty, and candidate cycles in the family-transition network.
+- Time-resolved chemical complexity is an explicitly requested deep analysis, not a routine permanent output.
 - Energy-balance residuals and per-seed validation.
 
-Per-seed artifacts are retained for 30 days; the combined report is retained
-for 90 days. Routine Rust CI remains separate and keeps its short 60-second
+Raw source data and intermediate analyzer files are deleted from the runner after record generation; they are never uploaded in routine runs. Compact record transport artifacts are retained for 90 days; permanent records belong in `experiments/records/results/`. Deep diagnostic artifacts are opt-in and expire after one day. Routine Rust CI remains separate and keeps its short 60-second
 seed-42 chemistry smoke baseline and focused correctness/feasibility tests.
 
-## Time-resolved complexity analysis
+## Time-resolved complexity analysis (deep diagnostics only)
 
-The aggregate workflow also runs `tools/temporal_chemical_complexity_analyzer.py` over the per-seed chemistry reports. It divides each run into twelve equal-duration windows and reports newly observed compound fingerprints, cumulative compound diversity, repeated compound products, all reaction-created identities, active-compound size and topology, reaction-pattern novelty, and strongly connected components in the cumulative compound-to-compound family-transition graph. Unbonded single-resource fragments are counted as reaction-created identities but excluded from compound novelty and active-compound complexity. The analysis is offline and does not change simulation behavior.
+When deep analysis is explicitly requested, the workflow runs `tools/temporal_chemical_complexity_analyzer.py` over per-seed chemistry reports. It divides each run into twelve equal-duration windows and reports newly observed compound fingerprints, cumulative compound diversity, repeated compound products, all reaction-created identities, active-compound size and topology, reaction-pattern novelty, and strongly connected components in the cumulative compound-to-compound family-transition graph. Unbonded single-resource fragments are counted as reaction-created identities but excluded from compound novelty and active-compound complexity. The analysis is offline and does not change simulation behavior.
 
 Structural fingerprints use iterative Weisfeiler-Lehman refinement with composition and degree summaries. They are scalable descriptors, not exact graph-isomorphism proofs. A directed cycle in the family-transition graph is a candidate network cycle, not evidence by itself of autocatalysis, energy coupling, or self-sustainability. The report includes these limitations explicitly.
 

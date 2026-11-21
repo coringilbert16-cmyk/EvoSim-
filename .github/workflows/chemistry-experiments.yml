@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      deep_diagnostics:
+        description: "Opt in to exhaustive local-resonance and detailed contact diagnostics; temporary only."
+        required: true
+        default: false
+        type: boolean
       experiment_id:
         description: "Registered experiment ID (for example EXP-2026-007)."
         required: false
@@ -61,6 +66,7 @@ jobs:
       diagnostic_interval: ${{ steps.parameters.outputs.diagnostic_interval }}
       profile_movement: ${{ steps.parameters.outputs.profile_movement }}
       profile_tick: ${{ steps.parameters.outputs.profile_tick }}
+      deep_diagnostics: ${{ steps.parameters.outputs.deep_diagnostics }}
       experiment_id: ${{ steps.parameters.outputs.experiment_id }}
       research_plan: ${{ steps.parameters.outputs.research_plan }}
       condition_id: ${{ steps.parameters.outputs.condition_id }}
@@ -75,6 +81,7 @@ jobs:
           DIAGNOSTIC_INTERVAL: ${{ inputs.diagnostic_interval }}
           PROFILE_MOVEMENT_INPUT: ${{ inputs.profile_movement }}
           PROFILE_TICK_INPUT: ${{ inputs.profile_tick }}
+          DEEP_DIAGNOSTICS_INPUT: ${{ inputs.deep_diagnostics }}
           EXPERIMENT_ID_INPUT: ${{ inputs.experiment_id }}
           RESEARCH_PLAN_INPUT: ${{ inputs.research_plan }}
           CONDITION_ID_INPUT: ${{ inputs.condition_id }}
@@ -98,6 +105,7 @@ jobs:
               interval = int(config.get("diagnostic_interval", 100))
               profile_movement = bool(config.get("profile_movement", False))
               profile_tick = bool(config.get("profile_tick", False))
+              deep_diagnostics = bool(config.get("deep_diagnostics", False))
               experiment_id = str(config.get("experiment_id") or "").strip()
               research_plan = str(config.get("research_plan") or "").strip()
               condition_id = str(config.get("condition_id") or "").strip()
@@ -111,6 +119,7 @@ jobs:
               interval = int(os.environ["DIAGNOSTIC_INTERVAL"])
               profile_movement = os.environ["PROFILE_MOVEMENT_INPUT"].lower() == "true"
               profile_tick = os.environ["PROFILE_TICK_INPUT"].lower() == "true"
+              deep_diagnostics = os.environ["DEEP_DIAGNOSTICS_INPUT"].lower() == "true"
               experiment_id = os.environ.get("EXPERIMENT_ID_INPUT", "").strip()
               research_plan = os.environ.get("RESEARCH_PLAN_INPUT", "").strip()
               condition_id = os.environ.get("CONDITION_ID_INPUT", "").strip()
@@ -140,6 +149,7 @@ jobs:
               output.write("diagnostic_interval=" + str(interval) + chr(10))
               output.write("profile_movement=" + str(profile_movement).lower() + chr(10))
               output.write("profile_tick=" + str(profile_tick).lower() + chr(10))
+              output.write("deep_diagnostics=" + str(deep_diagnostics).lower() + chr(10))
               output.write("experiment_id=" + experiment_id + chr(10))
               output.write("research_plan=" + research_plan + chr(10))
               output.write("condition_id=" + condition_id + chr(10))
@@ -167,6 +177,7 @@ jobs:
           SEED: ${{ matrix.seed }}
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
           DIAGNOSTIC_INTERVAL: ${{ needs.prepare.outputs.diagnostic_interval }}
+          DEEP_DIAGNOSTICS: ${{ needs.prepare.outputs.deep_diagnostics }}
           EVOSIM_PROFILE_MOVEMENT: ${{ needs.prepare.outputs.profile_movement }}
           EVOSIM_PROFILE_TICK: ${{ needs.prepare.outputs.profile_tick }}
           EVOSIM_EXPERIMENT_ID: ${{ needs.prepare.outputs.experiment_id }}
@@ -175,25 +186,72 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p observations
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds "$DURATION_SECONDS" --seed "$SEED" --diagnostics "observations/seed-$SEED.jsonl" --diagnostic-interval "$DIAGNOSTIC_INTERVAL"
+          EXTRA_ARGS=()
+          if [[ "$DEEP_DIAGNOSTICS" == "true" ]]; then
+            EXTRA_ARGS+=(--deep-diagnostics)
+          fi
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds "$DURATION_SECONDS" --seed "$SEED" --diagnostics "observations/seed-$SEED.jsonl" --diagnostic-interval "$DIAGNOSTIC_INTERVAL" "${EXTRA_ARGS[@]}"
       - name: Analyze reactions and energy
         env:
           SEED: ${{ matrix.seed }}
         run: |
+          set -euo pipefail
           python3 tools/chemistry_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-chemistry.json" --markdown-out "observations/seed-$SEED-chemistry.md"
       - name: Analyze molecular organization and lineage
         env:
           SEED: ${{ matrix.seed }}
         run: |
+          set -euo pipefail
           python3 tools/chemistry_organization_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-organization.json" --markdown-out "observations/seed-$SEED-organization.md"
-      - name: Upload raw observation and per-seed analysis
-        if: always() && hashFiles('observations/seed-*.jsonl') != ''
+      - name: Build compact opportunity coverage summary
+        env:
+          SEED: ${{ matrix.seed }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+        run: |
+          set -euo pipefail
+          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir observations/coverage --summary-only
+      - name: Build compact per-seed permanent record
+        env:
+          SEED: ${{ matrix.seed }}
+        run: |
+          set -euo pipefail
+          mkdir -p compact-records
+          python3 tools/compact_experiment_record.py \
+            --seed "$SEED" \
+            --chemistry "observations/seed-$SEED-chemistry.json" \
+            --organization "observations/seed-$SEED-organization.json" \
+            --manifest "observations/seed-$SEED.jsonl.manifest.json" \
+            --opportunity-coverage observations/coverage/contact-opportunity-analysis.json \
+            --output "compact-records/seed-$SEED-record.json"
+      - name: Run explicitly requested deep analyses
+        if: needs.prepare.outputs.deep_diagnostics == 'true'
+        env:
+          SEED: ${{ matrix.seed }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+        run: |
+          set -euo pipefail
+          python3 tools/reaction_network_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir deep/reaction-network
+          python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir deep/geometry-aware-network
+          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --output-dir deep/contact-opportunities
+          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEED" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir deep/temporal-chemical-complexity
+      - name: Upload compact per-seed record
         uses: actions/upload-artifact@v4
         with:
-          name: chemistry-observation-seed-${{ matrix.seed }}
-          path: observations/
+          name: chemistry-compact-record-seed-${{ matrix.seed }}
+          path: compact-records/seed-${{ matrix.seed }}-record.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 1
+      - name: Upload temporary deep analysis
+        if: needs.prepare.outputs.deep_diagnostics == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chemistry-deep-temporary-seed-${{ matrix.seed }}
+          path: deep/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Clean local raw diagnostic workspace
+        if: always()
+        run: rm -rf observations deep compact-records
 
   aggregate:
     if: needs.prepare.outputs.should_run == 'true'
@@ -201,33 +259,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download all per-seed observations
+      - name: Download compact per-seed records
         uses: actions/download-artifact@v4
         with:
-          pattern: chemistry-observation-seed-*
-          path: observations
+          pattern: chemistry-compact-record-seed-*
+          path: compact-records
           merge-multiple: true
-      - name: Build pooled chemistry and molecular-development report
-        env:
-          SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
-          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+      - name: Compare compact records with the unified analyzer
         run: |
           set -euo pipefail
-          python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
-          python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
-          python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
-          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
-          python3 tools/temporal_chemical_complexity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --windows 12 --output-dir temporal-chemical-complexity
-      - name: Upload combined experiment report
+          RECORD_ARGS=()
+          for RECORD in compact-records/seed-*-record.json; do
+            [[ -f "$RECORD" ]] || continue
+            RECORD_ARGS+=("$RECORD")
+          done
+          if [[ "${#RECORD_ARGS[@]}" -eq 0 ]]; then
+            echo "No compact per-seed records were downloaded." >&2
+            exit 1
+          fi
+          python3 tools/unified_chemistry_analysis.py --compare-records "${RECORD_ARGS[@]}" --comparison-json-out compact-record-comparison.json --comparison-markdown-out compact-record-comparison.md
+      - name: Upload compact record transport artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chemistry-experiment-combined
+          name: chemistry-experiment-compact-records
           path: |
-            chemistry-experiment-combined.json
-            chemistry-experiment-combined.md
-            reaction-network/
-            geometry-aware-network/
-            contact-opportunities/
-            temporal-chemical-complexity/
+            compact-records/
+            compact-record-comparison.json
+            compact-record-comparison.md
           if-no-files-found: error
           retention-days: 90

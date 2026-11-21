@@ -131,3 +131,25 @@ Committed participant geometry was complete for 2,811 of 4,305 reaction events. 
 - Material totals across lineage generations may count conserved constituents more than once.
 - Structural fingerprints use iterative Weisfeiler–Lehman refinement and composition/degree summaries; they are descriptors, not exact graph-isomorphism proofs.
 - Candidate directed cycles are not evidence by themselves of autocatalysis, energy coupling, or self-sustainability.
+
+## OBS-001 legacy compact-record compatibility assessment
+
+**Status: historical result validated; v1 compact-record conversion not certified.**
+
+This experiment predates the canonical run-manifest and compact-record pipeline. The durable historical result above preserves the scientific run identity, commit, workflow run ID, five seeds, requested duration, initial inventory, diagnostic interval, and aggregate results. It does not, by itself, provide enough provenance to certify a schema-v1 compact record as complete or measurement-compatible.
+
+The following fields are **unknown from the preserved historical result record** and must remain null/unknown rather than be reconstructed or inferred:
+
+- Manifest schema version and canonical manifest contents.
+- Simulator executable version.
+- Enabled diagnostic-tier declaration in the manifest.
+- Canonical configuration digest and seed-independent comparison-configuration SHA-256.
+- Chemistry-analyzer and organization-analyzer source fingerprints used for the historical analysis.
+- Opportunity-coverage source schema version.
+- Per-seed raw diagnostic checksums and byte counts.
+- Per-seed settlement aggregates and residual summaries required by the v1 record, beyond the snapshot energy-residual maximum already reported above.
+- Per-seed normalized opportunity-coverage details; the preserved report supplies pooled totals only.
+
+The source commit and workflow run identity are known and retained above. The absence of the other fields from this durable report does **not** prove that they are absent from every original artifact. They have not been certified from the historical archive in this compatibility pass. Do not fabricate them, substitute current analyzer fingerprints for historical ones, or infer a manifest from workflow defaults.
+
+**Disposition:** preserve EXP-2026-004 as a scientifically validated historical result and retain its original artifact reference. Do not emit a v1 record marked complete or include it in strict between-condition comparisons on the basis of this report alone. If the original per-seed source files and manifest can later be verified, a partial/complete compact conversion may be reconsidered field by field. Until then, unavailable provenance and measurement-definition fields remain unknown. This limitation does not invalidate the reported historical reaction and chemistry findings.

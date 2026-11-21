@@ -12,12 +12,16 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
+    let mut deep_diagnostics = false;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--deep-diagnostics" => {
+                deep_diagnostics = true;
             }
             "--seed" => {
                 seed = args
@@ -66,6 +70,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
             diagnostic_interval,
+            deep_diagnostics,
         );
         return;
     }
@@ -143,10 +148,11 @@ fn run_environment_chemistry_experiment(
     duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
+    deep_diagnostics: bool,
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
-    simulation.record_local_resonance_diagnostics = true;
+    simulation.record_local_resonance_diagnostics = deep_diagnostics;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
         diagnostics_path,

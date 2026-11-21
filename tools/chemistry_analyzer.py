@@ -38,6 +38,39 @@ def load_records(path: Path) -> list[dict[str, Any]]:
 def _number(value: Any) -> float | int | None:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
+def summarize_settlements(reactions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate exact event settlement fields without retaining event-level payloads."""
+    fields = (
+        "usable_energy_delta", "resonance_withdrawn", "structural_energy_delta",
+        "physical_work", "heat_dissipated",
+    )
+    totals: dict[str, dict[str, Any]] = {}
+    for reaction in ("BREAK", "COMBINE", "DISPLACEMENT"):
+        events = [row for row in reactions if row.get("reaction") == reaction]
+        settled = [row.get("energy_settlement", {}) for row in events
+                   if (row.get("energy_settlement") or {}).get("status") == "settled"]
+        summary: dict[str, Any] = {
+            "event_count": len(events),
+            "settled_event_count": len(settled),
+            "not_settled_event_count": len(events) - len(settled),
+        }
+        for field in fields:
+            values = [
+                value for row in settled
+                if (value := _number(row.get(field))) is not None
+            ]
+            summary[field] = {
+                "count": len(values),
+                "sum": sum(values) if values else None,
+                "mean": sum(values) / len(values) if values else None,
+                "min": min(values) if values else None,
+                "max": max(values) if values else None,
+                "max_abs": max((abs(value) for value in values), default=None),
+            }
+        totals[reaction] = summary
+    return totals
+
+
 
 def _structural_signature(molecule: Any) -> str:
     if not isinstance(molecule, dict):
@@ -648,6 +681,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "outcome_counts": dict(sorted(outcome_counts.items())),
             "failure_reasons": dict(sorted(failure_reasons.items())),
             "diagnostic_totals": reaction_totals,
+            "settlement": summarize_settlements(reactions),
             "elemental_bond_pairs": bond_pair_attribution,
         },
         "molecular_history": {

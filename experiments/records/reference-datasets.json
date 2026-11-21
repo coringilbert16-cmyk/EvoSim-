@@ -1,0 +1,6 @@
+{
+  "schema": "evosim.reference_dataset_registry",
+  "schema_version": 1,
+  "policy": "Explicitly allowlisted reference evidence only; routine experiment raw artifacts are not retained.",
+  "datasets": []
+}

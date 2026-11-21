@@ -664,6 +664,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "requested_duration_seconds": duration_seconds,
             "planned_ticks": planned_ticks,
             "diagnostic_interval_ticks": recorder.interval,
+            "deep_diagnostics_enabled": simulation.record_local_resonance_diagnostics,
             "biology_enabled": false,
             "initial_physical_material_count": initial_physical_material_count,
             "initial_independent_resource_count": initial_independent_resource_count,
@@ -969,6 +970,11 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                         run_id
                     )
                 });
+        let enabled_tiers = if simulation.record_local_resonance_diagnostics {
+            vec!["core", "standard", "deep"]
+        } else {
+            vec!["core", "standard"]
+        };
         let manifest = json!({
             "schema": "evosim.experiment_manifest",
             "schema_version": 1,
@@ -1009,7 +1015,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "diagnostics": {
                 "raw_schema_versions": { "environmental_chemistry_header": 2 },
                 "diagnostic_interval_ticks": self.manifest_context["diagnostic_interval_ticks"],
-                "enabled_tiers": ["core", "standard"]
+                "enabled_tiers": enabled_tiers
             },
             "analyzers": {
                 "source_commit_sha": commit_sha,

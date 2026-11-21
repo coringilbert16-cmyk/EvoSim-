@@ -97,15 +97,16 @@ First use retained evidence; no simulation reruns by default:
 
 Compare unified results with existing specialist reports. Investigate every discrepancy and record any non-reconstructible historical field as unavailable rather than inferred.
 
-### Phase 6 — Adoption
+### Phase 6 — Compact-record adoption
 
-After the pilot passes:
-
-- add the unified report/index to the standard environmental chemistry workflow;
-- make the compact core analysis required for registered runs;
-- keep high-volume traces optional and purpose-driven;
-- update experiment documentation and result-record templates;
-- require each new measurement to state its scientific question, expected data volume, consumer stage, and acceptance test.
+- Define and validate the permanent record contract before changing retention defaults.
+- Build compact per-seed records directly from the existing specialist analyzer outputs.
+- Compare experiments from compact records alone, without requiring raw JSONL or intermediate analyzer outputs.
+- Make exhaustive local-resonance sampling, contact-opportunity CSVs, reaction-network expansion, and temporal detail explicit deep-analysis options.
+- Do not upload raw JSONL, manifests, or specialist intermediate reports in routine runs; generate and validate compact records in the same per-seed job, then clean the local workspace. Retain only compact transport artifacts separately.
+- Commit validated compact per-seed records and the experiment comparison record with the permanent result note.
+- Preserve selected reference datasets only through an explicit allowlist and documented retention reason.
+- Require each new measurement to state its scientific question, expected data volume, consumer stage, and acceptance test.
 
 ## Acceptance criteria
 
@@ -118,6 +119,8 @@ After the pilot passes:
 - Missing, null, sampled, partial, unknown, and measured zero are never conflated.
 - No rate is emitted without a valid, complete, semantically appropriate denominator.
 - Reports distinguish observations from interpretation and retain seed-level results.
+- Compact records can be compared after all raw/intermediate artifacts have expired.
+- Routine workflow uploads no raw JSONL, manifest, specialist report, or detailed contact CSV; local source files are deleted after compact-record generation. Deep artifacts are explicit opt-in and expire automatically.
 - Automated tests cover invalid manifests/checksums, legacy schema, partial coverage, missing analyzer output, stale cache, deterministic index/report assembly, and aggregation naming variants.
 - No simulation behavior or chemistry/physics rules change.
 
@@ -128,3 +131,5 @@ After the pilot passes:
 - 2026-11-20: PLAN-004 retained artifact assembly failure traced to condition-prefixed artifact names. A tested normalization helper and analysis-only workflow path were added to the PLAN-004 branch; validation and reaggregation remain pending.
 - 2026-11-20: PLAN-004 / EXP-2026-005 analysis-only recovery run #44833658626 passed; its observe matrix was skipped and the full specialist aggregate artifact was uploaded. The ten source observations were not repeated. This validates the paired artifact normalization/aggregation path; historical EXP-2026-004 and EXP-2026-006 remain the next unified-pipeline pilot targets.
 - 2026-11-20: Initial unified orchestrator and tests added in PR #402. It validates manifest/raw checksums, creates per-seed chemistry and organization outputs with cache fingerprints, runs batch/network/geometry/temporal stages, writes a portable versioned index/report, and keeps detailed contact CSV generation opt-in. Rust CI run #44833728704 passed on implementation commit 327b256; the latest plan-log update is documentation-only.
+
+- 2026-11-20: PR #403 opened to implement the compact-retention revision. Added the versioned permanent-record contract, per-seed record builder, compact-only comparison tool, per-reaction settlement summaries, and summary-only opportunity-coverage output. Routine runs never upload raw source artifacts: they are processed and validated on the runner, then deleted locally. Only compact records are transported for 90 days. Deep local-resonance sampling and detailed network/contact/temporal outputs require explicit opt-in and expire after one day. CI validation is pending; historical compact-only comparison validation has not yet been completed.
