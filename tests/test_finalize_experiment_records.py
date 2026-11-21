@@ -36,8 +36,13 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
                 paths.append(path)
             comparison = {"condition_groups": [{"summary": {"independent_seed_count": 2}}],
                           "measurement_definition_missing_records": []}
+            index_path = root / "index.json"
+            index_path.write_text(json.dumps({"schema": "evosim.unified_chemistry_analysis", "stages": [
+                {"stage": "chemistry", "status": "completed"},
+                {"stage": "organization", "status": "completed"},
+                {"stage": "experiment_batch", "status": "completed"}]}), encoding="utf-8")
             with patch.object(finalizer, "compare", return_value=comparison):
-                setup, report = finalizer.finalize(paths, [42, 43])
+                setup, report = finalizer.finalize(paths, [42, 43], index_path)
             self.assertEqual(setup["seeds"], [42, 43])
             self.assertEqual(report["status"], "validated")
             self.assertEqual(len(report["analysis"]["per_seed_results"]), 2)
@@ -47,7 +52,7 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             path = Path(directory) / "seed-42.json"
             path.write_text(json.dumps(sample_record(42)), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "seed coverage mismatch"):
-                finalizer.finalize([path], [42, 43])
+                finalizer.finalize([path], [42, 43], Path(directory) / "unused-index.json")
 
     def test_rejects_partial_seed_record(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -56,7 +61,7 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             path = Path(directory) / "seed-42.json"
             path.write_text(json.dumps(record), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "not complete"):
-                finalizer.finalize([path], [42])
+                finalizer.finalize([path], [42], Path(directory) / "unused-index.json")
 
 
 if __name__ == "__main__":
