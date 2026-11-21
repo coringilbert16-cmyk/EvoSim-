@@ -58,8 +58,8 @@ class UpdateExperimentRegistryTests(unittest.TestCase):
         registry_dir.mkdir(parents=True)
         registry = registry_dir / "registry.md"
         registry.write_text(
-            "| ID | Experiment | Conditions | Status | Primary record |\\n"
-            "| EXP-2026-099 | Test | Baseline | Planned | |\\n",
+            "| ID | Experiment | Conditions | Status | Primary record |\n"
+            "| EXP-2026-099 | Test | Baseline | Planned | |\n",
             encoding="utf-8",
         )
         result_dir = registry_dir / "results" / "EXP-2026-099-baseline"
