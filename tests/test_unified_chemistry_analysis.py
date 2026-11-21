@@ -79,6 +79,7 @@ class UnifiedChemistryAnalysisTests(unittest.TestCase):
             self.assertIn("reaction_network", index["quality"]["deferred_stages"])
             self.assertTrue((output / "unified-analysis-index.json").is_file())
             self.assertTrue((output / "unified-chemistry-report.md").is_file())
+            self.assertEqual(index["report_path"], "unified-chemistry-report.md")
             self.assertTrue((output / "normalized-input/seed-42.jsonl").is_symlink())
             self.assertTrue(raw.is_file())
 
