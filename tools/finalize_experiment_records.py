@@ -83,6 +83,8 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
     identity = first["identity"]
     provenance = first["provenance"]
     conditions = first["conditions"]
+    if not provenance.get("workflow_run_id") or not provenance.get("workflow_run_url"):
+        raise ValueError("validated experiment records must identify their source workflow run")
     canonical_configuration = dict(conditions.get("configuration") or {})
     canonical_configuration.pop("seed", None)
     for row in records[1:]:
@@ -93,6 +95,10 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
             raise ValueError("records contain multiple experiment/plan/condition identities")
         if measurement_compatibility_key(row) != measurement_compatibility_key(first):
             raise ValueError("records have incompatible measurement definitions")
+        if (row.get("provenance", {}).get("workflow_run_id"),
+                row.get("provenance", {}).get("workflow_run_url")) != (
+                provenance.get("workflow_run_id"), provenance.get("workflow_run_url")):
+            raise ValueError("records originate from different workflow runs")
         other_configuration = dict(row.get("conditions", {}).get("configuration") or {})
         other_configuration.pop("seed", None)
         if other_configuration != canonical_configuration:
