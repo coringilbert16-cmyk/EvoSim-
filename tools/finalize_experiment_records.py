@@ -113,8 +113,40 @@ def finalize(paths: list[Path], expected_seeds: list[int], analysis_index_path: 
         raise ValueError("world geometry must be recorded as a structured mapping")
     if not isinstance(canonical_configuration["flow_field"], dict):
         raise ValueError("ambient flow configuration must be recorded as a structured mapping")
+    if not isinstance(canonical_configuration["hotspot"], dict):
+        raise ValueError("hotspot parameters must be recorded as a structured mapping")
+    count_fields = (
+        "initial_physical_material_count", "initial_independent_resource_count",
+        "initial_molecule_count", "initial_constituent_count",
+    )
+    if any(not isinstance(canonical_configuration[field], int)
+           or isinstance(canonical_configuration[field], bool)
+           or canonical_configuration[field] < 0 for field in count_fields):
+        raise ValueError("initial inventory counts must be nonnegative integers")
+    if (canonical_configuration["initial_independent_resource_count"]
+            + canonical_configuration["initial_molecule_count"]
+            != canonical_configuration["initial_physical_material_count"]):
+        raise ValueError("initial resource and molecule counts do not reconcile to physical inventory")
+    if (any(not isinstance(size, int) or isinstance(size, bool) or size <= 0
+            for size in canonical_configuration["pile_sizes"])
+            or sum(canonical_configuration["pile_sizes"])
+            != canonical_configuration["initial_physical_material_count"]):
+        raise ValueError("initial pile sizes do not reconcile to physical inventory")
+    geometry = canonical_configuration["world_geometry"]
+    for field in ("width", "height", "cell_size"):
+        value = geometry.get(field)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+            raise ValueError(f"world geometry requires a positive numeric {field}")
+    for field in ("width_cells", "height_cells"):
+        value = geometry.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ValueError(f"world geometry requires a positive integer {field}")
     if requested_duration is None or diagnostic_interval is None:
         raise ValueError("requested duration and diagnostic interval are required for reproduction")
+    if (not isinstance(requested_duration, int) or isinstance(requested_duration, bool)
+            or requested_duration <= 0 or not isinstance(diagnostic_interval, int)
+            or isinstance(diagnostic_interval, bool) or diagnostic_interval <= 0):
+        raise ValueError("requested duration and diagnostic interval must be positive integers")
     for row in records[1:]:
         other = row["identity"]
         if (other.get("experiment_id"), other.get("research_plan"), other.get("condition_id")) != (
