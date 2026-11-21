@@ -211,6 +211,35 @@ class CompactExperimentRecordTests(unittest.TestCase):
         self.assertEqual(result["measurement_compatibility_group_count"], 2)
         self.assertEqual(result["condition_comparisons"], [])
 
+    def test_comparison_separates_different_analyzer_definitions(self) -> None:
+        paths = []
+        for seed in (42, 43):
+            chemistry, organization, manifest = self.seed_inputs(seed)
+            record = build_record(seed, chemistry, organization, manifest)
+            if seed == 43:
+                record["provenance"]["chemistry_analyzer_sha256"] = "f" * 64
+            path = self.root / f"analyzer-definition-{seed}.json"
+            path.write_text(json.dumps(record), encoding="utf-8")
+            paths.append(path)
+        result = compare(paths)
+        self.assertFalse(result["measurement_compatible"])
+        self.assertEqual(result["measurement_compatibility_group_count"], 2)
+        self.assertEqual(result["condition_comparisons"], [])
+
+    def test_comparison_fails_closed_when_measurement_definition_is_missing(self) -> None:
+        chemistry, organization, manifest = self.seed_inputs(42)
+        record = build_record(42, chemistry, organization, manifest)
+        record["provenance"]["organization_analyzer_sha256"] = None
+        path = self.root / "missing-measurement-definition.json"
+        path.write_text(json.dumps(record), encoding="utf-8")
+        result = compare([path])
+        self.assertFalse(result["measurement_compatible"])
+        self.assertIn(42, result["measurement_definition_missing_by_seed"])
+        self.assertIn(
+            "organization_analyzer_sha256",
+            result["measurement_definition_missing_by_seed"][42],
+        )
+
     def test_summary_only_opportunity_analysis_omits_tick_and_sample_arrays(self) -> None:
         raw = self.root / "seed-42.jsonl"
         raw.write_text(json.dumps({
