@@ -12,12 +12,14 @@ def update_registry(
     condition_id: str,
     setup_path: str,
     report_path: str,
+    repo_root: Path | None = None,
 ) -> None:
     setup_file = Path(setup_path)
     report_file = Path(report_path)
     if setup_file.is_absolute() or report_file.is_absolute():
         raise ValueError("registry links must be repository-relative paths")
-    if not setup_file.is_file() or not report_file.is_file():
+    root = (repo_root or Path.cwd()).resolve()
+    if not (root / setup_file).is_file() or not (root / report_file).is_file():
         raise ValueError("both published result files must exist before registry update")
 
     lines = registry_path.read_text(encoding="utf-8").splitlines()
@@ -54,6 +56,7 @@ def main() -> int:
     parser.add_argument("--condition-id", required=True)
     parser.add_argument("--setup-path", required=True)
     parser.add_argument("--report-path", required=True)
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     update_registry(
         args.registry,
@@ -61,6 +64,7 @@ def main() -> int:
         args.condition_id,
         args.setup_path,
         args.report_path,
+        args.repo_root,
     )
     print(f"Updated registry entry for {args.experiment_id}/{args.condition_id}")
     return 0
