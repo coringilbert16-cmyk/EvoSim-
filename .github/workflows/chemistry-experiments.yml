@@ -276,6 +276,7 @@ jobs:
             --setup-out work/final/experiment-setup.json \
             --report-out work/final/consolidated-report.json
           DEST="experiments/records/results/$EXPERIMENT_ID-$CONDITION_ID"
+          export DEST
           [[ ! -e "$DEST" ]] || { echo "Refusing to overwrite an existing permanent experiment record: $DEST" >&2; exit 1; }
           mkdir -p "$DEST"
           cp work/final/experiment-setup.json "$DEST/setup.json"
