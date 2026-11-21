@@ -136,7 +136,7 @@ class FinalizeExperimentRecordsTests(unittest.TestCase):
             self.assertEqual(len(report["conclusions"]), 2)
             self.assertTrue(any(
                 "not automatically normalized" in item
-                for item in report["analysis"]["limitations"]
+                for item in report["quality"]["limitations"]
             ))
 
 
