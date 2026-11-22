@@ -323,7 +323,10 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Material emission/response | User-selected powered emission plus passive response | Define material energy ownership and conservative emission/coupling mechanism |
 | Empty-space propagation speed | User-selected universal constant in homogeneous empty space | Calibrate value and physical units; do not infer from legacy movement behavior |
 | Energy density and flux | Candidate formulas in Section 4.2 | Fix field normalization and energy units |
+| Dimensional basis | Defined in Section 2.4 | Approve world-length scale, project-energy-to-SI conversion, and authoritative tick-to-physics-time mapping |
+| Scalar field dimensions | Conditional on dimensionless u in Section 2.4 | Confirm field variable's physical dimension and calibrate K consistently |
 | Spatial unit and propagation speed | Open | Define world-unit meaning, speed, and tick/substep relationship |
+| Source-to-field transfer | Common contract defined in Section 5.5 | Audit source implementations; define boundary condition, distributed support, finite budgets/replenishment, and calibrated power/flux values |
 | Source time units | Existing conventions identified | Separate physics time from experiment/wall time; calibrate source power |
 | World-tone source | Existing source parameters identified | Convert width-rate to a physically dimensioned source boundary contract |
 | Hotspot source | Existing area-rate identified | Define distributed source coupling and unit calibration |
@@ -349,4 +352,4 @@ Phase 1 is complete only when:
 - The design is reviewed against the user's approved infinite-plane/laboratory/camera separation and unified-energy decisions, and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
-**Next action:** compare conservative planar discretization options, define world-distance and physical energy units, validate finite computational-window treatment, and complete source-dimension and powered-material-oscillator contracts. Then lock the plane-wave equation and numerical reference method before Phase 2 implements an independent empty-space solver.
+**Next action:** audit the existing world-tone and hotspot implementations against the common source contract in Section 5.5; resolve the authoritative tick-to-physics-time mapping and physical length/energy scales; then calibrate source power without conflating boundary and distributed dimensions. In parallel, compare conservative planar discretizations and validate finite computational-window treatment. Material-origin emission remains disabled in the empty-space reference solver until a powered or conservative coupling law is specified.
