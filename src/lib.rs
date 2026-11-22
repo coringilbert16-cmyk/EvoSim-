@@ -1,5 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 
+// Independent Phase 2 reference wave solver; not connected to live simulation behavior.
+#[path = "physics/wave_field.rs"]
+#[allow(dead_code)]
+mod wave_field;
+
 // Core environment, resources, and physical material/structure.
 #[path = "organism/developmental_blueprint.rs"]
 mod developmental_blueprint;
