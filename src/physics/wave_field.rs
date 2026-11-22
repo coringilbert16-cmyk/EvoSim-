@@ -201,16 +201,23 @@ impl WaveField {
         let mut next_current = self.current.clone();
         let mut initial_velocity = vec![0.0; self.current.len()];
         for index in 0..self.current.len() {
-            initial_velocity[index] = (self.current[index] - self.previous[index]) / self.time_step
-                + 0.5 * self.time_step * self.propagation_speed.powi(2)
-                    * self.laplacian(&self.current, index % self.width, index / self.width);
+            initial_velocity[index] =
+                (self.current[index] - self.previous[index]) / self.time_step
+                    + velocity[index];
             next_current[index] += displacement[index];
-            initial_velocity[index] += velocity[index];
+        }
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let index = self.index(x, y);
+                initial_velocity[index] += 0.5
+                    * self.time_step
+                    * self.propagation_speed.powi(2)
+                    * self.laplacian(&self.current, x, y);
+            }
         }
 
         let acceleration_scale =
-            0.5 * self.time_step.powi(2) * self.propagation_speed.powi(2)
-                / self.spacing.powi(2);
+            0.5 * self.time_step.powi(2) * self.propagation_speed.powi(2);
         let mut next_previous = next_current.clone();
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
@@ -515,9 +522,9 @@ mod tests {
 
         pulse(&mut first, &mut first_source, 80.0, 120.0, 0.5);
         pulse(&mut second, &mut second_source, 160.0, 120.0, 0.5);
-        pulse(&mut constructive, &mut constructive_a, 60.0, 100.0, 0.5);
-        pulse(&mut constructive, &mut constructive_b, 140.0, 100.0, 0.5);
-        pulse(&mut destructive, &mut destructive_a, 60.0, 100.0, 0.5);
+        pulse(&mut constructive, &mut constructive_a, 80.0, 120.0, 0.5);
+        pulse(&mut constructive, &mut constructive_b, 160.0, 120.0, 0.5);
+        pulse(&mut destructive, &mut destructive_a, 80.0, 120.0, 0.5);
         pulse(&mut destructive, &mut destructive_b, 160.0, 120.0, -0.5);
 
         first.advance_ticks(40).unwrap();
@@ -526,9 +533,9 @@ mod tests {
         destructive.advance_ticks(40).unwrap();
 
         let a = first.sample(120, 120).unwrap();
-        let b = second.sample(100, 100).unwrap();
-        let sum = constructive.sample(100, 100).unwrap();
-        let difference = destructive.sample(100, 100).unwrap();
+        let b = second.sample(120, 120).unwrap();
+        let sum = constructive.sample(120, 120).unwrap();
+        let difference = destructive.sample(120, 120).unwrap();
         assert!((sum - (a + b)).abs() < 1.0e-12);
         assert!(sum.abs() > 1.0e-3);
         assert!(difference.abs() < 1.0e-12);
