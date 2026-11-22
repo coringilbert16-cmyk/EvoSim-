@@ -59,6 +59,44 @@ For the initial homogeneous empty-space model, propagation speed is universal an
 
 The physical plane is infinite even if a numerical solver uses a finite computational window. Any truncation used for computation must be handled as a numerical approximation (for example, by a validated outgoing/absorbing treatment or a sufficiently expanded domain), never as an unmodeled physical wall. Numerical truncation must not silently reflect, absorb, delete, or duplicate energy.
 
+### 2.4 Physical unit system and clock conversion
+
+The model must use a dimensionally consistent physical unit system. The implementation may store scaled or normalized numerical values for precision and performance, but every stored quantity must have a documented conversion to the physical quantity it represents. Normalization is a numerical representation, not permission to mix dimensions.
+
+The canonical dimensional basis is:
+
+| Quantity | Symbol | Physical dimension | Required interpretation |
+|---|---|---|---|
+| World distance | L | length | Euclidean distance on the infinite plane |
+| Physics time | T | time | Simulation time, including any sub-tick solver interval |
+| Energy | E | energy | One consistently defined project energy unit, with its conversion to SI energy documented before calibration |
+| Power | P | E/T | Energy transfer per physics-time interval |
+| Area | A | L² | Physical planar area |
+| Boundary length | ℓ | L | Physical length of a source or receiver boundary |
+| Frequency | ν | 1/T | Cycles per physics-time unit |
+| Propagation speed | c | L/T | Physical wavefront speed in homogeneous empty space |
+| Energy density | e | E/L² | Field energy per physical planar area |
+| Energy flux | J | E/(L·T) | Energy crossing unit boundary length per physics time |
+| Power density | q | E/(L²·T) | Distributed source-to-field power per physical area |
+
+The physical unit scales must be explicit configuration/specification values, not inferred from screen pixels, grid-cell count, molecular size, or machine performance. The numerical grid spacing is expressed in L; it is not itself the definition of L. Camera zoom and solver refinement must not change physical distances, source power, or total energy.
+
+Use a single physics-time coordinate for all propagation, oscillation, and energy-transfer equations. The existing convention of 24,000 ticks per simulated day and 86,400 seconds per day implies 3.6 physical seconds per tick. Treat this as the current legacy clock conversion to verify against the runner and source implementations before adopting it as the authoritative T scale. A sub-tick solver step is a smaller interval in the same T coordinate, not a separate clock. Wall-clock execution time never enters the physical equations.
+
+The existing 440 and 880 cycles-per-simulated-day settings convert to frequency only after the simulated-day-to-T mapping is confirmed. The 2,400-tick orbital period is a separate source-position/phase schedule; it is not the carrier period. Store frequencies in cycles/T (or angular frequency in radians/T, with the convention stated) and derive phase deterministically from physics time.
+
+For the scalar candidate in Section 4, if u is dimensionless, dimensional consistency requires:
+- [c] = L/T.
+- [K] = E·T²/L².
+- [e] = E/L².
+- [J] = E/(L·T).
+- [f] = 1/T² in the forced equation.
+- [K u_t f] = E/(L²·T), a power density.
+
+If u is assigned a physical dimension instead, derive and document the corresponding dimensions of K and f; do not retain the dimensionless-u values by convention. The integrated field energy is ∫e dA, and integrated source-to-field power for a distributed source is ∫K u_t f dA. These are the dimensional reference checks for the solver and ledger interfaces.
+
+No numerical world-length scale, joule conversion for the project energy unit, propagation-speed value, field normalization K, or source calibration is approved by this section. Those values must be selected together using explicit physical/experimental criteria and then recorded as versioned model parameters. A value must not be selected solely to reproduce legacy reaction rates or improve benchmark throughput.
+
 ## 3. Unified energy ontology
 
 The complete energy inventory has one conservation authority and these non-overlapping categories:
@@ -180,6 +218,33 @@ The current world-tone rate is energy/(tick·projected-width); the hotspot rate 
 - A coupled material oscillator with explicit internal energy.
 
 Do not silently reinterpret a source's current numerical intensity as a field amplitude. For the scalar forced-wave candidate, source power must be computed from the actual field work term (the spatial integral of `K u_t f`) or an equivalent explicitly derived boundary-flux condition. The source's finite budget is debited by the same signed transfer that the field receives; if the coupling is one-way, its missing return-work destination must be specified rather than discarded.
+
+### 5.5 Common source-to-field energy contract
+
+World-tone and hotspot inputs may retain different physical geometries, but both must use one source-to-field transfer contract and the same conservation authority. A common interface does not mean forcing boundary and distributed sources into the same dimensional parameter.
+
+Every source must have:
+- Stable source identity and provenance.
+- A declared physical type: boundary emitter, distributed source, or explicitly coupled material degree of freedom.
+- Physical location and geometry, expressed in world units.
+- A deterministic time/phase schedule in physics time.
+- A declared spectral/temporal waveform; frequency and phase are not energy units.
+- An authoritative energy holder with a finite available budget, or an explicitly modeled external replenishment transfer with its own named origin and accounting.
+- A maximum/target power or flux expressed in the correct dimensions.
+- A rule for source shutoff, exhaustion, rejected work, and any work returned from the field.
+- A transfer record linking source debit and field credit (or the reverse signed transfer) in the same atomic operation.
+
+For the scalar forced-wave candidate, a distributed source f(p,t) contributes signed power density K u_t f. Its total instantaneous transfer is the spatial integral over the actual source support. The source holder is debited by exactly the field's net received work; if the net work is negative, the corresponding source/coupled holder is credited. A prescribed f is not allowed to inject energy without that matching transfer. If a source is intended to deliver a prescribed positive power independent of instantaneous field phase, the coupling must be formulated as a passive/active boundary or controlled-source law whose work and energy budget are explicitly derived; it must not overwrite the field state or add an arbitrary energy amount.
+
+For a boundary emitter, specify the boundary condition and its signed energy flux using the selected field equation's conservation law. Integrate over the complete physical emitting boundary length. A prescribed boundary amplitude is not a substitute for a power/flux contract. The field's net energy gain must equal the source's net debit, including any reflected work returned to the source.
+
+For a distributed emitter, specify the source support in physical area and power density in E/(L²·T). Integrate over the complete support using physical area. Do not multiply by the number of grid cells without the corresponding cell-area factor; refinement must not change total source power.
+
+The present world-tone input is provisionally classified as an external boundary/incident-field source because its legacy rate is stated per normalized projected width. Its exact boundary condition, physical length measure, source budget, and conversion to power per length remain open. The present hotspot input is provisionally classified as a distributed external source because its legacy rate is stated per realized area. Its support profile, physical area measure, finite budget/replenishment, and conversion to power density remain open. These classifications are hypotheses to audit against source code and intended physics, not authorization to preserve the legacy settlement algorithms.
+
+The 1–10 energy-units-per-tick-per-normalized-width world-tone setting and the 1,000 energy-units-per-simulated-second-per-area hotspot setting are legacy configuration values, not directly comparable physical quantities. Convert each through the verified tick/time and world-length/area scales before comparing or combining them. Never treat either value as a field amplitude. Source allocation must be independent of solver resolution, viewer size, camera zoom, and the number of receivers.
+
+Material-origin emission is a distinct case. The initial empty-space reference solver has no material emitters. When material coupling is introduced, select and implement either (a) a powered oscillator that debits a named material-internal energy holder, or (b) a conservative coupled field/material degree of freedom with a derived shared energy function. Passive response may absorb, reflect, transmit, or scatter incident field energy without becoming a source. Existing aura/spectrum calculations alone authorize neither emission nor an energy credit.
 
 ## 6. Material coupling contract
 
