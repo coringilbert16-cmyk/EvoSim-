@@ -780,7 +780,10 @@ mod tests {
             .energy_in_region(region.0, region.1, region.2, region.3)
             .unwrap();
         let measured_net_change = final_region_energy - initial_region_energy;
-        assert!(measured_net_change > 0.0, "the region should receive wave energy");
+        assert!(
+            measured_net_change > 0.0,
+            "the region should receive wave energy"
+        );
         assert!(integrated_boundary_transfer > 0.0);
         assert!(
             largest_step_residual < 1.0e-10,
