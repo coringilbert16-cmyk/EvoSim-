@@ -1,7 +1,7 @@
 # OBS-001 — Unified chemistry analysis implementation
 
-**Status:** Active engineering/observability initiative; two-file retention implementation in PR #404, historical pilot validation pending.  
-**Baseline:** PRs #398, #400, #401, #402, and #403 are merged.  
+**Status:** Implementation complete; historical pilots validated offline; first canonical experiment publication pending.  
+**Baseline:** PRs #398–#405 are merged.  
 **Scope:** Offline, reproducible analysis of environmental chemistry artifacts.  
 **Behavior boundary:** No changes to chemistry, physics, reaction discovery, scheduling, activation, or energy settlement.
 
@@ -121,4 +121,7 @@ Compare unified results with existing specialist reports. Investigate discrepanc
 - 2026-11-21: Added a tested, idempotent registry updater that preserves links for multiple conditions and writes links relative to the registry document. The workflow updates the shared index only after both permanent files have been generated and validated.
 - 2026-11-21: Historical pilot artifacts were located and confirmed retained: EXP-2026-004 source run #44582565701 (five per-seed observation artifacts plus the specialist aggregate) and EXP-2026-006 source run #44776501166 (five per-seed neighborhood observation artifacts). Both predate canonical run manifests; they must be processed in legacy-compatibility mode and must not be marked as strict manifest-validated future records. No new simulation was launched.
 - 2026-11-21: Added a dedicated analysis-only historical pilot workflow, pinned to the retained EXP-2026-004 and EXP-2026-006 source run IDs and verified source commits. It downloads only the five per-seed observation artifacts, reruns offline analyzers, compares current outputs against the retained specialist JSON, produces a compact one-day pilot artifact, and removes local raw/intermediate data. Legacy condition IDs remain null; no permanent two-file record is emitted from these manifest-less historical runs.
-- **Next:** finish CI on the latest PR head. After the workflow is available on main, dispatch it once for EXP-2026-004 and once for EXP-2026-006, then review only the compact pilot summaries and investigate any analyzer discrepancies. No simulation rerun is part of this validation.
+- 2026-11-21: PR #404 merged the two-file retention/publication contract. PR #405 merged the unified-analysis path-handling fix.
+- 2026-11-21: Historical OBS-001 pilot run #8 completed offline analysis of EXP-2026-006; run #9 completed offline analysis of EXP-2026-004. Both validated the analysis pipeline against retained legacy observations, did not rerun simulations, and correctly emitted no permanent canonical records because their source runs lack canonical manifests.
+- 2026-11-21: OBS-001 implementation and historical-pilot validation are complete. The remaining end-to-end acceptance test is the first new manifest-backed experiment that publishes exactly setup.json and consolidated-report.json, updates the registry, and then cleans temporary inputs.
+- 2026-11-21: Registered PLAN-007 and EXP-2026-007 to exercise that acceptance path while investigating ordinary environmental BREAK and DISPLACEMENT discovery eligibility. The experiment uses five 60-second seeds, ordinary chemistry, and no profiling/deep diagnostics. It has not been dispatched.
