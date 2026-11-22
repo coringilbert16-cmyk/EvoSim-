@@ -544,6 +544,51 @@ mod tests {
     }
 
     #[test]
+    fn field_evolution_remains_bounded_at_and_below_the_cfl_limit() {
+        for (speed, substeps) in [
+            (2.0 * std::f64::consts::FRAC_1_SQRT_2, 2),
+            (2.0 * std::f64::consts::FRAC_1_SQRT_2, 3),
+        ] {
+            let mut field = WaveField::new(65, 65, 1.0, speed, substeps, 1.0).unwrap();
+            for y in 1..field.height - 1 {
+                for x in 1..field.width - 1 {
+                    let phase = (x * 17 + y * 31) as f64;
+                    let value = (phase * 0.173).sin() + 0.5 * (phase * 0.071).cos();
+                    let index = field.index(x, y);
+                    field.current[index] = value;
+                    field.previous[index] = value;
+                }
+            }
+
+            let initial_energy = field.energy();
+            let initial_maximum = field
+                .current
+                .iter()
+                .map(|value| value.abs())
+                .fold(0.0, f64::max);
+            field.advance_ticks(500).unwrap();
+
+            let final_energy = field.energy();
+            let final_maximum = field
+                .current
+                .iter()
+                .map(|value| value.abs())
+                .fold(0.0, f64::max);
+            let relative_drift = (final_energy - initial_energy).abs() / initial_energy;
+
+            assert!(
+                relative_drift < 1.0e-8,
+                "speed={speed}, substeps={substeps}, relative energy drift={relative_drift}"
+            );
+            assert!(
+                final_maximum < initial_maximum * 2.0,
+                "speed={speed}, substeps={substeps}, amplitude grew from {initial_maximum} to {final_maximum}"
+            );
+            assert!(field.current.iter().all(|value| value.is_finite()));
+        }
+    }
+
+    #[test]
     fn finite_source_transfer_is_atomic_and_field_energy_is_conserved() {
         let mut field = solver(201, 201, 1.0, 2);
         let mut insufficient = FiniteEnergySource::new(0.001).unwrap();
@@ -1073,21 +1118,34 @@ mod tests {
             pulse(&mut field, &mut source, center_world, center_world, 0.5);
             field.advance_ticks(10).unwrap();
 
-            let axial_offset = (10.0 / spacing).round() as usize;
-            let off_axis_x = (6.0 / spacing).round() as usize;
-            let off_axis_y = (8.0 / spacing).round() as usize;
-            let axial = field.sample(center + axial_offset, center).unwrap();
-            let off_axis = field
-                .sample(center + off_axis_x, center + off_axis_y)
-                .unwrap();
-            (axial - off_axis).abs() / axial.abs().max(off_axis.abs())
+            let radius = 10.0;
+            let angular_samples = 32;
+            let mut samples = Vec::with_capacity(angular_samples);
+            for sample in 0..angular_samples {
+                let angle = std::f64::consts::TAU * sample as f64 / angular_samples as f64;
+                let offset_x = (radius * angle.cos() / spacing).round() as isize;
+                let offset_y = (radius * angle.sin() / spacing).round() as isize;
+                let x = (center as isize + offset_x) as usize;
+                let y = (center as isize + offset_y) as usize;
+                samples.push(field.sample(x, y).unwrap());
+            }
+
+            let mean = samples.iter().sum::<f64>() / samples.len() as f64;
+            let variance = samples
+                .iter()
+                .map(|value| (value - mean).powi(2))
+                .sum::<f64>()
+                / samples.len() as f64;
+            let mean_square = samples.iter().map(|value| value.powi(2)).sum::<f64>()
+                / samples.len() as f64;
+            variance.sqrt() / mean_square.sqrt()
         }
 
         let coarse = anisotropy_error(1.0, 2);
         let medium = anisotropy_error(0.5, 4);
         let fine = anisotropy_error(0.25, 8);
-        assert!(coarse > medium * 5.0, "coarse={coarse}, medium={medium}");
-        assert!(medium > fine * 1.5, "medium={medium}, fine={fine}");
+        assert!(coarse > medium * 1.5, "coarse={coarse}, medium={medium}");
+        assert!(medium > fine * 1.1, "medium={medium}, fine={fine}");
     }
 
     #[test]
