@@ -93,3 +93,14 @@ The controlling implementation sequence is maintained in [resonance-field-implem
 PR #377 remains focused on optimizing the existing resonance movement calculation. It must not implement this independent field architecture, introduce a second resonance-energy store, or change resonance propagation physics as a side effect of optimization.
 
 The source-geometry foundation is tracked separately from PR #377. The future field architecture can reuse that work after it has been reviewed and integrated appropriately.
+
+
+## Unified energy-system clarification
+
+The continuous wave field is the selected spatial transport architecture, but it is not the complete energy ontology. The complete design must unify external source energy, propagating field energy, material internal energy, thermal energy, validated structural/chemical potential, mechanical work, and boundary escape under one conservation authority.
+
+The existing ledger is reusable implementation infrastructure—not binding physics. Preserve its proven validation, inventory reconciliation, staged transaction, and rollback machinery where correct. Redesign its categories, holder ownership, and reaction-funding semantics where they do not fit the unified model. Likewise, retain source configuration, material properties, frequency/phase utilities, transaction patterns, and PR #378 geometry where their contracts remain valid. Do not preserve global chemistry pools, frequency-indexed reservoirs as travelling-field state, uniform per-constituent grants, independent source settlement paths, or instantaneous centroid interactions as physical authorities.
+
+Material resonance is a response/coupling property unless a powered source or conservative coupled degree of freedom is explicitly defined. Activation influence is not spendable energy. Organism-specific reception and energy budgets remain deferred until an organism exists; environmental physics must not be shaped around biological budgeting.
+
+This clarification supersedes any earlier statement that the existing energy ledger's semantics or current reservoir model are inherently authoritative. The controlling reuse map and phase gates are maintained in the implementation roadmap.
