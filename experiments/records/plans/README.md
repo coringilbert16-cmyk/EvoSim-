@@ -91,6 +91,22 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 **Interpretation:** co-occurrence, shared intermediates, or higher total reaction counts in a larger mixture do not establish cooperation. The interaction must be attributable to a defined chemical pathway and survive matched controls.
 
+## PLAN-006 — Spatially organized chemistry
+
+**Status:** Planned; can be designed from existing spatial/field capabilities, but requires controlled comparative execution and adequate local diagnostics.
+
+**Question:** Do flow, resonance propagation, energy gradients, and transport create persistent spatial reaction zones or connected chemical pathways that would not be apparent from well-mixed aggregate statistics?
+
+**Required evidence:**
+- Reproducible spatially resolved molecular positions, concentrations, reaction events, and local field/energy exposure over time.
+- Defined spatial conditions (for example, baseline versus altered flow or field geometry) with matched inventories and seeds.
+- Local reaction rates and pathway/family diversity normalized for local reactant availability and contact opportunity.
+- Persistence, movement, formation, and disappearance of reaction zones.
+- Evidence that observed organization is caused by environmental physics rather than a placement artifact or unequal material distribution.
+- Full energy and material accounting.
+
+**Infrastructure prerequisite:** the current lab exposes flow and source controls and supports deterministic tick-zero placement, but does not provide automated matched multi-condition runs. The existing environmental workflow is baseline-only. Build the comparison and spatial-diagnostic capability before interpreting a spatial intervention experiment.
+
 ## PLAN-007 — Environmental reaction-discovery eligibility
 
 **Status:** Registered; EXP-2026-007 prepared, not yet run.
@@ -138,22 +154,6 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 **Permanent record and cleanup:** after successful analysis, validate and publish exactly `setup.json` and `consolidated-report.json` under the experiment/condition result directory and update the shared registry. Delete raw observations, manifests, intermediate analyzer outputs, caches, temporary indexes, and diagnostics only after both permanent files are successfully published. Failed validation/publication must retain temporary inputs for recovery.
 
 **Decision after the run:** do not change simulator behavior immediately. Use the first supported bottleneck to decide whether the next step is a narrowly scoped measurement correction, a source-level audit of an existing eligibility rule, or a separately designed physics/chemistry experiment requiring explicit approval.
-
-## PLAN-006 — Spatially organized chemistry
-
-**Status:** Planned; can be designed from existing spatial/field capabilities, but requires controlled comparative execution and adequate local diagnostics.
-
-**Question:** Do flow, resonance propagation, energy gradients, and transport create persistent spatial reaction zones or connected chemical pathways that would not be apparent from well-mixed aggregate statistics?
-
-**Required evidence:**
-- Reproducible spatially resolved molecular positions, concentrations, reaction events, and local field/energy exposure over time.
-- Defined spatial conditions (for example, baseline versus altered flow or field geometry) with matched inventories and seeds.
-- Local reaction rates and pathway/family diversity normalized for local reactant availability and contact opportunity.
-- Persistence, movement, formation, and disappearance of reaction zones.
-- Evidence that observed organization is caused by environmental physics rather than a placement artifact or unequal material distribution.
-- Full energy and material accounting.
-
-**Infrastructure prerequisite:** the current lab exposes flow and source controls and supports deterministic tick-zero placement, but does not provide automated matched multi-condition runs. The existing environmental workflow is baseline-only. Build the comparison and spatial-diagnostic capability before interpreting a spatial intervention experiment.
 
 ## Research sequence
 
