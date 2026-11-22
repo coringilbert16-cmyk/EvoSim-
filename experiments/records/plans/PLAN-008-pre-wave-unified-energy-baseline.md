@@ -1,6 +1,6 @@
 # PLAN-008 — Pre-wave unified-energy performance baseline
 
-**Status:** Registered; ready to run.
+**Status:** Completed — EXP-2026-008 ran successfully for all five seeds; setup and consolidated report published and validated. Performance profiling summaries extracted from successful Actions logs and preserved in the consolidated report.
 
 **Linked experiment:** EXP-2026-008, condition `pre-wave-reference`.
 
@@ -77,4 +77,4 @@ Dispatch `.github/workflows/chemistry-experiments.yml` from `main` with:
 
 ## Decision after the run
 
-Phase 0 is complete only after the consolidated report is validated and published. Use this report as the fixed pre-wave comparison point for implementation and performance evaluation. Do not begin wave-field production changes until the baseline record is available and reviewed.
+Phase 0 baseline execution is complete. The two permanent files are published; the consolidated scientific report passed OBS-001 validation, and the separately derived profiling summary is explicitly labeled as log-extracted rather than OBS-001 schema-validated. Use this record as the fixed pre-wave comparison point. Review its limitations before designing Phase 1; do not interpret this empirical baseline as validation of the legacy energy physics.
