@@ -201,8 +201,9 @@ impl WaveField {
         let mut next_current = self.current.clone();
         let mut initial_velocity = vec![0.0; self.current.len()];
         for index in 0..self.current.len() {
-            initial_velocity[index] =
-                (self.current[index] - self.previous[index]) / self.time_step;
+            initial_velocity[index] = (self.current[index] - self.previous[index]) / self.time_step
+                + 0.5 * self.time_step * self.propagation_speed.powi(2)
+                    * self.laplacian(&self.current, index % self.width, index / self.width);
             next_current[index] += displacement[index];
             initial_velocity[index] += velocity[index];
         }
@@ -281,8 +282,7 @@ impl WaveField {
                 let dy = world_y - center_y;
                 let normalized_radius_squared = (dx * dx + dy * dy) / radius_squared;
                 if normalized_radius_squared < 1.0 {
-                    let profile = (1.0 - 1.0 / (1.0 - normalized_radius_squared)).exp()
-                        * std::f64::consts::E;
+                    let profile = (1.0 - 1.0 / (1.0 - normalized_radius_squared)).exp();
                     velocity[self.index(x, y)] = peak_velocity * profile;
                 }
             }
@@ -445,9 +445,9 @@ mod tests {
             WaveField::new(10, 10, 1.0, 1.0, 1, 1.0).err(),
             Some(WaveFieldError::UnstableTimeStep)
         );
-        assert!(WaveField::new(10, 10, 1.0, std::f64::consts::SQRT_2, 2, 1.0).is_ok());
+        assert!(WaveField::new(10, 10, 1.0, 1.4, 2, 1.0).is_ok());
         assert_eq!(
-            WaveField::new(10, 10, 1.0, std::f64::consts::SQRT_2 * 1.0001, 2, 1.0).err(),
+            WaveField::new(10, 10, 1.0, 1.44, 2, 1.0).err(),
             Some(WaveFieldError::UnstableTimeStep)
         );
     }
@@ -502,10 +502,10 @@ mod tests {
 
     #[test]
     fn two_sources_superpose_constructively_and_destructively() {
-        let mut first = solver(201, 201, 1.0, 2);
-        let mut second = solver(201, 201, 1.0, 2);
-        let mut constructive = solver(201, 201, 1.0, 2);
-        let mut destructive = solver(201, 201, 1.0, 2);
+        let mut first = solver(241, 241, 1.0, 2);
+        let mut second = solver(241, 241, 1.0, 2);
+        let mut constructive = solver(241, 241, 1.0, 2);
+        let mut destructive = solver(241, 241, 1.0, 2);
         let mut first_source = FiniteEnergySource::new(10.0).unwrap();
         let mut second_source = FiniteEnergySource::new(10.0).unwrap();
         let mut constructive_a = FiniteEnergySource::new(10.0).unwrap();
@@ -513,19 +513,19 @@ mod tests {
         let mut destructive_a = FiniteEnergySource::new(10.0).unwrap();
         let mut destructive_b = FiniteEnergySource::new(10.0).unwrap();
 
-        pulse(&mut first, &mut first_source, 60.0, 100.0, 0.5);
-        pulse(&mut second, &mut second_source, 140.0, 100.0, 0.5);
+        pulse(&mut first, &mut first_source, 80.0, 120.0, 0.5);
+        pulse(&mut second, &mut second_source, 160.0, 120.0, 0.5);
         pulse(&mut constructive, &mut constructive_a, 60.0, 100.0, 0.5);
         pulse(&mut constructive, &mut constructive_b, 140.0, 100.0, 0.5);
         pulse(&mut destructive, &mut destructive_a, 60.0, 100.0, 0.5);
-        pulse(&mut destructive, &mut destructive_b, 140.0, 100.0, -0.5);
+        pulse(&mut destructive, &mut destructive_b, 160.0, 120.0, -0.5);
 
         first.advance_ticks(40).unwrap();
         second.advance_ticks(40).unwrap();
         constructive.advance_ticks(40).unwrap();
         destructive.advance_ticks(40).unwrap();
 
-        let a = first.sample(100, 100).unwrap();
+        let a = first.sample(120, 120).unwrap();
         let b = second.sample(100, 100).unwrap();
         let sum = constructive.sample(100, 100).unwrap();
         let difference = destructive.sample(100, 100).unwrap();
