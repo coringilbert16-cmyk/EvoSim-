@@ -855,6 +855,68 @@ mod tests {
     }
 
     #[test]
+    fn standing_wave_matches_its_discrete_mode_frequency_over_many_cycles() {
+        let mut field = solver(65, 65, 0.5, 4);
+        let length = 32.0;
+        let mode_x = 3;
+        let mode_y = 2;
+        let mode = mode_profile(65, 65, 0.5, length, mode_x, mode_y);
+        let spatial_omega =
+            spatial_mode_frequency(0.5, 1.0, length, mode_x, mode_y);
+        let temporal_omega =
+            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos()
+                / field.time_step();
+
+        field.current.clone_from(&mode);
+        for (previous, value) in field.previous.iter_mut().zip(mode.iter()) {
+            *previous = *value * (temporal_omega * field.time_step()).cos();
+        }
+
+        let initial_energy = field.energy();
+        field.advance_ticks(256).unwrap();
+        let time = field.logical_time_ticks();
+        let expected_factor = (temporal_omega * time).cos();
+        let maximum_error = field
+            .current
+            .iter()
+            .zip(mode.iter())
+            .map(|(actual, initial)| (actual - initial * expected_factor).abs())
+            .fold(0.0, f64::max);
+        let final_energy = field.energy();
+        let relative_energy_drift = (final_energy - initial_energy).abs() / initial_energy;
+
+        assert!(
+            maximum_error < 1.0e-9,
+            "standing-mode maximum error after {time} ticks: {maximum_error}"
+        );
+        assert!(
+            relative_energy_drift < 1.0e-10,
+            "standing-mode relative energy drift: {relative_energy_drift}"
+        );
+    }
+
+    #[test]
+    fn empty_space_energy_remains_bounded_over_a_long_reflection_run() {
+        let mut field = solver(81, 81, 1.0, 2);
+        let mut source = FiniteEnergySource::new(10.0).unwrap();
+        pulse(&mut field, &mut source, 40.0, 40.0, 0.5);
+
+        let initial_energy = field.energy();
+        field.advance_ticks(500).unwrap();
+        let final_energy = field.energy();
+        let relative_drift = (final_energy - initial_energy).abs() / initial_energy;
+
+        assert!(
+            relative_drift < 1.0e-9,
+            "relative energy drift after 500 ticks: {relative_drift}"
+        );
+        assert!(
+            (field.energy() + source.available_energy() - source.initial_budget()).abs()
+                < 1.0e-10
+        );
+    }
+
+    #[test]
     fn returned_field_work_is_credited_to_the_active_source() {
         let mut field = solver(81, 81, 1.0, 2);
         let mut emitter = FiniteEnergySource::new(10.0).unwrap();
