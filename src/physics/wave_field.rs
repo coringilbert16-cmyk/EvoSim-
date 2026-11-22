@@ -744,6 +744,55 @@ mod tests {
     }
 
     #[test]
+    fn incoming_boundary_flux_closes_for_an_off_center_rectangular_region() {
+        let mut field = solver(201, 201, 1.0, 2);
+        let mut source = FiniteEnergySource::new(10.0).unwrap();
+        pulse(&mut field, &mut source, 80.0, 100.0, 0.5);
+
+        // The source support is entirely outside this non-square control volume.
+        let region = (90, 95, 100, 105);
+        let initial_region_energy = field
+            .energy_in_region(region.0, region.1, region.2, region.3)
+            .unwrap();
+        assert_eq!(initial_region_energy, 0.0);
+
+        let mut integrated_boundary_transfer = 0.0;
+        let mut largest_step_residual: f64 = 0.0;
+        for _ in 0..12 {
+            let previous = field.previous.clone();
+            let current = field.current.clone();
+            field.advance_substeps(1).unwrap();
+            let next = field.current.clone();
+
+            let measured_change = field
+                .energy_in_region(region.0, region.1, region.2, region.3)
+                .unwrap()
+                - regional_energy_for_pair(&field, &previous, &current, region);
+            let boundary_transfer = independently_integrated_boundary_energy_change(
+                &field, region, &previous, &current, &next,
+            );
+            largest_step_residual =
+                largest_step_residual.max((measured_change - boundary_transfer).abs());
+            integrated_boundary_transfer += boundary_transfer;
+        }
+
+        let final_region_energy = field
+            .energy_in_region(region.0, region.1, region.2, region.3)
+            .unwrap();
+        let measured_net_change = final_region_energy - initial_region_energy;
+        assert!(measured_net_change > 0.0, "the region should receive wave energy");
+        assert!(integrated_boundary_transfer > 0.0);
+        assert!(
+            largest_step_residual < 1.0e-10,
+            "largest per-step local conservation residual: {largest_step_residual}"
+        );
+        assert!(
+            (measured_net_change - integrated_boundary_transfer).abs() < 1.0e-10,
+            "regional change={measured_net_change}, integrated boundary transfer={integrated_boundary_transfer}"
+        );
+    }
+
+    #[test]
     fn returned_field_work_is_credited_to_the_active_source() {
         let mut field = solver(81, 81, 1.0, 2);
         let mut emitter = FiniteEnergySource::new(10.0).unwrap();
