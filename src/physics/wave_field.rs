@@ -635,10 +635,8 @@ mod tests {
 
         let spatial_omega_a = spatial_mode_frequency(spacing, 1.0, length, 1, 1);
         let spatial_omega_b = spatial_mode_frequency(spacing, 1.0, length, 2, 1);
-        let omega_a =
-            (1.0 - 0.5 * (spatial_omega_a * dt).powi(2)).acos() / dt;
-        let omega_b =
-            (1.0 - 0.5 * (spatial_omega_b * dt).powi(2)).acos() / dt;
+        let omega_a = (1.0 - 0.5 * (spatial_omega_a * dt).powi(2)).acos() / dt;
+        let omega_b = (1.0 - 0.5 * (spatial_omega_b * dt).powi(2)).acos() / dt;
         field.current.clone_from(&displacement);
         for index in 0..field.previous.len() {
             field.previous[index] = 0.7 * first[index] * (omega_a * dt).cos()
