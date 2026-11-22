@@ -9,7 +9,7 @@ The root [README](../README.md) is the project entry point and getting-started g
 - [Construction runtime boundaries](architecture/construction-runtime-boundaries.md) — construction subsystem responsibilities.
 - [Resonance-field architecture](design/resonance-field-architecture.md) — high-level field model.
 - [Resonance-field implementation roadmap](design/resonance-field-implementation-roadmap.md) — controlling detailed roadmap; read before any resonance-field work.
-- [Unified energy and continuous wave-field specification](design/unified-energy-physics-specification.md) — active Phase 1 decision register; production implementation remains blocked until its exit gate is met.
+- [Unified energy and continuous wave-field specification](design/unified-energy-physics-specification.md) — active Phase 1 decision register for the infinite flat world, temporary physical chemistry-lab walls, nonphysical observation window, and unified energy model; production implementation remains blocked until its exit gate is met.
 
 ## Chemistry and physical models
 
