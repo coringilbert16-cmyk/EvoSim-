@@ -199,8 +199,8 @@ impl WaveField {
             for x in horizontal_start..=horizontal_end {
                 let index = self.index(x, y);
                 let next = index + 1;
-                let left_inside = x >= x_min && x <= x_max;
-                let right_inside = x + 1 >= x_min && x + 1 <= x_max;
+                let left_inside = x >= x_min;
+                let right_inside = x < x_max;
                 let weight = 0.5 * (left_inside as u8 + right_inside as u8) as f64;
                 gradient_cross_sum += weight
                     * (self.current[next] - self.current[index])
@@ -214,8 +214,8 @@ impl WaveField {
             for x in x_min..=x_max {
                 let index = self.index(x, y);
                 let next = index + self.width;
-                let top_inside = y >= y_min && y <= y_max;
-                let bottom_inside = y + 1 >= y_min && y + 1 <= y_max;
+                let top_inside = y >= y_min;
+                let bottom_inside = y < y_max;
                 let weight = 0.5 * (top_inside as u8 + bottom_inside as u8) as f64;
                 gradient_cross_sum += weight
                     * (self.current[next] - self.current[index])
