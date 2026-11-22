@@ -1,6 +1,6 @@
 # Phase 1 — Unified Energy and Continuous Wave-Field Specification
 
-**Status:** Working specification / decision register. Phase 1 is in progress. This document does not authorize production implementation.
+**Status:** Phase 1 specification complete. This document defines the approved reference physics and implementation-independent contracts. It does not authorize production implementation; Phase 2 begins with an independent reference solver.
 
 **Controlling roadmap:** [Resonance Field — Formal Implementation Roadmap](resonance-field-implementation-roadmap.md)  
 **Baseline:** [EXP-2026-008 pre-wave reference](../../experiments/records/results/EXP-2026-008-pre-wave-reference/consolidated-report.json)  
@@ -26,13 +26,13 @@ The following constraints are fixed for this work:
 
 ### 2.1 Established simulation-time conventions
 
-The existing project defines:
-- 24,000 physics ticks per simulated day.
-- 440 reference-tone cycles per simulated day.
-- A separate 2,400-physics-tick orbital cycle for the external world-tone source.
-- A localized hotspot configured at 880 cycles per simulated day.
+The approved project-time convention is:
+- **24,000 physics ticks = one simulated day.**
+- **24,000 physics ticks = one complete solar orbital period.** One orbit and one simulated day are the same interval, not independent cycles.
+- **440 carrier cycles per simulated day/orbit** for the reference sun carrier.
+- **880 cycles per simulated day/orbit** for the localized hotspot carrier.
 
-These are existing model conventions, not yet a complete physical unit system. The 440-cycle carrier period and 2,400-tick orbital period are distinct quantities and must never be conflated. Phase must be derived deterministically from simulation time/state, never wall-clock execution time.
+The current source audit found a legacy 2,400-tick orbital setting in the implementation. That value is inconsistent with the approved model and is a known implementation discrepancy, not an alternate physical convention. Phase and orbital position are derived deterministically from the logical simulation tick, never wall-clock execution time.
 
 ### 2.2 Time domains must remain separate
 
@@ -55,47 +55,35 @@ The chemistry laboratory is a temporary experimental arrangement inside the plan
 
 The camera/observation window is nonphysical. It may pan, zoom, and follow subjects; crossing its edge changes only visibility. Objects and energy continue through that edge without any simulation event.
 
-For the initial homogeneous empty-space model, propagation speed is universal and constant. It is expressed in world-distance units per physics-time unit. Do not infer it from the old movement cutoff, viewer dimensions, observed wall-clock throughput, or a desired benchmark result.
+For the initial homogeneous empty-space model, propagation speed is universal and constant. It is expressed in project-native world-distance units per simulation tick. Do not infer it from the old movement cutoff, viewer dimensions, observed wall-clock throughput, or a desired benchmark result.
 
 The physical plane is infinite even if a numerical solver uses a finite computational window. Any truncation used for computation must be handled as a numerical approximation (for example, by a validated outgoing/absorbing treatment or a sufficiently expanded domain), never as an unmodeled physical wall. Numerical truncation must not silently reflect, absorb, delete, or duplicate energy.
 
-### 2.4 Physical unit system and clock conversion
+### 2.4 Project-native units and logical simulation time
 
-The model must use a dimensionally consistent physical unit system. The implementation may store scaled or normalized numerical values for precision and performance, but every stored quantity must have a documented conversion to the physical quantity it represents. Normalization is a numerical representation, not permission to mix dimensions.
+Use a dimensionally consistent **project-native** unit system. No conversion from simulation time to wall-clock seconds or SI seconds is required or intended. No world-distance-to-meters or project-energy-to-joules conversion is required unless a future, separately approved goal explicitly calls for external physical correspondence.
 
-The canonical dimensional basis is:
-
-| Quantity | Symbol | Physical dimension | Required interpretation |
+| Quantity | Symbol | Project-native dimension | Required interpretation |
 |---|---|---|---|
-| World distance | L | length | Euclidean distance on the infinite plane |
-| Physics time | T | time | Simulation time, including any sub-tick solver interval |
-| Energy | E | energy | One consistently defined project energy unit, with its conversion to SI energy documented before calibration |
-| Power | P | E/T | Energy transfer per physics-time interval |
-| Area | A | L² | Physical planar area |
+| World distance | L | world-distance unit | Euclidean distance on the infinite plane |
+| Simulation time | T | tick | Logical simulation time; one tick is the base time unit |
+| Energy | E | project energy unit | One consistently defined project energy unit |
+| Power | P | E/tick | Energy transfer per simulation tick |
+| Area | A | L² | Physical planar area in world units |
 | Boundary length | ℓ | L | Physical length of a source or receiver boundary |
-| Frequency | ν | 1/T | Cycles per physics-time unit |
-| Propagation speed | c | L/T | Physical wavefront speed in homogeneous empty space |
-| Energy density | e | E/L² | Field energy per physical planar area |
-| Energy flux | J | E/(L·T) | Energy crossing unit boundary length per physics time |
-| Power density | q | E/(L²·T) | Distributed source-to-field power per physical area |
+| Frequency | ν | cycles/tick | Oscillation cycles per logical simulation tick |
+| Propagation speed | c | L/tick | Wavefront distance per simulation tick |
+| Energy density | e | E/L² | Field energy per planar area |
+| Energy flux | J | E/(L·tick) | Energy crossing unit boundary length per tick |
+| Power density | q | E/(L²·tick) | Distributed source-to-field power per physical area |
 
-The physical unit scales must be explicit configuration/specification values, not inferred from screen pixels, grid-cell count, molecular size, or machine performance. The numerical grid spacing is expressed in L; it is not itself the definition of L. Camera zoom and solver refinement must not change physical distances, source power, or total energy.
+Simulation time is an internal logical coordinate, not elapsed machine time, SI seconds, or an external clock. Runtime pacing settings such as ticks_per_second control only how quickly the program executes; they must never affect phase, orbital position, propagation, source power, reaction eligibility, or any simulated physical behavior. Wall-clock performance remains separate metadata.
 
-Use a single physics-time coordinate for all propagation, oscillation, and energy-transfer equations. The existing convention of 24,000 ticks per simulated day and 86,400 seconds per day implies 3.6 physical seconds per tick. Treat this as the current legacy clock conversion to verify against the runner and source implementations before adopting it as the authoritative T scale. A sub-tick solver step is a smaller interval in the same T coordinate, not a separate clock. Wall-clock execution time never enters the physical equations.
+One simulated day and one complete solar orbit are exactly 24,000 ticks. The sun carrier completes 440 cycles and the hotspot carrier 880 cycles during that same interval. Their tick-domain frequencies are 440/24,000 and 880/24,000 cycles per tick. The sun orbital phase completes one cycle over those same 24,000 ticks. A sub-tick solver interval, if used, is a fraction of a tick and does not introduce a second clock.
 
-The existing 440 and 880 cycles-per-simulated-day settings convert to frequency only after the simulated-day-to-T mapping is confirmed. The 2,400-tick orbital period is a separate source-position/phase schedule; it is not the carrier period. Store frequencies in cycles/T (or angular frequency in radians/T, with the convention stated) and derive phase deterministically from physics time.
+For dimensionless u, dimensional consistency requires [c]=L/tick, [K]=E·tick²/L², [e]=E/L², [J]=E/(L·tick), [f]=1/tick², and [K u_t f]=E/(L²·tick). If u has another project-native dimension, derive the corresponding dimensions of K and f. Integrated field energy is ∫e dA; integrated source-to-field power is ∫K u_t f dA.
 
-For the scalar candidate in Section 4, if u is dimensionless, dimensional consistency requires:
-- [c] = L/T.
-- [K] = E·T²/L².
-- [e] = E/L².
-- [J] = E/(L·T).
-- [f] = 1/T² in the forced equation.
-- [K u_t f] = E/(L²·T), a power density.
-
-If u is assigned a physical dimension instead, derive and document the corresponding dimensions of K and f; do not retain the dimensionless-u values by convention. The integrated field energy is ∫e dA, and integrated source-to-field power for a distributed source is ∫K u_t f dA. These are the dimensional reference checks for the solver and ledger interfaces.
-
-No numerical world-length scale, joule conversion for the project energy unit, propagation-speed value, field normalization K, or source calibration is approved by this section. Those values must be selected together using explicit physical/experimental criteria and then recorded as versioned model parameters. A value must not be selected solely to reproduce legacy reaction rates or improve benchmark throughput.
+Project-native values for propagation speed, field normalization K, source power, hotspot radius, material coefficients, grid spacing, and solver step remain open calibration parameters. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. Never derive them from wall-clock throughput, legacy reaction rates, or an assumed seconds-per-tick mapping.
 
 ## 3. Unified energy ontology
 
@@ -132,7 +120,7 @@ The approved initial reference model is a two-dimensional scalar, linear wave fi
 where:
 - `u(p,t)` is a signed field state at point `p` on the infinite plane, not energy and not a resonance score.
 - `\Delta_{\mathbb{R}^2}` is the ordinary two-dimensional spatial Laplacian on the flat plane.
-- `c` is finite propagation speed in physical surface-distance units per physics-time unit.
+- `c` is finite propagation speed in project-native world-distance units per simulation tick.
 - Superposition follows from linearity.
 - Frequency and phase are represented by the evolving field state, not by a list of independent per-material energy grants.
 
@@ -189,7 +177,7 @@ For acceptance, run paired spatial/time refinements (at minimum, halve both Δx 
 
 Current source configuration describes the sun as a rotating external source, with a 440-cycles-per-simulated-day carrier, a 2,400-tick orbital cycle, and a configured incident-energy intensity of 1–10 energy units per physics tick per normalized projected width.
 
-**Physical geometry decision:** The sun is outside the infinite flat world plane and travels on a circular orbit in a plane perpendicular to the world plane, like the sun moving around a flat world. Its orbital position determines the direction of illumination across the plane. The 2,400-tick cycle is the orbital period/schedule, distinct from the emitted carrier frequency and phase. Define the orbit in physical world coordinates, independent of camera position, viewport, solver-window dimensions, and temporary laboratory walls. Orbit radius/distance, orientation, phase origin, and source emission geometry remain parameters to specify and calibrate; do not infer them from the old finite rectangular environment.
+**Physical geometry decision:** The sun is outside the infinite flat world plane and travels on a circular orbit in a plane perpendicular to the world plane, like the sun moving around a flat world. Its orbital position determines the direction of illumination across the plane. The 24,000-tick cycle is the orbital period/schedule and equals one simulated day; it is distinct from the 440-cycle carrier frequency and phase. Define the orbit in physical world coordinates, independent of camera position, viewport, solver-window dimensions, and temporary laboratory walls. Orbit radius/distance, orientation, phase origin, and source emission geometry remain parameters to specify and calibrate; do not infer them from the old finite rectangular environment.
 
 The source configuration and identity are reusable candidates. The current per-constituent uniform settlement is not a spatial wave source and must not remain an energy authority after migration.
 
@@ -250,7 +238,7 @@ For an in-plane distributed emitter, specify the source support in physical area
 
 For an external radiative source such as the sun, define the source position in 3D coordinates relative to the embedded 2D plane, its finite emitted power, its angular radiation pattern, and the propagation speed/path to each receiving point. The source-to-plane travel time must be finite and use retarded emission time: a field contribution arriving at plane point p at time t was emitted at the corresponding earlier time determined by the source-to-p distance and the universal propagation speed through homogeneous empty space. Use the same physical propagation speed as the in-plane field for the same carrier in the same medium; introduce a different speed only if a distinct physical medium and interface are explicitly modeled. The incident power density on the plane must include the source's distance dependence and the projection/incidence geometry. Its integral over the entire plane must not exceed the source's emitted power over the corresponding interval; any un-intercepted radiation remains in the external accounting domain rather than disappearing. The approved initial radiation pattern is isotropic in three-dimensional space. An infinite plane illuminated by an isotropic point source located on one side intercepts one half of the isotropically emitted power; the other half continues into the external accounting domain. This geometric partition is not an arbitrary efficiency factor. The mapping of intercepted radiation into the planar field must be conservative and must not count the same energy in both the external radiation domain and the planar field. Source power and any non-geometric coupling loss remain calibration/constitutive questions.
 
-The world-tone source is the sun: an external radiative source outside the infinite flat world plane, orbiting it on a circular path in a plane perpendicular to the world plane. Its changing orbital position determines the direction and incidence geometry of illumination. The 2,400-tick cycle is provisionally the orbital period/schedule and is distinct from the emitted field's carrier frequencies and phases. Define this orbit in physical coordinates independently of the camera, viewport, laboratory walls, and computational-window dimensions. The orbit is a vertical circle in a plane perpendicular to the world plane, anchored by convention at the world-coordinate origin and offset above the plane by more than its radius so the source never crosses the plane. The orbit is independent of the camera, viewport, lab walls, and solver window. The 2,400-tick orbital period is retained; the 440-cycle-per-simulated-day carrier setting remains a separate emitted carrier frequency. Orbit radius, vertical offset, orientation, phase origin, emitted power, and the conservative source-to-field coupling calibration remain open numerical parameters. The old orbit derived from a finite rectangular environment must be retired. The sun is an external radiative source coupled into the plane, not a boundary emitter and not an energy grant to each visible material. Its finite energy budget or explicitly accounted external replenishment and conversion from the legacy projected-width rate to a physically dimensioned radiation-power contract remain open. The present hotspot input is provisionally classified as an in-plane distributed source because its legacy rate is stated per realized area. Its radial cosine profile remains the initial candidate. Define a physical support area and integrate power over that area so total source power is independent of molecule count, receiver count, grid spacing, and grid refinement. Give it an explicit finite energy budget or replenishment law. Its total power and physical radius remain calibration parameters; the legacy 1,000-energy-units-per-second-per-area value is not carried forward without calibration. These classifications are hypotheses to audit against source code and intended physics.
+The world-tone source is the sun: an external radiative source outside the infinite flat world plane, orbiting it on a circular path in a plane perpendicular to the world plane. Its changing orbital position determines the direction and incidence geometry of illumination. The 2,400-tick cycle is provisionally the orbital period/schedule and is distinct from the emitted field's carrier frequencies and phases. Define this orbit in physical coordinates independently of the camera, viewport, laboratory walls, and computational-window dimensions. The orbit is a vertical circle in a plane perpendicular to the world plane, anchored by convention at the world-coordinate origin and offset above the plane by more than its radius so the source never crosses the plane. The orbit is independent of the camera, viewport, lab walls, and solver window. The 24,000-tick orbital period equals one simulated day; the 440-cycle-per-simulated-day carrier setting remains a separate emitted carrier frequency. Orbit radius, vertical offset, orientation, phase origin, emitted power, and the conservative source-to-field coupling calibration remain open numerical parameters. The old orbit derived from a finite rectangular environment must be retired. The sun is an external radiative source coupled into the plane, not a boundary emitter and not an energy grant to each visible material. Its finite energy budget or explicitly accounted external replenishment and conversion from the legacy projected-width rate to a physically dimensioned radiation-power contract remain open. The present hotspot input is provisionally classified as an in-plane distributed source because its legacy rate is stated per realized area. Its radial cosine profile remains the initial candidate. Define a physical support area and integrate power over that area so total source power is independent of molecule count, receiver count, grid spacing, and grid refinement. Give it an explicit finite energy budget or replenishment law. Its total power and physical radius remain calibration parameters; the legacy 1,000-energy-units-per-second-per-area value is not carried forward without calibration. These classifications are hypotheses to audit against source code and intended physics.
 
 The 1–10 energy-units-per-tick-per-normalized-width world-tone setting and the 1,000 energy-units-per-simulated-second-per-area hotspot setting are legacy configuration values, not directly comparable physical quantities. Convert each through the verified tick/time and world-length/area scales before comparing or combining them. Never treat either value as a field amplitude. Source allocation must be independent of solver resolution, viewer size, camera zoom, and the number of receivers.
 
@@ -346,7 +334,7 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Material emission/response | Approved powered oscillators plus passive absorption/reflection/transmission/scattering | Specify constitutive coefficients and conservative material-energy coupling |
 | Empty-space propagation speed | User-selected universal constant in homogeneous empty space | Calibrate value and physical units; do not infer from legacy movement behavior |
 | Energy density and flux | Approved scalar-reference formulas in Section 4.2 | Calibrate field normalization and energy units dimensionally |
-| Dimensional basis | Project-native L, T, E approved | Calibrate L-to-meter and E-to-joule scales; verify tick-to-physics-time mapping before adopting 3.6 seconds/tick |
+| Dimensional basis | Project-native L, tick, E approved | Keep all equations in project-native L, tick, and E; no SI or wall-clock conversion is required |
 | Scalar field dimensions | Dimensionless u is the initial reference convention | Confirm this convention in the solver contract and calibrate K consistently |
 | Spatial unit and propagation speed | L and T basis approved; numerical scales remain uncalibrated | Establish world-unit-to-meter scale and propagation speed by physical criteria; define tick/substep relationship |
 | Source-to-field transfer | One conservative source/field work contract approved | Complete source-specific implementation-independent transfer equations, finite budgets/replenishment, and calibrated power/flux values |
@@ -388,7 +376,7 @@ The following defaults are explicitly approved and supersede any earlier wording
 | Field energy | Amplitude is not energy; use the field energy-density and flux relations in Section 4.2 |
 | Sun | External three-dimensional isotropic radiative source illuminating the infinite two-dimensional plane |
 | Sun orbit | Vertical circular orbit in a plane perpendicular to the world plane, anchored by convention at world origin and offset above the plane by more than its radius |
-| Sun timing | Retain 2,400 physics ticks per orbit; keep 440 cycles per simulated day as a distinct carrier-frequency setting |
+| Sun timing | Use 24,000 physics ticks per orbit, exactly one simulated day; keep 440 cycles per simulated day as a distinct carrier-frequency setting |
 | Sun propagation | Finite source-to-plane travel time with retarded emission time; same homogeneous-empty-space propagation speed as the in-plane field for the same carrier |
 | Sun energy geometry | An infinite plane intercepts half the power of an isotropic 3D point source; the other half remains in the external accounting domain. Couple intercepted energy into the planar field conservatively without double counting |
 | Material-origin emission | Powered material oscillators only; emission debits owned internal energy. Passive response includes absorption, reflection, transmission, and scattering |
