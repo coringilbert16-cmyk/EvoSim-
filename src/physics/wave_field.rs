@@ -93,6 +93,16 @@ impl WaveField {
         }
 
         let time_step = 1.0 / substeps_per_tick as f64;
+        let spacing_squared = spacing.powi(2);
+        let speed_squared = propagation_speed.powi(2);
+        if !time_step.is_finite()
+            || time_step <= 0.0
+            || !spacing_squared.is_finite()
+            || spacing_squared <= 0.0
+            || !speed_squared.is_finite()
+        {
+            return Err(WaveFieldError::InvalidParameter);
+        }
         let courant_ratio = propagation_speed * time_step / spacing;
         if !courant_ratio.is_finite() || courant_ratio > std::f64::consts::FRAC_1_SQRT_2 {
             return Err(WaveFieldError::UnstableTimeStep);
@@ -266,17 +276,26 @@ impl WaveField {
         support_radius: f64,
         peak_velocity: f64,
     ) -> Result<f64, WaveFieldError> {
+        let maximum_x = (self.width - 1) as f64 * self.spacing;
+        let maximum_y = (self.height - 1) as f64 * self.spacing;
+        let radius_squared = support_radius.powi(2);
         if !center_x.is_finite()
             || !center_y.is_finite()
             || !support_radius.is_finite()
             || support_radius <= 0.0
+            || !radius_squared.is_finite()
             || !peak_velocity.is_finite()
+            || !maximum_x.is_finite()
+            || !maximum_y.is_finite()
+            || center_x - support_radius <= 0.0
+            || center_y - support_radius <= 0.0
+            || center_x + support_radius >= maximum_x
+            || center_y + support_radius >= maximum_y
         {
             return Err(WaveFieldError::InvalidParameter);
         }
 
         let mut velocity = vec![0.0; self.current.len()];
-        let radius_squared = support_radius.powi(2);
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let world_x = x as f64 * self.spacing;
@@ -312,8 +331,7 @@ impl WaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), WaveFieldError> {
-        let wave_step_squared =
-            self.propagation_speed.powi(2) * self.time_step.powi(2);
+        let wave_step_squared = self.propagation_speed.powi(2) * self.time_step.powi(2);
         let mut next = vec![0.0; self.current.len()];
 
         for y in 1..self.height - 1 {
@@ -447,9 +465,9 @@ mod tests {
             WaveField::new(10, 10, 1.0, 1.0, 1, 1.0).err(),
             Some(WaveFieldError::UnstableTimeStep)
         );
-        assert!(WaveField::new(10, 10, 1.0, 1.4, 2, 1.0).is_ok());
+        assert!(WaveField::new(10, 10, 1.0, 2.0 * std::f64::consts::FRAC_1_SQRT_2, 2, 1.0).is_ok());
         assert_eq!(
-            WaveField::new(10, 10, 1.0, 1.44, 2, 1.0).err(),
+            WaveField::new(10, 10, 1.0, 2.0 * std::f64::consts::FRAC_1_SQRT_2 * 1.0001, 2, 1.0).err(),
             Some(WaveFieldError::UnstableTimeStep)
         );
     }
@@ -654,6 +672,42 @@ mod tests {
         let fine = error(0.25, 8);
         assert!(coarse > medium * 3.5, "coarse={coarse}, medium={medium}");
         assert!(medium > fine * 3.5, "medium={medium}, fine={fine}");
+    }
+
+    #[test]
+    fn radial_wavefront_isotropy_improves_under_grid_refinement() {
+        fn anisotropy_error(spacing: f64, substeps: usize) -> f64 {
+            let domain_length = 100.0;
+            let intervals = (domain_length / spacing) as usize;
+            let width = intervals + 1;
+            let center = intervals / 2;
+            let mut field = solver(width, width, spacing, substeps);
+            let mut source = FiniteEnergySource::new(10.0).unwrap();
+            let center_world = center as f64 * spacing;
+            pulse(
+                &mut field,
+                &mut source,
+                center_world,
+                center_world,
+                0.5,
+            );
+            field.advance_ticks(10).unwrap();
+
+            let axial_offset = (10.0 / spacing).round() as usize;
+            let off_axis_x = (6.0 / spacing).round() as usize;
+            let off_axis_y = (8.0 / spacing).round() as usize;
+            let axial = field.sample(center + axial_offset, center).unwrap();
+            let off_axis = field
+                .sample(center + off_axis_x, center + off_axis_y)
+                .unwrap();
+            (axial - off_axis).abs() / axial.abs().max(off_axis.abs())
+        }
+
+        let coarse = anisotropy_error(1.0, 2);
+        let medium = anisotropy_error(0.5, 4);
+        let fine = anisotropy_error(0.25, 8);
+        assert!(coarse > medium * 5.0, "coarse={coarse}, medium={medium}");
+        assert!(medium > fine * 1.5, "medium={medium}, fine={fine}");
     }
 
     #[test]
