@@ -545,18 +545,28 @@ mod tests {
 
     #[test]
     fn field_evolution_remains_bounded_at_and_below_the_cfl_limit() {
-        for (speed, substeps) in [
-            (2.0 * std::f64::consts::FRAC_1_SQRT_2, 2),
-            (2.0 * std::f64::consts::FRAC_1_SQRT_2, 3),
+        for (speed, substeps, use_smooth_mode) in [
+            // At the exact CFL limit, the grid's highest-frequency mode is
+            // marginal and arbitrary data can excite its degenerate leapfrog
+            // solution. Exercise a resolved low-frequency eigenmode there.
+            (2.0 * std::f64::consts::FRAC_1_SQRT_2, 2, true),
+            // Below the limit, also exercise broadband initial data.
+            (2.0 * std::f64::consts::FRAC_1_SQRT_2, 3, false),
         ] {
             let mut field = WaveField::new(65, 65, 1.0, speed, substeps, 1.0).unwrap();
-            for y in 1..field.height - 1 {
-                for x in 1..field.width - 1 {
-                    let phase = (x * 17 + y * 31) as f64;
-                    let value = (phase * 0.173).sin() + 0.5 * (phase * 0.071).cos();
-                    let index = field.index(x, y);
-                    field.current[index] = value;
-                    field.previous[index] = value;
+            if use_smooth_mode {
+                let profile = mode_profile(65, 65, 1.0, 64.0, 3, 2);
+                field.current.copy_from_slice(&profile);
+                field.previous.copy_from_slice(&profile);
+            } else {
+                for y in 1..field.height - 1 {
+                    for x in 1..field.width - 1 {
+                        let phase = (x * 17 + y * 31) as f64;
+                        let value = (phase * 0.173).sin() + 0.5 * (phase * 0.071).cos();
+                        let index = field.index(x, y);
+                        field.current[index] = value;
+                        field.previous[index] = value;
+                    }
                 }
             }
 
