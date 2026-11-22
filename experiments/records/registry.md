@@ -18,7 +18,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 | ID | Experiment | Conditions | Status | Research plan |
 |---|---|---|---|---|
 | EXP-2026-007 | Environmental BREAK and DISPLACEMENT discovery-eligibility audit | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; ordinary chemistry; deep diagnostics and profiling disabled | **Registered; not yet run** | [PLAN-007 — Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |
-| EXP-2026-008 | Pre-wave unified-energy performance and accounting baseline | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; movement and sampled tick profiling enabled; deep diagnostics disabled | **Registered; not yet run** | [PLAN-008 — Pre-wave unified-energy performance baseline](plans/PLAN-008-pre-wave-unified-energy-baseline.md) |
+| EXP-2026-008 | Pre-wave unified-energy performance and accounting baseline | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; movement and sampled tick profiling enabled; deep diagnostics disabled | Results recorded: pre-wave-reference | [PLAN-008 — Pre-wave unified-energy performance baseline](plans/PLAN-008-pre-wave-unified-energy-baseline.md); [pre-wave-reference setup](results/EXP-2026-008-pre-wave-reference/setup.json) · [pre-wave-reference report](results/EXP-2026-008-pre-wave-reference/consolidated-report.json) |
 
 ## Planned research
 
