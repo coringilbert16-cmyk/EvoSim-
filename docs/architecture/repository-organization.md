@@ -4,6 +4,7 @@ EvoSim source is organized by responsibility rather than historical file creatio
 
 Current target:
 - src/simulation/ — simulation loop, state, runtime, server, process runner
+- src/physics/ — independent physical field solvers and numerical reference models
 - src/organism/ — lifecycle, genome, development, decisions, reproduction
 - src/geometry/ — physical geometry, structure, contacts, boundaries
 - src/construction/ — construction runtime, material selection, initial constructor
