@@ -334,7 +334,7 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 **Current status:** Architecture direction approved. PR #377 and PR #378 are merged. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). The audit confirms that the live system consists of separate material-origin movement, local chemistry activation, external world-tone input, and hotspot input paths; none is yet a persistent finite-speed wave field. The shape-aware perimeter geometry is a starting foundation, not a completed field implementation. The independent persistent wave field, finite-speed propagation, field energy lifecycle, complete perimeter coupling, and production migration remain future work.
 
-**Next action:** Close Phase 0 by recording the reproducible 60-second seed-42, 1,280-material current-main performance baseline with phase timing and energy diagnostics. Then begin Phase 1's formal source/energy and wave-physics decisions. In particular, reconcile the observed coordinate-topology discrepancy and decide the energy semantics of material-origin oscillators before solver implementation.
+**Next action:** Phase 0 is complete; see EXP-2026-008 and the Phase 1 specification. Continue Phase 1 by reconciling the Master Spec 2.4 coordinate topology, then settle field interpretation/units, source dimensionality and provenance, and material-origin oscillator semantics before solver implementation.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
