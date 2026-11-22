@@ -663,6 +663,35 @@ mod tests {
     }
 
     #[test]
+    fn destructive_interference_returns_field_energy_to_the_second_source() {
+        let mut field = solver(201, 201, 1.0, 2);
+        let mut emitter = FiniteEnergySource::new(10.0).unwrap();
+        let mut absorber = FiniteEnergySource::new(0.0).unwrap();
+        let mut velocity = vec![0.0; field.width() * field.height()];
+        let center = field.index(100, 100);
+        velocity[center] = 1.0;
+
+        let emitted = field
+            .inject_initial_profile(&mut emitter, &vec![0.0; velocity.len()], &velocity)
+            .unwrap();
+        assert!(emitted > 0.0);
+        assert!((field.energy() - emitted).abs() < 1.0e-12);
+
+        for value in &mut velocity {
+            *value = -*value;
+        }
+        let returned = field
+            .inject_initial_profile(&mut absorber, &vec![0.0; velocity.len()], &velocity)
+            .unwrap();
+
+        assert!((returned + emitted).abs() < 1.0e-12);
+        assert!(field.energy().abs() < 1.0e-12);
+        assert!((emitter.available_energy() + absorber.available_energy() - 10.0).abs() < 1.0e-12);
+        assert!((absorber.available_energy() - emitted).abs() < 1.0e-12);
+        assert!((emitter.net_energy_debit() + absorber.net_energy_debit()).abs() < 1.0e-12);
+    }
+
+    #[test]
     fn compact_pulse_has_finite_travel_time_and_arrives_near_distance_over_speed() {
         let mut field = solver(201, 201, 1.0, 2);
         let mut source = FiniteEnergySource::new(10.0).unwrap();
