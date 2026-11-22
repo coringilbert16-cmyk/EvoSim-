@@ -68,7 +68,7 @@ The complete energy inventory has one conservation authority and these non-overl
 | Thermal energy | Energy represented as unresolved microscopic motion or a defined thermal state | Local storage and any modeled thermal transport |
 | Structural / chemical potential | Energy associated with validated material structure and bonds | Only include terms with defined parameters and experimentally defensible meaning |
 | Mechanical energy / work | Energy in motion and energy transferred through forces or constraints | Equal-and-opposite work accounting across interacting holders |
-| Boundary transfer | Energy leaving the modeled domain or supplied by an external boundary | Explicit escaped/exported or imported amount and destination |
+| External exchange | Energy entering from or leaving to an explicitly modeled external system | Named external source/sink, signed amount, and destination; never inferred from a map edge |
 
 A transfer record must identify its source holder, destination holder, signed amount, simulation time, and physical mechanism. Internal transfers cancel in the whole-world balance. A holder cannot be debited or credited twice for one transfer.
 
@@ -234,7 +234,7 @@ Minimum atomic operations:
 3. **Field-to-material coupling:** field debit and material credit commit together.
 4. **Dissipation:** field debit and local thermal credit commit together.
 5. **Mechanical exchange:** field/material work and mechanical-energy changes reconcile as one transaction.
-6. **Boundary transfer:** exported energy is removed from the domain and recorded as export; incoming boundary energy is recorded as external input.
+6. **External exchange:** energy exchanged with an explicitly modeled external system is recorded with its source/destination and signed amount. The spherical surface has no environmental edge through which energy can escape.
 
 Rejected or invalid transactions must leave all participating holders unchanged. The field must not create a second ledger or a parallel energy authority.
 
@@ -251,7 +251,10 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Topic | Current status | Required resolution before Phase 1 exit |
 |---|---|---|
 | Unified energy categories | Defined provisionally in Section 3 | Confirm exact holder boundaries and initial/final inventory equation |
-| Field variable and equation | Scalar linear wave equation proposed as reference candidate | Confirm scalar/isotropic assumptions or select a richer model |
+| Field interpretation | User-selected coupled physical field | Confirm scalar/isotropic reference model is sufficient; expand only if physics requires it |
+| Frequency representation | User-selected single field containing multiple frequencies and phases | Validate superposition/interference and frequency-resolved response |
+| Material emission/response | User-selected powered emission plus passive response | Define material energy ownership and conservative emission/coupling mechanism |
+| Empty-space propagation speed | User-selected universal constant in homogeneous empty space | Calibrate value and physical units; do not infer from legacy movement behavior |
 | Energy density and flux | Candidate formulas in Section 4.2 | Fix field normalization and energy units |
 | Spatial unit and propagation speed | Open | Define world-unit meaning, speed, and tick/substep relationship |
 | Source time units | Existing conventions identified | Separate physics time from experiment/wall time; calibrate source power |
@@ -263,7 +266,7 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Structural/chemical energy | Explicitly provisional | Validate parameters or keep separate from settled physical energy |
 | World geometry | User-resolved: two-dimensional spherical surface; display is a map projection | Define radius/curvature scale, metric, numerical representation, and geometry tests |
 | Environmental wave boundaries | Resolved: none; the physical surface is closed | Validate continuity across projection/chart artifacts and global energy conservation; define material-interface behavior separately |
-| Numerics | Uniform-grid reference candidate | Select stencil/integrator, exact stability bound, precision, and convergence tolerance |
+| Numerics | Spherical-surface reference representation required; candidate mesh/chart methods remain open | Compare discretizations; derive stability bound, precision, isotropy, and convergence tolerances |
 | Determinism | Required | Define ordering and deterministic parallelism contract |
 
 ## 11. Phase 1 exit gate
@@ -273,10 +276,10 @@ Phase 1 is complete only when:
 - The field variable, governing equation, dimensionality, units, energy density, and flux are explicit and dimensionally consistent.
 - Propagation speed and simulation-time relationship are defined independently of wall-clock performance.
 - World-tone, hotspot, and material-origin source semantics have named ownership and dimensionally consistent source contracts.
-- Material coupling, attenuation, heat, structural-energy limits, and boundary behavior are explicit.
+- Material coupling, attenuation, heat, structural-energy limits, and the absence of environmental edge boundaries are explicit.
 - The numerical method has a derived stability condition, convergence plan, deterministic update order, and documented error tolerances.
 - Atomic transfer/rollback contracts cover every energy holder.
-- The design is reviewed against Master Spec 2.4 and the EXP-2026-008 baseline.
+- The design is reviewed against the user's approved spherical-surface and unified-energy decisions, and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
 **Next action:** derive and compare spherical-surface discretization options, define the radius/curvature scale and physical units, and complete the source-dimension and powered-material-oscillator contracts. Then lock the surface-wave equation and numerical reference method before Phase 2 implements an independent empty-sphere solver.
