@@ -601,29 +601,146 @@ mod tests {
         assert!((field.logical_time_ticks() - 24.0).abs() < f64::EPSILON);
     }
 
+    fn regional_energy_for_pair(
+        field: &WaveField,
+        previous: &[f64],
+        current: &[f64],
+        region: (usize, usize, usize, usize),
+    ) -> f64 {
+        let (x_min, y_min, x_max, y_max) = region;
+        let mut kinetic_sum = 0.0;
+        for y in y_min..=y_max {
+            for x in x_min..=x_max {
+                let index = field.index(x, y);
+                let velocity = (current[index] - previous[index]) / field.time_step;
+                kinetic_sum += velocity * velocity;
+            }
+        }
+
+        let mut gradient_cross_sum = 0.0;
+        let horizontal_start = x_min.saturating_sub(1);
+        let horizontal_end = x_max.min(field.width - 2);
+        for y in y_min..=y_max {
+            for x in horizontal_start..=horizontal_end {
+                let index = field.index(x, y);
+                let left_inside = x >= x_min;
+                let right_inside = x < x_max;
+                let weight = 0.5 * (left_inside as u8 + right_inside as u8) as f64;
+                gradient_cross_sum += weight
+                    * (current[index + 1] - current[index])
+                    * (previous[index + 1] - previous[index]);
+            }
+        }
+        let vertical_start = y_min.saturating_sub(1);
+        let vertical_end = y_max.min(field.height - 2);
+        for y in vertical_start..=vertical_end {
+            for x in x_min..=x_max {
+                let index = field.index(x, y);
+                let top_inside = y >= y_min;
+                let bottom_inside = y < y_max;
+                let weight = 0.5 * (top_inside as u8 + bottom_inside as u8) as f64;
+                gradient_cross_sum += weight
+                    * (current[index + field.width] - current[index])
+                    * (previous[index + field.width] - previous[index]);
+            }
+        }
+        0.5 * field.energy_normalization
+            * (kinetic_sum * field.spacing.powi(2)
+                + field.propagation_speed.powi(2) * gradient_cross_sum)
+    }
+
+    // Discrete local conservation for the leapfrog scheme. For each edge
+    // crossing the control-volume boundary, the regional energy increment
+    // contributed by that edge is
+    //
+    //   (normalization * c^2 / 4) * (q_j - q_i) * (d_i + d_j),
+    //
+    // where q is the field at the old integer time and d = q^(n+1)-q^(n-1).
+    // This follows by subtracting the two-time-level energy expressions and
+    // applying the five-point update plus discrete summation by parts. It
+    // uses only boundary-edge field samples, not total or complementary energy.
+    fn independently_integrated_boundary_energy_change(
+        field: &WaveField,
+        region: (usize, usize, usize, usize),
+        previous: &[f64],
+        current: &[f64],
+        next: &[f64],
+    ) -> f64 {
+        let (x_min, y_min, x_max, y_max) = region;
+        let mut edge_sum = 0.0;
+        let mut add_edge = |inside: usize, outside: usize| {
+            let gradient = current[outside] - current[inside];
+            let centered_change = (next[inside] - previous[inside])
+                + (next[outside] - previous[outside]);
+            edge_sum += gradient * centered_change;
+        };
+
+        for y in y_min..=y_max {
+            if x_min > 0 {
+                add_edge(field.index(x_min, y), field.index(x_min - 1, y));
+            }
+            if x_max + 1 < field.width {
+                add_edge(field.index(x_max, y), field.index(x_max + 1, y));
+            }
+        }
+        for x in x_min..=x_max {
+            if y_min > 0 {
+                add_edge(field.index(x, y_min), field.index(x, y_min - 1));
+            }
+            if y_max + 1 < field.height {
+                add_edge(field.index(x, y_max), field.index(x, y_max + 1));
+            }
+        }
+
+        0.25 * field.energy_normalization * field.propagation_speed.powi(2) * edge_sum
+    }
+
     #[test]
-    fn regional_energy_change_closes_integrated_boundary_flux() {
+    fn regional_energy_change_closes_independently_integrated_boundary_flux() {
         let mut field = solver(201, 201, 1.0, 2);
         let mut source = FiniteEnergySource::new(10.0).unwrap();
         pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
 
-        let total_before = field.energy();
-        let inside_before = field.energy_in_region(95, 95, 105, 105).unwrap();
-        assert!((total_before - inside_before).abs() < 1.0e-12);
-        assert!((field.energy_in_region(0, 0, 200, 200).unwrap() - total_before).abs() < 1.0e-12);
+        let region = (95, 95, 105, 105);
+        let initial_region_energy = field.energy_in_region(
+            region.0, region.1, region.2, region.3
+        ).unwrap();
         assert!(field.energy_in_region(10, 10, 9, 20).is_none());
 
-        field.advance_ticks(24).unwrap();
-        let total_after = field.energy();
-        let inside_after = field.energy_in_region(95, 95, 105, 105).unwrap();
-        let outside_before = total_before - inside_before;
-        let outside_after = total_after - inside_after;
-        let outward_flux = inside_before - inside_after;
-        let outside_energy_gain = outside_after - outside_before;
+        let mut independently_integrated_flux = 0.0;
+        let mut largest_step_residual: f64 = 0.0;
+        for _ in 0..48 {
+            let previous = field.previous.clone();
+            let current = field.current.clone();
+            field.advance_substeps(1).unwrap();
+            let next = field.current.clone();
 
-        assert!(outward_flux > 0.0);
-        assert!((outward_flux - outside_energy_gain).abs() < 1.0e-10);
-        assert!((total_after - total_before).abs() < 1.0e-10);
+            let measured_change = field.energy_in_region(
+                region.0, region.1, region.2, region.3
+            ).unwrap()
+                - regional_energy_for_pair(&field, &previous, &current, region);
+            let boundary_change = independently_integrated_boundary_energy_change(
+                &field, region, &previous, &current, &next
+            );
+            largest_step_residual =
+                largest_step_residual.max((measured_change - boundary_change).abs());
+            independently_integrated_flux += boundary_change;
+        }
+
+        let final_region_energy = field.energy_in_region(
+            region.0, region.1, region.2, region.3
+        ).unwrap();
+        let measured_net_change = final_region_energy - initial_region_energy;
+        assert!(independently_integrated_flux < 0.0);
+        assert!(
+            largest_step_residual < 1.0e-10,
+            "largest per-step local conservation residual: {largest_step_residual}"
+        );
+        assert!(
+            (measured_net_change - independently_integrated_flux).abs() < 1.0e-10,
+            "regional change={measured_net_change}, integrated boundary transfer={independently_integrated_flux}"
+        );
+        assert!(field.energy().is_finite());
     }
 
     #[test]
