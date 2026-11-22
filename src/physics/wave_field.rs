@@ -543,8 +543,18 @@ mod tests {
 
         for offset_y in -20isize..=20 {
             for offset_x in -20isize..=20 {
-                let small = smaller.sample((100isize + offset_x) as usize, (100isize + offset_y) as usize).unwrap();
-                let large = larger.sample((120isize + offset_x) as usize, (120isize + offset_y) as usize).unwrap();
+                let small = smaller
+                    .sample(
+                        (100isize + offset_x) as usize,
+                        (100isize + offset_y) as usize,
+                    )
+                    .unwrap();
+                let large = larger
+                    .sample(
+                        (120isize + offset_x) as usize,
+                        (120isize + offset_y) as usize,
+                    )
+                    .unwrap();
                 assert!((small - large).abs() < 1.0e-12);
             }
         }
