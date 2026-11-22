@@ -103,7 +103,17 @@ This relationship is essential: field amplitude or spectral magnitude alone is n
 
 ### 4.3 Damping and heat
 
-A damped candidate equation may include `2\gamma u_t`. If used, the associated reduction in field energy must be derived from the equation and deposited into the local thermal holder exactly once. Damping cannot be an arbitrary attenuation multiplier that makes energy disappear.
+A damped candidate equation may include `2\gamma u_t`:
+
+`u_{tt} + 2\gamma u_t = c^2 \\nabla^2 u + f(x,y,t)`
+
+For this candidate, the local energy balance is:
+
+`\\partial_t e + \\nabla \\cdot J = K u_t f - 2K\\gamma u_t^2`
+
+The first right-hand term is signed power density transferred from the source or coupled degree of freedom into the field. Its spatial integral is the source-to-field power transfer. The second term is nonnegative dissipation and must be credited to local thermal energy. If the field does work back on a source, the signed transfer reverses and the source holder is credited. Source debit and field work must be committed atomically. This relation makes source energy transfer auditable instead of equating a prescribed amplitude with an energy grant.
+
+If damping is not part of the selected physical model, set `\\gamma = 0`; do not add it merely to stabilize or quiet the simulation. Damping cannot be an arbitrary attenuation multiplier that makes energy disappear.
 
 Geometric spreading is not dissipation. A wave can have lower local amplitude as its energy spreads over a larger region while total field energy remains conserved. True material absorption, bulk damping, and boundary absorption are separate mechanisms with separate heat or export destinations.
 
