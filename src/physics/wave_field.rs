@@ -167,6 +167,73 @@ impl WaveField {
         self.discrete_energy(&self.previous, &self.current)
     }
 
+    /// Discrete energy assigned to an inclusive rectangular control volume.
+    /// Edge potential energy is split evenly between its endpoint cells, so
+    /// a region and its complement sum exactly to the global field energy.
+    /// In source-free empty space, the region's energy change is its net
+    /// integrated boundary flux.
+    pub(crate) fn energy_in_region(
+        &self,
+        x_min: usize,
+        y_min: usize,
+        x_max: usize,
+        y_max: usize,
+    ) -> Option<f64> {
+        if x_min > x_max
+            || y_min > y_max
+            || x_max >= self.width
+            || y_max >= self.height
+        {
+            return None;
+        }
+
+        let mut kinetic_sum = 0.0;
+        for y in y_min..=y_max {
+            for x in x_min..=x_max {
+                let index = self.index(x, y);
+                let velocity = (self.current[index] - self.previous[index]) / self.time_step;
+                kinetic_sum += velocity * velocity;
+            }
+        }
+
+        let mut gradient_cross_sum = 0.0;
+        let horizontal_start = x_min.saturating_sub(1);
+        let horizontal_end = x_max.min(self.width - 2);
+        for y in y_min..=y_max {
+            for x in horizontal_start..=horizontal_end {
+                let index = self.index(x, y);
+                let next = index + 1;
+                let left_inside = x >= x_min && x <= x_max;
+                let right_inside = x + 1 >= x_min && x + 1 <= x_max;
+                let weight = 0.5 * (left_inside as u8 + right_inside as u8) as f64;
+                gradient_cross_sum += weight
+                    * (self.current[next] - self.current[index])
+                    * (self.previous[next] - self.previous[index]);
+            }
+        }
+
+        let vertical_start = y_min.saturating_sub(1);
+        let vertical_end = y_max.min(self.height - 2);
+        for y in vertical_start..=vertical_end {
+            for x in x_min..=x_max {
+                let index = self.index(x, y);
+                let next = index + self.width;
+                let top_inside = y >= y_min && y <= y_max;
+                let bottom_inside = y + 1 >= y_min && y + 1 <= y_max;
+                let weight = 0.5 * (top_inside as u8 + bottom_inside as u8) as f64;
+                gradient_cross_sum += weight
+                    * (self.current[next] - self.current[index])
+                    * (self.previous[next] - self.previous[index]);
+            }
+        }
+
+        Some(
+            0.5 * self.energy_normalization
+                * (kinetic_sum * self.spacing.powi(2)
+                    + self.propagation_speed.powi(2) * gradient_cross_sum),
+        )
+    }
+
     /// Adds an initial displacement/velocity profile and settles the exact
     /// change in discrete field energy against a finite source budget.
     ///
@@ -536,6 +603,34 @@ mod tests {
             "wave had not reached receiver after 24 ticks: {after_arrival}"
         );
         assert!((field.logical_time_ticks() - 24.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn regional_energy_change_closes_integrated_boundary_flux() {
+        let mut field = solver(201, 201, 1.0, 2);
+        let mut source = FiniteEnergySource::new(10.0).unwrap();
+        pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
+
+        let total_before = field.energy();
+        let inside_before = field.energy_in_region(95, 95, 105, 105).unwrap();
+        assert!((total_before - inside_before).abs() < 1.0e-12);
+        assert!(
+            (field.energy_in_region(0, 0, 200, 200).unwrap() - total_before).abs()
+                < 1.0e-12
+        );
+        assert!(field.energy_in_region(10, 10, 9, 20).is_none());
+
+        field.advance_ticks(24).unwrap();
+        let total_after = field.energy();
+        let inside_after = field.energy_in_region(95, 95, 105, 105).unwrap();
+        let outside_before = total_before - inside_before;
+        let outside_after = total_after - inside_after;
+        let outward_flux = inside_before - inside_after;
+        let outside_energy_gain = outside_after - outside_before;
+
+        assert!(outward_flux > 0.0);
+        assert!((outward_flux - outside_energy_gain).abs() < 1.0e-10);
+        assert!((total_after - total_before).abs() < 1.0e-10);
     }
 
     #[test]
