@@ -9,6 +9,7 @@ The root [README](../README.md) is the project entry point and getting-started g
 - [Construction runtime boundaries](architecture/construction-runtime-boundaries.md) — construction subsystem responsibilities.
 - [Resonance-field architecture](design/resonance-field-architecture.md) — high-level field model.
 - [Resonance-field implementation roadmap](design/resonance-field-implementation-roadmap.md) — controlling detailed roadmap; read before any resonance-field work.
+- [Unified energy and continuous wave-field specification](design/unified-energy-physics-specification.md) — active Phase 1 specification and approved modeling defaults for the scalar continuous wave reference field, infinite flat world, isotropic external sun on an above-plane perpendicular orbit, conservative source coupling, powered material oscillators plus passive response, finite-area hotspot, project-native units, and uniform-grid reference solver; Phase 1 specification complete; Phase 2 is the independent empty-space reference solver, with production integration still gated.
 
 ## Chemistry and physical models
 
