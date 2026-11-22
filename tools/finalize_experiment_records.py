@@ -6,10 +6,15 @@ import argparse
 import hashlib
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any
 
-from tools.compare_compact_experiment_records import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.compare_compact_experiment_records import (  # noqa: E402
     compare,
     measurement_compatibility_key,
 )
