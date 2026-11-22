@@ -339,7 +339,7 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Spatial unit and propagation speed | Open | Define world-unit meaning, speed, and tick/substep relationship |
 | Source-to-field transfer | Common contract defined in Section 5.5 | Audit source implementations; define boundary condition, distributed support, finite budgets/replenishment, and calibrated power/flux values |
 | Source time units | Existing conventions identified | Separate physics time from experiment/wall time; calibrate source power |
-| World-tone source | Existing source parameters identified | Convert width-rate to a physically dimensioned source boundary contract |
+| World-tone source | Legacy rate and finite-rectangle orbit audited in Section 5.6 | Decide finite in-plane emitter vs incoming field condition on the infinite plane; define geometry, ownership/replenishment, and convert width-rate only after the physical measure is selected |
 | Hotspot source | Existing area-rate identified | Define distributed source coupling and unit calibration |
 | Material-origin oscillators | No current source debit identified | Choose powered oscillator, conservative coupling, or response-only |
 | Material coupling | Interface requirements drafted | Define constitutive response and finite-energy sharing |
@@ -363,4 +363,4 @@ Phase 1 is complete only when:
 - The design is reviewed against the user's approved infinite-plane/laboratory/camera separation and unified-energy decisions, and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
-**Next action:** audit the existing world-tone and hotspot implementations against the common source contract in Section 5.5; resolve the authoritative tick-to-physics-time mapping and physical length/energy scales; then calibrate source power without conflating boundary and distributed dimensions. In parallel, compare conservative planar discretizations and validate finite computational-window treatment. Material-origin emission remains disabled in the empty-space reference solver until a powered or conservative coupling law is specified.
+**Next action:** resolve the world-tone source's physical identity and geometry on the infinite plane (finite in-plane emitter versus a defined incoming field condition), then establish the physical length and energy scales needed to calibrate its width-rate and the hotspot's area-rate. Verify that the runner and all phase/frequency helpers share the 3.6-simulated-seconds-per-tick convention before locking it. In parallel, compare conservative planar discretizations and validate finite computational-window treatment. Material-origin emission remains disabled in the empty-space reference solver until a powered or conservative coupling law is specified.
