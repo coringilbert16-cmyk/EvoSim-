@@ -68,8 +68,8 @@ Do not invent constants or choose equations solely for convenient performance. R
 
 1. **Field quantity and units:** Define what the field state represents (for example, a signed oscillatory field amplitude or a set of coupled components), its units, and how physical energy density and flux are derived. Establish a dimensionally consistent basis for world length, physics time, energy, power, area, boundary length, frequency, energy density, and flux. Document conversion scales and keep numerical normalization separate from physical units. Amplitude or spectral magnitude is not itself energy.
 2. **Propagation law:** Select the governing wave equation and its dimensionality/components. State assumptions and physical interpretation. The implementation must represent finite propagation speed, not instantaneous influence.
-3. **Propagation speed:** Define the world-unit/physics-tick relationship and propagation speed. Keep this distinct from wall-clock execution pacing.
-4. **Frequency and phase:** Preserve the established simulation-time oscillator convention: 24,000 physics ticks per simulated day and 440 reference-tone oscillations per simulated day. The 2,400-tick world-source orbital cycle is separate. Derive phase from simulation time/state, not wall-clock time.
+3. **Propagation speed:** Define propagation speed in project-native world-distance units per logical simulation tick. Keep this distinct from wall-clock execution pacing.
+4. **Frequency and phase:** Use the fixed logical clock: 24,000 ticks per simulated day and 24,000 ticks per complete solar orbit; they are the same interval. The sun carrier completes 440 cycles and the hotspot carrier 880 cycles during that interval. Runtime pacing is not simulated time and has no influence on physics.
 5. **Source ontology and energy provenance:** Define the physical source classes (external radiative world-tone sun, localized in-plane hotspot, true boundary/line emitters if any, and material-origin oscillators). Every source needs a named authoritative energy holder or explicitly accounted external supply, a finite budget or replenishment law, deterministic schedule, and atomic source/field work transfer. Distinct source geometries retain their correct physical dimensions while sharing one source-to-field accounting contract. The sun is outside the infinite flat plane and follows a circular orbit in a plane perpendicular to it; orbital position determines illumination direction. Its orbit is defined in physical coordinates, independent of camera, viewport, solver window, and laboratory walls. The legacy orbit derived from finite rectangular environment dimensions must be retired; orbital radius/distance, height, orientation, and phase origin remain to be specified. The sun is an external radiative source, not a boundary emitter: define its radiation pattern, finite source-to-plane propagation delay using the same empty-space propagation speed as the field, incidence geometry, finite emitted power, and conservative coupling into the 2D field. In particular, decide whether material-origin resonance is powered emission, a conservative coupled degree of freedom, or response-only. Existing material aura amplitudes are not automatically source energy and may not create energy without a named owner/debit or a formally conservative interaction.
 6. **Source footprint and injection:** Define how each source couples energy through its actual physical geometry. For the sun, use a finite-power external radiation pattern and source-to-plane geometry/retarded time; derive incident power density over physical plane area, including incidence projection, and ensure total intercepted power never exceeds emitted power. For an in-plane distributed source, integrate power density over its physical support area. For a true line/boundary emitter, integrate flux over its complete physical boundary length. Do not use projected screen width or renormalize visible source energy independently for each receiver. Verify that total source power is invariant under grid refinement and is not scaled by material-recipient count.
 7. **Material coupling:** Define frequency-dependent absorption, reflection, transmission, scattering, and response rules. Reuse established material/resonance semantics where valid; do not create molecule-specific propagation exceptions.
@@ -148,20 +148,22 @@ Exit criteria:
 
 ### Phase 1 — Formal wave-physics specification and contracts
 
-**Goal:** Turn the target into explicit equations, units, state, and interfaces before building a production solver.
+<badge>Complete</badge>
 
-Work:
-- Resolve every item in Section 3.
-- Define field state, source descriptor, receiver descriptor, material-interface coupling contract, energy-flux interface, and field query contract on an infinite flat plane.
-- Define geometry snapshot/version invalidation and event ordering.
-- Define the relationship between simulation ticks, spatial units, propagation speed, carrier frequency, and source schedules.
-- Define ledger transactions for emission, field storage/transport, absorption, and heat.
+**Goal:** Establish the implementation-independent physical and numerical contracts before building a solver.
 
-Exit criteria:
-- Equations and units are documented and dimensionally consistent.
-- Boundary behavior and material coupling are explicit.
-- Interface contracts and failure/rollback semantics are testable.
-- The specification is reviewed against the approved infinite-plane, laboratory-wall, and observation-window separation and current energy semantics.
+Completed in PR #409:
+- Unified energy ontology and one conservation authority, including source ownership, local availability, material/internal/thermal/structural/work holders, and atomic debit/credit/rollback rules.
+- Continuous scalar wave equation, field energy density and flux, zero empty-space damping, and explicit project-native dimensions.
+- Logical clock: 24,000 ticks per simulated day and per solar orbit; 440 sun-carrier cycles and 880 hotspot-carrier cycles per day. Runtime pacing is execution speed only.
+- Infinite flat-plane geometry, nonphysical viewer/window, temporary laboratory walls as ordinary material objects, and finite computational-window requirements.
+- External isotropic 3D sun geometry, retarded source-to-plane time, exact half-power plane interception, normalized in-plane hotspot source, powered material oscillators, and passive material response.
+- Conservative source-work identity, receiver energy partition, deterministic ordering, and transaction/rollback contracts.
+- Uniform Cartesian second-order reference numerics, five-point/leapfrog stability bound, second-order refinement protocol, and numerical-tolerance reporting policy.
+
+The legacy 2,400-tick orbit and 86,400-second conversion are recorded as implementation discrepancies, not accepted model settings. Project-native parameter values remain open for controlled Phase 2 experiments; no wall-clock or SI-time calibration is required.
+
+**Exit:** The specification and decision register are complete. Phase 2 is limited to the independent empty-space reference solver with a controlled finite-budget mathematical test source; production integration remains gated.
 
 ### Phase 2 — Independent reference wave solver
 
@@ -339,7 +341,7 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 **Current status:** Architecture direction approved. PR #377 and PR #378 are merged. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). The audit confirms that the live system consists of separate material-origin movement, local chemistry activation, external world-tone input, and hotspot input paths; none is yet a persistent finite-speed wave field. The shape-aware perimeter geometry is a starting foundation, not a completed field implementation. The independent persistent wave field, finite-speed propagation, field energy lifecycle, complete perimeter coupling, and production migration remain future work.
 
-**Next action:** Phase 0 is complete; see EXP-2026-008 and the Phase 1 specification. The user has approved the Phase 1 modeling defaults recorded in Section 11 below and in Section 12 of the specification: scalar linear isotropic nondispersive reference field; external isotropic 3D sun on an above-plane perpendicular circular orbit; conservative source coupling; powered material oscillators plus passive response; finite-area distributed hotspot; project-native L/tick/E; uniform Cartesian reference grid with conservative second-order stepping; zero empty-space damping; and provisional separately reported structural energy. Remaining work is calibration and contract verification—not reopening these defaults. Complete the Phase 1 exit gate before production solver implementation.
+**Next action:** Phase 1 is complete at the specification level. Proceed to Phase 2 only: implement and validate the independent empty-space reference wave solver using a controlled finite-budget mathematical test source. Do not connect the live sun, hotspot, material emitters, chemistry, or movement during Phase 2.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
