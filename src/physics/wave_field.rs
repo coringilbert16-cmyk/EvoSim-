@@ -94,8 +94,7 @@ impl WaveField {
 
         let time_step = 1.0 / substeps_per_tick as f64;
         let courant_ratio = propagation_speed * time_step / spacing;
-        if !courant_ratio.is_finite()
-            || courant_ratio > std::f64::consts::FRAC_1_SQRT_2
+        if !courant_ratio.is_finite() || courant_ratio > std::f64::consts::FRAC_1_SQRT_2
         {
             return Err(WaveFieldError::UnstableTimeStep);
         }
@@ -202,8 +201,7 @@ impl WaveField {
         let mut initial_velocity = vec![0.0; self.current.len()];
         for index in 0..self.current.len() {
             initial_velocity[index] =
-                (self.current[index] - self.previous[index]) / self.time_step
-                    + velocity[index];
+                (self.current[index] - self.previous[index]) / self.time_step + velocity[index];
             next_current[index] += displacement[index];
         }
         for y in 1..self.height - 1 {
@@ -216,8 +214,7 @@ impl WaveField {
             }
         }
 
-        let acceleration_scale =
-            0.5 * self.time_step.powi(2) * self.propagation_speed.powi(2);
+        let acceleration_scale = 0.5 * self.time_step.powi(2) * self.propagation_speed.powi(2);
         let mut next_previous = next_current.clone();
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
@@ -344,7 +341,9 @@ impl WaveField {
 
     fn laplacian(&self, values: &[f64], x: usize, y: usize) -> f64 {
         let index = self.index(x, y);
-        (values[index - 1] + values[index + 1] + values[index - self.width]
+        (values[index - 1]
+            + values[index + 1]
+            + values[index - self.width]
             + values[index + self.width]
             - 4.0 * values[index])
             / self.spacing.powi(2)
@@ -362,8 +361,8 @@ impl WaveField {
             for x in 0..self.width - 1 {
                 let index = self.index(x, y);
                 let next = index + 1;
-                gradient_cross_sum += (current[next] - current[index])
-                    * (previous[next] - previous[index]);
+                gradient_cross_sum +=
+                    (current[next] - current[index]) * (previous[next] - previous[index]);
             }
         }
         for y in 0..self.height - 1 {
@@ -390,8 +389,7 @@ mod tests {
     use super::*;
 
     fn solver(width: usize, height: usize, spacing: f64, substeps: usize) -> WaveField {
-        WaveField::new(width, height, spacing, 1.0, substeps, 1.0)
-            .expect("stable reference solver")
+        WaveField::new(width, height, spacing, 1.0, substeps, 1.0).expect("stable reference solver")
     }
 
     fn pulse(
@@ -419,8 +417,7 @@ mod tests {
             for x in 1..width - 1 {
                 let px = x as f64 * spacing;
                 let py = y as f64 * spacing;
-                profile[y * width + x] = (std::f64::consts::PI * mode_x as f64 * px / length)
-                    .sin()
+                profile[y * width + x] = (std::f64::consts::PI * mode_x as f64 * px / length).sin()
                     * (std::f64::consts::PI * mode_y as f64 * py / length).sin();
             }
         }
@@ -437,8 +434,7 @@ mod tests {
         let kx = std::f64::consts::PI * mode_x as f64 / length;
         let ky = std::f64::consts::PI * mode_y as f64 / length;
         let eigenvalue = 4.0 / spacing.powi(2)
-            * ((0.5 * kx * spacing).sin().powi(2)
-                + (0.5 * ky * spacing).sin().powi(2));
+            * ((0.5 * kx * spacing).sin().powi(2) + (0.5 * ky * spacing).sin().powi(2));
         speed * eigenvalue.sqrt()
     }
 
@@ -472,20 +468,23 @@ mod tests {
         assert_eq!(insufficient.net_energy_debit(), 0.0);
 
         let mut source = FiniteEnergySource::new(10.0).unwrap();
-        let initial_transfer =
-            field.inject_compact_pulse(&mut source, 100.0, 100.0, 3.0, 0.5).unwrap();
+        let initial_transfer = field
+            .inject_compact_pulse(&mut source, 100.0, 100.0, 3.0, 0.5)
+            .unwrap();
         assert!(initial_transfer > 0.0);
         assert!((field.energy() - initial_transfer).abs() < 1.0e-12);
         assert!(
-            (field.energy() + source.available_energy() - source.initial_budget()).abs()
-                < 1.0e-12
+            (field.energy() + source.available_energy() - source.initial_budget()).abs() < 1.0e-12
         );
 
         let initial_energy = field.energy();
         field.advance_ticks(40).unwrap();
         let final_energy = field.energy();
         let relative_drift = (final_energy - initial_energy).abs() / initial_energy;
-        assert!(relative_drift < 1.0e-10, "relative energy drift: {relative_drift}");
+        assert!(
+            relative_drift < 1.0e-10,
+            "relative energy drift: {relative_drift}"
+        );
         assert_eq!(source.net_energy_debit(), initial_transfer);
     }
 
@@ -588,7 +587,10 @@ mod tests {
             field.advance_ticks(2).unwrap();
             let continuum_omega = std::f64::consts::PI * std::f64::consts::SQRT_2 / length;
             let expected_factor = (continuum_omega * 2.0).cos();
-            field.current.iter().zip(mode.iter())
+            field
+                .current
+                .iter()
+                .zip(mode.iter())
                 .map(|(actual, initial)| (actual - initial * expected_factor).abs())
                 .fold(0.0, f64::max)
         }
