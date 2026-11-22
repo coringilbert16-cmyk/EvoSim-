@@ -1,5 +1,5 @@
 {
-  "run": true,
+  "run": false,
   "seeds": [
     42,
     43,
@@ -7,9 +7,13 @@
     45,
     46
   ],
-  "duration_seconds": 3600,
+  "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Five independent one-hour standard chemistry observations; 12 temporal complexity windows per seed; ordinary chemistry, no forced reactions.",
+  "request_note": "PREPARED ONLY — EXP-2026-007 / PLAN-007 ordinary environmental BREAK and DISPLACEMENT discovery-eligibility baseline. Dispatch manually from main after registration PR is merged; no forced reactions, no profiling, no deep diagnostics.",
   "profile_movement": false,
-  "profile_tick": false
+  "profile_tick": false,
+  "deep_diagnostics": false,
+  "experiment_id": "EXP-2026-007",
+  "research_plan": "PLAN-007",
+  "condition_id": "ordinary-discovery-baseline"
 }

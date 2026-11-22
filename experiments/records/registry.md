@@ -1,6 +1,6 @@
 # EvoSim chemistry experiment registry
 
-Last updated: 2026-11-20
+Last updated: 2026-11-21
 
 This is the master index. Detailed completed-run results live under [results/](results/); planned research lives under [plans/](plans/README.md).
 
@@ -13,6 +13,12 @@ This is the master index. Detailed completed-run results live under [results/](r
 | EXP-2026-003 | Five-seed extended chemistry observation | 25 minutes per seed; seeds 42–46 | Completed; reanalyzed | [Historical result summary](results/historical-experiments.md) |
 | EXP-2026-004 | Five-seed one-hour chemistry observation | 3,600 seconds per seed; seeds 42–46; 1,200 independent resources + 80 two-constituent molecules; six active elements | Completed; scientific result validated; legacy v1 compact compatibility partial/uncertified | [Full result, analysis, and compatibility limits](results/2026-11-19-one-hour-five-seed.md) |
 
+## Registered experiments
+
+| ID | Experiment | Conditions | Status | Research plan |
+|---|---|---|---|---|
+| EXP-2026-007 | Environmental BREAK and DISPLACEMENT discovery-eligibility audit | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; ordinary chemistry; deep diagnostics and profiling disabled | **Registered; not yet run** | [PLAN-007 — Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |
+
 ## Planned research
 
 | ID | Research question | Status | Plan |
@@ -23,14 +29,15 @@ This is the master index. Detailed completed-run results live under [results/](r
 | PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
 | PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
 | PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
+| PLAN-007 | At which stage do ordinary environmental BREAK and DISPLACEMENT candidates fail to become eligible, funded, and committed reactions? | **Registered; EXP-2026-007 prepared, not yet run** | [Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |
 
 ## Engineering and observability initiatives
 
 | ID | Objective | Status | Implementation record |
 |---|---|---|---|
-| OBS-001 | Build compact, reproducible chemistry diagnostics and unified offline analysis without changing simulation behavior | **Active — compact record and retention implementation in progress** | [Unified analysis implementation](plans/OBS-001-unified-analysis-implementation.md); [permanent record contract](plans/OBS-001-permanent-experiment-record.md) |
+| OBS-001 | Build compact, reproducible chemistry diagnostics and unified offline analysis without changing simulation behavior | **Implementation complete; first canonical experiment publication pending** | [Unified analysis implementation](plans/OBS-001-unified-analysis-implementation.md); [permanent record contract](plans/OBS-001-permanent-experiment-record.md) |
 
-OBS-001 is an engineering initiative, not a scientific experiment. It has no EXP identifier and does not itself establish a chemistry hypothesis. Its merged foundations are PR #398 (reaction identity/settlement telemetry), PR #400 (opportunity coverage semantics), and PR #401 (canonical run manifests). The opportunity-coverage and manifest implementation records remain linked in [plans/](plans/).
+OBS-001 is an engineering initiative, not a scientific experiment. It has no EXP identifier and does not itself establish a chemistry hypothesis. Its implementation is complete through PRs #398–#405: reaction identity/settlement telemetry, opportunity-coverage semantics, canonical manifests, unified analysis, compact reports, two-file retention, and the unified-analysis path fix. The two historical pilots completed offline in workflow runs [#8](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44964063392) and [#9](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44965815500); they did not rerun simulations and remain legacy datasets without canonical manifests. The remaining acceptance test is the first new experiment to publish exactly the two canonical permanent files through the workflow.
 
 ## Current PLAN-001 progress
 
