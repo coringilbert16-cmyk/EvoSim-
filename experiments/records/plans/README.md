@@ -166,3 +166,24 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 7. Pursue spatial organization once spatially resolved opportunity and rate comparisons are available.
 
 All future experiments must be registered before execution and receive a dedicated result record at closeout. Plans do not authorize simulator behavior changes; implementation requires a separate explicit design decision and approval.
+
+
+## PLAN-008 — Pre-wave unified-energy performance baseline
+
+**Status:** Registered; EXP-2026-008 prepared, not yet run.
+
+**Question:** What is the reproducible performance and observable energy-accounting baseline of the current `main` implementation immediately before the unified energy / continuous spatial wave-field redesign?
+
+**Purpose:** Establish the fixed Phase 0 comparison point for later physics implementations. This is a measurement-only experiment; it does not validate the physical completeness of the current resonance model and changes no simulator behavior.
+
+**Registered experiment:** [EXP-2026-008](../registry.md#registered-experiments), condition `pre-wave-reference`.
+
+**Design:** Five independent seeds (42–46), 60 seconds of real simulation time per seed, diagnostic interval 100 ticks, and the standard inventory of 1,200 independent single-constituent resources plus 80 intact two-constituent molecules (1,360 constituents total). Run from `main` and capture the exact source commit. Ordinary chemistry and all environment/energy behavior remain unchanged. Movement profiling and sampled tick profiling are enabled; deep diagnostics are disabled.
+
+**Measurements:** Per-seed wall-clock runtime, simulated ticks and throughput, movement/resonance/placement phase timings, sampled tick-phase timings, energy/source/settlement and ledger results, material balance, and provenance. Unavailable measurements must be marked unavailable, not inferred. Profiling overhead must be kept distinct from phase costs; future comparisons must use matching instrumentation.
+
+**Success criteria:** All five seeds complete with validated provenance and compatible measurements; per-seed and descriptive cross-seed results are consolidated; the canonical two-file permanent record is validated and published; temporary observations and intermediate analysis are deleted only after successful publication.
+
+**Workflow request:** `seeds=42,43,44,45,46`, `duration_seconds=60`, `diagnostic_interval=100`, `profile_movement=true`, `profile_tick=true`, `deep_diagnostics=false`, `experiment_id=EXP-2026-008`, `research_plan=PLAN-008`, `condition_id=pre-wave-reference`.
+
+**Decision:** Phase 0 remains incomplete until the consolidated report is validated and published. The report becomes the fixed pre-wave performance/accounting reference; it is not evidence that the legacy energy model is physically correct.
