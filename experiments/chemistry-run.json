@@ -1,5 +1,5 @@
 {
-  "run": true,
+  "run": false,
   "seeds": [
     42,
     43,
@@ -9,7 +9,7 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "EXP-2026-008 / PLAN-008 pre-wave unified-energy performance and accounting baseline. Registered run: five independent seeds, standard inventory, movement and sampled tick profiling enabled; no deep diagnostics or behavior changes. Retry after registry table formatting correction; experiment registration is present on main.",
+  "request_note": "INACTIVE — EXP-2026-008 / PLAN-008 pre-wave baseline was launched by the preceding push. Keep inactive to prevent accidental repeat runs.",
   "profile_movement": true,
   "profile_tick": true,
   "deep_diagnostics": false,
