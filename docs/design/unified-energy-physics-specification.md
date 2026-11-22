@@ -67,9 +67,9 @@ A transfer record must identify its source holder, destination holder, signed am
 
 The global conservation equation is an accounting identity, not a mechanism:
 
-`E_external,in + E_initial = E_field + E_material + E_thermal + E_structural + E_mechanical + E_exported + E_residual`
+`E_initial + E_external,in = E_source,remaining + E_field + E_material + E_thermal + E_structural + E_mechanical + E_exported + E_residual`
 
-The residual is a validation result and must be within a documented numerical tolerance. It is not an energy holder and must never be silently assigned to heat.
+The remaining source budget is included because un-emitted energy remains owned by its source. The residual is a validation result and must be within a documented numerical tolerance. It is not an energy holder and must never be silently assigned to heat.
 
 Structural/chemical potential is provisional. Existing bond-graph energy is not assumed to be complete thermodynamics. Until validated, it must be reported separately from experimentally established energy conversions rather than used to conceal missing source energy.
 
