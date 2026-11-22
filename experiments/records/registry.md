@@ -17,7 +17,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Experiment | Conditions | Status | Research plan |
 |---|---|---|---|---|
-| EXP-2026-007 | Environmental BREAK and DISPLACEMENT discovery-eligibility audit | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; ordinary chemistry; deep diagnostics and profiling disabled | **Registered; not yet run** | [PLAN-007 — Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |
+| EXP-2026-007 | Environmental BREAK and DISPLACEMENT discovery-eligibility audit | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; ordinary chemistry; deep diagnostics and profiling disabled | **Registered; not yet run** | [PLAN-007 — Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |\n| EXP-2026-008 | Pre-wave unified-energy performance and accounting baseline | Five independent seeds (42–46); 60 seconds per seed; diagnostic interval 100 ticks; standard six-element inventory; movement and sampled tick profiling enabled; deep diagnostics disabled | **Registered; not yet run** | [PLAN-008 — Pre-wave unified-energy performance baseline](plans/PLAN-008-pre-wave-unified-energy-baseline.md) |
 
 ## Planned research
 
@@ -29,7 +29,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 | PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
 | PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
 | PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
-| PLAN-007 | At which stage do ordinary environmental BREAK and DISPLACEMENT candidates fail to become eligible, funded, and committed reactions? | **Registered; EXP-2026-007 prepared, not yet run** | [Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |
+| PLAN-007 | At which stage do ordinary environmental BREAK and DISPLACEMENT candidates fail to become eligible, funded, and committed reactions? | **Registered; EXP-2026-007 prepared, not yet run** | [Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |\n| PLAN-008 | What is the reproducible pre-wave performance and energy-accounting baseline? | **Registered; EXP-2026-008 prepared, not yet run** | [Pre-wave unified-energy performance baseline](plans/PLAN-008-pre-wave-unified-energy-baseline.md) |
 
 ## Engineering and observability initiatives
 
