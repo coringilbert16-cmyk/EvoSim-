@@ -38,7 +38,7 @@ The current source audit found a legacy 2,400-tick orbital setting in the implem
 
 The specification must distinguish:
 - **Physics time:** the simulation tick and any sub-tick numerical integration interval.
-- **Experiment duration:** the requested simulated observation interval and its exact runner semantics.
+- **Experiment duration:** a requested wall-clock execution interval for controlled workload runs (the standard run is 60 real seconds); record the logical ticks completed. Wall-clock duration never defines a simulated time interval.
 - **Wall-clock time:** elapsed machine execution time used for performance measurement.
 
 The Phase 0 run records actual elapsed execution and completed ticks. Its measured ticks/second is a performance result, not a physical conversion factor. It must not be used to infer wave speed or source power.
@@ -156,7 +156,7 @@ Geometric spreading is not dissipation. A wave can have lower local amplitude as
 
 ### 4.4 Numerical candidate and stability
 
-The approved initial reference representation is a uniform Cartesian grid with a conservative second-order wave solver. Use a second-order leapfrog integrator or an equivalent method demonstrated to preserve the discrete energy balance. Derive the stability bound for the actual stencil and time integrator; the familiar five-point-stencil CFL bound `c Δt / Δx ≤ 1/√2` is a reference check, not a substitute for that derivation. Initially target approximately 16 grid samples across the shortest modeled wavelength, then verify phase accuracy, isotropy, and convergence under refinement. The familiar five-point-stencil CFL bound `c Δt / Δx ≤ 1/√2` is only a starting reference for the corresponding idealized stencil; derive and test the actual stability bound for the selected discrete operator, spacing, and time integrator.
+The approved initial reference representation is a uniform Cartesian grid with a conservative second-order wave solver. Use a second-order leapfrog integrator or an equivalent method demonstrated to preserve the discrete energy balance. Derive the stability bound for the actual stencil and time integrator; the familiar five-point-stencil CFL bound `c Δt / Δx ≤ 1/√2` is a reference check, not a substitute for that derivation. Initially target approximately 16 grid samples across the shortest modeled wavelength, then verify phase accuracy, isotropy, and convergence under refinement. For the selected five-point Cartesian Laplacian with leapfrog stepping on a square grid, the von Neumann condition is `c Δt / Δx ≤ 1/√2`: the largest discrete Laplacian eigenvalue magnitude is 8/Δx², and the leapfrog stability requirement is `c² Δt² (8/Δx²) ≤ 4`. Use a strict margin below this limit in normal runs and test both sides of the limit. If the stencil, grid, or integrator changes, re-derive the bound for that actual scheme.
 
 A finite computational window is not the physical world boundary. Its outgoing-wave treatment must be tested for reflection error, energy flux, and convergence as the window is expanded. The numerical method must not impose laboratory containment or viewer-edge behavior on the underlying field.
 
@@ -312,37 +312,37 @@ These measurements are instrumented baseline observations, not a universal cost 
 
 | Topic | Current status | Required resolution before Phase 1 exit |
 |---|---|---|
-| Unified energy categories | Defined provisionally in Section 3 | Confirm exact holder boundaries and initial/final inventory equation |
-| Field interpretation | Approved initial scalar, linear, isotropic, nondispersive reference model | Validate against reference experiments; expand only if evidence requires it |
-| Frequency representation | User-selected single field containing multiple frequencies and phases | Validate superposition/interference and frequency-resolved response |
-| Material emission/response | Approved powered oscillators plus passive absorption/reflection/transmission/scattering | Specify constitutive coefficients and conservative material-energy coupling |
-| Empty-space propagation speed | User-selected universal constant in homogeneous empty space | Calibrate value and physical units; do not infer from legacy movement behavior |
-| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | Calibrate field normalization and energy units dimensionally |
+| Unified energy categories | Defined in Section 3 with one conservation authority | Holder categories and inventory equation are fixed at specification level; implementation must map every holder without duplication |
+| Field interpretation | Approved initial scalar, linear, isotropic, nondispersive reference model | Phase 2 validates against analytic/reference cases; expand only if evidence requires it |
+| Frequency representation | One time-domain field carries simultaneous frequencies and phases | Phase 2 tests superposition, interference, and frequency-resolved behavior |
+| Material emission/response | Powered oscillators with owned internal energy; passive absorption/reflection/transmission/scattering | Numeric coefficients are Phase 3 calibration values; ownership and atomic transfer rules are specified |
+| Empty-space propagation speed | Universal constant in homogeneous empty space, expressed L/tick | Select a project-native value in Phase 2 using controlled propagation tests; never use wall-clock or legacy movement calibration |
+| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | Select project-native field normalization in Phase 2 and verify measured energy/flux closure |
 | Dimensional basis | Project-native L, tick, E approved | Keep all equations in project-native L, tick, and E; no SI or wall-clock conversion is required |
-| Scalar field dimensions | Dimensionless u is the initial reference convention | Confirm this convention in the solver contract and calibrate K consistently |
-| Spatial unit and propagation speed | L and T basis approved; numerical scales remain uncalibrated | Establish world-unit-to-meter scale and propagation speed by physical criteria; define tick/substep relationship |
-| Source-to-field transfer | One conservative source/field work contract approved | Complete source-specific implementation-independent transfer equations, finite budgets/replenishment, and calibrated power/flux values |
+| Scalar field dimensions | Dimensionless u is the initial reference convention | Preserve the documented project-native dimensions for K and forcing in the solver |
+| Spatial unit and propagation speed | L and tick basis approved; numerical scales remain uncalibrated | Use project-native L/tick values and define any sub-tick solver step as a fraction of a tick |
+| Source-to-field transfer | Signed field-work identity and atomic source debit/field credit specified | Phase 2 proves the contract with a finite-budget mathematical test source; source power values remain calibration parameters |
 | Source time units | Logical tick convention resolved | Express all source schedules and powers in ticks; runtime pacing is metadata only |
-| World-tone source | Approved isotropic 3D external source; above-plane perpendicular circular orbit; 24,000-tick period equal to one simulated day; 440-cycle/day carrier kept separate | Calibrate orbit dimensions and project-native source power; verify retarded-time and conservative half-plane-interception coupling |
-| Hotspot source | Approved localized in-plane distributed source; radial cosine initial profile and physical support area | Calibrate power/radius and finite budget or replenishment; prove independence from molecule count and grid refinement |
-| Material-origin oscillators | Powered internal-energy oscillators approved; disabled in empty-space reference solver | Define oscillator energy states, coupling law, and conservative debit/credit behavior |
-| Material coupling | Passive absorption/reflection/transmission/scattering and powered emission approved | Define constitutive response coefficients and finite-energy sharing equations |
-| Damping / thermal state | Zero empty-space damping approved; material dissipation credits local thermal storage | Define material dissipation coefficients and thermal holder; defer heat transport until a mechanism is selected |
+| World-tone source | Isotropic 3D external sun; above-plane perpendicular circular orbit; 24,000-tick orbit/day; 440-cycle/day carrier | Orbit/source values remain project-native parameters; Phase 2 validates retarded-time and conservative half-plane interception |
+| Hotspot source | Localized in-plane distributed source; normalized radial cosine profile and finite budget/replenishment | Power/radius remain project-native parameters; verify grid- and receiver-independent integrated power when implemented |
+| Material-origin oscillators | Powered internal-energy oscillators approved; disabled in empty-space reference solver | Phase 3 defines numeric oscillator/constitutive parameters while preserving specified ownership and transfer rules |
+| Material coupling | Local conservative partition and shared finite-field-energy rule specified | Phase 3 calibrates material response coefficients and tests no-double-claim behavior |
+| Damping / thermal state | Zero empty-space damping; material dissipation credits explicit local thermal storage | Numeric dissipation coefficients are Phase 3 values; heat transport remains deferred pending a defined mechanism |
 | Structural/chemical energy | Explicitly provisional | Validate parameters or keep separate from settled physical energy |
-| World geometry | User-resolved: infinite flat two-dimensional plane; viewer is a nonphysical observation window | Define world-distance units, planar numerical representation, and geometry tests |
+| World geometry | Infinite flat two-dimensional plane; viewer is a nonphysical observation window | Project-native Euclidean coordinates are specified; Phase 2 tests finite-window independence |
 | Environmental wave boundaries | Resolved: none globally; laboratory walls are ordinary physical objects | Validate finite-window numerical treatment and material-specific wall/interface behavior separately |
-| Numerics | Approved uniform Cartesian grid; conservative second-order solver; leapfrog/equivalent integrator; ~16 samples per shortest wavelength initial target | Derive stability bound and demonstrate precision, isotropy, finite-window error, and convergence |
-| Determinism | Required | Define ordering and deterministic parallelism contract |
+| Numerics | Uniform Cartesian grid; conservative second-order wave solver; leapfrog; ~16 samples per shortest wavelength initial target | Five-point/leapfrog stability bound is derived in Section 4.4; Phase 2 measures precision, isotropy, finite-window error, and convergence |
+| Determinism | Deterministic tick/source/update order required; fixed-order accumulation for reference solver | Phase 2 implements and verifies deterministic replay; parallelism is deferred until it can preserve deterministic accumulation |
 
 ## 11. Phase 1 exit gate
 
 Phase 1 is complete only when:
-- Infinite flat-plane geometry, world-distance units, and the numerical representation are explicit and tested; camera and storage-window artifacts do not affect physics.
+- Infinite flat-plane geometry, project-native world-distance units, and the reference numerical representation are explicitly specified; Phase 2 tests camera and storage-window independence.
 - The field variable, governing equation, dimensionality, units, energy density, and flux are explicit and dimensionally consistent.
 - Propagation speed is defined in project-native world-distance units per tick, independently of wall-clock performance; one simulated day and one solar orbit are both exactly 24,000 ticks.
 - World-tone, hotspot, and material-origin source semantics have named ownership and dimensionally consistent source contracts.
 - Material coupling, attenuation, heat, structural-energy limits, and the absence of environmental edge boundaries are explicit.
-- The numerical method has a derived stability condition, convergence plan, deterministic update order, and documented error tolerances.
+- The reference method has a derived five-point/leapfrog stability condition, a second-order refinement/convergence plan, deterministic update order, and a policy requiring numeric pass tolerances to be recorded before each Phase 2 experiment.
 - Atomic transfer/rollback contracts cover every energy holder.
 - The design is reviewed against the user's approved infinite-plane/laboratory/camera separation and unified-energy decisions, and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
@@ -378,8 +378,8 @@ The orbit anchor at world origin is a coordinate convention, not a physical cent
 
 ### 12.1 Calibration values intentionally left open
 
-The approved defaults do not assign values to orbit radius/height, source power, world-distance-to-meter conversion, project-energy-to-joule conversion, propagation speed, hotspot power/radius, material response coefficients, field normalization, grid spacing, or solver time step. Derive these through dimensional analysis, source-code verification, physical criteria, and controlled reference experiments. Do not tune them to reproduce legacy movement or reaction behavior.
+The approved defaults do not assign values to orbit radius/height, finite source budgets/power, propagation speed in L/tick, hotspot power/radius, material response coefficients, field normalization, grid spacing, or solver time step. Select and version these through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required. Do not tune them to reproduce legacy movement or reaction behavior.
 
 ### 12.2 Phase 1 decision status
 
-The architecture and modeling-default decisions above are resolved. Phase 1 remains a specification/contract phase until the clock convention is verified, the remaining calibration methodology and source/material transfer contracts are explicit, the numerical stability and convergence criteria are documented, and the exit-gate checklist is satisfied. No production solver or chemistry/movement behavior is authorized by this approval.
+The architecture and modeling-default decisions, source/material contracts, project-native clock and units, energy-transfer rules, numerical stability bound, and convergence/tolerance policy are specified. Phase 1 is complete at the specification level. Phase 2 will select numerical parameters and validate the reference solver; no production solver or chemistry/movement behavior is authorized by this completion.
