@@ -148,7 +148,7 @@ Exit criteria:
 
 ### Phase 1 — Formal wave-physics specification and contracts
 
-<badge>Complete</badge>
+**Status: COMPLETE**
 
 **Goal:** Establish the implementation-independent physical and numerical contracts before building a solver.
 
