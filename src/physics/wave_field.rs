@@ -467,7 +467,15 @@ mod tests {
         );
         assert!(WaveField::new(10, 10, 1.0, 2.0 * std::f64::consts::FRAC_1_SQRT_2, 2, 1.0).is_ok());
         assert_eq!(
-            WaveField::new(10, 10, 1.0, 2.0 * std::f64::consts::FRAC_1_SQRT_2 * 1.0001, 2, 1.0).err(),
+            WaveField::new(
+                10,
+                10,
+                1.0,
+                2.0 * std::f64::consts::FRAC_1_SQRT_2 * 1.0001,
+                2,
+                1.0
+            )
+            .err(),
             Some(WaveFieldError::UnstableTimeStep)
         );
     }
@@ -684,13 +692,7 @@ mod tests {
             let mut field = solver(width, width, spacing, substeps);
             let mut source = FiniteEnergySource::new(10.0).unwrap();
             let center_world = center as f64 * spacing;
-            pulse(
-                &mut field,
-                &mut source,
-                center_world,
-                center_world,
-                0.5,
-            );
+            pulse(&mut field, &mut source, center_world, center_world, 0.5);
             field.advance_ticks(10).unwrap();
 
             let axial_offset = (10.0 / spacing).round() as usize;
