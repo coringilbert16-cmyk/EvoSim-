@@ -546,9 +546,10 @@ mod tests {
     #[test]
     fn field_evolution_remains_bounded_at_and_below_the_cfl_limit() {
         for (speed, substeps, use_smooth_mode) in [
-            // At the exact CFL limit, the grid's highest-frequency mode is
-            // marginal and arbitrary data can excite its degenerate leapfrog
-            // solution. Exercise a resolved low-frequency eigenmode there.
+            // At the exact theoretical CFL limit, the finite fixed-zero
+            // grid's highest-frequency mode is near-marginal. Broadband data
+            // can strongly amplify that component, so exercise a resolved
+            // low-frequency eigenmode at the endpoint.
             (2.0 * std::f64::consts::FRAC_1_SQRT_2, 2, true),
             // Below the limit, also exercise broadband initial data.
             (2.0 * std::f64::consts::FRAC_1_SQRT_2, 3, false),
