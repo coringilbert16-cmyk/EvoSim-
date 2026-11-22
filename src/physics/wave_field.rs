@@ -866,8 +866,9 @@ mod tests {
             (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos() / field.time_step();
 
         field.current.clone_from(&mode);
+        let previous_phase = (temporal_omega * field.time_step()).cos();
         for (previous, value) in field.previous.iter_mut().zip(mode.iter()) {
-            *previous = *value * (temporal_omega * field.time_step()).cos();
+            *previous = *value * previous_phase;
         }
 
         let initial_energy = field.energy();
