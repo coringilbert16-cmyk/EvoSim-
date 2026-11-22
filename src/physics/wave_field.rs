@@ -861,11 +861,9 @@ mod tests {
         let mode_x = 3;
         let mode_y = 2;
         let mode = mode_profile(65, 65, 0.5, length, mode_x, mode_y);
-        let spatial_omega =
-            spatial_mode_frequency(0.5, 1.0, length, mode_x, mode_y);
+        let spatial_omega = spatial_mode_frequency(0.5, 1.0, length, mode_x, mode_y);
         let temporal_omega =
-            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos()
-                / field.time_step();
+            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos() / field.time_step();
 
         field.current.clone_from(&mode);
         for (previous, value) in field.previous.iter_mut().zip(mode.iter()) {
@@ -911,8 +909,7 @@ mod tests {
             "relative energy drift after 500 ticks: {relative_drift}"
         );
         assert!(
-            (field.energy() + source.available_energy() - source.initial_budget()).abs()
-                < 1.0e-10
+            (field.energy() + source.available_energy() - source.initial_budget()).abs() < 1.0e-10
         );
     }
 
