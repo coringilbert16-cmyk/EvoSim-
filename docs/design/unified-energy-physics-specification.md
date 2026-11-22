@@ -86,11 +86,12 @@ Structural/chemical potential is provisional. Existing bond-graph energy is not 
 
 The simplest candidate for a first reference solver is a two-dimensional scalar, linear wave field in an isotropic homogeneous empty environment:
 
-`u_{tt} = c^2 \nabla^2 u`
+`u_{tt} = c^2 \Delta_{S^2} u`
 
 where:
-- `u(x,y,t)` is a signed field state, not energy and not a resonance score.
-- `c` is finite propagation speed in world-units per physics-time unit.
+- `u(p,t)` is a signed field state at point `p` on the spherical surface, not energy and not a resonance score.
+- `\Delta_{S^2}` is the Laplace–Beltrami operator for the selected spherical metric.
+- `c` is finite propagation speed in physical surface-distance units per physics-time unit.
 - Superposition follows from linearity.
 - Frequency and phase are represented by the evolving field state, not by a list of independent per-material energy grants.
 
@@ -100,11 +101,11 @@ This is a deliberately minimal reference candidate. One real time-domain scalar 
 
 For the candidate scalar model, introduce a positive field normalization coefficient `K`. A consistent candidate energy density and flux are:
 
-`e = (K/2) [u_t^2 + c^2 |\nabla u|^2]`
+`e = (K/2) [u_t^2 + c^2 |\nabla_{S^2} u|^2]`
 
-`J = -K c^2 u_t \nabla u`
+`J = -K c^2 u_t \nabla_{S^2} u`
 
-The units of `K` must be chosen so `e` is energy per world-area and `J` is energy per world-length per physics-time. The integral of `e` over the domain is field energy. The flux integral through a boundary is the energy transfer across that boundary.
+The units of `K` must be chosen so `e` is energy per physical surface area and `J` is tangent to the sphere with units of energy per surface-length per physics-time. The integral of `e` over the spherical surface is field energy. There is no outer boundary on which to integrate a net environmental flux; local flux redistributes energy over the closed surface.
 
 This relationship is essential: field amplitude or spectral magnitude alone is not an energy inventory. The coefficient and units must be fixed together with the simulation's energy unit and source calibration.
 
@@ -112,11 +113,11 @@ This relationship is essential: field amplitude or spectral magnitude alone is n
 
 A damped candidate equation may include `2\gamma u_t`:
 
-`u_{tt} + 2\gamma u_t = c^2 \nabla^2 u + f(x,y,t)`
+`u_{tt} + 2\gamma u_t = c^2 \Delta_{S^2} u + f(p,t)`
 
 For this candidate, the local energy balance is:
 
-`\partial_t e + \nabla \cdot J = K u_t f - 2K\gamma u_t^2`
+`\partial_t e + \nabla_{S^2} \cdot J = K u_t f - 2K\gamma u_t^2`
 
 The first right-hand term is signed power density transferred from the source or coupled degree of freedom into the field. Its spatial integral is the source-to-field power transfer. The second term is nonnegative dissipation and must be credited to local thermal energy. If the field does work back on a source, the signed transfer reverses and the source holder is credited. Source debit and field work must be committed atomically. This relation makes source energy transfer auditable instead of equating a prescribed amplitude with an energy grant.
 
