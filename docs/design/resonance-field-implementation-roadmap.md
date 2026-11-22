@@ -167,7 +167,17 @@ The legacy 2,400-tick orbit and 86,400-second conversion are recorded as impleme
 
 ### Phase 2 — Independent reference wave solver
 
+**Status: IN PROGRESS — initial standalone solver implementation is under review in PR #410.**
+
 **Goal:** Prove real finite-speed wave propagation in empty space before adding molecular complexity.
+
+Initial reference implementation in PR #410:
+- Isolated module at src/physics/wave_field.rs; no live simulation, chemistry, movement, materials, or production-ledger dependency.
+- Uniform Cartesian grid, five-point Laplacian, and second-order leapfrog stepping in logical ticks with explicit substeps per tick.
+- Project-native reference parameters only; propagation speed is L/tick, and no wall-clock or SI-time conversion is involved.
+- Compact-support initial pulse funded by a finite mathematical source budget. The signed source transfer is the exact change in the solver's conserved discrete leapfrog energy; failed funding leaves both source and field unchanged.
+- The discrete energy uses the leapfrog cross-time gradient invariant, not an instantaneous continuum-energy approximation.
+- Fixed-zero outer grid nodes are computational boundaries only. Current reference tests keep the stencil's numerical domain of dependence away from them and compare translated interior results across window sizes. No absorbing-boundary scheme is claimed yet.
 
 Work:
 - Implement a standalone field state and deterministic update loop.
