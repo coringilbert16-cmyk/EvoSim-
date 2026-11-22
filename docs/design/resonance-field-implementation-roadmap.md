@@ -334,7 +334,7 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 **Current status:** Architecture direction approved. PR #377 and PR #378 are merged. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). The audit confirms that the live system consists of separate material-origin movement, local chemistry activation, external world-tone input, and hotspot input paths; none is yet a persistent finite-speed wave field. The shape-aware perimeter geometry is a starting foundation, not a completed field implementation. The independent persistent wave field, finite-speed propagation, field energy lifecycle, complete perimeter coupling, and production migration remain future work.
 
-**Next action:** Phase 0 is complete; see EXP-2026-008 and the Phase 1 specification. Continue Phase 1 by reconciling the Master Spec 2.4 coordinate topology, then settle field interpretation/units, source dimensionality and provenance, and material-origin oscillator semantics before solver implementation.
+**Next action:** Phase 0 is complete; see EXP-2026-008 and the Phase 1 specification. Master Spec 2.4's horizontal-X-wrap / vertical-Y-hard-wall convention is confirmed; reconcile the reversed material-grid implementation and tests, then settle field interpretation/units, source dimensionality and provenance, and material-origin oscillator semantics before solver implementation.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
@@ -388,4 +388,4 @@ There must be one conservation/accounting authority for the complete system. The
 - **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
 - The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
 
-**Immediate sequence:** complete Phase 1's open physical decisions, starting with the Master Spec 2.4 coordinate/topology reconciliation, the field's physical interpretation and units, and the source dimensionality/material-oscillator semantics. No production energy or resonance code should be rewritten until the Phase 1 exit gate is satisfied. EXP-2026-008 is a comparison point, not a requirement to preserve legacy physics.
+**Immediate sequence:** complete Phase 1's open physical decisions, starting with the material-grid reconciliation against the confirmed Master Spec 2.4 topology, the field's physical interpretation and units, and the source dimensionality/material-oscillator semantics. No production energy or resonance code should be rewritten until the Phase 1 exit gate is satisfied. EXP-2026-008 is a comparison point, not a requirement to preserve legacy physics.
