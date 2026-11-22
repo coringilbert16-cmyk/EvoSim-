@@ -633,6 +633,38 @@ mod tests {
     }
 
     #[test]
+    fn source_work_accounts_for_constructive_interference_cross_energy() {
+        let mut field = solver(201, 201, 1.0, 2);
+        let mut first_source = FiniteEnergySource::new(10.0).unwrap();
+        let mut second_source = FiniteEnergySource::new(10.0).unwrap();
+
+        let first_transfer = field
+            .inject_compact_pulse(&mut first_source, 100.0, 100.0, 3.0, 0.5)
+            .unwrap();
+        let second_transfer = field
+            .inject_compact_pulse(&mut second_source, 100.0, 100.0, 3.0, 0.5)
+            .unwrap();
+
+        // Identical in-phase profiles double the field amplitude, so total
+        // field energy quadruples. The second source therefore supplies the
+        // isolated first-pulse energy plus the full positive cross term.
+        assert!(first_transfer > 0.0);
+        assert!((second_transfer - 3.0 * first_transfer).abs() < 1.0e-12);
+        assert!((field.energy() - 4.0 * first_transfer).abs() < 1.0e-12);
+        assert!(
+            (field.energy()
+                + first_source.available_energy()
+                + second_source.available_energy()
+                - first_source.initial_budget()
+                - second_source.initial_budget())
+                .abs()
+                < 1.0e-12
+        );
+        assert!((first_source.net_energy_debit() - first_transfer).abs() < 1.0e-12);
+        assert!((second_source.net_energy_debit() - second_transfer).abs() < 1.0e-12);
+    }
+
+    #[test]
     fn compact_pulse_has_finite_travel_time_and_arrives_near_distance_over_speed() {
         let mut field = solver(201, 201, 1.0, 2);
         let mut source = FiniteEnergySource::new(10.0).unwrap();
