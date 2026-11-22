@@ -179,11 +179,7 @@ impl WaveField {
         x_max: usize,
         y_max: usize,
     ) -> Option<f64> {
-        if x_min > x_max
-            || y_min > y_max
-            || x_max >= self.width
-            || y_max >= self.height
-        {
+        if x_min > x_max || y_min > y_max || x_max >= self.width || y_max >= self.height {
             return None;
         }
 
@@ -614,10 +610,7 @@ mod tests {
         let total_before = field.energy();
         let inside_before = field.energy_in_region(95, 95, 105, 105).unwrap();
         assert!((total_before - inside_before).abs() < 1.0e-12);
-        assert!(
-            (field.energy_in_region(0, 0, 200, 200).unwrap() - total_before).abs()
-                < 1.0e-12
-        );
+        assert!((field.energy_in_region(0, 0, 200, 200).unwrap() - total_before).abs() < 1.0e-12);
         assert!(field.energy_in_region(10, 10, 9, 20).is_none());
 
         field.advance_ticks(24).unwrap();
