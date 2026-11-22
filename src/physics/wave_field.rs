@@ -652,12 +652,10 @@ mod tests {
         assert!((second_transfer - 3.0 * first_transfer).abs() < 1.0e-12);
         assert!((field.energy() - 4.0 * first_transfer).abs() < 1.0e-12);
         assert!(
-            (field.energy()
-                + first_source.available_energy()
-                + second_source.available_energy()
+            (field.energy() + first_source.available_energy() + second_source.available_energy()
                 - first_source.initial_budget()
                 - second_source.initial_budget())
-                .abs()
+            .abs()
                 < 1.0e-12
         );
         assert!((first_source.net_energy_debit() - first_transfer).abs() < 1.0e-12);
