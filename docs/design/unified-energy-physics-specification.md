@@ -138,9 +138,9 @@ where:
 
 This is the deliberately minimal approved reference model for Phase 1 and the independent reference solver. It is a modeling default, not a claim that scalar physics is universally sufficient. One real time-domain scalar field naturally carries simultaneous frequencies and their phase relationships; frequency decomposition is an analysis/query of that field, not a set of independently spendable frequency reservoirs. The model is non-dispersive in empty space and isotropic. It is valid only if those assumptions match the intended physics. If the physical model requires polarization, direction-dependent propagation, multiple coupled components, or dispersion, the equation must be expanded before solver implementation. The project must not choose the scalar form merely because it is cheaper.
 
-### 4.2 Energy density and flux candidate
+### 4.2 Approved reference-model energy density and flux
 
-For the candidate scalar model, introduce a positive field normalization coefficient `K`. A consistent candidate energy density and flux are:
+For the approved scalar reference model, introduce a positive field normalization coefficient `K`. The selected energy density and flux relations are:
 
 `e = (K/2) [u_t^2 + c^2 |\nabla_{\mathbb{R}^2} u|^2]`
 
@@ -343,17 +343,17 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Frequency representation | User-selected single field containing multiple frequencies and phases | Validate superposition/interference and frequency-resolved response |
 | Material emission/response | Approved powered oscillators plus passive absorption/reflection/transmission/scattering | Specify constitutive coefficients and conservative material-energy coupling |
 | Empty-space propagation speed | User-selected universal constant in homogeneous empty space | Calibrate value and physical units; do not infer from legacy movement behavior |
-| Energy density and flux | Candidate formulas in Section 4.2 | Fix field normalization and energy units |
-| Dimensional basis | Defined in Section 2.4 | Approve world-length scale, project-energy-to-SI conversion, and authoritative tick-to-physics-time mapping |
-| Scalar field dimensions | Conditional on dimensionless u in Section 2.4 | Confirm field variable's physical dimension and calibrate K consistently |
-| Spatial unit and propagation speed | Open | Define world-unit meaning, speed, and tick/substep relationship |
-| Source-to-field transfer | Common contract defined in Section 5.5 | Audit source implementations; define boundary condition, distributed support, finite budgets/replenishment, and calibrated power/flux values |
+| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | Calibrate field normalization and energy units dimensionally |
+| Dimensional basis | Project-native L, T, E approved | Calibrate L-to-meter and E-to-joule scales; verify tick-to-physics-time mapping before adopting 3.6 seconds/tick |
+| Scalar field dimensions | Dimensionless u is the initial reference convention | Confirm this convention in the solver contract and calibrate K consistently |
+| Spatial unit and propagation speed | L and T basis approved; numerical scales remain uncalibrated | Establish world-unit-to-meter scale and propagation speed by physical criteria; define tick/substep relationship |
+| Source-to-field transfer | One conservative source/field work contract approved | Complete source-specific implementation-independent transfer equations, finite budgets/replenishment, and calibrated power/flux values |
 | Source time units | Existing conventions identified | Separate physics time from experiment/wall time; calibrate source power |
 | World-tone source | Approved isotropic 3D external source; above-plane perpendicular circular orbit; 2,400-tick period; 440-cycle/day carrier kept separate | Calibrate orbit dimensions and source power; verify retarded-time and conservative half-plane-interception coupling |
 | Hotspot source | Approved localized in-plane distributed source; radial cosine initial profile and physical support area | Calibrate power/radius and finite budget or replenishment; prove independence from molecule count and grid refinement |
-| Material-origin oscillators | No current source debit identified | Choose powered oscillator, conservative coupling, or response-only |
-| Material coupling | Interface requirements drafted | Define constitutive response and finite-energy sharing |
-| Damping / thermal state | Energy destination requirement defined | Define thermal holder, damping law, and local heat transport |
+| Material-origin oscillators | Powered internal-energy oscillators approved; disabled in empty-space reference solver | Define oscillator energy states, coupling law, and conservative debit/credit behavior |
+| Material coupling | Passive absorption/reflection/transmission/scattering and powered emission approved | Define constitutive response coefficients and finite-energy sharing equations |
+| Damping / thermal state | Zero empty-space damping approved; material dissipation credits local thermal storage | Define material dissipation coefficients and thermal holder; defer heat transport until a mechanism is selected |
 | Structural/chemical energy | Explicitly provisional | Validate parameters or keep separate from settled physical energy |
 | World geometry | User-resolved: infinite flat two-dimensional plane; viewer is a nonphysical observation window | Define world-distance units, planar numerical representation, and geometry tests |
 | Environmental wave boundaries | Resolved: none globally; laboratory walls are ordinary physical objects | Validate finite-window numerical treatment and material-specific wall/interface behavior separately |
