@@ -74,7 +74,7 @@ Do not invent constants or choose equations solely for convenient performance. R
 6. **Source boundary condition:** Define how source energy is injected over time and across the complete exposed source perimeter. Use the geometry foundation's linear perimeter measure/allocation as the starting contract; do not renormalize visible source energy independently for each receiver.
 7. **Material coupling:** Define frequency-dependent absorption, reflection, transmission, scattering, and response rules. Reuse established material/resonance semantics where valid; do not create molecule-specific propagation exceptions.
 8. **Attenuation and dissipation:** Derive how amplitude, energy density, and flux change during propagation. Distinguish geometric spreading from true dissipative loss. The existing distance law A(d)=A0/(1+d), E(d)=E0/(1+d)^2 is legacy/reference behavior, not automatically the governing law for a finite-speed wave solver. Any change must be derived, documented, and validated rather than silently copied or discarded.
-9. **Environment boundaries:** Implement the Master Spec 2.4 world topology (horizontal wrap and vertical hard boundaries). Separately specify the wave boundary condition at each edge (periodic continuation, reflection, absorption, or a justified combination). The Phase 0 audit found the current material-field coordinate lookup rejects out-of-range x and wraps y; reconcile the axis convention against Master Spec 2.4 before choosing wave boundary conditions. A hard physical wall does not by itself determine whether waves reflect or dissipate.
+9. **Closed spherical-surface geometry:** The physical world is a two-dimensional spherical surface; the rectangular display is only a map projection. There are no environmental edges or wave boundary conditions at the outer edge. Define the spherical metric, curvature scale, numerical representation, and continuity across chart/projection artifacts. Reflection, absorption, and transmission are material-interface phenomena governed by explicit coupling laws, not edge conditions.
 10. **Numerical stability:** Specify discretization, spatial/time resolution relationship, stability condition (including a CFL-like bound where applicable), interpolation, and error/convergence criteria.
 11. **Determinism:** Define update ordering, source ordering, accumulation precision, and deterministic handling of parallel work.
 
@@ -149,7 +149,7 @@ Exit criteria:
 
 Work:
 - Resolve every item in Section 3.
-- Define field state, source descriptor, receiver descriptor, boundary-condition interface, energy-flux interface, and field query contract.
+- Define field state, source descriptor, receiver descriptor, material-interface coupling contract, energy-flux interface, and field query contract on a spherical surface.
 - Define geometry snapshot/version invalidation and event ordering.
 - Define the relationship between simulation ticks, spatial units, propagation speed, carrier frequency, and source schedules.
 - Define ledger transactions for emission, field storage/transport, absorption, and heat.
@@ -158,7 +158,7 @@ Exit criteria:
 - Equations and units are documented and dimensionally consistent.
 - Boundary behavior and material coupling are explicit.
 - Interface contracts and failure/rollback semantics are testable.
-- The specification is reviewed against Master Spec 2.4 and current energy semantics.
+- The specification is reviewed against the approved spherical-surface geometry and current energy semantics.
 
 ### Phase 2 — Independent reference wave solver
 
@@ -169,14 +169,14 @@ Work:
 - Start with the simplest stable spatial discretization that meets the physics specification; do not start with an adaptive solver.
 - Support multiple frequencies and phase-resolved evolution.
 - Support source injection with finite propagation delay.
-- Implement specified environment edge conditions.
+- Implement a closed spherical-surface domain with no environmental edge conditions; numerical chart seams must preserve continuity and energy.
 - Keep field state persistent between simulation ticks.
 
 Required tests:
 - Single-frequency propagation with measured finite travel time.
 - Known analytic/reference wave behavior in a simple domain.
 - Two-source superposition and constructive/destructive interference.
-- Standing-wave formation under the specified boundary conditions.
+- Standing-wave and global spherical-mode behavior arising from the closed surface and material interactions, without artificial edge reflections.
 - Multiple simultaneous frequencies without collapsing to one scalar.
 - Phase continuity and deterministic replay.
 - Grid/time-step refinement showing expected convergence.
@@ -334,7 +334,7 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 **Current status:** Architecture direction approved. PR #377 and PR #378 are merged. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). The audit confirms that the live system consists of separate material-origin movement, local chemistry activation, external world-tone input, and hotspot input paths; none is yet a persistent finite-speed wave field. The shape-aware perimeter geometry is a starting foundation, not a completed field implementation. The independent persistent wave field, finite-speed propagation, field energy lifecycle, complete perimeter coupling, and production migration remain future work.
 
-**Next action:** Phase 0 is complete; see EXP-2026-008 and the Phase 1 specification. Master Spec 2.4's horizontal-X-wrap / vertical-Y-hard-wall convention is confirmed; reconcile the reversed material-grid implementation and tests, then settle field interpretation/units, source dimensionality and provenance, and material-origin oscillator semantics before solver implementation.
+**Next action:** Phase 0 is complete; see EXP-2026-008 and the Phase 1 specification. The user has selected a two-dimensional spherical surface as the physical world, a single multi-frequency coupled field, powered material emission plus passive response, and a universal empty-space propagation speed. Complete the spherical metric/discretization, physical units, source dimensionality/provenance, and material-oscillator coupling contracts before solver implementation.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
@@ -382,10 +382,10 @@ There must be one conservation/accounting authority for the complete system. The
 ### 10.4 Roadmap phase clarifications
 
 - **Phase 0** remains open until the reproducible current-main baseline is recorded. The existing code/ledger/geometry audit is complete, but no new baseline benchmark was run during that audit.
-- **Phase 1** is a unified energy-and-wave physics specification, not merely selection of a wave equation. It must include energy forms, units, source ownership, local availability, transfer equations, heat/thermal semantics, structural-energy limits, boundaries, numerics, determinism, and this reuse/retirement map.
+- **Phase 1** is a unified energy-and-wave physics specification, not merely selection of a wave equation. It must include energy forms, units, source ownership, local availability, transfer equations, heat/thermal semantics, structural-energy limits, spherical geometry, material-interface behavior, numerics, determinism, and this reuse/retirement map.
 - **Phase 3–4** must transfer energy through the single redesigned conservation authority. Do not presume the existing usable-energy pool or resonant reservoir remains the funding mechanism.
 - **Chemistry activation is not energy.** Field influence may affect activation, but reaction energy must come from physically available local transfers or validated structural-energy changes.
 - **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
 - The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
 
-**Immediate sequence:** complete Phase 1's open physical decisions, starting with the material-grid reconciliation against the confirmed Master Spec 2.4 topology, the field's physical interpretation and units, and the source dimensionality/material-oscillator semantics. No production energy or resonance code should be rewritten until the Phase 1 exit gate is satisfied. EXP-2026-008 is a comparison point, not a requirement to preserve legacy physics.
+**Immediate sequence:** complete Phase 1's open physical decisions using the approved spherical-surface model. Derive the spherical metric and numerical representation, physical units, source dimensionality/provenance, and powered material-oscillator coupling. No production energy or resonance code should be rewritten until the Phase 1 exit gate is satisfied. EXP-2026-008 is a comparison point, not a requirement to preserve legacy physics.
