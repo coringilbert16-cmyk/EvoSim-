@@ -94,8 +94,7 @@ impl WaveField {
 
         let time_step = 1.0 / substeps_per_tick as f64;
         let courant_ratio = propagation_speed * time_step / spacing;
-        if !courant_ratio.is_finite() || courant_ratio > std::f64::consts::FRAC_1_SQRT_2
-        {
+        if !courant_ratio.is_finite() || courant_ratio > std::f64::consts::FRAC_1_SQRT_2 {
             return Err(WaveFieldError::UnstableTimeStep);
         }
 
@@ -369,8 +368,8 @@ impl WaveField {
             for x in 0..self.width {
                 let index = self.index(x, y);
                 let next = index + self.width;
-                gradient_cross_sum += (current[next] - current[index])
-                    * (previous[next] - previous[index]);
+                gradient_cross_sum +=
+                    (current[next] - current[index]) * (previous[next] - previous[index]);
             }
         }
 
