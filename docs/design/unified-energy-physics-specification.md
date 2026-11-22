@@ -45,16 +45,19 @@ The Phase 0 run records actual elapsed execution and completed ticks. Its measur
 
 ### 2.3 Physical world geometry and propagation speed
 
-**User decision: the physical environment is a two-dimensional spherical surface.** It is analogous to the surface of a globe, not a three-dimensional spherical volume. The simulation's rectangular display is only a map projection; its apparent edges, seam, poles, and projection distortion have no physical significance.
+**User decision: the physical world is an infinite, flat, two-dimensional plane.** The visible rectangular viewer is only an observation window into that world. Its edges have no physical meaning and create no reflection, absorption, containment, or discontinuity.
 
-Consequences:
-- The physical domain is a closed surface with no environmental edges, top/bottom walls, or wraparound seam.
-- Waves propagate along the surface, and physical distance is measured by surface/geodesic distance rather than rectangular coordinate distance.
-- Field energy is integrated over surface area; source and receiver contracts must use physical surface measures, not projected pixel or rectangular-grid measures.
-- A numerical coordinate chart may have singularities or seams, but those are implementation artifacts. They must not create reflection, absorption, duplicated energy, or discontinuity.
-- The spherical radius (or equivalent curvature scale) and the mapping from simulation coordinates to physical surface distance remain to be calibrated.
+The chemistry laboratory is a temporary experimental arrangement inside the plane:
+- Laboratory walls are ordinary physical objects with explicit geometry and material properties. They contain and help track experimental subjects during controlled chemistry experiments.
+- A wall affects matter, waves, and energy only through its defined physical interactions. It must not automatically block every kind of particle or energy.
+- The laboratory is not a special simulation domain, and chemistry, energy propagation, or material behavior must never require laboratory walls to exist.
+- Removing laboratory walls later must leave the same physical laws and simulation world in place.
 
-For the initial homogeneous empty-space model, propagation speed is universal and constant over the spherical surface. It is expressed in physical surface-distance units per physics-time unit. Do not infer it from the old movement cutoff, display dimensions, observed wall-clock throughput, or a desired benchmark result.
+The camera/observation window is nonphysical. It may pan, zoom, and follow subjects; crossing its edge changes only visibility. Objects and energy continue through that edge without any simulation event.
+
+For the initial homogeneous empty-space model, propagation speed is universal and constant. It is expressed in world-distance units per physics-time unit. Do not infer it from the old movement cutoff, viewer dimensions, observed wall-clock throughput, or a desired benchmark result.
+
+The physical plane is infinite even if a numerical solver uses a finite computational window. Any truncation used for computation must be handled as a numerical approximation (for example, by a validated outgoing/absorbing treatment or a sufficiently expanded domain), never as an unmodeled physical wall. Numerical truncation must not silently reflect, absorb, delete, or duplicate energy.
 
 ## 3. Unified energy ontology
 
@@ -86,11 +89,11 @@ Structural/chemical potential is provisional. Existing bond-graph energy is not 
 
 The simplest candidate for a first reference solver is a two-dimensional scalar, linear wave field in an isotropic homogeneous empty environment:
 
-`u_{tt} = c^2 \Delta_{S_R^2} u`
+`u_{tt} = c^2 \Delta_{\mathbb{R}^2} u`
 
 where:
-- `u(p,t)` is a signed field state at point `p` on the spherical surface, not energy and not a resonance score.
-- `\Delta_{S_R^2}` is the Laplace–Beltrami operator for the selected spherical metric.
+- `u(p,t)` is a signed field state at point `p` on the infinite plane, not energy and not a resonance score.
+- `\Delta_{\mathbb{R}^2}` is the ordinary two-dimensional spatial Laplacian on the flat plane.
 - `c` is finite propagation speed in physical surface-distance units per physics-time unit.
 - Superposition follows from linearity.
 - Frequency and phase are represented by the evolving field state, not by a list of independent per-material energy grants.
@@ -101,11 +104,11 @@ This is a deliberately minimal reference candidate. One real time-domain scalar 
 
 For the candidate scalar model, introduce a positive field normalization coefficient `K`. A consistent candidate energy density and flux are:
 
-`e = (K/2) [u_t^2 + c^2 |\nabla_{S_R^2} u|^2]`
+`e = (K/2) [u_t^2 + c^2 |\nabla_{\mathbb{R}^2} u|^2]`
 
-`J = -K c^2 u_t \nabla_{S_R^2} u`
+`J = -K c^2 u_t \nabla_{\mathbb{R}^2} u`
 
-The units of `K` must be chosen so `e` is energy per physical surface area and `J` is tangent to the sphere with units of energy per surface-length per physics-time. The integral of `e` over the spherical surface is field energy. There is no outer boundary on which to integrate a net environmental flux; local flux redistributes energy over the closed surface.
+The units of `K` must be chosen so `e` is energy per physical area and `J` has units of energy per length per physics-time. The integral of `e` over the plane is field energy. For finite-energy localized states, global conservation is evaluated over the full plane; any finite computational window must account for flux crossing its numerical boundary without treating that boundary as a physical wall.
 
 This relationship is essential: field amplitude or spectral magnitude alone is not an energy inventory. The coefficient and units must be fixed together with the simulation's energy unit and source calibration.
 
@@ -113,23 +116,23 @@ This relationship is essential: field amplitude or spectral magnitude alone is n
 
 A damped candidate equation may include `2\gamma u_t`:
 
-`u_{tt} + 2\gamma u_t = c^2 \Delta_{S_R^2} u + f(p,t)`
+`u_{tt} + 2\gamma u_t = c^2 \Delta_{\mathbb{R}^2} u + f(p,t)`
 
 For this candidate, the local energy balance is:
 
-`\partial_t e + \nabla_{S_R^2} \cdot J = K u_t f - 2K\gamma u_t^2`
+`\partial_t e + \nabla_{\mathbb{R}^2} \cdot J = K u_t f - 2K\gamma u_t^2`
 
 The first right-hand term is signed power density transferred from the source or coupled degree of freedom into the field. Its spatial integral is the source-to-field power transfer. The second term is nonnegative dissipation and must be credited to local thermal energy. If the field does work back on a source, the signed transfer reverses and the source holder is credited. Source debit and field work must be committed atomically. This relation makes source energy transfer auditable instead of equating a prescribed amplitude with an energy grant.
 
 If damping is not part of the selected physical model, set `\gamma = 0`; do not add it merely to stabilize or quiet the simulation. Damping cannot be an arbitrary attenuation multiplier that makes energy disappear.
 
-Geometric spreading is not dissipation. A wave can have lower local amplitude as its energy spreads over a larger region while total field energy remains conserved. True material absorption and bulk damping are separate mechanisms with explicit local thermal destinations. There is no outer environmental boundary absorption on the closed sphere.
+Geometric spreading is not dissipation. A wave can have lower local amplitude as its energy spreads over a larger region while total field energy remains conserved. True material absorption and bulk damping are separate mechanisms with explicit local thermal destinations. The viewer edge is never an absorption boundary. Any finite solver-window treatment must be validated independently and included in numerical energy accounting.
 
 ### 4.4 Numerical candidate and stability
 
-A uniform planar finite-difference grid is not automatically a valid spherical discretization. The independent reference solver must use a representation that respects the sphere's metric and curvature. Candidate approaches include a triangulated spherical mesh, a cubed-sphere/multi-chart grid, or another conservative surface discretization; choose only after comparing geometric error, isotropy, conservation, convergence, and cost.
+A regular Cartesian grid is a natural candidate for the flat-plane reference solver, but it is not automatically the final choice. Compare conservative finite-difference, finite-volume, or other suitable planar discretizations for isotropy, conservation, convergence, and cost. The familiar five-point-stencil CFL bound `c Δt / Δx ≤ 1/√2` is only a starting reference for the corresponding idealized stencil; derive and test the actual stability bound for the selected discrete operator, spacing, and time integrator.
 
-The familiar planar five-point-stencil CFL bound `c Δt / Δx ≤ 1/√2` does not automatically apply to a spherical mesh or multi-chart discretization. Derive the stability bound for the actual discrete surface Laplacian, local spacing, time integrator, and any mesh irregularity. Enforce it and test both sides of the bound before implementation.
+A finite computational window is not the physical world boundary. Its outgoing-wave treatment must be tested for reflection error, energy flux, and convergence as the window is expanded. The numerical method must not impose laboratory containment or viewer-edge behavior on the underlying field.
 
 Required numerical properties:
 - Deterministic update and source ordering.
@@ -198,29 +201,28 @@ The coupling law must ensure that multiple receivers cannot each claim the same 
 
 Chemistry activation remains dimensionless influence only. A local field query may change an activation probability or eligibility rule only when that behavior is separately specified and validated. It does not itself fund BREAK, COMBINE, or displacement.
 
-## 7. Closed spherical-surface geometry
+## 7. Infinite-plane geometry, laboratory containment, and observation
 
-**Resolved physical decision:** The environment is a two-dimensional spherical surface. It is not a rectangular plane with periodic and bounded axes, and it is not a three-dimensional volume enclosed by a sphere.
+**Resolved physical decision:** The physical environment is an infinite, flat, two-dimensional plane. It has no global physical edge, enclosing sphere, periodic seam, or environmental wall.
 
 Physical requirements:
-- The surface has no physical boundary. There is no edge at which field energy can escape, reflect, or be absorbed.
-- Waves propagate over the curved surface. The governing spatial operator is the surface Laplace–Beltrami operator, and the gradient/flux are tangent to the surface.
-- The physical distance between points is surface geodesic distance. Rectangular map distance is not a physical distance.
-- Total field energy is integrated over the sphere's surface area.
-- Any source or receiver integration uses actual surface area or surface-boundary length, never projected map pixels or rectangular cell area.
-- The display projection is not part of the physics. A map seam, pole singularity, or projection distortion must not alter field state or energy.
-- Since the surface is closed, there is no environmental boundary-flux term in the global energy balance. Energy can leave the field only through an explicitly modeled internal coupling (for example, material absorption/dissipation), not by falling off the map.
+- Physical position and distance use ordinary Euclidean two-dimensional coordinates and distance.
+- The governing empty-space spatial operator is the flat-plane Laplacian; field gradients and energy flux lie in the plane.
+- Field energy is integrated over physical area. Source and receiver integration use actual physical area or physical boundary length, never projected screen pixels.
+- Waves and energy continue through the observation-window edge. The camera does not create a boundary condition.
+- Matter also continues through the observation-window edge. Leaving the visible screen is not deletion, despawning, wrapping, or a collision.
+- A chemistry laboratory is a temporary arrangement of explicit solid wall objects placed in the world to contain and track experimental subjects.
+- Laboratory walls participate through ordinary geometry and material-interaction contracts. They may constrain or block particular matter and may reflect, absorb, transmit, or otherwise interact with waves according to their material properties; no universal wall behavior is presumed.
+- Laboratory walls are not a prerequisite for chemistry or field propagation. They can be removed without changing the governing physics or the identity of the world.
+- Future populated-world operation uses the same plane and physical laws with laboratory containment absent or selectively deployed.
 
 Numerical implications:
-- The solver must represent spherical geometry and curvature. A flat rectangular solver with wraparound or reflective edges is not an acceptable physical substitute.
-- Coordinate charts may be used for storage or visualization, but chart seams and singularities require continuity-preserving treatment.
-- Candidate discretizations include a well-defined spherical mesh or a multi-chart/cubed-sphere representation. The choice must be justified by convergence, energy conservation, isotropy error, and computational cost.
-- A latitude/longitude grid must not be adopted naively: cell area and spacing vary with latitude, and the poles create coordinate singularities.
-- Source injection, field propagation, and material coupling must use the same spherical metric and surface measures.
+- A finite solver window, storage tile, or viewer rectangle is an implementation/observation limit, not a physical boundary.
+- The solver must use a validated outgoing-wave, absorbing numerical treatment, domain expansion, or another convergence-demonstrated method for computational truncation. Numerical truncation must not introduce unaccounted reflection, absorption, deletion, or duplication.
+- Source injection, field propagation, and material coupling use the same flat-plane metric and physical measures.
+- Numerical and visualization coordinates must preserve continuity across storage-tile and camera-window boundaries.
 
-The current environment axis behavior and the earlier Master Spec 2.4 rectangular topology convention are no longer the physical authority for the new field. Existing movement/environment code may need a separate geometry migration plan; do not silently reinterpret its current coordinate behavior as spherical physics. The display may continue to use a rectangular projection during migration, but the physical model must be defined independently of that display.
-
-**Wave boundary conditions:** There are no environmental edge boundary conditions on a closed sphere. Reflection, absorption, and transmission remain meaningful at material interfaces and through explicit material coupling laws, not at the outer edge of the environment. Any future internal obstacles or interfaces require their own physical contracts and energy accounting.
+**Wave and wall interaction:** There are no global environmental edge conditions. Reflection, absorption, transmission, scattering, and occlusion occur only through explicit physical interactions with materials and objects. The laboratory is a convenient controlled arrangement of those objects, not a separate physics mode.
 
 ## 8. Single conservation authority and transaction contracts
 
@@ -234,7 +236,7 @@ Minimum atomic operations:
 3. **Field-to-material coupling:** field debit and material credit commit together.
 4. **Dissipation:** field debit and local thermal credit commit together.
 5. **Mechanical exchange:** field/material work and mechanical-energy changes reconcile as one transaction.
-6. **External exchange:** energy exchanged with an explicitly modeled external system is recorded with its source/destination and signed amount. The spherical surface has no environmental edge through which energy can escape.
+6. **External exchange:** energy exchanged with an explicitly modeled external system is recorded with its source/destination and signed amount. The infinite physical plane has no global environmental edge; flux through a finite computational window is a numerical-domain accounting issue, not physical escape.
 
 Rejected or invalid transactions must leave all participating holders unchanged. The field must not create a second ledger or a parallel energy authority.
 
@@ -264,22 +266,22 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Material coupling | Interface requirements drafted | Define constitutive response and finite-energy sharing |
 | Damping / thermal state | Energy destination requirement defined | Define thermal holder, damping law, and local heat transport |
 | Structural/chemical energy | Explicitly provisional | Validate parameters or keep separate from settled physical energy |
-| World geometry | User-resolved: two-dimensional spherical surface; display is a map projection | Define radius/curvature scale, metric, numerical representation, and geometry tests |
-| Environmental wave boundaries | Resolved: none; the physical surface is closed | Validate continuity across projection/chart artifacts and global energy conservation; define material-interface behavior separately |
-| Numerics | Spherical-surface reference representation required; candidate mesh/chart methods remain open | Compare discretizations; derive stability bound, precision, isotropy, and convergence tolerances |
+| World geometry | User-resolved: infinite flat two-dimensional plane; viewer is a nonphysical observation window | Define world-distance units, planar numerical representation, and geometry tests |
+| Environmental wave boundaries | Resolved: none globally; laboratory walls are ordinary physical objects | Validate finite-window numerical treatment and material-specific wall/interface behavior separately |
+| Numerics | Infinite-plane reference representation required; planar discretization remains open | Compare discretizations; derive stability bound, precision, isotropy, finite-window error, and convergence tolerances |
 | Determinism | Required | Define ordering and deterministic parallelism contract |
 
 ## 11. Phase 1 exit gate
 
 Phase 1 is complete only when:
-- The spherical-surface geometry, curvature scale, metric, and numerical representation are explicit and tested; projection artifacts do not affect physics.
+- Infinite flat-plane geometry, world-distance units, and the numerical representation are explicit and tested; camera and storage-window artifacts do not affect physics.
 - The field variable, governing equation, dimensionality, units, energy density, and flux are explicit and dimensionally consistent.
 - Propagation speed and simulation-time relationship are defined independently of wall-clock performance.
 - World-tone, hotspot, and material-origin source semantics have named ownership and dimensionally consistent source contracts.
 - Material coupling, attenuation, heat, structural-energy limits, and the absence of environmental edge boundaries are explicit.
 - The numerical method has a derived stability condition, convergence plan, deterministic update order, and documented error tolerances.
 - Atomic transfer/rollback contracts cover every energy holder.
-- The design is reviewed against the user's approved spherical-surface and unified-energy decisions, and the EXP-2026-008 baseline.
+- The design is reviewed against the user's approved infinite-plane/laboratory/camera separation and unified-energy decisions, and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
-**Next action:** derive and compare spherical-surface discretization options, define the radius/curvature scale and physical units, and complete the source-dimension and powered-material-oscillator contracts. Then lock the surface-wave equation and numerical reference method before Phase 2 implements an independent empty-sphere solver.
+**Next action:** compare conservative planar discretization options, define world-distance and physical energy units, validate finite computational-window treatment, and complete source-dimension and powered-material-oscillator contracts. Then lock the plane-wave equation and numerical reference method before Phase 2 implements an independent empty-space solver.
