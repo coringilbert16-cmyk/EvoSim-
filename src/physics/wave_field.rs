@@ -670,8 +670,8 @@ mod tests {
         let mut edge_sum = 0.0;
         let mut add_edge = |inside: usize, outside: usize| {
             let gradient = current[outside] - current[inside];
-            let centered_change = (next[inside] - previous[inside])
-                + (next[outside] - previous[outside]);
+            let centered_change =
+                (next[inside] - previous[inside]) + (next[outside] - previous[outside]);
             edge_sum += gradient * centered_change;
         };
 
@@ -702,9 +702,9 @@ mod tests {
         pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
 
         let region = (95, 95, 105, 105);
-        let initial_region_energy = field.energy_in_region(
-            region.0, region.1, region.2, region.3
-        ).unwrap();
+        let initial_region_energy = field
+            .energy_in_region(region.0, region.1, region.2, region.3)
+            .unwrap();
         assert!(field.energy_in_region(10, 10, 9, 20).is_none());
 
         let mut independently_integrated_flux = 0.0;
@@ -715,21 +715,21 @@ mod tests {
             field.advance_substeps(1).unwrap();
             let next = field.current.clone();
 
-            let measured_change = field.energy_in_region(
-                region.0, region.1, region.2, region.3
-            ).unwrap()
+            let measured_change = field
+                .energy_in_region(region.0, region.1, region.2, region.3)
+                .unwrap()
                 - regional_energy_for_pair(&field, &previous, &current, region);
             let boundary_change = independently_integrated_boundary_energy_change(
-                &field, region, &previous, &current, &next
+                &field, region, &previous, &current, &next,
             );
             largest_step_residual =
                 largest_step_residual.max((measured_change - boundary_change).abs());
             independently_integrated_flux += boundary_change;
         }
 
-        let final_region_energy = field.energy_in_region(
-            region.0, region.1, region.2, region.3
-        ).unwrap();
+        let final_region_energy = field
+            .energy_in_region(region.0, region.1, region.2, region.3)
+            .unwrap();
         let measured_net_change = final_region_energy - initial_region_energy;
         assert!(independently_integrated_flux < 0.0);
         assert!(
