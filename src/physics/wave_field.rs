@@ -441,7 +441,7 @@ mod tests {
         profile
     }
 
-    fn discrete_mode_frequency(
+    fn spatial_mode_frequency(
         spacing: f64,
         speed: f64,
         length: f64,
@@ -633,8 +633,12 @@ mod tests {
             displacement[index] = 0.7 * first[index] + 0.3 * second[index];
         }
 
-        let omega_a = discrete_mode_frequency(spacing, 1.0, length, 1, 1);
-        let omega_b = discrete_mode_frequency(spacing, 1.0, length, 2, 1);
+        let spatial_omega_a = spatial_mode_frequency(spacing, 1.0, length, 1, 1);
+        let spatial_omega_b = spatial_mode_frequency(spacing, 1.0, length, 2, 1);
+        let omega_a =
+            (1.0 - 0.5 * (spatial_omega_a * dt).powi(2)).acos() / dt;
+        let omega_b =
+            (1.0 - 0.5 * (spatial_omega_b * dt).powi(2)).acos() / dt;
         field.current.clone_from(&displacement);
         for index in 0..field.previous.len() {
             field.previous[index] = 0.7 * first[index] * (omega_a * dt).cos()
@@ -659,7 +663,7 @@ mod tests {
             let mut field = solver(width, width, spacing, substeps);
             let mode = mode_profile(width, width, spacing, length, 1, 1);
             let dt = field.time_step();
-            let omega = discrete_mode_frequency(spacing, 1.0, length, 1, 1);
+            let omega = spatial_mode_frequency(spacing, 1.0, length, 1, 1);
             field.current.clone_from(&mode);
             for index in 0..field.previous.len() {
                 field.previous[index] = mode[index] - 0.5 * dt * dt * omega.powi(2) * mode[index];
