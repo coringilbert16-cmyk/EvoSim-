@@ -178,6 +178,7 @@ Initial reference implementation in PR #410:
 - Compact-support initial pulse funded by a finite mathematical source budget. The signed source transfer is the exact change in the solver's conserved discrete leapfrog energy; failed funding leaves both source and field unchanged.
 - The discrete energy uses the leapfrog cross-time gradient invariant, not an instantaneous continuum-energy approximation.
 - Fixed-zero outer grid nodes are computational boundaries only. Current reference tests keep the stencil's numerical domain of dependence away from them and compare translated interior results across window sizes. No absorbing-boundary scheme is claimed yet.
+- Current tests cover finite travel delay, two-source constructive/destructive superposition, simultaneous discrete modes and phase, radial isotropy under refinement, second-order space/time convergence, deterministic tick/substep replay, stability rejection, source rollback/return, and discrete empty-space energy conservation.
 
 Work:
 - Implement a standalone field state and deterministic update loop.
