@@ -43,11 +43,18 @@ The specification must distinguish:
 
 The Phase 0 run records actual elapsed execution and completed ticks. Its measured ticks/second is a performance result, not a physical conversion factor. It must not be used to infer wave speed or source power.
 
-### 2.3 Spatial units and propagation speed remain unresolved
+### 2.3 Physical world geometry and propagation speed
 
-The world has numeric coordinates and cell dimensions, but Phase 1 must state what one world unit means physically within the model and how that relates to one physics tick. Propagation speed must then be expressed in world-units per physics-time unit.
+**User decision: the physical environment is a two-dimensional spherical surface.** It is analogous to the surface of a globe, not a three-dimensional spherical volume. The simulation's rectangular display is only a map projection; its apparent edges, seam, poles, and projection distortion have no physical significance.
 
-No wave speed may be selected from the old movement cutoff, the grid cell size, observed wall-clock throughput, or a desired benchmark result.
+Consequences:
+- The physical domain is a closed surface with no environmental edges, top/bottom walls, or wraparound seam.
+- Waves propagate along the surface, and physical distance is measured by surface/geodesic distance rather than rectangular coordinate distance.
+- Field energy is integrated over surface area; source and receiver contracts must use physical surface measures, not projected pixel or rectangular-grid measures.
+- A numerical coordinate chart may have singularities or seams, but those are implementation artifacts. They must not create reflection, absorption, duplicated energy, or discontinuity.
+- The spherical radius (or equivalent curvature scale) and the mapping from simulation coordinates to physical surface distance remain to be calibrated.
+
+For the initial homogeneous empty-space model, propagation speed is universal and constant over the spherical surface. It is expressed in physical surface-distance units per physics-time unit. Do not infer it from the old movement cutoff, display dimensions, observed wall-clock throughput, or a desired benchmark result.
 
 ## 3. Unified energy ontology
 
@@ -190,17 +197,29 @@ The coupling law must ensure that multiple receivers cannot each claim the same 
 
 Chemistry activation remains dimensionless influence only. A local field query may change an activation probability or eligibility rule only when that behavior is separately specified and validated. It does not itself fund BREAK, COMBINE, or displacement.
 
-## 7. World topology and wave boundaries
+## 7. Closed spherical-surface geometry
 
-The Master Technical Specification v2.4 convention has been confirmed from the prior specification review: **horizontal X wraps; vertical Y has hard top and bottom boundaries.** This is distinct from the current material-grid lookup behavior in `src/simulation/environment.rs`, which bounds x and wraps y. The source implementation therefore conflicts with the authoritative axis convention and must be reconciled before field integration.
+**Resolved physical decision:** The environment is a two-dimensional spherical surface. It is not a rectangular plane with periodic and bounded axes, and it is not a three-dimensional volume enclosed by a sphere.
 
-**Resolved:** The intended physical coordinate topology is X-periodic and Y-bounded. The remaining implementation task is to correct/reconcile the material-grid coordinate lookup, spatial queries, neighbor relationships, and regression tests so they agree with that convention. Do not build the wave solver on the reversed convention.
+Physical requirements:
+- The surface has no physical boundary. There is no edge at which field energy can escape, reflect, or be absorbed.
+- Waves propagate over the curved surface. The governing spatial operator is the surface Laplace–Beltrami operator, and the gradient/flux are tangent to the surface.
+- The physical distance between points is surface geodesic distance. Rectangular map distance is not a physical distance.
+- Total field energy is integrated over the sphere's surface area.
+- Any source or receiver integration uses actual surface area or surface-boundary length, never projected map pixels or rectangular cell area.
+- The display projection is not part of the physics. A map seam, pole singularity, or projection distortion must not alter field state or energy.
+- Since the surface is closed, there is no environmental boundary-flux term in the global energy balance. Energy can leave the field only through an explicitly modeled internal coupling (for example, material absorption/dissipation), not by falling off the map.
 
-Physical topology and wave boundary conditions are separate decisions:
-- Horizontal wrap requires periodic continuation of the field across the horizontal X seam.
-- A hard vertical Y wall does not, by itself, specify the wave condition. The field may reflect, absorb, or use a justified mixed boundary rule. This remains an explicit physical decision and requires tests.
-- Any boundary absorption must debit field energy and credit heat/export exactly once.
-- Periodic boundaries must preserve flux and energy across the seam without duplicate accounting.
+Numerical implications:
+- The solver must represent spherical geometry and curvature. A flat rectangular solver with wraparound or reflective edges is not an acceptable physical substitute.
+- Coordinate charts may be used for storage or visualization, but chart seams and singularities require continuity-preserving treatment.
+- Candidate discretizations include a well-defined spherical mesh or a multi-chart/cubed-sphere representation. The choice must be justified by convergence, energy conservation, isotropy error, and computational cost.
+- A latitude/longitude grid must not be adopted naively: cell area and spacing vary with latitude, and the poles create coordinate singularities.
+- Source injection, field propagation, and material coupling must use the same spherical metric and surface measures.
+
+The current environment axis behavior and the earlier Master Spec 2.4 rectangular topology convention are no longer the physical authority for the new field. Existing movement/environment code may need a separate geometry migration plan; do not silently reinterpret its current coordinate behavior as spherical physics. The display may continue to use a rectangular projection during migration, but the physical model must be defined independently of that display.
+
+**Wave boundary conditions:** There are no environmental edge boundary conditions on a closed sphere. Reflection, absorption, and transmission remain meaningful at material interfaces and through explicit material coupling laws, not at the outer edge of the environment. Any future internal obstacles or interfaces require their own physical contracts and energy accounting.
 
 ## 8. Single conservation authority and transaction contracts
 
@@ -241,15 +260,15 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Material coupling | Interface requirements drafted | Define constitutive response and finite-energy sharing |
 | Damping / thermal state | Energy destination requirement defined | Define thermal holder, damping law, and local heat transport |
 | Structural/chemical energy | Explicitly provisional | Validate parameters or keep separate from settled physical energy |
-| World topology | Master Spec 2.4 confirmed: horizontal X wrap / vertical Y hard walls; code appears reversed | Reconcile material-grid coordinates, queries, neighbors, and tests with the specification |
-| Wave boundary conditions | Horizontal periodic candidate; vertical open | Decide reflection/absorption/mixed vertical boundary and account for it |
+| World geometry | User-resolved: two-dimensional spherical surface; display is a map projection | Define radius/curvature scale, metric, numerical representation, and geometry tests |
+| Environmental wave boundaries | Resolved: none; the physical surface is closed | Validate continuity across projection/chart artifacts and global energy conservation; define material-interface behavior separately |
 | Numerics | Uniform-grid reference candidate | Select stencil/integrator, exact stability bound, precision, and convergence tolerance |
 | Determinism | Required | Define ordering and deterministic parallelism contract |
 
 ## 11. Phase 1 exit gate
 
 Phase 1 is complete only when:
-- The exact Master Spec 2.4 coordinate convention has been checked and any source mismatch resolved.
+- The spherical-surface geometry, curvature scale, metric, and numerical representation are explicit and tested; projection artifacts do not affect physics.
 - The field variable, governing equation, dimensionality, units, energy density, and flux are explicit and dimensionally consistent.
 - Propagation speed and simulation-time relationship are defined independently of wall-clock performance.
 - World-tone, hotspot, and material-origin source semantics have named ownership and dimensionally consistent source contracts.
@@ -259,4 +278,4 @@ Phase 1 is complete only when:
 - The design is reviewed against Master Spec 2.4 and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
-**Next action:** reconcile the reversed material-grid axis behavior with the confirmed Master Spec 2.4 topology. In parallel, settle the field's physical interpretation and units, then lock the scalar-wave candidate (or replace it with a justified richer model), source dimensions, and material-oscillator semantics in a reviewed decision record. Only after those decisions should Phase 2 implement an independent empty-space solver.
+**Next action:** derive and compare spherical-surface discretization options, define the radius/curvature scale and physical units, and complete the source-dimension and powered-material-oscillator contracts. Then lock the surface-wave equation and numerical reference method before Phase 2 implements an independent empty-sphere solver.
