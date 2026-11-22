@@ -170,7 +170,7 @@ All future experiments must be registered before execution and receive a dedicat
 
 ## PLAN-008 — Pre-wave unified-energy performance baseline
 
-**Status:** Registered; EXP-2026-008 prepared, not yet run.
+**Status:** Completed — five-seed baseline validated; profiling supplement preserved in consolidated report.
 
 **Question:** What is the reproducible performance and observable energy-accounting baseline of the current `main` implementation immediately before the unified energy / continuous spatial wave-field redesign?
 
