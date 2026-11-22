@@ -109,7 +109,7 @@ A damped candidate equation may include `2\gamma u_t`:
 
 For this candidate, the local energy balance is:
 
-`\partial_t e + \nabla \\cdot J = K u_t f - 2K\gamma u_t^2`
+`\partial_t e + \nabla \cdot J = K u_t f - 2K\gamma u_t^2`
 
 The first right-hand term is signed power density transferred from the source or coupled degree of freedom into the field. Its spatial integral is the source-to-field power transfer. The second term is nonnegative dissipation and must be credited to local thermal energy. If the field does work back on a source, the signed transfer reverses and the source holder is credited. Source debit and field work must be committed atomically. This relation makes source energy transfer auditable instead of equating a prescribed amplitude with an energy grant.
 
