@@ -337,3 +337,55 @@ Do not use a longer observation window as a substitute for identifying a broken 
 **Next action:** Close Phase 0 by recording the reproducible 60-second seed-42, 1,280-material current-main performance baseline with phase timing and energy diagnostics. Then begin Phase 1's formal source/energy and wave-physics decisions. In particular, reconcile the observed coordinate-topology discrepancy and decide the energy semantics of material-origin oscillators before solver implementation.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
+
+
+## 10. Unified energy-system design and code reuse policy
+
+**This section is a user-approved clarification of the architecture and supersedes any earlier wording in this roadmap that treats the current energy-ledger semantics, environmental usable-energy pool, frequency-indexed resonance reservoirs, or named reaction-funding reservoirs as binding physical authorities.** The continuous spatial wave field remains the selected propagation architecture, but it is one part of a unified energy system—not a standalone replacement pool.
+
+### 10.1 Unified physical energy ontology
+
+Phase 1 must specify all energy forms and conversions together, with consistent units, ownership, and transfer rules:
+
+- **External/source energy:** energy supplied by explicit external sources, with finite emission and provenance.
+- **Propagating field energy:** energy carried through space, represented by local field state with energy density and flux derived from the governing equations.
+- **Material internal energy:** energy retained in physical degrees of freedom or material-local modes. Resonance describes frequency-dependent response; it is not itself an energy grant.
+- **Thermal energy:** energy represented as unresolved microscopic motion or explicit thermal state, with defined local storage and transport.
+- **Structural/chemical potential:** energy associated with bonds and material structure only to the extent its physical definition and parameters are validated. Existing bond-graph bookkeeping is a candidate, not automatically a complete thermodynamic model.
+- **Mechanical work and other physical transfers:** energy exchanged with motion or other degrees of freedom, accounted on both sides.
+- **Boundary escape/external work:** explicit destinations for energy leaving the modeled world or crossing its boundary.
+
+Every transfer identifies a source, destination, and signed amount. Internal transfers cancel in the whole-world balance. No action receives energy merely because it requires it. Local availability must follow from field flux, material ownership, or another explicitly specified physical mechanism; a global chemistry budget is not presumed to make energy locally available.
+
+### 10.2 Reuse map
+
+**Reuse directly where contracts remain valid:**
+- PR #378 realized composite geometry, supported straight/curved boundary primitives, visibility queries, perimeter measures, and linear allocation helpers. Extend shared geometry for documented gaps; do not duplicate it in the field.
+- Atomic material/chemistry transaction patterns, staged validation, commit/rollback, and deterministic state-update patterns.
+- Independent energy-inventory reconciliation and conservation-test techniques, after adapting inventory coverage to the new energy forms.
+- Simulation-time phase utilities and frequency-resolved spectrum operations where units and meanings remain valid.
+- Material identity/properties and the physical material catalog.
+- PR #377 spatial broad-phase techniques as optional query acceleration where they preserve the reference field solution. Its movement-resolution threshold is never a propagation cutoff.
+
+**Reuse after adapting and validating:**
+- Energy-ledger structures and settlement helpers: retain finite-value validation, staged allocation, provenance, residual reporting, and rollback. Redesign categories, holder ownership, and balance equations for field, material-internal, thermal, validated structural, work, and boundary energy.
+- World-tone and hotspot definitions: retain source identity/configuration, location, frequency, phase schedule, and intended source characteristics where valid. Replace independent receiver-settlement paths with one field-source interface and finite emission/debit contract.
+- Harmonic/material-response calculations: reuse as candidate constitutive response data, but derive absorption, reflection, transmission, and energy transfer from the new field/material coupling law.
+- Reaction trial builders and atomic commits: retain topology validation and rollback, but replace global-pool/reservoir funding assumptions with Phase 1's local energy-transfer rules.
+
+**Do not retain as physical authorities:** global chemistry-usable pools or frequency-indexed reservoirs as representations of propagating energy; uniform per-constituent source grants; separate world-tone/hotspot settlement authorities; instantaneous centroid-to-centroid resonance as propagation; legacy attenuation/aura magnitude as a wave equation or energy inventory; or reaction subsidies not derived from physically available energy.
+
+### 10.3 One conservation authority, redesigned semantics
+
+There must be one conservation/accounting authority for the complete system. The current ledger implementation is reusable infrastructure, not a binding physical specification. Its validation, inventory, transaction, and rollback mechanics should be preserved where correct; its categories, reservoir semantics, and reaction-funding rules must change wherever they conflict with the unified ontology. The wave field must not introduce a parallel ledger, and legacy paths must not remain a second authority after migration.
+
+### 10.4 Roadmap phase clarifications
+
+- **Phase 0** remains open until the reproducible current-main baseline is recorded. The existing code/ledger/geometry audit is complete, but no new baseline benchmark was run during that audit.
+- **Phase 1** is a unified energy-and-wave physics specification, not merely selection of a wave equation. It must include energy forms, units, source ownership, local availability, transfer equations, heat/thermal semantics, structural-energy limits, boundaries, numerics, determinism, and this reuse/retirement map.
+- **Phase 3–4** must transfer energy through the single redesigned conservation authority. Do not presume the existing usable-energy pool or resonant reservoir remains the funding mechanism.
+- **Chemistry activation is not energy.** Field influence may affect activation, but reaction energy must come from physically available local transfers or validated structural-energy changes.
+- **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
+- The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
+
+**Immediate sequence:** complete the Phase 0 baseline, then execute Phase 1 as the complete unified energy-system specification. No production energy or resonance code should be rewritten before both are complete. The baseline is a comparison point, not a requirement to preserve legacy physics.
