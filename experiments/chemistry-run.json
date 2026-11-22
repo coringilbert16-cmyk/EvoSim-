@@ -1,5 +1,5 @@
 {
-  "run": false,
+  "run": true,
   "seeds": [
     42,
     43,
@@ -9,11 +9,11 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PREPARED ONLY — EXP-2026-007 / PLAN-007 ordinary environmental BREAK and DISPLACEMENT discovery-eligibility baseline. Dispatch manually from main after registration PR is merged; no forced reactions, no profiling, no deep diagnostics.",
-  "profile_movement": false,
-  "profile_tick": false,
+  "request_note": "EXP-2026-008 / PLAN-008 pre-wave unified-energy performance and accounting baseline. Registered run: five independent seeds, standard inventory, movement and sampled tick profiling enabled; no deep diagnostics or behavior changes.",
+  "profile_movement": true,
+  "profile_tick": true,
   "deep_diagnostics": false,
-  "experiment_id": "EXP-2026-007",
-  "research_plan": "PLAN-007",
-  "condition_id": "ordinary-discovery-baseline"
+  "experiment_id": "EXP-2026-008",
+  "research_plan": "PLAN-008",
+  "condition_id": "pre-wave-reference"
 }
