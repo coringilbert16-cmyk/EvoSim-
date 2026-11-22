@@ -496,13 +496,58 @@ mod tests {
         field.advance_ticks(10).unwrap();
         assert_eq!(field.sample(124, 100).unwrap(), 0.0);
 
-        field.advance_ticks(14).unwrap();
+        field.advance_ticks(10).unwrap();
+        let before_arrival = field.sample(124, 100).unwrap();
+        assert!(
+            before_arrival.abs() < 1.0e-2,
+            "wave arrived too early: {before_arrival}"
+        );
+
+        field.advance_ticks(4).unwrap();
         let after_arrival = field.sample(124, 100).unwrap();
         assert!(
             after_arrival.abs() > 1.0e-2,
             "wave had not reached receiver after 24 ticks: {after_arrival}"
         );
         assert!((field.logical_time_ticks() - 24.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn returned_field_work_is_credited_to_the_active_source() {
+        let mut field = solver(81, 81, 1.0, 2);
+        let mut emitter = FiniteEnergySource::new(10.0).unwrap();
+        let mut absorber = FiniteEnergySource::new(0.0).unwrap();
+        let emitted = field
+            .inject_compact_pulse(&mut emitter, 40.0, 40.0, 3.0, 0.5)
+            .unwrap();
+        let returned = field
+            .inject_compact_pulse(&mut absorber, 40.0, 40.0, 3.0, -0.5)
+            .unwrap();
+
+        assert!(emitted > 0.0);
+        assert!((emitted + returned).abs() < 1.0e-12);
+        assert!(field.energy().abs() < 1.0e-12);
+        assert!((absorber.available_energy() - emitted).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn computational_window_does_not_affect_interior_before_boundary_influence() {
+        let mut smaller = solver(201, 201, 1.0, 2);
+        let mut larger = solver(241, 241, 1.0, 2);
+        let mut small_source = FiniteEnergySource::new(10.0).unwrap();
+        let mut large_source = FiniteEnergySource::new(10.0).unwrap();
+        pulse(&mut smaller, &mut small_source, 100.0, 100.0, 0.5);
+        pulse(&mut larger, &mut large_source, 120.0, 120.0, 0.5);
+        smaller.advance_ticks(40).unwrap();
+        larger.advance_ticks(40).unwrap();
+
+        for offset_y in -20isize..=20 {
+            for offset_x in -20isize..=20 {
+                let small = smaller.sample((100isize + offset_x) as usize, (100isize + offset_y) as usize).unwrap();
+                let large = larger.sample((120isize + offset_x) as usize, (120isize + offset_y) as usize).unwrap();
+                assert!((small - large).abs() < 1.0e-12);
+            }
+        }
     }
 
     #[test]
@@ -610,7 +655,7 @@ mod tests {
         pulse(&mut left, &mut left_source, 80.0, 80.0, 0.5);
         pulse(&mut right, &mut right_source, 80.0, 80.0, 0.5);
         left.advance_ticks(30).unwrap();
-        right.advance_ticks(30).unwrap();
+        right.advance_substeps(60).unwrap();
         assert_eq!(left.current, right.current);
         assert_eq!(left.previous, right.previous);
         assert_eq!(left.energy().to_bits(), right.energy().to_bits());
