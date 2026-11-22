@@ -191,7 +191,7 @@ Current source configuration describes the sun as a rotating external source, wi
 
 The source configuration and identity are reusable candidates. The current per-constituent uniform settlement is not a spatial wave source and must not remain an energy authority after migration.
 
-For a field model, source injection must become a finite power/flux boundary contract. The complete source boundary is the allocation denominator. Source energy is debited once when work is done on the field; un-emitted or rejected energy remains with the source. The existing intensity unit must be reconciled with world length and physics time before it is converted to a field boundary condition.
+The sun is not a boundary emitter of the 2D world: it is an external radiative source above the plane. Its radiation reaches the plane through a source-to-point propagation geometry with finite travel time, a declared radiation pattern, and incidence-angle projection. The incident waveform/power density is evaluated over physical plane area and coupled into the one persistent 2D field. The sun's emitted power is finite and normalized over its full radiation pattern; the infinite plane intercepts only the physically determined share. The source debit must equal the field's net received work. Do not allocate a fixed energy amount across visible materials or normalize by the camera window. A boundary-flux contract applies only to a source that is physically a line/boundary emitter.
 
 ### 5.2 Localized hotspot
 
@@ -210,16 +210,20 @@ Phase 1 must choose and justify one of these interpretations before material-ori
 2. **Conservative coupled degree of freedom:** material and field are coupled degrees of freedom in one Hamiltonian/Lagrangian or equivalent conservative model; energy exchange is derived from the coupling equations, not from a source grant.
 3. **Response only:** material properties determine absorption, reflection, transmission, scattering, or frequency response, but the material is not an emitter.
 
+For the first empty-space reference solver, use only a controlled mathematical test source with an explicit finite energy budget. It is a solver fixture, not a claim about the sun or a material emitter.
+
 The default for the first empty-space solver is no material-origin sources. Material response is introduced only after its coupling law and energy ownership are defined.
 
 ### 5.4 Source dimensions must be reconciled
 
-The current world-tone rate is energy/(tick·projected-width); the hotspot rate is energy/(tick·area) after conversion. These are not interchangeable. Phase 1 must decide whether each source is:
-- A boundary emitter with a power-per-length or prescribed flux condition.
-- A distributed source with power-per-area.
-- A coupled material oscillator with explicit internal energy.
+The current world-tone rate is energy/(tick·projected-width); the hotspot rate is energy/(tick·area) after conversion. These are not interchangeable. The approved physical source classes are:
+- **External radiative source:** a source outside the plane whose radiation reaches and couples into the plane over a physically defined spatial distribution. The sun belongs to this class; it is not a boundary emitter.
+- **Distributed in-plane source:** a source with physical support area and power density, such as the provisional hotspot model.
+- **Boundary/line emitter:** only a source whose actual physical geometry is a line or boundary, with power per physical length or a derived boundary-flux condition.
+- **Coupled material oscillator:** a material degree of freedom with explicit internal-energy ownership or a conservative shared field/material energy function.
+- **Passive material response:** a receiver that absorbs, reflects, transmits, or scatters without independently emitting energy.
 
-Do not silently reinterpret a source's current numerical intensity as a field amplitude. For the scalar forced-wave candidate, source power must be computed from the actual field work term (the spatial integral of `K u_t f`) or an equivalent explicitly derived boundary-flux condition. The source's finite budget is debited by the same signed transfer that the field receives; if the coupling is one-way, its missing return-work destination must be specified rather than discarded.
+Do not silently reinterpret a source's current numerical intensity as a field amplitude. For the scalar forced-wave candidate, source power must be computed from the actual field work term (the spatial integral of `K u_t f`) or an equivalent explicitly derived coupling/flux condition. The source's finite budget is debited by the same signed transfer that the field receives; if the coupling is one-way, its missing return-work destination must be specified rather than discarded.
 
 ### 5.5 Common source-to-field energy contract
 
@@ -238,11 +242,13 @@ Every source must have:
 
 For the scalar forced-wave candidate, a distributed source f(p,t) contributes signed power density K u_t f. Its total instantaneous transfer is the spatial integral over the actual source support. The source holder is debited by exactly the field's net received work; if the net work is negative, the corresponding source/coupled holder is credited. A prescribed f is not allowed to inject energy without that matching transfer. If a source is intended to deliver a prescribed positive power independent of instantaneous field phase, the coupling must be formulated as a passive/active boundary or controlled-source law whose work and energy budget are explicitly derived; it must not overwrite the field state or add an arbitrary energy amount.
 
-For a boundary emitter, specify the boundary condition and its signed energy flux using the selected field equation's conservation law. Integrate over the complete physical emitting boundary length. A prescribed boundary amplitude is not a substitute for a power/flux contract. The field's net energy gain must equal the source's net debit, including any reflected work returned to the source.
+For a true boundary/line emitter, specify the boundary condition and its signed energy flux using the selected field equation's conservation law. Integrate over the complete physical emitting boundary length. A prescribed boundary amplitude is not a substitute for a power/flux contract. The field's net energy gain must equal the source's net debit, including any reflected work returned to the source. This contract does not describe the sun.
 
-For a distributed emitter, specify the source support in physical area and power density in E/(L²·T). Integrate over the complete support using physical area. Do not multiply by the number of grid cells without the corresponding cell-area factor; refinement must not change total source power.
+For an in-plane distributed emitter, specify the source support in physical area and power density in E/(L²·T). Integrate over the complete support using physical area. Do not multiply by the number of grid cells without the corresponding cell-area factor; refinement must not change total source power.
 
-The world-tone source is the sun: an external source outside the infinite flat world plane, orbiting it on a circular path in a plane perpendicular to the world plane. Its changing orbital position determines the direction of illumination. The 2,400-tick cycle is provisionally the orbital period/schedule and is distinct from the emitted field's carrier frequencies and phases. Define this orbit in physical coordinates independently of the camera, viewport, laboratory walls, and computational-window dimensions. Orbit radius/distance, orientation, phase origin, and emission geometry remain parameters to specify and calibrate. The old orbit derived from a finite rectangular environment must be retired. The source's finite energy budget or explicitly accounted external replenishment and conversion from legacy projected-width rate to physically dimensioned source power remain open. The present hotspot input is provisionally classified as a distributed external source because its legacy rate is stated per realized area. Its support profile, physical area measure, finite budget/replenishment, and conversion to power density remain open. These classifications are hypotheses to audit against source code and intended physics, not authorization to preserve the legacy settlement algorithms.
+For an external radiative source such as the sun, define the source position in 3D coordinates relative to the embedded 2D plane, its finite emitted power, its angular radiation pattern, and the propagation speed/path to each receiving point. The source-to-plane travel time must be finite and use retarded emission time: a field contribution arriving at plane point p at time t was emitted at the corresponding earlier time determined by the source-to-p distance and external propagation speed. The incident power density on the plane must include the source's distance dependence and the projection/incidence geometry. Its integral over the entire plane must not exceed the source's emitted power over the corresponding interval; any un-intercepted radiation remains in the external accounting domain rather than disappearing. The exact radiation pattern and coupling efficiency remain open physical parameters, not assumptions to be hidden in a normalization constant.
+
+The world-tone source is the sun: an external radiative source outside the infinite flat world plane, orbiting it on a circular path in a plane perpendicular to the world plane. Its changing orbital position determines the direction and incidence geometry of illumination. The 2,400-tick cycle is provisionally the orbital period/schedule and is distinct from the emitted field's carrier frequencies and phases. Define this orbit in physical coordinates independently of the camera, viewport, laboratory walls, and computational-window dimensions. Orbit radius/distance, vertical offset/height, orientation, phase origin, radiation pattern, emitted power, and coupling efficiency remain parameters to specify and calibrate. The old orbit derived from a finite rectangular environment must be retired. The sun is an external radiative source coupled into the plane, not a boundary emitter and not an energy grant to each visible material. Its finite energy budget or explicitly accounted external replenishment and conversion from the legacy projected-width rate to a physically dimensioned radiation-power contract remain open. The present hotspot input is provisionally classified as an in-plane distributed source because its legacy rate is stated per realized area. Its support profile, physical area measure, finite budget/replenishment, and conversion to power density remain open. These classifications are hypotheses to audit against source code and intended physics.
 
 The 1–10 energy-units-per-tick-per-normalized-width world-tone setting and the 1,000 energy-units-per-simulated-second-per-area hotspot setting are legacy configuration values, not directly comparable physical quantities. Convert each through the verified tick/time and world-length/area scales before comparing or combining them. Never treat either value as a field amplitude. Source allocation must be independent of solver resolution, viewer size, camera zoom, and the number of receivers.
 
@@ -271,9 +277,11 @@ A receiver query must provide:
 
 The field returns:
 - Local field state and phase at requested boundary locations.
-- Incident energy flux over the boundary interval.
+- Incident energy flux over each boundary interval.
 - A staged interaction result separating absorbed, reflected, transmitted, and scattered energy.
 - Any energy transferred into material internal or thermal holders.
+
+Material constitutive properties determine frequency-dependent coupling and response. Resonance is a response characteristic, not an energy source. Absorption, reflection, transmission, scattering, and any re-emission must follow a conservative local interaction law. Passive response may redistribute or store incoming energy but cannot create net energy. Material-origin emission remains disabled until a powered internal-energy debit or conservative coupled-degree-of-freedom law is defined.
 
 The coupling law must ensure that multiple receivers cannot each claim the same finite field energy. For the first reference solver there are no receivers; matter coupling is a later phase. Absorption and reflection coefficients must be bounded and energy-consistent. Unmodeled or unsupported geometry fails closed; it does not fall back to centroids or bounding circles.
 
@@ -341,7 +349,7 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Spatial unit and propagation speed | Open | Define world-unit meaning, speed, and tick/substep relationship |
 | Source-to-field transfer | Common contract defined in Section 5.5 | Audit source implementations; define boundary condition, distributed support, finite budgets/replenishment, and calibrated power/flux values |
 | Source time units | Existing conventions identified | Separate physics time from experiment/wall time; calibrate source power |
-| World-tone source | Legacy rate and finite-rectangle orbit audited in Section 5.6 | Decide finite in-plane emitter vs incoming field condition on the infinite plane; define geometry, ownership/replenishment, and convert width-rate only after the physical measure is selected |
+| World-tone source | External radiative source above the plane; perpendicular circular orbit approved | Define source-to-plane propagation/retarded time, radiation pattern, incidence projection, finite emitted power and ownership/replenishment; replace legacy projected-width rate with calibrated physical radiation power |
 | Hotspot source | Existing area-rate identified | Define distributed source coupling and unit calibration |
 | Material-origin oscillators | No current source debit identified | Choose powered oscillator, conservative coupling, or response-only |
 | Material coupling | Interface requirements drafted | Define constitutive response and finite-energy sharing |
@@ -365,4 +373,4 @@ Phase 1 is complete only when:
 - The design is reviewed against the user's approved infinite-plane/laboratory/camera separation and unified-energy decisions, and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
-**Next action:** resolve the world-tone source's physical identity and geometry on the infinite plane (finite in-plane emitter versus a defined incoming field condition), then establish the physical length and energy scales needed to calibrate its width-rate and the hotspot's area-rate. Verify that the runner and all phase/frequency helpers share the 3.6-simulated-seconds-per-tick convention before locking it. In parallel, compare conservative planar discretizations and validate finite computational-window treatment. Material-origin emission remains disabled in the empty-space reference solver until a powered or conservative coupling law is specified.
+**Next action:** specify and audit the external sun-to-plane radiation contract: source coordinates on the approved perpendicular circular orbit; finite source-to-plane propagation delay; radiation pattern; incidence-angle projection; finite emitted power and external energy ownership; and conservative coupling into the single 2D field. Then calibrate physical length, energy, and time scales and reconcile the hotspot's distributed area-rate. Verify that the runner and all phase/frequency helpers share the 3.6-simulated-seconds-per-tick convention before locking it. In parallel, compare conservative planar discretizations and validate finite computational-window treatment. Material-origin emission remains disabled in the empty-space reference solver until a powered or conservative coupling law is specified.
