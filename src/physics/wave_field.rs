@@ -312,15 +312,15 @@ impl WaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), WaveFieldError> {
-        let ratio = self.propagation_speed * self.time_step / self.spacing;
-        let ratio_squared = ratio * ratio;
+        let wave_step_squared =
+            self.propagation_speed.powi(2) * self.time_step.powi(2);
         let mut next = vec![0.0; self.current.len()];
 
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let index = self.index(x, y);
                 next[index] = 2.0 * self.current[index] - self.previous[index]
-                    + ratio_squared * self.laplacian(&self.current, x, y);
+                    + wave_step_squared * self.laplacian(&self.current, x, y);
             }
         }
 
