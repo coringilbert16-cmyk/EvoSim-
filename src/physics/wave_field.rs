@@ -1136,8 +1136,8 @@ mod tests {
                 .map(|value| (value - mean).powi(2))
                 .sum::<f64>()
                 / samples.len() as f64;
-            let mean_square = samples.iter().map(|value| value.powi(2)).sum::<f64>()
-                / samples.len() as f64;
+            let mean_square =
+                samples.iter().map(|value| value.powi(2)).sum::<f64>() / samples.len() as f64;
             variance.sqrt() / mean_square.sqrt()
         }
 
