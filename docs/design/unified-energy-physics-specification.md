@@ -87,7 +87,7 @@ where:
 - Superposition follows from linearity.
 - Frequency and phase are represented by the evolving field state, not by a list of independent per-material energy grants.
 
-This is a deliberately minimal reference candidate. It is valid only if the intended field is scalar and isotropic in the empty medium. If the physical model requires polarization, direction-dependent propagation, multiple coupled components, or a dispersive medium, the equation must be expanded before solver implementation. The project must not choose the scalar form merely because it is cheaper.
+This is a deliberately minimal reference candidate. One real time-domain scalar field naturally carries simultaneous frequencies and their phase relationships; frequency decomposition is an analysis/query of that field, not a set of independently spendable frequency reservoirs. The model is non-dispersive in empty space and isotropic. It is valid only if those assumptions match the intended physics. If the physical model requires polarization, direction-dependent propagation, multiple coupled components, or dispersion, the equation must be expanded before solver implementation. The project must not choose the scalar form merely because it is cheaper.
 
 ### 4.2 Energy density and flux candidate
 
@@ -158,7 +158,7 @@ The current world-tone rate is energy/(tick·projected-width); the hotspot rate 
 - A distributed source with power-per-area.
 - A coupled material oscillator with explicit internal energy.
 
-Do not silently reinterpret a source's current numerical intensity as a field amplitude.
+Do not silently reinterpret a source's current numerical intensity as a field amplitude. For the scalar forced-wave candidate, source power must be computed from the actual field work term (the spatial integral of `K u_t f`) or an equivalent explicitly derived boundary-flux condition. The source's finite budget is debited by the same signed transfer that the field receives; if the coupling is one-way, its missing return-work destination must be specified rather than discarded.
 
 ## 6. Material coupling contract
 
