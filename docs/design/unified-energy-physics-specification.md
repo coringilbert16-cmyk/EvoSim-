@@ -182,13 +182,13 @@ Chemistry activation remains dimensionless influence only. A local field query m
 
 ## 7. World topology and wave boundaries
 
-The intended world topology recorded for EvoSim is horizontal wrap with hard vertical top and bottom boundaries. This is distinct from the current material-grid lookup behavior in `src/simulation/environment.rs`, which bounds x and wraps y. The source implementation therefore conflicts with the intended axis convention.
+The Master Technical Specification v2.4 convention has been confirmed from the prior specification review: **horizontal X wraps; vertical Y has hard top and bottom boundaries.** This is distinct from the current material-grid lookup behavior in `src/simulation/environment.rs`, which bounds x and wraps y. The source implementation therefore conflicts with the authoritative axis convention and must be reconciled before field integration.
 
-**Required blocker:** Verify the exact Master Technical Specification v2.4 coordinate convention, then reconcile the material-grid axis implementation and tests before selecting field boundary conditions. Do not build the wave solver on the reversed convention.
+**Resolved:** The intended physical coordinate topology is X-periodic and Y-bounded. The remaining implementation task is to correct/reconcile the material-grid coordinate lookup, spatial queries, neighbor relationships, and regression tests so they agree with that convention. Do not build the wave solver on the reversed convention.
 
 Physical topology and wave boundary conditions are separate decisions:
-- Horizontal wrap implies periodic continuation of the field across the horizontal seam if the wave domain shares the world topology.
-- A hard vertical physical wall does not, by itself, specify the wave condition. The field may reflect, absorb, or use a justified mixed boundary rule. This requires an explicit physical decision and tests.
+- Horizontal wrap requires periodic continuation of the field across the horizontal X seam.
+- A hard vertical Y wall does not, by itself, specify the wave condition. The field may reflect, absorb, or use a justified mixed boundary rule. This remains an explicit physical decision and requires tests.
 - Any boundary absorption must debit field energy and credit heat/export exactly once.
 - Periodic boundaries must preserve flux and energy across the seam without duplicate accounting.
 
@@ -231,7 +231,7 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Material coupling | Interface requirements drafted | Define constitutive response and finite-energy sharing |
 | Damping / thermal state | Energy destination requirement defined | Define thermal holder, damping law, and local heat transport |
 | Structural/chemical energy | Explicitly provisional | Validate parameters or keep separate from settled physical energy |
-| World topology | Intended horizontal wrap / vertical hard walls; code appears reversed | Verify Master Spec 2.4 and correct/test coordinate convention |
+| World topology | Master Spec 2.4 confirmed: horizontal X wrap / vertical Y hard walls; code appears reversed | Reconcile material-grid coordinates, queries, neighbors, and tests with the specification |
 | Wave boundary conditions | Horizontal periodic candidate; vertical open | Decide reflection/absorption/mixed vertical boundary and account for it |
 | Numerics | Uniform-grid reference candidate | Select stencil/integrator, exact stability bound, precision, and convergence tolerance |
 | Determinism | Required | Define ordering and deterministic parallelism contract |
@@ -249,4 +249,4 @@ Phase 1 is complete only when:
 - The design is reviewed against Master Spec 2.4 and the EXP-2026-008 baseline.
 - No production solver or live chemistry/movement behavior has been changed as part of this specification phase.
 
-**Next action:** resolve the Master Spec/topology discrepancy and settle the field's physical interpretation and units. Then lock the scalar-wave candidate (or replace it with a justified richer model), source dimensions, and material-oscillator semantics in a reviewed decision record. Only after those decisions should Phase 2 implement an independent empty-space solver.
+**Next action:** reconcile the reversed material-grid axis behavior with the confirmed Master Spec 2.4 topology. In parallel, settle the field's physical interpretation and units, then lock the scalar-wave candidate (or replace it with a justified richer model), source dimensions, and material-oscillator semantics in a reviewed decision record. Only after those decisions should Phase 2 implement an independent empty-space solver.
