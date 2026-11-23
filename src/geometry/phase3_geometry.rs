@@ -8,9 +8,7 @@
 
 use crate::organism_geometry::OrganismBodyGeometry;
 use crate::resources::Form;
-use crate::source_exposure::{
-    self, ExposedBoundaryInterval, VisibleMaterialPerimeter,
-};
+use crate::source_exposure::{self, ExposedBoundaryInterval, VisibleMaterialPerimeter};
 
 fn is_phase3_polygon(form: &Form) -> bool {
     matches!(
@@ -73,7 +71,9 @@ fn validate_visibility_snapshot(
                 }
                 Form::Polygon { vertices }
                     if vertices.len() < 3
-                        || vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) =>
+                        || vertices
+                            .iter()
+                            .any(|(x, y)| !x.is_finite() || !y.is_finite()) =>
                 {
                     return None;
                 }
@@ -101,11 +101,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
         return None;
     }
     validate_visibility_snapshot(bodies, target_body_indices)?;
-    source_exposure::visible_polygonal_intervals_for_targets(
-        source,
-        bodies,
-        target_body_indices,
-    )
+    source_exposure::visible_polygonal_intervals_for_targets(source, bodies, target_body_indices)
 }
 
 /// Phase 3 material perimeter: polygonal solids only. Finite lines are
@@ -157,7 +153,10 @@ mod tests {
 
     fn target() -> OrganismBodyGeometry {
         body(
-            Form::Rectangle { width: 2.0, height: 2.0 },
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
             5.0,
             0.0,
             (4.0, -1.0),
@@ -189,13 +188,14 @@ mod tests {
             multi_contact_boundary: None,
         };
         let fluid_target = vec![body(fluid(), 5.0, 0.0, (4.0, -1.0), (6.0, 1.0))];
-        assert!(visible_polygonal_intervals_for_targets((-5.0, 0.0), &fluid_target, &[0]).is_none());
+        assert!(
+            visible_polygonal_intervals_for_targets((-5.0, 0.0), &fluid_target, &[0]).is_none()
+        );
 
-        let fluid_blocker = vec![
-            target(),
-            body(fluid(), 0.0, 0.0, (-1.0, -1.0), (1.0, 1.0)),
-        ];
-        assert!(visible_polygonal_intervals_for_targets((-5.0, 0.0), &fluid_blocker, &[0]).is_none());
+        let fluid_blocker = vec![target(), body(fluid(), 0.0, 0.0, (-1.0, -1.0), (1.0, 1.0))];
+        assert!(
+            visible_polygonal_intervals_for_targets((-5.0, 0.0), &fluid_blocker, &[0]).is_none()
+        );
     }
 
     #[test]
