@@ -2,27 +2,19 @@
 
 These plans define questions and evidence standards, not claims that the behaviors already exist. The research objective is to discover naturally arising organization in the general chemistry engine. No plan authorizes special-case reactions, organism-specific logic, forced reactions, artificial energy grants, or threshold changes.
 
-The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 is now in progress.
+The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Analyze retained artifacts before commissioning new simulations. PLAN-001 artifact analysis is complete; no new simulation was required.
 
 ## PLAN-001 — Existing pathway and molecular-lineage analysis
 
-**Status:** In progress; existing-artifact analysis only.
+**Status:** Completed for EXP-2026-004 artifact analysis; no new simulation was required.
 
 **Question:** Which instance-level reaction sequences demonstrate reusable intermediates, reversible transformations, multistep synthesis, or plausible facilitation?
 
-**Starting evidence:** EXP-2026-004 recorded 4,200 distinct reaction-created product identities later reused as parents, 6,444 parent-lineage edges from reaction-created products, and 1,956 such edges leading to COMBINE. H–O–P / O–P and N–O–P / O–P are recurrent family-level transformations.
+**Work completed:** Exact molecule identities were traced across parent/child events; unchanged identity, consumption/recreation, and family-only similarity were distinguished; chronological pathways were reconstructed; and substrate recycling was separated from evidence of facilitation.
 
-**Work:**
-1. Trace exact molecule instance IDs across parent/child events.
-2. Distinguish unchanged identity/state, consumption and recreation, and family-only similarity.
-3. Reconstruct chronological pathways and exact intermediate reuse.
-4. Separate reversible substrate recycling from a molecule facilitating a separate reaction.
-5. Rank candidates with seed, tick, reaction ID, parent IDs, child IDs, and artifact provenance.
-6. Record geometry and opportunity coverage limits; do not infer reaction probabilities from committed events alone.
+**Results:** Four exact-instance fragment-reuse cycles were confirmed: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. Three additional exact-instance sequences show H–O–P temporarily incorporated into H–O–P–S and released again by BREAK. A broader scan found 192 exact-pair fragment reunifications across five seeds. Longest connected identity-lineage walks ranged from 12 to 39 events across seeds 42–46. A targeted audit found no event-level evidence of an unchanged third-party facilitator; available contact samples are pairwise and do not provide matched facilitator controls.
 
-**Success criterion:** a reproducible instance-level evidence table and a ranked set of follow-up candidates. No new simulation is required.
-
-**Current progress:** Four complete exact-instance fragment-reuse cycles have been identified in the first pass: three N–O–P ⇌ N + O–P cycles and one H–O–P ⇌ H + O–P cycle. See [PLAN-001 initial findings](../results/2026-11-20-plan-001-initial-findings.md). These establish reversible intermediate recycling, not catalysis.
+These results establish reversible substrate/intermediate reuse and connected identity lineages, not catalysis, autocatalysis, or metabolism. See [completed PLAN-001 findings and evidence audit](../results/2026-11-20-plan-001-initial-findings.md).
 
 ## PLAN-002 — Catalytic facilitation
 
@@ -61,19 +53,17 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-004 — Pseudo-metabolism
 
-**Status:** Planned; depends on validated pathways and intermediate regeneration from PLAN-001, with relevant facilitation/self-production tests from PLAN-002/003 where applicable.
+**Status:** In progress; initial paired resource-feed experiment EXP-2026-005 completed with an inconclusive result. Further pathway-level turnover analysis is required.
 
 **Question:** Can a connected chemical network repeatedly transform environmental resources, turn over intermediates, and regenerate compounds needed by earlier stages?
 
-**Required evidence:**
-- A connected, temporally ordered reaction network, not merely a collection of unrelated events.
-- Recurrent resource input and measurable product/intermediate turnover.
-- Demonstrated regeneration of intermediate identities or chemically equivalent states with explicit accounting of identity changes.
-- Persistence over repeated cycles.
-- Energy input, stored energy, heat, losses, and residuals accounted for across the network.
-- Evidence that persistence follows from general chemistry and environmental physics, not an organism-specific controller.
+**Existing evidence:** EXP-2026-004 contains an eight-event connected identity lineage in seed 45 (ticks 13,639–20,850), with O–P₂ transformed through N–O–P₂ and C–O branches and regenerated as new O–P₂ identities. This establishes connected multistage chemistry and family/state regeneration in a finite inventory, not pseudo-metabolism. See the [exact-instance lineage trace](../results/2026-11-20-plan-004-lineage-trace.md).
 
-**Initial candidates:** H–O–P ⇌ H + O–P and N–O–P ⇌ N + O–P are candidate reversible intermediate transformations. They are not yet metabolism.
+**EXP-2026-005 paired resource-feed comparison:** Five matched seed pairs (42–46), each with 3,600 seconds per arm, compared no-feed controls against six deterministic feed pulses at 5, 15, 25, 35, 45, and 55 minutes. Each pulse added 72 free atoms (12 of each active element), for 432 total atoms per feed run. No compounds or energy were injected; ordinary chemistry remained unchanged. All ten observations and specialist aggregators were recovered from retained artifacts without rerunning simulations. The five-pair comparison did not support a consistent positive resource-feed effect. See the [pre-registered experiment](../results/2026-11-20-plan-004-resource-feed-paired-experiment.md) and [five-pair recovery report](../results/2026-11-20-plan-004-five-pair-recovery.md).
+
+**Interpretation:** The current evidence does not establish persistent resource-fed pathway turnover, pseudo-metabolism, or self-sustaining chemistry. Do not infer a positive effect from selected seeds or isolated pathway examples.
+
+**Next evidence required:** Analyze the recovered specialist reports for pathway-specific turnover and regeneration, then determine whether a more targeted, pre-registered comparison is justified. Any new experiment must preserve matched conditions and complete material/energy accounting.
 
 ## PLAN-005 — Cross-catalysis and cooperative chemical networks
 
@@ -93,7 +83,7 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 
 ## PLAN-006 — Spatially organized chemistry
 
-**Status:** Planned; can be designed from existing spatial/field capabilities, but requires controlled comparative execution and adequate local diagnostics.
+**Status:** Descriptive baseline screen completed; causal spatial comparison remains blocked by incomplete local opportunity denominators and lack of matched spatial conditions.
 
 **Question:** Do flow, resonance propagation, energy gradients, and transport create persistent spatial reaction zones or connected chemical pathways that would not be apparent from well-mixed aggregate statistics?
 
@@ -105,7 +95,9 @@ The existing EXP-2026-004 one-hour, five-seed dataset is the starting point. Ana
 - Evidence that observed organization is caused by environmental physics rather than a placement artifact or unequal material distribution.
 - Full energy and material accounting.
 
-**Infrastructure prerequisite:** the current lab exposes flow and source controls and supports deterministic tick-zero placement, but does not provide automated matched multi-condition runs. The existing environmental workflow is baseline-only. Build the comparison and spatial-diagnostic capability before interpreting a spatial intervention experiment.
+**Baseline evidence:** Of 4,305 committed events in EXP-2026-004, 2,811 had complete participant geometry. Those events show a possible spatial concentration with substantial seed-to-seed variation. The data lack complete local opportunity denominators and matched environmental conditions, so causal spatial organization and exposure-normalized rates cannot be inferred. See the [PLAN-006 initial screen](../results/2026-11-20-plan-004-006-initial-screens.md).
+
+**Infrastructure prerequisite:** matched spatial conditions and complete local opportunity denominators are required before causal interpretation.
 
 ## PLAN-007 — Environmental reaction-discovery eligibility
 
