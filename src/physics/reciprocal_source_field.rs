@@ -542,7 +542,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn candidate_a_replay_of_candidate_b_coupling_matches_field_evolution() {
         use super::super::reference_wave_solver::WaveField;
@@ -556,15 +555,8 @@ mod tests {
         let time_step = 0.005;
         let substeps_per_tick = (1.0 / time_step) as usize;
         let mut candidate_b = refined_model(cells, spacing, time_step);
-        let mut candidate_a = WaveField::new(
-            cells,
-            cells,
-            spacing,
-            1.0,
-            substeps_per_tick,
-            1.0,
-        )
-        .unwrap();
+        let mut candidate_a =
+            WaveField::new(cells, cells, spacing, 1.0, substeps_per_tick, 1.0).unwrap();
 
         let source_id = SourceId::new(9001).unwrap();
         let descriptor = SourceDescriptor::new(
@@ -594,15 +586,13 @@ mod tests {
             // coupling acceleration as a prescribed force. This deliberately
             // replays the same force history; it does not make the source
             // models physically equivalent or give Candidate A an oscillator.
-            let gap = candidate_b.current_source
-                - candidate_b.source_average(&candidate_b.current_field);
+            let gap =
+                candidate_b.current_source - candidate_b.source_average(&candidate_b.current_field);
             let forcing: Vec<f64> = candidate_b
                 .profile
                 .iter()
                 .map(|weight| {
-                    candidate_b.coupling_strength / candidate_b.field_normalization
-                        * gap
-                        * weight
+                    candidate_b.coupling_strength / candidate_b.field_normalization * gap * weight
                 })
                 .collect();
 
@@ -625,8 +615,7 @@ mod tests {
 
         let field_energy_difference = (candidate_a.energy() - candidate_b.field_energy()).abs();
         let replayed_work_difference = (signed_work - candidate_b.field_energy()).abs();
-        let candidate_b_energy_residual =
-            (candidate_b.total_energy() - initial_b_energy).abs();
+        let candidate_b_energy_residual = (candidate_b.total_energy() - initial_b_energy).abs();
 
         assert!(
             maximum_field_difference <= 1.0e-12,
@@ -649,5 +638,4 @@ mod tests {
         assert!(candidate_b.source_energy().is_finite());
         assert!(candidate_b.coupling_energy().is_finite());
     }
-
 }
