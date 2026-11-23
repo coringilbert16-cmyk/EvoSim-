@@ -2307,7 +2307,7 @@ mod tests {
 
         // Reconcile each source's complete signed-work history with its account.
         for (source, source_index) in [(&left_first, 0_usize), (&left_second, 1_usize)] {
-            let history_work: f64 = left_work.iter().map(|step| step[source]).sum();
+            let history_work: f64 = left_work.iter().map(|step| step[source_index]).sum();
             let account = source.account();
             let account_scale = history_work
                 .abs()
