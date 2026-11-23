@@ -1524,7 +1524,12 @@ mod tests {
                 reflection_ratio < 0.12,
                 "angle={angle}, wave_number={wave_number}, residual ratio={reflection_ratio}"
             );
-            assert!(absorbing.boundary_absorbed_energy() > 0.99 * absorbing.energy());
+            let remaining_energy = absorbing.energy();
+            let absorbed_energy = absorbing.boundary_absorbed_energy();
+            assert!(
+                absorbed_energy > 0.99 * (absorbed_energy + remaining_energy),
+                "angle={angle}, wave_number={wave_number}, absorbed={absorbed_energy}, remaining={remaining_energy}"
+            );
         }
     }
 
