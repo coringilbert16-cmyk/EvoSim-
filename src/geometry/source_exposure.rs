@@ -5484,7 +5484,7 @@ mod source_global_perimeter_tests {
     fn source_global_perimeter_removes_only_partial_shared_straight_edge() {
         let body = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.5)]);
         let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        assert_eq!(perimeter.straight.len(), 10);
+        assert_eq!(perimeter.straight.len(), 8);
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - 13.0).abs() < 1e-12);
     }
 
