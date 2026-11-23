@@ -5935,46 +5935,20 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 sweep,
                 mut cuts,
             } => {
-                cuts.sort_by(f64::total_cmp);
-                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
-                // Preserve the historical stable partition for genuine
-                // multi-point intersections, but not for tangencies or
-                // near-coincident circles whose tiny overlap is numerically
-                // ill-conditioned. Those cases are classified from their
-                // actual intersection cuts and then coalesced normally.
-                let near_coincident_circle =
-                    body.parts.iter().enumerate().any(|(other_index, other)| {
-                        other_index != part_index
-                            && matches!(
-                                &other.form,
-                                crate::resources::Form::Circle { radius: other_radius }
-                                    if (other.x - center.0).hypot(other.y - center.1)
-                                        <= 1e-6 * radius.max(*other_radius)
-                            )
-                    });
-                let preserve_intersection_partition = sweep >= std::f64::consts::TAU - 1e-10
-                    && cuts.len() > 3
-                    && !near_coincident_circle;
-                if preserve_intersection_partition
+                if sweep >= std::f64::consts::TAU - 1e-10
+                    && cuts.len() > 2
                     && !cuts.iter().any(|cut| (*cut - 0.5).abs() <= 1e-10)
                 {
+                    // Split a wrapped exposed arc at the antipode only when
+                    // intersections already partition this circle. An
+                    // isolated full circle remains one interval.
                     cuts.push(0.5);
-                    cuts.sort_by(f64::total_cmp);
-                    cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
                 }
-                let is_duplicate_circle = |other: &crate::organism_geometry::PlacedForm| {
-                    matches!(
-                        &other.form,
-                        crate::resources::Form::Circle { radius: other_radius }
-                            if (other.x - center.0).hypot(other.y - center.1) <= 1e-12
-                                && (*other_radius - radius).abs() <= 1e-10
-                    )
-                };
-                let mut exposed = Vec::with_capacity(cuts.len().saturating_sub(1));
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
                 for pair in cuts.windows(2) {
                     let (start_t, end_t) = (pair[0], pair[1]);
                     if end_t - start_t <= 1e-12 {
-                        exposed.push(false);
                         continue;
                     }
                     let midpoint_angle = start + sweep * (start_t + end_t) * 0.5;
@@ -5984,7 +5958,6 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     );
                     let hidden = body.parts.iter().enumerate().any(|(other_index, other)| {
                         other_index != part_index
-                            && !is_duplicate_circle(other)
                             && crate::organism_geometry::form_contains_point(
                                 &other.form,
                                 other.x,
@@ -5994,57 +5967,9 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                                 midpoint.1,
                             )
                     });
-                    exposed.push(!hidden);
-                }
-
-                // Merge across cuts where visibility is unchanged, except
-                // for the deliberate antipode partition used for stable arcs.
-                let mut intervals = Vec::new();
-                let mut index = 0;
-                while index < exposed.len() {
-                    if !exposed[index] {
-                        index += 1;
+                    if hidden {
                         continue;
                     }
-                    let run_start = index;
-                    while index + 1 < exposed.len()
-                        && exposed[index + 1]
-                        // The antipode is a deliberate stable partition, unlike
-                        // tangent cuts where visibility remains unchanged.
-                        && (cuts[index + 1] - 0.5).abs() > 1e-12
-                    {
-                        index += 1;
-                    }
-                    intervals.push((cuts[run_start], cuts[index + 1]));
-                    index += 1;
-                }
-
-                // The first and last partitions of a full circle are
-                // adjacent across the parameter seam as well.
-                if !preserve_intersection_partition
-                    && sweep >= std::f64::consts::TAU - 1e-10
-                    && intervals.len() >= 2
-                    && intervals
-                        .first()
-                        .is_some_and(|interval| interval.0 <= 1e-12)
-                    && intervals
-                        .last()
-                        .is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
-                    // Do not merge through the parameter seam when that
-                    // would erase the deliberate antipode partition.
-                    && intervals
-                        .first()
-                        .is_some_and(|interval| (interval.1 - 0.5).abs() > 1e-12)
-                    && intervals
-                        .last()
-                        .is_some_and(|interval| (interval.0 - 0.5).abs() > 1e-12)
-                {
-                    let first = intervals.remove(0);
-                    let last = intervals.pop().expect("two intervals were checked");
-                    intervals.push((last.0, first.1 + 1.0));
-                }
-
-                for (start_t, end_t) in intervals {
                     curved.push(ExposedCircularArcInterval {
                         body_index,
                         unit_index,
