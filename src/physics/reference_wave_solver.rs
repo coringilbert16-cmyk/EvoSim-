@@ -2316,11 +2316,10 @@ mod tests {
             let kx = std::f64::consts::PI * mode_x as f64;
             let ky = std::f64::consts::PI * mode_y as f64;
             let spatial_eigenvalue = 4.0 / spacing.powi(2)
-                * ((0.5 * kx * spacing).sin().powi(2)
-                    + (0.5 * ky * spacing).sin().powi(2));
+                * ((0.5 * kx * spacing).sin().powi(2) + (0.5 * ky * spacing).sin().powi(2));
             let omega_squared = spatial_eigenvalue;
-            let mut previous = -dt * initial_velocity * weight
-                + 0.5 * dt.powi(2) * amplitude * weight;
+            let mut previous =
+                -dt * initial_velocity * weight + 0.5 * dt.powi(2) * amplitude * weight;
             let mut current = 0.0_f64;
             let mut work = 0.0_f64;
             // The discrete sine norm is evaluated from the actual grid values,
@@ -2328,27 +2327,18 @@ mod tests {
             let mut norm_squared = 0.0_f64;
             for y in 1..cells - 1 {
                 for x in 1..cells - 1 {
-                    let px = (std::f64::consts::PI * mode_x as f64 * x as f64
-                        * spacing)
-                        .sin();
-                    let py = (std::f64::consts::PI * mode_y as f64 * y as f64
-                        * spacing)
-                        .sin();
+                    let px = (std::f64::consts::PI * mode_x as f64 * x as f64 * spacing).sin();
+                    let py = (std::f64::consts::PI * mode_y as f64 * y as f64 * spacing).sin();
                     norm_squared += (px * py).powi(2);
                 }
             }
             norm_squared *= spacing.powi(2);
 
             for _ in 0..steps {
-                let next = 2.0 * current - previous
-                    - dt.powi(2) * omega_squared * current
+                let next = 2.0 * current - previous - dt.powi(2) * omega_squared * current
                     + dt.powi(2) * amplitude * weight;
                 let midpoint_velocity = (next - previous) / (2.0 * dt);
-                work += dt
-                    * norm_squared
-                    * amplitude
-                    * weight
-                    * midpoint_velocity;
+                work += dt * norm_squared * amplitude * weight * midpoint_velocity;
                 previous = current;
                 current = next;
             }
@@ -2356,8 +2346,7 @@ mod tests {
         };
 
         let continuum_modal_work = |mode_x: usize, mode_y: usize, weight: f64| {
-            let omega = std::f64::consts::PI
-                * ((mode_x * mode_x + mode_y * mode_y) as f64).sqrt();
+            let omega = std::f64::consts::PI * ((mode_x * mode_x + mode_y * mode_y) as f64).sqrt();
             let displacement = initial_velocity / omega * (omega * duration).sin()
                 + amplitude / omega.powi(2) * (1.0 - (omega * duration).cos());
             amplitude * weight.powi(2) * 0.25 * displacement
@@ -2384,41 +2373,23 @@ mod tests {
                 profile[index] = primary[index] + secondary_weight * secondary[index];
                 forcing[index] = amplitude * profile[index];
                 field.previous[index] =
-                    -dt * initial_velocity * profile[index]
-                        + 0.5 * dt.powi(2) * forcing[index];
+                    -dt * initial_velocity * profile[index] + 0.5 * dt.powi(2) * forcing[index];
             }
 
             let mut source = test_source(100.0, source_id);
             let steps = (duration / dt).round() as usize;
             let mut measured_work = 0.0_f64;
             for _ in 0..steps {
-                measured_work +=
-                    field.advance_forced_substep(&mut source, &forcing).unwrap();
+                measured_work += field.advance_forced_substep(&mut source, &forcing).unwrap();
             }
 
-            let mut discrete_work = discrete_modal_work(
-                cells,
-                spacing,
-                dt,
-                steps,
-                mode_x,
-                mode_y,
-                1.0,
-            );
-            let mut continuum_work =
-                continuum_modal_work(mode_x, mode_y, 1.0);
+            let mut discrete_work =
+                discrete_modal_work(cells, spacing, dt, steps, mode_x, mode_y, 1.0);
+            let mut continuum_work = continuum_modal_work(mode_x, mode_y, 1.0);
             if secondary_weight != 0.0 {
-                discrete_work += discrete_modal_work(
-                    cells,
-                    spacing,
-                    dt,
-                    steps,
-                    2,
-                    1,
-                    secondary_weight,
-                );
-                continuum_work +=
-                    continuum_modal_work(2, 1, secondary_weight);
+                discrete_work +=
+                    discrete_modal_work(cells, spacing, dt, steps, 2, 1, secondary_weight);
+                continuum_work += continuum_modal_work(2, 1, secondary_weight);
             }
 
             assert!(
@@ -2433,7 +2404,12 @@ mod tests {
             );
             let continuum_error =
                 (discrete_work - continuum_work).abs() / continuum_work.abs().max(1.0e-15);
-            (measured_work, discrete_work, continuum_work, continuum_error)
+            (
+                measured_work,
+                discrete_work,
+                continuum_work,
+                continuum_error,
+            )
         };
 
         for (profile_index, (mode_x, mode_y, secondary_weight)) in
