@@ -175,7 +175,7 @@ Initial reference implementation in PR #410:
 - Isolated module at src/physics/wave_field.rs; no live simulation, chemistry, movement, materials, or production-ledger dependency.
 - Uniform Cartesian grid, five-point Laplacian, and second-order leapfrog stepping in logical ticks with explicit substeps per tick.
 - Project-native reference parameters only; propagation speed is L/tick, and no wall-clock or SI-time conversion is involved.
-- Compact-support initial pulse funded by a finite mathematical source budget. The signed source transfer is the exact change in the solver's conserved discrete leapfrog energy; failed funding leaves both source and field unchanged.
+- Compact-support pulse emissions can be activated at the current logical simulation time after propagation has begun, as well as in the initial condition. Each emission is funded by a finite mathematical source budget; signed source transfer is the exact change in the solver's discrete leapfrog energy, and failed funding leaves both source and field unchanged. A delayed-emission test verifies that propagation delay is measured from activation, not solver startup.
 - The discrete energy uses the leapfrog cross-time gradient invariant, not an instantaneous continuum-energy approximation.
 - Fixed-zero outer grid nodes are computational boundaries only. Current reference tests keep the stencil's numerical domain of dependence away from them and compare translated interior results across window sizes. No absorbing-boundary scheme is claimed yet.
 - Current tests cover finite travel delay, two-source constructive/destructive superposition, simultaneous discrete modes and phase, radial isotropy under refinement, second-order space/time convergence, deterministic tick/substep replay, stability rejection, source rollback/return, discrete empty-space energy conservation, and integrated regional boundary-flux closure.
@@ -184,7 +184,7 @@ Work:
 - Implement a standalone field state and deterministic update loop.
 - Start with the simplest stable spatial discretization that meets the physics specification; do not start with an adaptive solver.
 - Support multiple frequencies and phase-resolved evolution.
-- Support source injection with finite propagation delay.
+- Support source activation at scheduled logical times, with finite propagation delay measured from each emission event (not only from the initial condition).
 - Implement the infinite-plane reference domain without physical environmental edges. Any finite computational window must use a validated truncation treatment and preserve continuity and auditable energy flux; it must not act as a laboratory wall or camera boundary.
 - Keep field state persistent between simulation ticks.
 
