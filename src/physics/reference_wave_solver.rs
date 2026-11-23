@@ -521,9 +521,7 @@ impl WaveField {
         let mut total_forcing = vec![0.0; self.current.len()];
         let mut source_work_sums = vec![0.0; sources.len()];
         for (source_index, (_, forcing)) in sources.iter().enumerate() {
-            if forcing.len() != self.current.len()
-                || forcing.iter().any(|value| !value.is_finite())
-            {
+            if forcing.len() != self.current.len() || forcing.iter().any(|value| !value.is_finite()) {
                 return Err(WaveFieldError::InvalidProfile);
             }
             for y in 0..self.height {
@@ -583,13 +581,9 @@ impl WaveField {
         }
 
         let scale = self.energy_normalization * dt * self.spacing.powi(2);
-        let source_works: Vec<f64> = source_work_sums
-            .iter()
-            .map(|sum| scale * sum)
-            .collect();
+        let source_works: Vec<f64> = source_work_sums.iter().map(|sum| scale * sum).collect();
         let total_source_work: f64 = source_works.iter().sum();
-        let absorbed_this_step =
-            self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
+        let absorbed_this_step = self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
         let next_energy = self.discrete_energy(&self.current, &next);
         let measured_change = next_energy - old_energy;
         let expected_change = total_source_work - absorbed_this_step;
@@ -907,18 +901,17 @@ mod tests {
         second_force[center] = 0.6;
         let before = field.energy();
 
-        let mut sources = [(&mut first, first_force.as_slice()), (&mut second, second_force.as_slice())];
+        let mut sources = [
+            (&mut first, first_force.as_slice()),
+            (&mut second, second_force.as_slice()),
+        ];
         let works = field.advance_forced_substep_multi(&mut sources).unwrap();
 
         assert_eq!(works.len(), 2);
         assert!(works.iter().all(|work| *work > 0.0));
         assert!((works[0] + works[1] - (field.energy() - before)).abs() < 1.0e-10);
-        assert!(
-            (first.account().cumulative_field_transfer() - works[0]).abs() < 1.0e-12
-        );
-        assert!(
-            (second.account().cumulative_field_transfer() - works[1]).abs() < 1.0e-12
-        );
+        assert!((first.account().cumulative_field_transfer() - works[0]).abs() < 1.0e-12);
+        assert!((second.account().cumulative_field_transfer() - works[1]).abs() < 1.0e-12);
     }
 
     #[test]
@@ -973,7 +966,8 @@ mod tests {
 
     #[test]
     fn prescribed_forcing_work_converges_to_the_continuum_integral() {
-        let integral_x = 0.5 + 0.1 + 0.04 * (1.0 / 6.0 - 1.0 / (4.0 * std::f64::consts::PI.powi(2)));
+        let integral_x =
+            0.5 + 0.1 + 0.04 * (1.0 / 6.0 - 1.0 / (4.0 * std::f64::consts::PI.powi(2)));
         let continuum_profile_squared_integral = 0.5 * integral_x;
         let amplitude = 0.4;
         let initial_velocity = 0.7;
