@@ -84,6 +84,31 @@ q_{\odot}(\mathbf{x},t)
 
 For a moving orbiting source, the implementation must also reconcile emission-time intervals with arrival-time intervals. The retarded-time map is \(t=\tau+d(\tau,\mathbf{x})/c\); its time Jacobian must be considered when converting emitted power per source tick into received power per plane tick. The half-power statement is an integrated energy/geometric constraint, not permission to ignore retarded-time bookkeeping. The exact convention for isotropic emission in the project frame and the corresponding moving-source flux factor must be made explicit and tested.
 
+**Static-source normalization check.** For constant height \(h\) and constant emitted power \(P\), write planar radius as \(r\) and \(d=\sqrt{r^2+h^2}\). Then
+
+\[
+\int_{\mathbb R^2}q_{\odot}\,dA
+=\int_0^{2\pi}\int_0^\infty
+\frac{P h}{4\pi(r^2+h^2)^{3/2}}r\,dr\,d\phi
+=\frac P2.
+\]
+
+This is an analytic reference test for a stationary source. It verifies the incidence projection and infinite-plane normalization independently of the wave solver. It does not validate the orbiting/retarded-time implementation.
+
+For the moving source, each emitted ray can be parameterized by emission time \(\tau\) and downward solid angle \(d\Omega\). Its energy is \(dE=P(\tau)d\tau d\Omega/(4\pi)\). The implementation must map this emitted measure to the plane's area-and-arrival-time measure without loss or duplication. In particular, the source's motion changes the relation between an emission-time interval and the arrival-time interval at the plane. A simple stationary-source expression evaluated at retarded position is not, by itself, proof that the time-resolved plane integral equals emitted power. The moving-source Jacobian and the selected project-frame emission convention require an explicit derivation before code is written.
+
+**Minimal accounting shape for the unresolved radiation-to-field interface.** Whatever constitutive mechanism is selected, it must expose an auditable local transfer between (a) incident radiation arriving at the plane and (b) signed work entering the planar wave field. If those rates are not identical, the difference must be represented by an explicit, non-duplicated physical state or destination—for example, a defined coupling degree of freedom with stored energy, or an explicitly modeled reflected/transmitted/thermal channel. A bookkeeping-only buffer with no physical interpretation is not acceptable. At every time interval, the balance must have the form
+
+\[
+E_{\mathrm{incident}}
+=\Delta E_{\mathrm{field}}
++\Delta E_{\mathrm{coupling}}
++E_{\mathrm{reflected/transmitted}}
++E_{\mathrm{thermal}},
+\]
+
+with each term grounded in the selected mechanism and no residual hidden as a tuning efficiency. This is an accounting template, not yet the physical constitutive law.
+
 **Unresolved coupling question:** \(q_{\odot}\) is incident radiative power per physical plane area. It is not the wave-equation forcing \(f\), nor is it automatically equal to \(K u_t f\). The physical mechanism that converts intercepted external radiation into the planar scalar field has not yet been specified. Candidate A supplies an accounting-compatible forcing interface but no incident-power law. Candidate B is a closed finite oscillator and is not a model of an external radiative sun.
 
 The derivation must define the radiation-to-field coupling mechanism, its state variables/port behavior, energy ownership for both the intercepted and non-intercepted fractions, retarded-time integration, and a transaction that reconciles emitted energy, energy arriving at the plane, field energy, and any energy still in transit. It must preserve the 50% integrated interception result without double counting.
