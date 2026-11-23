@@ -896,6 +896,81 @@ mod tests {
     }
 
     #[test]
+    fn multiple_sources_settle_their_signed_work_as_one_field_step() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut first = test_source(10.0, 109);
+        let mut second = test_source(10.0, 110);
+        let mut first_force = vec![0.0; field.width() * field.height()];
+        let mut second_force = vec![0.0; field.width() * field.height()];
+        let center = field.index(20, 20);
+        first_force[center] = 0.4;
+        second_force[center] = 0.6;
+        let before = field.energy();
+
+        let mut sources = [(&mut first, first_force.as_slice()), (&mut second, second_force.as_slice())];
+        let works = field.advance_forced_substep_multi(&mut sources).unwrap();
+
+        assert_eq!(works.len(), 2);
+        assert!(works.iter().all(|work| *work > 0.0));
+        assert!((works[0] + works[1] - (field.energy() - before)).abs() < 1.0e-10);
+        assert!(
+            (first.account().cumulative_field_transfer() - works[0]).abs() < 1.0e-12
+        );
+        assert!(
+            (second.account().cumulative_field_transfer() - works[1]).abs() < 1.0e-12
+        );
+    }
+
+    #[test]
+    fn multiple_source_overdraw_rolls_back_every_account_and_field_state() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut funded = test_source(10.0, 111);
+        let mut unfunded = test_source(0.0, 112);
+        let mut first_force = vec![0.0; field.width() * field.height()];
+        let mut second_force = vec![0.0; field.width() * field.height()];
+        let center = field.index(20, 20);
+        first_force[center] = 0.4;
+        second_force[center] = 0.6;
+        let previous = field.previous.clone();
+        let current = field.current.clone();
+        let energy = field.energy();
+
+        let mut sources = [
+            (&mut funded, first_force.as_slice()),
+            (&mut unfunded, second_force.as_slice()),
+        ];
+        assert_eq!(
+            field.advance_forced_substep_multi(&mut sources),
+            Err(WaveFieldError::InsufficientSourceEnergy)
+        );
+
+        assert_eq!(field.previous, previous);
+        assert_eq!(field.current, current);
+        assert_eq!(field.energy(), energy);
+        assert_eq!(funded.account().remaining_energy(), 10.0);
+        assert_eq!(funded.account().cumulative_field_transfer(), 0.0);
+        assert_eq!(unfunded.account().remaining_energy(), 0.0);
+        assert_eq!(unfunded.account().cumulative_field_transfer(), 0.0);
+        assert_eq!(field.substeps_elapsed, 0);
+    }
+
+    #[test]
+    fn multiple_source_step_rejects_duplicate_source_identity() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut source = test_source(10.0, 113);
+        let forcing = vec![0.0; field.width() * field.height()];
+        let mut sources = [
+            (&mut source, forcing.as_slice()),
+            (&mut source, forcing.as_slice()),
+        ];
+        assert_eq!(
+            field.advance_forced_substep_multi(&mut sources),
+            Err(WaveFieldError::InvalidProfile)
+        );
+        assert_eq!(field.substeps_elapsed, 0);
+    }
+
+    #[test]
     fn prescribed_forcing_has_zero_work_at_a_centered_velocity_node() {
         let mut field = solver(41, 41, 1.0, 2);
         let mut source = test_source(0.0, 106);
