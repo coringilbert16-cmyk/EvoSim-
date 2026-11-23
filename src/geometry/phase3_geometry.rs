@@ -407,8 +407,7 @@ mod tests {
         let length: f64 = perimeter
             .iter()
             .map(|interval| {
-                (interval.end.0 - interval.start.0)
-                    .hypot(interval.end.1 - interval.start.1)
+                (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1)
             })
             .sum();
         assert!((length - 8.0).abs() < 1e-3);
