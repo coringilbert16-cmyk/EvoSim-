@@ -728,15 +728,27 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
         if !polygon_is_convex(&vertices) {
             return None;
         }
-        let area2: f64 = vertices
-            .iter()
-            .enumerate()
-            .map(|(index, &(x1, y1))| {
-                let (x2, y2) = vertices[(index + 1) % vertices.len()];
-                x1 * y2 - x2 * y1
+        // Translate to the first vertex before accumulating the shoelace
+        // sum. This avoids catastrophic cancellation for distant geometry.
+        let origin = vertices[0];
+        let area2: f64 = (1..vertices.len() - 1)
+            .map(|index| {
+                let first = (vertices[index].0 - origin.0, vertices[index].1 - origin.1);
+                let second = (
+                    vertices[index + 1].0 - origin.0,
+                    vertices[index + 1].1 - origin.1,
+                );
+                first.0 * second.1 - first.1 * second.0
             })
             .sum();
-        if !area2.is_finite() || area2.abs() <= 1e-12 {
+        let polygon_scale = vertices
+            .iter()
+            .map(|point| (point.0 - origin.0).hypot(point.1 - origin.1))
+            .fold(0.0_f64, f64::max);
+        let polygon_linear_tolerance =
+            crate::phase3_numeric::linear_tolerance(&vertices, polygon_scale);
+        let area_tolerance = polygon_linear_tolerance * polygon_scale;
+        if !area2.is_finite() || area2.abs() <= area_tolerance {
             return None;
         }
         let winding = area2.signum();
@@ -747,12 +759,21 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
             let ex = b.0 - a.0;
             let ey = b.1 - a.1;
             let edge_length = ex.hypot(ey);
-            if !edge_length.is_finite() || edge_length <= 1e-12 {
+            if !edge_length.is_finite() {
+                return None;
+            }
+            let edge_linear_tolerance =
+                crate::phase3_numeric::linear_tolerance(&[source, a, b], edge_length);
+            if edge_length <= edge_linear_tolerance {
                 continue;
             }
+            let edge_parameter_tolerance =
+                crate::phase3_numeric::parameter_tolerance(edge_linear_tolerance, edge_length);
             let normal = (winding * ey / edge_length, -winding * ex / edge_length);
-            let midpoint = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
-            if normal.0 * (source.0 - midpoint.0) + normal.1 * (source.1 - midpoint.1) <= 1e-10 {
+            let midpoint = (a.0 + ex * 0.5, a.1 + ey * 0.5);
+            if normal.0 * (source.0 - midpoint.0) + normal.1 * (source.1 - midpoint.1)
+                <= edge_linear_tolerance
+            {
                 continue;
             }
 
@@ -773,14 +794,32 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
                     let dx = vx - source.0;
                     let dy = vy - source.1;
                     let denominator = ex * dy - ey * dx;
-                    if denominator.abs() <= 1e-12 {
+                    let ray_length = dx.hypot(dy);
+                    let intersection_tolerance = crate::phase3_numeric::linear_tolerance(
+                        &[source, a, b, (vx, vy)],
+                        edge_length.max(ray_length),
+                    );
+                    let denominator_tolerance = crate::phase3_numeric::cross_tolerance(
+                        (ex, ey),
+                        (dx, dy),
+                        intersection_tolerance,
+                    );
+                    if denominator.abs() <= denominator_tolerance {
                         continue;
                     }
                     let ax = a.0 - source.0;
                     let ay = a.1 - source.1;
                     let t = -(ax * dy - ay * dx) / denominator;
                     let u = -(ax * ey - ay * ex) / denominator;
-                    if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
+                    let t_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        edge_length,
+                    );
+                    let u_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        ray_length,
+                    );
+                    if t > t_tolerance && t < 1.0 - t_tolerance && u > 1.0 + u_tolerance {
                         cuts.push(t);
                     }
                 }
@@ -798,13 +837,32 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
                     let qx = c.0 - a.0;
                     let qy = c.1 - a.1;
                     let denominator = ex * sy - ey * sx;
-                    if denominator.abs() <= 1e-12 {
-                        if (qx * ey - qy * ex).abs() <= 1e-9 {
+                    let blocker_length = sx.hypot(sy);
+                    let intersection_tolerance = crate::phase3_numeric::linear_tolerance(
+                        &[a, b, c, d],
+                        edge_length.max(blocker_length),
+                    );
+                    let denominator_tolerance = crate::phase3_numeric::cross_tolerance(
+                        (ex, ey),
+                        (sx, sy),
+                        intersection_tolerance,
+                    );
+                    let t_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        edge_length,
+                    );
+                    if denominator.abs() <= denominator_tolerance {
+                        let collinear_tolerance = crate::phase3_numeric::cross_tolerance(
+                            (qx, qy),
+                            (ex, ey),
+                            intersection_tolerance,
+                        );
+                        if (qx * ey - qy * ex).abs() <= collinear_tolerance {
                             let length_squared = ex * ex + ey * ey;
                             for point in [c, d] {
                                 let t =
                                     ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
-                                if t > 1e-10 && t < 1.0 - 1e-10 {
+                                if t > t_tolerance && t < 1.0 - t_tolerance {
                                     cuts.push(t);
                                 }
                             }
@@ -813,7 +871,14 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
                     }
                     let t = (qx * sy - qy * sx) / denominator;
                     let u = (qx * ey - qy * ex) / denominator;
-                    if t > 1e-10 && t < 1.0 - 1e-10 && (-1e-10..=1.0 + 1e-10).contains(&u) {
+                    let u_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        blocker_length,
+                    );
+                    if t > t_tolerance
+                        && t < 1.0 - t_tolerance
+                        && (-u_tolerance..=1.0 + u_tolerance).contains(&u)
+                    {
                         cuts.push(t);
                     }
                 }
@@ -843,7 +908,9 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
                             }
                             let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
                                 / (edge_length * edge_length);
-                            if t > 1e-10 && t < 1.0 - 1e-10 {
+                            if t > edge_parameter_tolerance
+                                && t < 1.0 - edge_parameter_tolerance
+                            {
                                 cuts.push(t);
                             }
                         }
@@ -852,10 +919,10 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
             }
 
             cuts.sort_by(f64::total_cmp);
-            cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+            cuts.dedup_by(|a, b| (*a - *b).abs() <= edge_parameter_tolerance);
             for pair in cuts.windows(2) {
                 let (t0, t1) = (pair[0], pair[1]);
-                if t1 - t0 <= 1e-10 {
+                if t1 - t0 <= edge_parameter_tolerance {
                     continue;
                 }
                 let t = (t0 + t1) * 0.5;
