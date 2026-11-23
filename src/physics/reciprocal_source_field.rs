@@ -292,6 +292,53 @@ mod tests {
         profile
     }
 
+    fn normalized_gaussian_profile(width: usize, height: usize, spacing: f64) -> Vec<f64> {
+        let center = (width as f64 - 1.0) * spacing * 0.5;
+        let sigma = 0.25;
+        let mut profile = Vec::with_capacity(width * height);
+        for y in 0..height {
+            for x in 0..width {
+                let px = x as f64 * spacing;
+                let py = y as f64 * spacing;
+                let radius_squared = (px - center).powi(2) + (py - center).powi(2);
+                profile.push((-radius_squared / (2.0 * sigma.powi(2))).exp());
+            }
+        }
+        for y in 0..height {
+            for x in 0..width {
+                if x == 0 || y == 0 || x + 1 == width || y + 1 == height {
+                    profile[y * width + x] = 0.0;
+                }
+            }
+        }
+        let integral = profile.iter().sum::<f64>() * spacing.powi(2);
+        for value in &mut profile {
+            *value /= integral;
+        }
+        profile
+    }
+
+    fn refined_model(
+        cells: usize,
+        spacing: f64,
+        time_step: f64,
+    ) -> ReciprocalSourceField {
+        ReciprocalSourceField::new(
+            cells,
+            cells,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.2,
+            normalized_gaussian_profile(cells, cells, spacing),
+            1.0,
+        )
+        .unwrap()
+    }
+
     fn model(frequency: f64, coupling: f64, time_step: f64) -> ReciprocalSourceField {
         let width = 15;
         let height = 15;
@@ -404,6 +451,58 @@ mod tests {
         }
         assert!(system.field_energy() > initial_field_energy);
         assert!((system.source_energy() - initial_source_energy).abs() > 1.0e-5);
+    }
+
+    #[test]
+    fn reciprocal_model_spatial_refinement_converges_at_fixed_time_step() {
+        let duration = 1.0_f64;
+        let configurations = [(17_usize, 0.2_f64), (33, 0.1), (65, 0.05)];
+        let mut source_displacements = Vec::new();
+
+        for (cells, spacing) in configurations {
+            let time_step = 0.001;
+            let mut system = refined_model(cells, spacing, time_step);
+            let steps = (duration / time_step).round() as usize;
+            for _ in 0..steps {
+                system.step().unwrap();
+            }
+            source_displacements.push(system.source_displacement());
+        }
+
+        let reference = source_displacements[2];
+        let coarse_error = (source_displacements[0] - reference).abs();
+        let medium_error = (source_displacements[1] - reference).abs();
+        assert!(
+            medium_error < coarse_error,
+            "spatial refinement did not reduce source-displacement error: coarse={coarse_error}, medium={medium_error}"
+        );
+    }
+
+    #[test]
+    fn reciprocal_model_temporal_refinement_converges_at_fixed_grid() {
+        let duration = 1.0_f64;
+        let cells = 33;
+        let spacing = 0.1;
+        let time_steps = [0.004_f64, 0.002, 0.001, 0.0005];
+        let mut source_displacements = Vec::new();
+
+        for time_step in time_steps {
+            let mut system = refined_model(cells, spacing, time_step);
+            let steps = (duration / time_step).round() as usize;
+            for _ in 0..steps {
+                system.step().unwrap();
+            }
+            source_displacements.push(system.source_displacement());
+        }
+
+        let reference = source_displacements[3];
+        let coarse_error = (source_displacements[0] - reference).abs();
+        let medium_error = (source_displacements[1] - reference).abs();
+        let fine_error = (source_displacements[2] - reference).abs();
+        assert!(
+            medium_error < coarse_error && fine_error < medium_error,
+            "temporal refinement did not monotonically reduce source-displacement error: coarse={coarse_error}, medium={medium_error}, fine={fine_error}"
+        );
     }
 
     #[test]
