@@ -177,8 +177,24 @@ Initial reference implementation in PR #410:
 - Project-native reference parameters only; propagation speed is L/tick, and no wall-clock or SI-time conversion is involved.
 - Compact-support pulse emissions can be activated at the current logical simulation time after propagation has begun, as well as in the initial condition. Each emission is funded by a finite mathematical source budget; signed source transfer is the exact change in the solver's discrete leapfrog energy, and failed funding leaves both source and field unchanged. A delayed-emission test verifies that propagation delay is measured from activation, not solver startup.
 - The discrete energy uses the leapfrog cross-time gradient invariant, not an instantaneous continuum-energy approximation.
-- Fixed-zero outer grid nodes are computational boundaries only. Current reference tests keep the stencil's numerical domain of dependence away from them and compare translated interior results across window sizes. No absorbing-boundary scheme is claimed yet.
-- Current tests cover finite travel delay, two-source constructive/destructive superposition, simultaneous discrete modes and phase, radial isotropy under refinement, second-order space/time convergence, deterministic tick/substep replay, stability rejection, source rollback/return, discrete empty-space energy conservation, and integrated regional boundary-flux closure.
+- Fixed-zero outer grid nodes remain computational boundaries, not physical edges. An optional graded sponge layer now damps outgoing waves before they reach those nodes. It is an approximate absorber, not a perfectly matched layer; its residual reflection is measured rather than assumed to be zero.
+- The damped update uses centered velocity damping:
+  \[
+  (1+\sigma_i\Delta t/2)u_i^{n+1}
+  =2u_i^n-(1-\sigma_i\Delta t/2)u_i^{n-1}
+  +c^2\Delta t^2\nabla_h^2u_i^n.
+  \]
+  The corresponding discrete energy loss is
+  \[
+  \Delta E_{\mathrm{out}}
+  =\mathcal N\Delta x^2\sum_i
+  \sigma_i\Delta t
+  \left(\frac{u_i^{n+1}-u_i^{n-1}}{2\Delta t}\right)^2
+  \ge 0.
+  \]
+  This amount is accumulated as computational-boundary outflow. It is not credited as physical heat, material energy, or an additional field reservoir. Field energy plus recorded boundary outflow closes to the pre-step energy within the declared floating-point tolerance.
+- The initial reference profile is a quadratic ramp across the buffer, with additive contributions at corners. The current normalized test profile uses a 72-cell layer and maximum damping 0.2 per project-native time unit. These are numerical test settings, not physical calibrations or production defaults.
+- Current tests cover finite travel delay, two-source constructive/destructive superposition, simultaneous discrete modes and phase, radial isotropy under refinement, second-order space/time convergence, deterministic tick/substep replay, stability rejection, source rollback/return, discrete empty-space energy conservation, integrated regional boundary-flux closure, absorber energy closure, return-amplitude suppression across three carrier wavenumbers and two incidence angles, a refined-grid absorber case, and comparison against a larger window.
 
 Work:
 - Implement a standalone field state and deterministic update loop.
@@ -202,7 +218,8 @@ Required tests:
 Exit criteria:
 - The solver demonstrably propagates waves; it is not diffusion or instantaneous redistribution.
 - Numerical stability and convergence are established.
-- Empty-space energy accounting closes within a documented tolerance.
+- Empty-space energy accounting closes within a documented tolerance, including the explicitly recorded energy removed by computational truncation.
+- Absorbing-boundary residual reflection is quantified across the supported frequency, incidence-angle, and grid-resolution envelope; interior evolution converges against a larger-domain reference.
 - The solver can run independently of molecule count and molecular collision/reaction discovery.
 
 ### Phase 3 — Sources, propagation energy, and material coupling
