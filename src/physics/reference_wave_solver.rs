@@ -521,7 +521,8 @@ impl WaveField {
         let mut total_forcing = vec![0.0; self.current.len()];
         let mut source_work_sums = vec![0.0; sources.len()];
         for (source_index, (_, forcing)) in sources.iter().enumerate() {
-            if forcing.len() != self.current.len() || forcing.iter().any(|value| !value.is_finite()) {
+            if forcing.len() != self.current.len() || forcing.iter().any(|value| !value.is_finite())
+            {
                 return Err(WaveFieldError::InvalidProfile);
             }
             for y in 0..self.height {
