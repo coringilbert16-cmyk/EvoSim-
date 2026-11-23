@@ -1593,9 +1593,7 @@ mod visibility_tests {
             crate::phase3_numeric::linear_tolerance(&comparison_points, characteristic_length);
 
         for (index, (first, second)) in first.iter().zip(&second).enumerate() {
-            for (first_point, second_point) in
-                [(first.0, second.0), (first.1, second.1)]
-            {
+            for (first_point, second_point) in [(first.0, second.0), (first.1, second.1)] {
                 assert!(
                     (first_point.0 - second_point.0).abs() <= tolerance
                         && (first_point.1 - second_point.1).abs() <= tolerance,
