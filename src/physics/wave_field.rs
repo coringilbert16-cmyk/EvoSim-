@@ -1419,10 +1419,8 @@ mod tests {
         center_offset: f64,
         envelope_radius: f64,
     ) -> (usize, usize, f64) {
-        let center_x = (field.width / 2) as f64 * field.spacing
-            - center_offset * angle.cos();
-        let center_y = (field.height / 2) as f64 * field.spacing
-            - center_offset * angle.sin();
+        let center_x = (field.width / 2) as f64 * field.spacing - center_offset * angle.cos();
+        let center_y = (field.height / 2) as f64 * field.spacing - center_offset * angle.sin();
         let spatial_eigenvalue = 4.0 / field.spacing.powi(2)
             * ((0.5 * wave_number * field.spacing * angle.cos())
                 .sin()
@@ -1543,8 +1541,7 @@ mod tests {
         smaller.configure_absorbing_boundary(72, 0.2).unwrap();
         let (small_x, small_y, initial_norm) =
             outgoing_wave_packet(&mut smaller, 0.0, 0.18, 15.0, 9.0);
-        let (large_x, large_y, _) =
-            outgoing_wave_packet(&mut larger, 0.0, 0.18, 15.0, 9.0);
+        let (large_x, large_y, _) = outgoing_wave_packet(&mut larger, 0.0, 0.18, 15.0, 9.0);
 
         smaller.advance_ticks(260).unwrap();
         larger.advance_ticks(260).unwrap();
@@ -1582,8 +1579,7 @@ mod tests {
         absorbing.configure_absorbing_boundary(88, 0.2).unwrap();
 
         let angle = std::f64::consts::FRAC_PI_4;
-        let (center_x, center_y, _) =
-            outgoing_wave_packet(&mut absorbing, angle, 0.18, 7.5, 4.5);
+        let (center_x, center_y, _) = outgoing_wave_packet(&mut absorbing, angle, 0.18, 7.5, 4.5);
         let (reflective_x, reflective_y, _) =
             outgoing_wave_packet(&mut reflective, angle, 0.18, 7.5, 4.5);
 
@@ -1591,8 +1587,7 @@ mod tests {
         reflective.advance_ticks(180).unwrap();
 
         let absorbed_return = local_amplitude_norm(&absorbing, center_x, center_y, 24);
-        let reflected_return =
-            local_amplitude_norm(&reflective, reflective_x, reflective_y, 24);
+        let reflected_return = local_amplitude_norm(&reflective, reflective_x, reflective_y, 24);
         let reflection_ratio = absorbed_return / reflected_return.max(1.0e-15);
         assert!(
             reflection_ratio < 0.03,
