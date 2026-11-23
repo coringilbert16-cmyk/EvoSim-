@@ -217,6 +217,32 @@ The next separate decision must specify a physical interface between incident ra
 No live sun injection, field forcing law, production ledger migration, or chemistry/material coupling is authorized by this document.
 
 
+
+### Global injectivity for a bounded sub-\(c\) source
+
+The positive local Jacobian can be strengthened to a global uniqueness result for the approved bounded periodic orbit. Fix any plane event \((\mathbf X,T)\), and define the retarded-time residual
+
+\[
+g(\tau)=\tau+\frac{\left|(\mathbf X,0)-\mathbf s(\tau)\right|}{c}-T.
+\]
+
+Where the source does not coincide with the plane event,
+
+\[
+g'(\tau)=1-\frac{\mathbf n(\tau)\cdot\dot{\mathbf s}(\tau)}{c}
+\ge 1-\frac{|\dot{\mathbf s}(\tau)|}{c}>0.
+\]
+
+Thus \(g\) is strictly increasing. For a bounded periodic trajectory, \(g(\tau)\to-\infty\) as \(\tau\to-\infty\), while \(g(T)>0\) because the source is above the plane. There is exactly one retarded emission time for every plane event. The downward ray direction is then fixed by the source-to-event displacement, so the full arrival map has exactly one preimage.
+
+Consequences under these assumptions:
+- no multiple-arrival branches or geometric caustics occur;
+- inverse arrival evaluation can use a bracketed monotone scalar root solve;
+- the absolute Jacobian formula is positive and the density has one contributing ray;
+- any observed multiple preimages or zero/negative Jacobian in the reference implementation indicates a defect, a violated sub-\(c\)/bounded-source assumption, or a different physical emission convention.
+
+This is a mathematical property of the selected project-frame bounded sub-\(c\) source model, not a general statement about arbitrary moving emitters.
+
 ## 9. Dimensionless orbit-family calibration and reference checks
 
 The user approved **\(R=1\)** as a conventional project-native length normalization. This is a coordinate choice only; it does not claim that the physical orbit radius is one meter, one world cell, or any measured distance. With the approved period \(T_o=24000\), define
