@@ -5409,9 +5409,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     exposed.push(!hidden);
                 }
 
-                // Join adjacent exposed partitions. Exact intersection,
-                // tangent, and antipode cuts classify intervals; they do not
-                // become output boundaries when visibility is unchanged.
+                // Merge across cuts where visibility is unchanged, except
+                // for the deliberate antipode partition used for stable arcs.
                 let mut intervals = Vec::new();
                 let mut index = 0;
                 while index < exposed.len() {
