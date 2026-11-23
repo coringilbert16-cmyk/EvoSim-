@@ -578,6 +578,10 @@ impl WaveField {
             return Err(WaveFieldError::InvalidState);
         }
 
+        let next_substeps_elapsed = self
+            .substeps_elapsed
+            .checked_add(1)
+            .ok_or(WaveFieldError::CounterOverflow)?;
         let settlement = source
             .account()
             .prepare_field_transfer(source_work)
@@ -594,10 +598,7 @@ impl WaveField {
         self.previous.clone_from(&self.current);
         self.current = next;
         self.boundary_absorbed_energy = next_absorbed_energy;
-        self.substeps_elapsed = self
-            .substeps_elapsed
-            .checked_add(1)
-            .ok_or(WaveFieldError::CounterOverflow)?;
+        self.substeps_elapsed = next_substeps_elapsed;
         Ok(source_work)
     }
 
@@ -832,10 +833,10 @@ mod tests {
         let mut source = test_source(0.0, 102);
         let mut forcing = vec![0.0; field.width() * field.height()];
         let center = field.index(20, 20);
-        field.current[center] = 1.0;
-        field.previous[center] = 0.5;
-        // This force opposes the existing centered velocity at the center.
-        forcing[center] = -1.0;
+        field.current[center] = 0.0;
+        field.previous[center] = 1.0;
+        // The existing field is moving opposite the positive applied force.
+        forcing[center] = 1.0;
 
         let before = field.energy();
         let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
