@@ -421,6 +421,24 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
+    visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, true)
+}
+
+#[cfg(test)]
+fn visible_polygonal_intervals_for_targets_unpruned(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, false)
+}
+
+fn visible_polygonal_intervals_for_targets_with_pruning(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    use_candidate_pruning: bool,
+) -> Option<Vec<ExposedBoundaryInterval>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
@@ -738,13 +756,17 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 continue;
             }
 
-            let candidate_body_indices = candidate_body_indices_for_bounds(
-                source,
-                (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
-                reference_angle,
-                &body_intervals,
-                &body_min_distances,
-            )?;
+            let candidate_body_indices = if use_candidate_pruning {
+                candidate_body_indices_for_bounds(
+                    source,
+                    (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
+                    reference_angle,
+                    &body_intervals,
+                    &body_min_distances,
+                )?
+            } else {
+                (0..bodies.len()).collect()
+            };
             let mut cuts = vec![0.0_f64, 1.0_f64];
             for &candidate_body in &candidate_body_indices {
                 for &(vx, vy) in &critical_points_by_body[candidate_body] {
@@ -919,6 +941,99 @@ mod visibility_tests {
             !candidates.contains(&2),
             "a farther body cannot block a nearer target, even when angular bounds overlap"
         );
+    }
+
+    #[test]
+    fn candidate_pruning_preserves_visible_coverage_against_unpruned_reference() {
+        let source = (-10.0, 0.0);
+        let arrangements = [
+            vec![
+                rectangle_body(0, 10.0, 0.0, 2.0, 4.0),
+                rectangle_body(0, 2.0, 0.0, 1.0, 1.0),
+                rectangle_body(0, 5.0, 1.0, 1.0, 1.0),
+                rectangle_body(0, 30.0, 0.0, 2.0, 2.0),
+            ],
+            vec![
+                rectangle_body(0, 10.0, 0.0, 2.0, 4.0),
+                rectangle_body(0, 3.0, -0.8, 0.8, 0.8),
+                rectangle_body(0, 6.0, 0.8, 0.8, 0.8),
+                rectangle_body(0, 40.0, 0.0, 2.0, 2.0),
+            ],
+            vec![
+                rectangle_body(0, 10.0, 0.0, 2.0, 4.0),
+                rectangle_body(0, 4.0, 0.0, 0.5, 5.0),
+                rectangle_body(0, 7.0, -1.0, 0.5, 0.5),
+                rectangle_body(0, 60.0, 0.0, 2.0, 2.0),
+            ],
+        ];
+
+        for (arrangement_index, bodies) in arrangements.iter().enumerate() {
+            let pruned =
+                visible_polygonal_intervals_for_targets(source, bodies, &[0]).unwrap();
+            let unpruned =
+                visible_polygonal_intervals_for_targets_unpruned(source, bodies, &[0]).unwrap();
+
+            // Every open interval visible in the exhaustive reference must be
+            // covered by the pruned result, even if pruning changes partition cuts.
+            for reference in &unpruned {
+                let midpoint = (
+                    (reference.start.0 + reference.end.0) * 0.5,
+                    (reference.start.1 + reference.end.1) * 0.5,
+                );
+                assert!(
+                    pruned.iter().any(|candidate| {
+                        candidate.body_index == reference.body_index
+                            && candidate.unit_index == reference.unit_index
+                            && point_on_segment_with_tolerance(
+                                midpoint,
+                                candidate.start,
+                                candidate.end,
+                                1e-8,
+                            )
+                    }),
+                    "pruning lost reference-visible coverage in arrangement {arrangement_index}: {reference:?}"
+                );
+            }
+
+            // Every pruned interval must also be visible when all bodies are
+            // considered by the exact blocker predicate.
+            let all_candidates: Vec<_> = (0..bodies.len()).collect();
+            for interval in &pruned {
+                let midpoint = (
+                    (interval.start.0 + interval.end.0) * 0.5,
+                    (interval.start.1 + interval.end.1) * 0.5,
+                );
+                assert!(
+                    !crate::organism_geometry::source_path_blocked_for_candidates(
+                        source,
+                        midpoint,
+                        bodies,
+                        interval.body_index,
+                        interval.unit_index,
+                        &all_candidates,
+                    ),
+                    "pruning retained globally blocked coverage in arrangement {arrangement_index}: {interval:?}"
+                );
+            }
+        }
+    }
+
+    fn point_on_segment_with_tolerance(
+        point: (f64, f64),
+        start: (f64, f64),
+        end: (f64, f64),
+        tolerance: f64,
+    ) -> bool {
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let length_squared = dx * dx + dy * dy;
+        if length_squared <= 0.0 {
+            return (point.0 - start.0).hypot(point.1 - start.1) <= tolerance;
+        }
+        let t = (((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared)
+            .clamp(0.0, 1.0);
+        let projection = (start.0 + t * dx, start.1 + t * dy);
+        (point.0 - projection.0).hypot(point.1 - projection.1) <= tolerance
     }
 
     #[test]
