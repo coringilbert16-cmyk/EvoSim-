@@ -405,4 +405,46 @@ mod tests {
         assert!(system.field_energy() > initial_field_energy);
         assert!((system.source_energy() - initial_source_energy).abs() > 1.0e-5);
     }
+
+    #[test]
+    fn reciprocal_model_parameter_sweep_preserves_energy_and_exchanges_energy() {
+        let duration = 8.0_f64;
+        let frequencies = [0.75_f64, 1.5, 3.0];
+        let couplings = [0.05_f64, 0.2, 0.8];
+        let time_steps = [0.0025_f64, 0.005, 0.01];
+
+        for frequency in frequencies {
+            for coupling in couplings {
+                for time_step in time_steps {
+                    let mut system = model(frequency, coupling, time_step);
+                    let initial_total = system.total_energy();
+                    let initial_source = system.source_energy();
+                    let steps = (duration / time_step).round() as usize;
+
+                    for _ in 0..steps {
+                        system.step().unwrap();
+                    }
+
+                    let final_total = system.total_energy();
+                    let scale = initial_total.abs().max(final_total.abs()).max(1.0);
+                    let residual = (final_total - initial_total).abs() / scale;
+                    assert!(
+                        residual <= 1.0e-8,
+                        "energy drift for frequency={frequency}, coupling={coupling}, dt={time_step}: {residual}"
+                    );
+                    assert!(
+                        system.field_energy() > 0.0,
+                        "no field energy for frequency={frequency}, coupling={coupling}, dt={time_step}"
+                    );
+                    assert!(
+                        (system.source_energy() - initial_source).abs() > 1.0e-8,
+                        "no source energy exchange for frequency={frequency}, coupling={coupling}, dt={time_step}"
+                    );
+                    assert!(system.coupling_energy().is_finite());
+                    assert_eq!(system.steps_elapsed(), steps as u64);
+                }
+            }
+        }
+    }
+
 }
