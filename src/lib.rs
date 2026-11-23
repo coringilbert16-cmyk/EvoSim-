@@ -123,3 +123,150 @@ mod diagnostics;
 )]
 #[path = "chemistry/emergent_cohesion.rs"]
 mod emergent_cohesion;
+#[path = "chemistry/energy_ledger.rs"]
+mod energy_ledger;
+#[path = "chemistry/environmental_broad_phase.rs"]
+mod environmental_broad_phase;
+#[path = "chemistry/environmental_combine.rs"]
+mod environmental_combine;
+#[path = "chemistry/environmental_displacement.rs"]
+mod environmental_displacement;
+#[path = "chemistry/environmental_interaction.rs"]
+mod environmental_interaction;
+#[path = "infrastructure/property_profile.rs"]
+mod property_profile;
+
+// Organism genome, behavior, and lifecycle.
+#[path = "organism/decision.rs"]
+mod decision;
+#[path = "organism/decision_runtime.rs"]
+mod decision_runtime;
+#[path = "organism/developmental_decision.rs"]
+mod developmental_decision;
+#[path = "organism/genome.rs"]
+mod genome;
+#[path = "perception/harmonics.rs"]
+mod harmonics;
+#[path = "organism/memory.rs"]
+mod memory;
+#[path = "perception/movement.rs"]
+mod movement;
+#[path = "perception/observation.rs"]
+mod observation;
+#[path = "chemistry/recycling.rs"]
+mod recycling;
+#[path = "organism/reproduction.rs"]
+mod reproduction;
+#[path = "organism/structural_blueprint_unified.rs"]
+#[allow(clippy::needless_range_loop, unused_variables)]
+mod structural_blueprint;
+#[path = "chemistry/transformation.rs"]
+mod transformation;
+
+// Dedicated laboratory application, sharing the authoritative chemistry engine.
+pub mod chemistry_lab;
+
+// Simulation and application runtime.
+#[path = "infrastructure/deterministic_parallel.rs"]
+mod deterministic_parallel;
+#[path = "infrastructure/math.rs"]
+mod math;
+#[path = "ui/resource_visualization.rs"]
+mod resource_visualization;
+#[path = "simulation/runtime.rs"]
+mod runtime;
+#[path = "simulation/server.rs"]
+mod server;
+#[path = "simulation/sim_process.rs"]
+mod sim_process;
+#[path = "simulation/simulation.rs"]
+mod simulation;
+#[path = "simulation/simulation_runner.rs"]
+mod simulation_runner;
+#[path = "simulation/state.rs"]
+mod state;
+
+// Integration and contract tests.
+#[cfg(test)]
+#[path = "tests/blueprint_diagnostics.rs"]
+mod blueprint_diagnostics;
+#[cfg(test)]
+#[path = "tests/blueprint_spatial_target_tests.rs"]
+mod blueprint_spatial_target_tests;
+#[cfg(test)]
+#[path = "tests/bond_driven_contract_tests.rs"]
+mod bond_driven_contract_tests;
+#[cfg(test)]
+#[path = "tests/environmental_discovery_parity_tests.rs"]
+mod environmental_discovery_parity_tests;
+#[cfg(test)]
+#[path = "tests/observation_contract_tests.rs"]
+mod observation_contract_tests;
+#[cfg(test)]
+#[path = "tests/phase1_acquisition_contract_tests.rs"]
+mod phase1_acquisition_contract_tests;
+#[cfg(test)]
+#[path = "tests/phase2_structure_contract_tests.rs"]
+mod phase2_structure_contract_tests;
+#[cfg(test)]
+#[path = "tests/phase3_authority_contract_tests.rs"]
+mod phase3_authority_contract_tests;
+#[cfg(test)]
+#[path = "tests/simulation_tests.rs"]
+mod simulation_tests;
+
+pub async fn run_cli() {
+    let command = std::env::args().nth(1);
+
+    if command.as_deref() == Some("--simulation-child") {
+        let port = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u16>().ok())
+            .expect("--simulation-child requires a TCP port");
+        sim_process::run_child(port).await;
+        return;
+    }
+
+    if command.as_deref() == Some("--geometry-worker-once") {
+        geometry_library_worker::run_once().expect("geometry worker smoke test failed");
+        return;
+    }
+
+    if command.as_deref() == Some("--geometry-worker-complete-up-to") {
+        let max_constituents = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|count| *count > 0)
+            .expect("--geometry-worker-complete-up-to requires a positive constituent count");
+        geometry_library_worker::run_to_completion(max_constituents)
+            .expect("bounded geometry generation or reopen verification failed");
+        return;
+    }
+
+    if command.as_deref() == Some("--geometry-worker-passes") {
+        let passes = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|passes| *passes > 0)
+            .expect("--geometry-worker-passes requires a positive integer");
+        geometry_library_worker::run_passes(passes).expect("bounded geometry worker run failed");
+        return;
+    }
+
+    if command.as_deref() == Some("--geometry-worker") {
+        geometry_library_worker::run();
+        return;
+    }
+
+    if command.as_deref() == Some("--geometry-viewer") {
+        geometry_server::run().await;
+        return;
+    }
+
+    if command.as_deref() == Some("--headless") {
+        simulation_runner::run_from_args(std::env::args());
+        return;
+    }
+
+    server::run().await;
+}
