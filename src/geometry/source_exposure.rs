@@ -5441,6 +5441,14 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     && intervals
                         .last()
                         .is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
+                    // Do not merge through the parameter seam when that
+                    // would erase the deliberate antipode partition.
+                    && intervals
+                        .first()
+                        .is_some_and(|interval| (interval.1 - 0.5).abs() > 1e-12)
+                    && intervals
+                        .last()
+                        .is_some_and(|interval| (interval.0 - 0.5).abs() > 1e-12)
                 {
                     let first = intervals.remove(0);
                     let last = intervals.pop().expect("two intervals were checked");
