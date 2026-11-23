@@ -482,7 +482,6 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 || !part.x.is_finite()
                 || !part.y.is_finite()
                 || !part.rotation_radians.is_finite()
-
             {
                 return None;
             }
