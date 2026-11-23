@@ -1982,8 +1982,8 @@ mod visibility_tests {
         assert!(shoulders[2].1 <= 1.0 + 1e-8);
 
         // The two blocker silhouettes have analytic target-edge cuts at
-        // ±27/29 and ±63/145. The three visible intervals must be disjoint,
-        // with a total visible measure of 146/145.
+        // ±27/29 and ±63/155. The three visible intervals must be disjoint,
+        // with a total visible measure of 4/29 + 126/155.
         let mut visible: Vec<(f64, f64)> = intervals
             .iter()
             .filter(|interval| {
