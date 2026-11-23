@@ -91,6 +91,8 @@ Use the documentation index to find the relevant design authority. In particular
 
 Project status is evolving. Treat source code and the latest exact-head CI results as evidence of what currently works; treat specifications and roadmaps as intended behavior unless implementation and tests establish otherwise.
 
+**Resonance-field status:** Phase 1 (formal wave-physics specification) and Phase 2 (isolated reference wave solver) are formally closed. Phase 2 closure is limited to the solver's documented tested numerical envelope; it does not mean the live simulation has been migrated or physically calibrated. PR #410 remains isolated and unmerged. See the [resonance-field implementation roadmap](docs/design/resonance-field-implementation-roadmap.md) for the phase gates and next steps.
+
 ## Contributing and making changes
 
 - Keep chemistry, energy accounting, geometry, and material ownership invariants explicit.
