@@ -5369,10 +5369,10 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
                 let is_duplicate_circle = |other: &crate::organism_geometry::PlacedForm| {
                     matches!(
-                        other.form,
+                        &other.form,
                         crate::resources::Form::Circle { radius: other_radius }
                             if (other.x - center.0).hypot(other.y - center.1) <= 1e-12
-                                && (other_radius - radius).abs() <= 1e-10
+                                && (*other_radius - radius).abs() <= 1e-10
                     )
                 };
                 let mut exposed = Vec::with_capacity(cuts.len().saturating_sub(1));
@@ -5434,7 +5434,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         },
                     });
                 }
-            }        }
+            }
+        }
     }
 
     // Canonicalize segment direction and ordering so equivalent unions do
