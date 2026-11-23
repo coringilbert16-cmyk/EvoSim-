@@ -85,6 +85,7 @@ fn validate_visibility_snapshot(
         );
         for part in &body.parts {
             if !is_phase3_supported_part(&part.form)
+                || !part.form.is_valid()
                 || !part.x.is_finite()
                 || !part.y.is_finite()
                 || !part.rotation_radians.is_finite()
@@ -260,6 +261,40 @@ mod tests {
         assert!(
             visible_polygonal_intervals_for_targets((-5.0, 0.0), &fluid_blocker, &[0]).is_none()
         );
+    }
+
+    #[test]
+    fn phase3_visibility_rejects_malformed_polygon_blockers() {
+        let degenerate = body(
+            Form::Polygon {
+                vertices: vec![(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)],
+            },
+            0.0,
+            0.0,
+            (0.0, 0.0),
+            (2.0, 0.0),
+        );
+        let self_intersecting = body(
+            Form::Polygon {
+                vertices: vec![(0.0, 0.0), (1.0, 1.0), (0.0, 1.0), (1.0, 0.0)],
+            },
+            0.0,
+            0.0,
+            (0.0, 0.0),
+            (1.0, 1.0),
+        );
+
+        for blocker in [degenerate, self_intersecting] {
+            assert!(
+                visible_polygonal_intervals_for_targets(
+                    (-5.0, 0.0),
+                    &[target(), blocker],
+                    &[0]
+                )
+                .is_none(),
+                "malformed polygon blockers must fail closed"
+            );
+        }
     }
 
     #[test]
