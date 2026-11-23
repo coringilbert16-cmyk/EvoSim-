@@ -5,6 +5,16 @@
 #[allow(dead_code)]
 mod hotspot_profile;
 
+// Isolated Phase 3B.2a source descriptors and finite source-energy accounts.
+#[path = "physics/source.rs"]
+#[allow(dead_code)]
+mod source;
+
+// Extracted, isolated reference solver; not connected to live simulation paths.
+#[path = "physics/reference_wave_solver.rs"]
+#[allow(dead_code)]
+mod reference_wave_solver;
+
 // Core environment, resources, and physical material/structure.
 #[path = "organism/developmental_blueprint.rs"]
 mod developmental_blueprint;
