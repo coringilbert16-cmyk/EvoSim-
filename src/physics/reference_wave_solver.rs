@@ -509,10 +509,10 @@ impl WaveField {
         }
         for y in 0..self.height {
             for x in 0..self.width {
-                if x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height {
-                    if forcing[self.index(x, y)] != 0.0 {
-                        return Err(WaveFieldError::InvalidProfile);
-                    }
+                if (x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height)
+                    && forcing[self.index(x, y)] != 0.0
+                {
+                    return Err(WaveFieldError::InvalidProfile);
                 }
             }
         }
