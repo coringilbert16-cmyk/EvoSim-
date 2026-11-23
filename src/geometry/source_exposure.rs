@@ -5413,8 +5413,12 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 // two artificial pieces for one continuous physical arc.
                 if sweep >= std::f64::consts::TAU - 1e-10
                     && intervals.len() >= 2
-                    && intervals.first().is_some_and(|interval| interval.0 <= 1e-12)
-                    && intervals.last().is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
+                    && intervals
+                        .first()
+                        .is_some_and(|interval| interval.0 <= 1e-12)
+                    && intervals
+                        .last()
+                        .is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
                 {
                     let first = intervals.remove(0);
                     let last = intervals.pop().expect("two intervals were checked");
