@@ -97,11 +97,21 @@ impl WaveField {
         let time_step = 1.0 / substeps_per_tick as f64;
         let spacing_squared = spacing.powi(2);
         let speed_squared = propagation_speed.powi(2);
+        let spatial_energy_scale = energy_normalization * spacing_squared;
+        let gradient_energy_scale = energy_normalization * speed_squared;
+        let wave_step_squared = speed_squared * time_step.powi(2);
         if !time_step.is_finite()
             || time_step <= 0.0
             || !spacing_squared.is_finite()
             || spacing_squared <= 0.0
             || !speed_squared.is_finite()
+            || speed_squared <= 0.0
+            || !spatial_energy_scale.is_finite()
+            || spatial_energy_scale <= 0.0
+            || !gradient_energy_scale.is_finite()
+            || gradient_energy_scale <= 0.0
+            || !wave_step_squared.is_finite()
+            || wave_step_squared <= 0.0
         {
             return Err(WaveFieldError::InvalidParameter);
         }
@@ -715,6 +725,22 @@ mod tests {
             )
             .err(),
             Some(WaveFieldError::UnstableTimeStep)
+        );
+    }
+
+    #[test]
+    fn rejects_parameters_that_overflow_or_underflow_numerical_energy_scales() {
+        assert_eq!(
+            WaveField::new(3, 3, 1.0, 1.0e-200, 2, 1.0).err(),
+            Some(WaveFieldError::InvalidParameter)
+        );
+        assert_eq!(
+            WaveField::new(3, 3, 1.0, 2.0, 4, 1.0e308).err(),
+            Some(WaveFieldError::InvalidParameter)
+        );
+        assert_eq!(
+            WaveField::new(3, 3, 1.0e-100, 1.0, 4, 1.0e-200).err(),
+            Some(WaveFieldError::InvalidParameter)
         );
     }
 
