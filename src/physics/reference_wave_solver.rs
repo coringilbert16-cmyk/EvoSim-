@@ -10,7 +10,7 @@
 //! boundaries only; reference measurements must finish before their numerical
 //! domain of dependence can reach those boundaries.
 
-use super::source::{SourceAccountError, SourceId, SourceInstance};
+use super::source::{SourceAccountError, SourceInstance};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WaveFieldError {
@@ -618,6 +618,7 @@ impl WaveField {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source::SourceId;
 
     fn test_source(energy_budget: f64, id: u64) -> SourceInstance {
         let source_id = SourceId::new(id).expect("valid test source ID");
@@ -790,7 +791,7 @@ mod tests {
     #[test]
     fn finite_source_transfer_is_atomic_and_field_energy_is_conserved() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut insufficient = test_source(0.001, 1).unwrap();
+        let mut insufficient = test_source(0.001, 1);
         assert_eq!(
             field.inject_compact_pulse(&mut insufficient, 100.0, 100.0, 3.0, 0.5),
             Err(WaveFieldError::InsufficientSourceEnergy)
@@ -799,7 +800,7 @@ mod tests {
         assert_eq!(insufficient.account().remaining_energy(), 0.001);
         assert_eq!(insufficient.account().cumulative_field_transfer(), 0.0);
 
-        let mut source = test_source(10.0, 2).unwrap();
+        let mut source = test_source(10.0, 2);
         let initial_transfer = field
             .inject_compact_pulse(&mut source, 100.0, 100.0, 3.0, 0.5)
             .unwrap();
@@ -823,8 +824,8 @@ mod tests {
     #[test]
     fn source_work_accounts_for_constructive_interference_cross_energy() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut first_source = test_source(10.0, 3).unwrap();
-        let mut second_source = test_source(10.0, 4).unwrap();
+        let mut first_source = test_source(10.0, 3);
+        let mut second_source = test_source(10.0, 4);
 
         let first_transfer = field
             .inject_compact_pulse(&mut first_source, 100.0, 100.0, 3.0, 0.5)
@@ -853,8 +854,8 @@ mod tests {
     #[test]
     fn destructive_interference_returns_field_energy_to_the_second_source() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut emitter = test_source(10.0, 5).unwrap();
-        let mut absorber = test_source(0.0, 6).unwrap();
+        let mut emitter = test_source(10.0, 5);
+        let mut absorber = test_source(0.0, 6);
         let mut velocity = vec![0.0; field.width() * field.height()];
         let center = field.index(100, 100);
         velocity[center] = 1.0;
@@ -882,7 +883,7 @@ mod tests {
     #[test]
     fn scheduled_source_emission_begins_propagating_at_its_activation_time() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut source = test_source(10.0, 7).unwrap();
+        let mut source = test_source(10.0, 7);
 
         field.advance_ticks(10).unwrap();
         assert_eq!(field.logical_time_ticks(), 10.0);
@@ -909,7 +910,7 @@ mod tests {
     fn scheduled_source_emission_preserves_centered_velocity_inside_sponge_layer() {
         let mut field = solver(201, 201, 1.0, 2);
         field.configure_absorbing_boundary(72, 0.2).unwrap();
-        let mut source = test_source(10.0, 8).unwrap();
+        let mut source = test_source(10.0, 8);
 
         field.advance_ticks(10).unwrap();
         let transfer = field
@@ -942,7 +943,7 @@ mod tests {
     #[test]
     fn compact_pulse_has_finite_travel_time_and_arrives_near_distance_over_speed() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut source = test_source(10.0, 9).unwrap();
+        let mut source = test_source(10.0, 9);
         pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
 
         field.advance_ticks(10).unwrap();
@@ -1061,7 +1062,7 @@ mod tests {
     #[test]
     fn regional_energy_change_closes_independently_integrated_boundary_flux() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut source = test_source(10.0, 10).unwrap();
+        let mut source = test_source(10.0, 10);
         pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
 
         let region = (95, 95, 105, 105);
@@ -1109,7 +1110,7 @@ mod tests {
     #[test]
     fn incoming_boundary_flux_closes_for_an_off_center_rectangular_region() {
         let mut field = solver(201, 201, 1.0, 2);
-        let mut source = test_source(10.0, 11).unwrap();
+        let mut source = test_source(10.0, 11);
         pulse(&mut field, &mut source, 80.0, 100.0, 0.5);
 
         // The source support is entirely outside this non-square control volume.
@@ -1170,7 +1171,7 @@ mod tests {
 
         for region in regions {
             let mut field = solver(241, 241, 1.0, 2);
-            let mut source = test_source(10.0, 12).unwrap();
+            let mut source = test_source(10.0, 12);
             pulse(&mut field, &mut source, 80.0, 100.0, 0.5);
 
             let initial_region_energy = field
@@ -1300,7 +1301,7 @@ mod tests {
     #[test]
     fn empty_space_energy_remains_bounded_over_a_long_reflection_run() {
         let mut field = solver(81, 81, 1.0, 2);
-        let mut source = test_source(10.0, 13).unwrap();
+        let mut source = test_source(10.0, 13);
         pulse(&mut field, &mut source, 40.0, 40.0, 0.5);
 
         let initial_energy = field.energy();
@@ -1320,8 +1321,8 @@ mod tests {
     #[test]
     fn returned_field_work_is_credited_to_the_active_source() {
         let mut field = solver(81, 81, 1.0, 2);
-        let mut emitter = test_source(10.0, 14).unwrap();
-        let mut absorber = test_source(0.0, 15).unwrap();
+        let mut emitter = test_source(10.0, 14);
+        let mut absorber = test_source(0.0, 15);
         let emitted = field
             .inject_compact_pulse(&mut emitter, 40.0, 40.0, 3.0, 0.5)
             .unwrap();
@@ -1339,8 +1340,8 @@ mod tests {
     fn computational_window_does_not_affect_interior_before_boundary_influence() {
         let mut smaller = solver(201, 201, 1.0, 2);
         let mut larger = solver(241, 241, 1.0, 2);
-        let mut small_source = test_source(10.0, 16).unwrap();
-        let mut large_source = test_source(10.0, 17).unwrap();
+        let mut small_source = test_source(10.0, 16);
+        let mut large_source = test_source(10.0, 17);
         pulse(&mut smaller, &mut small_source, 100.0, 100.0, 0.5);
         pulse(&mut larger, &mut large_source, 120.0, 120.0, 0.5);
         smaller.advance_ticks(40).unwrap();
@@ -1371,12 +1372,12 @@ mod tests {
         let mut second = solver(241, 241, 1.0, 2);
         let mut constructive = solver(241, 241, 1.0, 2);
         let mut destructive = solver(241, 241, 1.0, 2);
-        let mut first_source = test_source(10.0, 18).unwrap();
-        let mut second_source = test_source(10.0, 19).unwrap();
-        let mut constructive_a = test_source(10.0, 20).unwrap();
-        let mut constructive_b = test_source(10.0, 21).unwrap();
-        let mut destructive_a = test_source(10.0, 22).unwrap();
-        let mut destructive_b = test_source(10.0, 23).unwrap();
+        let mut first_source = test_source(10.0, 18);
+        let mut second_source = test_source(10.0, 19);
+        let mut constructive_a = test_source(10.0, 20);
+        let mut constructive_b = test_source(10.0, 21);
+        let mut destructive_a = test_source(10.0, 22);
+        let mut destructive_b = test_source(10.0, 23);
 
         pulse(&mut first, &mut first_source, 80.0, 120.0, 0.5);
         pulse(&mut second, &mut second_source, 160.0, 120.0, 0.5);
@@ -1471,7 +1472,7 @@ mod tests {
             let width = intervals + 1;
             let center = intervals / 2;
             let mut field = solver(width, width, spacing, substeps);
-            let mut source = test_source(10.0, 24).unwrap();
+            let mut source = test_source(10.0, 24);
             let center_world = center as f64 * spacing;
             pulse(&mut field, &mut source, center_world, center_world, 0.5);
             field.advance_ticks(10).unwrap();
@@ -1570,7 +1571,7 @@ mod tests {
     fn absorbing_boundary_accounts_for_removed_energy_without_a_hidden_sink() {
         let mut field = solver(201, 201, 1.0, 2);
         field.configure_absorbing_boundary(72, 0.2).unwrap();
-        let mut source = test_source(10.0, 25).unwrap();
+        let mut source = test_source(10.0, 25);
         pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
         let emitted_energy = field.energy();
 
@@ -1703,8 +1704,8 @@ mod tests {
     fn identical_runs_replay_bit_for_bit() {
         let mut left = solver(161, 161, 1.0, 2);
         let mut right = solver(161, 161, 1.0, 2);
-        let mut left_source = test_source(10.0, 26).unwrap();
-        let mut right_source = test_source(10.0, 27).unwrap();
+        let mut left_source = test_source(10.0, 26);
+        let mut right_source = test_source(10.0, 27);
         pulse(&mut left, &mut left_source, 80.0, 80.0, 0.5);
         pulse(&mut right, &mut right_source, 80.0, 80.0, 0.5);
         left.advance_ticks(30).unwrap();
