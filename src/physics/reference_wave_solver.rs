@@ -990,11 +990,7 @@ mod tests {
                         * (std::f64::consts::PI * py).sin()
                         * (1.0 + 0.2 * px);
                     let index = field.index(x, y);
-                    // Leapfrog stores the previous integer-time level. Include the half-step
-                    // acceleration term so the centered initial velocity is exactly v(0),
-                    // rather than v(0) + O(dt) from a first-order startup.
-                    field.previous[index] =
-                        -dt * initial_velocity * profile + 0.5 * dt.powi(2) * forcing[index];
+                    field.previous[index] = -dt * initial_velocity * profile;
                     forcing[index] = amplitude * profile;
                 }
             }
@@ -2333,7 +2329,11 @@ mod tests {
                 for index in 0..profile.len() {
                     profile[index] = primary[index] + secondary_weight * secondary[index];
                     forcing[index] = amplitude * profile[index];
-                    field.previous[index] = -dt * initial_velocity * profile[index];
+                    // Leapfrog stores the previous integer-time level. Include the half-step
+                    // acceleration term so the centered initial velocity is exactly v(0),
+                    // rather than v(0) + O(dt) from a first-order startup.
+                    field.previous[index] =
+                        -dt * initial_velocity * profile[index] + 0.5 * dt.powi(2) * forcing[index];
                 }
 
                 let mut source = test_source(100.0, 400 + (profile_case * 10 + grid_case) as u64);
