@@ -364,18 +364,44 @@ fn candidate_body_indices_for_bounds(
     // The farthest corner of the target AABB is an upper bound on every point
     // along the target edge/arc. A body whose nearest AABB point is farther
     // from the source cannot block that target, even if their angles overlap.
-    let target_max_distance = [
+    let target_corners = [
         (target_bounds.0, target_bounds.2),
         (target_bounds.0, target_bounds.3),
         (target_bounds.1, target_bounds.2),
         (target_bounds.1, target_bounds.3),
-    ]
-    .into_iter()
-    .map(|(x, y)| (x - source.0).hypot(y - source.1))
-    .fold(0.0_f64, f64::max);
-    if !target_max_distance.is_finite() {
+    ];
+    let target_max_distance = target_corners
+        .iter()
+        .map(|(x, y)| (x - source.0).hypot(y - source.1))
+        .fold(0.0_f64, f64::max);
+    let target_min_dx = if source.0 < target_bounds.0 {
+        target_bounds.0 - source.0
+    } else if source.0 > target_bounds.1 {
+        source.0 - target_bounds.1
+    } else {
+        0.0
+    };
+    let target_min_dy = if source.1 < target_bounds.2 {
+        target_bounds.2 - source.1
+    } else if source.1 > target_bounds.3 {
+        source.1 - target_bounds.3
+    } else {
+        0.0
+    };
+    let target_min_distance = target_min_dx.hypot(target_min_dy);
+    if !target_max_distance.is_finite() || !target_min_distance.is_finite() {
         return None;
     }
+    let mut tolerance_points = Vec::with_capacity(5);
+    tolerance_points.push(source);
+    tolerance_points.extend(target_corners);
+    let linear_tolerance =
+        crate::phase3_numeric::linear_tolerance(&tolerance_points, target_max_distance);
+    let angular_tolerance = if target_min_distance <= linear_tolerance {
+        std::f64::consts::PI
+    } else {
+        linear_tolerance / target_min_distance
+    };
     let mut candidates = Vec::new();
     for (body_index, (interval, minimum_distance)) in body_intervals
         .iter()
@@ -383,9 +409,9 @@ fn candidate_body_indices_for_bounds(
         .zip(body_min_distances.iter().copied())
         .enumerate()
     {
-        let angular_overlap =
-            interval.0 <= target_interval.1 + 1e-10 && target_interval.0 <= interval.1 + 1e-10;
-        let could_be_in_front = minimum_distance <= target_max_distance + 1e-9;
+        let angular_overlap = interval.0 <= target_interval.1 + angular_tolerance
+            && target_interval.0 <= interval.1 + angular_tolerance;
+        let could_be_in_front = minimum_distance <= target_max_distance + linear_tolerance;
         if angular_overlap && could_be_in_front {
             candidates.push(body_index);
         }
