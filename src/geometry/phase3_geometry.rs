@@ -386,4 +386,27 @@ mod tests {
         assert_eq!(perimeter.len(), 4);
         assert!(perimeter.iter().all(|interval| interval.body_index == 3));
     }
+
+    #[test]
+    fn phase3_material_perimeter_is_stable_under_large_translation() {
+        let mut translated = target();
+        translated.parts[0].x += 1.0e12;
+        translated.parts[0].y -= 1.0e12;
+        translated.min_x += 1.0e12;
+        translated.max_x += 1.0e12;
+        translated.min_y -= 1.0e12;
+        translated.max_y -= 1.0e12;
+
+        let perimeter = disjoint_polygonal_material_perimeter(&translated, 4)
+            .expect("translated polygon remains a valid Phase 3 receiver");
+        assert_eq!(perimeter.len(), 4);
+        let length: f64 = perimeter
+            .iter()
+            .map(|interval| {
+                (interval.end.0 - interval.start.0)
+                    .hypot(interval.end.1 - interval.start.1)
+            })
+            .sum();
+        assert!((length - 8.0).abs() < 1e-3);
+    }
 }
