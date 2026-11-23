@@ -209,7 +209,7 @@ No production code or real-source integration is authorized by this investigatio
 
 - **Implemented, pending CI:** an isolated one-source acceleration-forcing substep on the PR #427 extracted reference solver. It stages the forced update, computes signed work from the actual midpoint velocity, checks the exact combined source-work/sponge-loss identity, stages the finite source-account transfer, and commits only after validation. It does not touch production simulation paths.
 - Focused tests cover positive work, negative work returned to a zero-budget source, simultaneous forcing and sponge absorption, insufficient-budget rollback, and rejection of nonzero forcing on fixed boundary nodes.
-- Still required: zero-work/velocity-node behavior, sign reversal, multiple simultaneous sources with atomic multi-account settlement, and deterministic replay.
+- Implemented and covered by tests: zero-work at a centered velocity node, force sign reversal, multiple simultaneous sources with per-source work attribution, duplicate-source rejection, and all-account rollback when any source overdraws. Deterministic replay remains to be tested.
 - Still required: compare exact discrete work with independently converged quadrature of the continuum integral \(\int\!\int K u_t f\,dA\,dt\) under paired spatial/time refinement. Report convergence order and normalized residual; do not claim continuum equivalence from a single grid.
 
 ### 7.2 Then evaluate Candidate B
@@ -239,4 +239,4 @@ The exact discrete work identity for additive acceleration forcing can be derive
 
 However, Candidate A is an accounting-compatible mathematical forcing mechanism, not yet a physical incident-power law. Candidate B offers a reciprocal physical source model but introduces a coupling-energy inventory and a coupled-integrator requirement. The present evidence does not justify choosing one as the production hotspot law.
 
-**Next action:** Run the isolated forcing tests and full CI; fix any failures. Then add the missing zero-work, sign-reversal, multi-source atomicity, and continuum-refinement experiments. Only after Candidate A's discrete and continuum validation should Candidate B's reciprocal source oscillator be implemented for comparison. Keep hotspot power mapping unresolved and do not connect either candidate to the live simulation.
+**Next action:** Complete CI for the expanded isolated forcing tests. Then implement paired spatial/time refinement against the continuum work integral and deterministic replay. Only after Candidate A's discrete and continuum validation should Candidate B's reciprocal source oscillator be implemented for comparison. Keep hotspot power mapping unresolved and do not connect either candidate to the live simulation.
