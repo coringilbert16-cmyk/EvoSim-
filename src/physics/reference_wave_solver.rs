@@ -957,11 +957,12 @@ mod tests {
     #[test]
     fn multiple_source_step_rejects_duplicate_source_identity() {
         let mut field = solver(41, 41, 1.0, 2);
-        let mut source = test_source(10.0, 113);
+        let mut first = test_source(10.0, 113);
+        let mut duplicate_identity = test_source(10.0, 113);
         let forcing = vec![0.0; field.width() * field.height()];
         let mut sources = [
-            (&mut source, forcing.as_slice()),
-            (&mut source, forcing.as_slice()),
+            (&mut first, forcing.as_slice()),
+            (&mut duplicate_identity, forcing.as_slice()),
         ];
         assert_eq!(
             field.advance_forced_substep_multi(&mut sources),
