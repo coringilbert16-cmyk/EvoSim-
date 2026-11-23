@@ -2176,7 +2176,6 @@ mod tests {
         fn run_replay() -> (WaveField, SourceInstance, SourceInstance, Vec<[f64; 2]>, f64) {
             let mut field = solver(65, 65, 1.0, 2);
             field.configure_absorbing_boundary(8, 0.04).unwrap();
-            let initial_field_energy = field.energy();
             let mut first_source = test_source(1_000.0, 260);
             let mut second_source = test_source(1_000.0, 261);
 
@@ -2189,6 +2188,7 @@ mod tests {
                 }
             }
 
+            let initial_field_energy = field.energy();
             let mut first_profile = vec![0.0; field.current.len()];
             let mut second_profile = vec![0.0; field.current.len()];
             for y in 1..field.height - 1 {
@@ -2304,13 +2304,13 @@ mod tests {
             assert!(
                 (history_work - account.cumulative_field_transfer()).abs()
                     <= 1.0e-10 * account_scale,
-                "source {source} history does not reconcile with its cumulative account"
+                "source {source_index} history does not reconcile with its cumulative account"
             );
             let ownership_change = account.initial_energy() - account.remaining_energy();
             assert!(
                 (ownership_change - account.cumulative_field_transfer()).abs()
                     <= 1.0e-10 * account_scale,
-                "source {source} inventory does not reconcile with its signed transfers"
+                "source {source_index} inventory does not reconcile with its signed transfers"
             );
         }
 
