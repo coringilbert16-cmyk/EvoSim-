@@ -177,6 +177,17 @@ mod tests {
             ),
         ];
         assert!(visible_polygonal_intervals_for_targets((-5.0, 0.0), &bodies, &[0]).is_none());
+
+        let circle_target = vec![body(
+            Form::Circle { radius: 1.0 },
+            5.0,
+            0.0,
+            (4.0, -1.0),
+            (6.0, 1.0),
+        )];
+        assert!(
+            visible_polygonal_intervals_for_targets((-5.0, 0.0), &circle_target, &[0]).is_none()
+        );
     }
 
     #[test]
@@ -212,7 +223,11 @@ mod tests {
         ];
         let intervals = visible_polygonal_intervals_for_targets((-5.0, 0.0), &bodies, &[0])
             .expect("polygon receiver and finite line blocker are Phase 3 geometry");
-        assert!(!intervals.is_empty());
+        assert_eq!(
+            intervals.len(),
+            2,
+            "the finite segment must split the front-facing target edge into two visible shoulders"
+        );
         assert!(intervals.iter().all(|interval| interval.body_index == 0));
     }
 
