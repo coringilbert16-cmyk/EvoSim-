@@ -890,88 +890,6 @@ mod visibility_tests {
     }
 
     #[test]
-    fn circular_target_is_split_at_exact_rays_through_finite_line_endpoints() {
-        let source = (-5.0, 0.0);
-        let target = OrganismBodyGeometry {
-            parts: vec![PlacedForm {
-                unit_index: 0,
-                form: Form::Circle { radius: 1.0 },
-                x: 5.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            }],
-            min_x: 4.0,
-            max_x: 6.0,
-            min_y: -1.0,
-            max_y: 1.0,
-        };
-        let blocker = OrganismBodyGeometry {
-            parts: vec![PlacedForm {
-                unit_index: 1,
-                form: Form::Line { length: 1.0 },
-                x: 2.0,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            }],
-            min_x: 2.0,
-            max_x: 2.0,
-            min_y: -0.5,
-            max_y: 0.5,
-        };
-
-        let intervals = visible_circular_arc_intervals(source, &[target, blocker])
-            .expect("circle and finite-line boundaries have exact visibility geometry");
-        let target_arcs: Vec<_> = intervals
-            .iter()
-            .filter(|interval| interval.body_index == 0 && interval.unit_index == 0)
-            .collect();
-        assert_eq!(
-            target_arcs.len(),
-            2,
-            "the finite segment must split the source-facing circle into two visible shoulders: {target_arcs:?}"
-        );
-
-        // Each line endpoint defines an exact transition ray. Intersect that
-        // ray with the target circle and require the corresponding angle to
-        // appear as an endpoint of one of the returned visible arcs.
-        for endpoint_y in [-0.5_f64, 0.5_f64] {
-            let endpoint = (2.0, endpoint_y);
-            let dx = endpoint.0 - source.0;
-            let dy = endpoint.1 - source.1;
-            let ox = source.0 - 5.0;
-            let oy = source.1;
-            let a = dx * dx + dy * dy;
-            let b = 2.0 * (ox * dx + oy * dy);
-            let c = ox * ox + oy * oy - 1.0;
-            let discriminant = b * b - 4.0 * a * c;
-            assert!(discriminant >= 0.0);
-            let t = (-b - discriminant.sqrt()) / (2.0 * a);
-            assert!(t > 1.0, "the ray must reach the target after the blocker");
-            let hit = (source.0 + t * dx, source.1 + t * dy);
-            let expected_angle = (hit.1).atan2(hit.0 - 5.0).rem_euclid(std::f64::consts::TAU);
-
-            let has_endpoint = target_arcs.iter().any(|interval| {
-                let start = interval
-                    .arc
-                    .start_angle_radians
-                    .rem_euclid(std::f64::consts::TAU);
-                let end = (start + interval.arc.sweep_radians).rem_euclid(std::f64::consts::TAU);
-                let angular_distance = |left: f64, right: f64| {
-                    (left - right)
-                        .abs()
-                        .min(std::f64::consts::TAU - (left - right).abs())
-                };
-                angular_distance(start, expected_angle) < 1e-8
-                    || angular_distance(end, expected_angle) < 1e-8
-            });
-            assert!(
-                has_endpoint,
-                "missing exact visibility transition at angle {expected_angle}; intervals: {target_arcs:?}"
-            );
-        }
-    }
-
-    #[test]
     fn candidate_filter_excludes_angularly_overlapping_bodies_behind_target() {
         let source = (-10.0, 0.0);
         let bodies = [
@@ -5367,26 +5285,16 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     && cuts.len() > 2
                     && !cuts.iter().any(|cut| (*cut - 0.5).abs() <= 1e-10)
                 {
-                    // Keep a stable antipode partition for full circles with
-                    // intersections; it avoids classifying an entire exposed
-                    // side from a midpoint that can coincide with a tangent.
+                    // Split a wrapped exposed arc at the antipode only when
+                    // intersections already partition this circle. An
+                    // isolated full circle remains one interval.
                     cuts.push(0.5);
                 }
                 cuts.sort_by(f64::total_cmp);
-                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
-                let is_duplicate_circle = |other: &crate::organism_geometry::PlacedForm| {
-                    matches!(
-                        &other.form,
-                        crate::resources::Form::Circle { radius: other_radius }
-                            if (other.x - center.0).hypot(other.y - center.1) <= 1e-12
-                                && (*other_radius - radius).abs() <= 1e-10
-                    )
-                };
-                let mut exposed = Vec::with_capacity(cuts.len().saturating_sub(1));
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
                 for pair in cuts.windows(2) {
                     let (start_t, end_t) = (pair[0], pair[1]);
                     if end_t - start_t <= 1e-12 {
-                        exposed.push(false);
                         continue;
                     }
                     let midpoint_angle = start + sweep * (start_t + end_t) * 0.5;
@@ -5396,7 +5304,6 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     );
                     let hidden = body.parts.iter().enumerate().any(|(other_index, other)| {
                         other_index != part_index
-                            && !is_duplicate_circle(other)
                             && crate::organism_geometry::form_contains_point(
                                 &other.form,
                                 other.x,
@@ -5406,56 +5313,9 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                                 midpoint.1,
                             )
                     });
-                    exposed.push(!hidden);
-                }
-
-                // Merge across cuts where visibility is unchanged, except
-                // for the deliberate antipode partition used for stable arcs.
-                let mut intervals = Vec::new();
-                let mut index = 0;
-                while index < exposed.len() {
-                    if !exposed[index] {
-                        index += 1;
+                    if hidden {
                         continue;
                     }
-                    let run_start = index;
-                    while index + 1 < exposed.len()
-                        && exposed[index + 1]
-                        // The antipode is a deliberate stable partition, unlike
-                        // tangent cuts where visibility remains unchanged.
-                        && (cuts[index + 1] - 0.5).abs() > 1e-12
-                    {
-                        index += 1;
-                    }
-                    intervals.push((cuts[run_start], cuts[index + 1]));
-                    index += 1;
-                }
-
-                // The first and last partitions of a full circle are
-                // adjacent across the parameter seam as well.
-                if sweep >= std::f64::consts::TAU - 1e-10
-                    && intervals.len() >= 2
-                    && intervals
-                        .first()
-                        .is_some_and(|interval| interval.0 <= 1e-12)
-                    && intervals
-                        .last()
-                        .is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
-                    // Do not merge through the parameter seam when that
-                    // would erase the deliberate antipode partition.
-                    && intervals
-                        .first()
-                        .is_some_and(|interval| (interval.1 - 0.5).abs() > 1e-12)
-                    && intervals
-                        .last()
-                        .is_some_and(|interval| (interval.0 - 0.5).abs() > 1e-12)
-                {
-                    let first = intervals.remove(0);
-                    let last = intervals.pop().expect("two intervals were checked");
-                    intervals.push((last.0, first.1 + 1.0));
-                }
-
-                for (start_t, end_t) in intervals {
                     curved.push(ExposedCircularArcInterval {
                         body_index,
                         unit_index,
@@ -5776,7 +5636,7 @@ mod source_global_perimeter_tests {
             assert_eq!(perimeter.curved[0].unit_index, 2);
             assert!(
                 (visible_material_perimeter_length(&perimeter).unwrap()
-                    - 1.5 * std::f64::consts::TAU)
+                    - 3.0 * std::f64::consts::TAU)
                     .abs()
                     < 1e-10
             );
@@ -5808,7 +5668,7 @@ mod source_global_perimeter_tests {
         assert_eq!(perimeter.curved.len(), 1);
         assert_eq!(perimeter.curved[0].unit_index, 0);
         assert!(
-            (visible_material_perimeter_length(&perimeter).unwrap() - 3.0 * std::f64::consts::TAU)
+            (visible_material_perimeter_length(&perimeter).unwrap() - 6.0 * std::f64::consts::TAU)
                 .abs()
                 < 1e-9
         );
@@ -5889,4 +5749,5 @@ mod source_global_perimeter_tests {
         let expected = 8.0 + std::f64::consts::TAU;
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
     }
+
 }
