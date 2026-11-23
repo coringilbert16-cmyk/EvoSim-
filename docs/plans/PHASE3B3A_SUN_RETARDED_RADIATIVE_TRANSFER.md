@@ -79,6 +79,25 @@ c+\mu\dot z_s(\tau)
 
 For a source speed strictly less than \(c\), the bracket is positive: the velocity projection term is bounded in magnitude by source speed, while the remaining factor is at least \(c-|\dot{\mathbf s}|\). This prevents a zero-Jacobian caustic in this parameterization. The implementation should still validate the bound and reject unsupported source trajectories.
 
+For auditability, let \(A(\mu)=\sqrt{1-\mu^2}/\mu\) and \(R=z_sA\). The coordinate derivatives are
+
+\[
+\begin{aligned}
+X_\tau&=\dot x_s+\dot z_sA\cos\phi,&
+Y_\tau&=\dot y_s+\dot z_sA\sin\phi,\\
+X_\mu&=z_sA'\cos\phi,&
+Y_\mu&=z_sA'\sin\phi,\\
+X_\phi&=-R\sin\phi,&Y_\phi&=R\cos\phi,\\
+T_\tau&=1+\frac{\dot z_s}{c\mu},&
+T_\mu&=-\frac{z_s}{c\mu^2},&
+T_\phi&=0,
+\end{aligned}
+\qquad
+A'(\mu)=-\frac{1}{\mu^2\sqrt{1-\mu^2}}.
+\]
+
+Taking the determinant of these derivatives gives the stated \(J\). The azimuth coordinate degenerates for the exactly vertical ray \(\mu=1\); use the continuous limit there (the single ray has zero solid-angle measure). The grazing limit \(\mu\to0^+\) is treated as a limiting arrival distribution, not discarded.
+
 Where the arrival map is one-to-one, the incident power density at the mapped event is
 
 \[
