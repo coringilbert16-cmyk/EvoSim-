@@ -10,6 +10,7 @@ The root [README](../README.md) is the project entry point and getting-started g
 - [Resonance-field architecture](design/resonance-field-architecture.md) — high-level field model.
 - [Resonance-field implementation roadmap](design/resonance-field-implementation-roadmap.md) — controlling detailed roadmap; read before any resonance-field work.
 - [Unified energy and continuous wave-field specification](design/unified-energy-physics-specification.md) — active Phase 1 specification and approved modeling defaults for the scalar continuous wave reference field, infinite flat world, isotropic external sun on an above-plane perpendicular orbit, conservative source coupling, powered material oscillators plus passive response, finite-area hotspot, project-native units, and uniform-grid reference solver; Phase 1 specification complete; Phase 2 is the independent empty-space reference solver, with production integration still gated.
+- [Phase 3A.1 geometry contracts and test plan](plans/PHASE3A1_GEOMETRY_CONTRACTS.md) — planning-only contract for exact composite boundaries, visibility partitions, area/length measures, deterministic behavior, fail-closed handling, and the focused Phase 3A test matrix.
 
 ## Chemistry and physical models
 
