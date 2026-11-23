@@ -155,7 +155,11 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
         return None;
     }
     validate_visibility_snapshot(bodies, target_body_indices)?;
-    source_exposure::visible_phase3_polygonal_intervals_for_targets(source, bodies, target_body_indices)
+    source_exposure::visible_phase3_polygonal_intervals_for_targets(
+        source,
+        bodies,
+        target_body_indices,
+    )
 }
 
 /// Phase 3 material perimeter: polygonal solids only. Finite lines are
