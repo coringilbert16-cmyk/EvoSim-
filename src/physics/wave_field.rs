@@ -362,22 +362,20 @@ impl WaveField {
         let mut next_current = self.current.clone();
         let mut initial_velocity = vec![0.0; self.current.len()];
         for index in 0..self.current.len() {
-            initial_velocity[index] =
-                (self.current[index] - self.previous[index]) / self.time_step;
+            initial_velocity[index] = (self.current[index] - self.previous[index]) / self.time_step;
             next_current[index] += displacement[index];
         }
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let index = self.index(x, y);
-                let damping_factor =
-                    1.0 + 0.5 * self.boundary_damping[index] * self.time_step;
-                let centered_acceleration =
-                    0.5 * self.time_step
-                        * self.propagation_speed.powi(2)
-                        * self.laplacian(&self.current, x, y);
-                initial_velocity[index] =
-                    (initial_velocity[index] + centered_acceleration) / damping_factor
-                        + velocity[index];
+                let damping_factor = 1.0 + 0.5 * self.boundary_damping[index] * self.time_step;
+                let centered_acceleration = 0.5
+                    * self.time_step
+                    * self.propagation_speed.powi(2)
+                    * self.laplacian(&self.current, x, y);
+                initial_velocity[index] = (initial_velocity[index] + centered_acceleration)
+                    / damping_factor
+                    + velocity[index];
             }
         }
 
@@ -386,8 +384,7 @@ impl WaveField {
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let index = self.index(x, y);
-                let damping_factor =
-                    1.0 + 0.5 * self.boundary_damping[index] * self.time_step;
+                let damping_factor = 1.0 + 0.5 * self.boundary_damping[index] * self.time_step;
                 next_previous[index] = next_current[index]
                     - self.time_step * damping_factor * initial_velocity[index]
                     + acceleration_scale * self.laplacian(&next_current, x, y);
