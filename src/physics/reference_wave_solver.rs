@@ -2335,9 +2335,7 @@ mod tests {
                 let mut source = test_source(100.0, 400 + (profile_case * 10 + grid_case) as u64);
                 let mut measured_work = 0.0;
                 for _ in 0..(substeps / 2) {
-                    measured_work += field
-                        .advance_forced_substep(&mut source, &forcing)
-                        .unwrap();
+                    measured_work += field.advance_forced_substep(&mut source, &forcing).unwrap();
                 }
 
                 let mode_work = |mx: usize, my: usize| {
@@ -2352,11 +2350,9 @@ mod tests {
                     mode_work(2, 1)
                 };
                 let continuum_work = amplitude
-                    * (primary_displacement
-                        + secondary_weight.powi(2) * secondary_displacement)
+                    * (primary_displacement + secondary_weight.powi(2) * secondary_displacement)
                     * 0.25;
-                let relative_error =
-                    (measured_work - continuum_work).abs() / continuum_work.abs();
+                let relative_error = (measured_work - continuum_work).abs() / continuum_work.abs();
                 assert!(relative_error.is_finite() && relative_error < 1.0);
                 assert!(
                     (source.account().cumulative_field_transfer() - measured_work).abs() < 1.0e-9,
