@@ -16,7 +16,7 @@ Phase 3 uses **polygonal solid boundaries and finite straight-line blockers only
 
 This restriction applies only to Phase 3 reference geometry. Existing circle/fluid behavior in unrelated collision, contact, containment, chemistry, rendering, and legacy perception paths is unchanged. Removing those representations from the wider simulation is a separate future project.
 
-The strict adapter in `src/geometry/phase3_geometry.rs` enforces this boundary before delegating to shared legacy polygon visibility/perimeter helpers. Those shared helpers may retain circle/fluid support for non-Phase-3 callers; Phase 3 must use the strict adapter, never call them directly.
+The strict adapter in `src/geometry/phase3_geometry.rs` enforces this boundary before calling a dedicated polygon/finite-line visibility solver. It uses the shared material-perimeter union helper only after validating that every part is polygonal. The original legacy visibility helper and circle-perimeter behavior remain available to non-Phase-3 callers; Phase 3 must use the strict adapter and must not call the legacy visibility helper directly.
 
 ## Goal
 
