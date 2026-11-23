@@ -353,16 +353,21 @@ impl WaveField {
         let mut initial_velocity = vec![0.0; self.current.len()];
         for index in 0..self.current.len() {
             initial_velocity[index] =
-                (self.current[index] - self.previous[index]) / self.time_step + velocity[index];
+                (self.current[index] - self.previous[index]) / self.time_step;
             next_current[index] += displacement[index];
         }
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let index = self.index(x, y);
-                initial_velocity[index] += 0.5
-                    * self.time_step
-                    * self.propagation_speed.powi(2)
-                    * self.laplacian(&self.current, x, y);
+                let damping_factor =
+                    1.0 + 0.5 * self.boundary_damping[index] * self.time_step;
+                let centered_acceleration =
+                    0.5 * self.time_step
+                        * self.propagation_speed.powi(2)
+                        * self.laplacian(&self.current, x, y);
+                initial_velocity[index] =
+                    (initial_velocity[index] + centered_acceleration) / damping_factor
+                        + velocity[index];
             }
         }
 
@@ -371,8 +376,10 @@ impl WaveField {
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let index = self.index(x, y);
+                let damping_factor =
+                    1.0 + 0.5 * self.boundary_damping[index] * self.time_step;
                 next_previous[index] = next_current[index]
-                    - self.time_step * initial_velocity[index]
+                    - self.time_step * damping_factor * initial_velocity[index]
                     + acceleration_scale * self.laplacian(&next_current, x, y);
             }
         }
@@ -883,6 +890,40 @@ mod tests {
             (field.energy() + source.available_energy() - source.initial_budget()).abs() < 1.0e-10
         );
         assert!((source.net_energy_debit() - transfer).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn scheduled_source_emission_preserves_centered_velocity_inside_sponge_layer() {
+        let mut field = solver(201, 201, 1.0, 2);
+        field.configure_absorbing_boundary(72, 0.2).unwrap();
+        let mut source = FiniteEnergySource::new(10.0).unwrap();
+
+        field.advance_ticks(10).unwrap();
+        let transfer = field
+            .inject_compact_pulse_at_current_time(&mut source, 150.0, 100.0, 3.0, 0.5)
+            .unwrap();
+        assert!(transfer > 0.0);
+
+        let center = field.index(150, 100);
+        let previous_at_emission = field.previous[center];
+        let expected_centered_velocity = 0.5;
+        let energy_after_emission = field.energy();
+        field.advance_substeps(1).unwrap();
+
+        let measured_centered_velocity =
+            (field.current[center] - previous_at_emission) / (2.0 * field.time_step());
+        assert!(
+            (measured_centered_velocity - expected_centered_velocity).abs() < 1.0e-12,
+            "requested centered velocity={}, measured={measured_centered_velocity}",
+            expected_centered_velocity
+        );
+        assert!(
+            (field.energy() + field.boundary_absorbed_energy() + source.available_energy()
+                - source.initial_budget())
+            .abs()
+                < 1.0e-10
+        );
+        assert!(energy_after_emission > 0.0);
     }
 
     #[test]
