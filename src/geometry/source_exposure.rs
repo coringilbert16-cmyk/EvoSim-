@@ -1326,7 +1326,11 @@ mod visibility_tests {
             .collect();
         endpoints.sort_by(f64::total_cmp);
         endpoints.dedup_by(|a, b| (*a - *b).abs() < 1e-10);
-        assert_eq!(endpoints.len(), 4, "two visible shoulders must have four distinct endpoints: {endpoints:?}");
+        assert_eq!(
+            endpoints.len(),
+            4,
+            "two visible shoulders must have four distinct endpoints: {endpoints:?}"
+        );
         for (actual, expected) in endpoints.iter().zip([-1.0, -9.0 / 29.0, 9.0 / 29.0, 1.0]) {
             assert!(
                 (actual - expected).abs() < 1e-10,
