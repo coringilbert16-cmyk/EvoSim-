@@ -2292,4 +2292,91 @@ mod tests {
         assert!(left_work.iter().flatten().any(|work| *work > 0.0));
         assert!(left_work.iter().flatten().any(|work| *work < 0.0));
     }
+    #[test]
+    fn sustained_modal_forcing_converges_across_profiles_and_time_intervals() {
+        let amplitude = 4.0;
+        let initial_velocity = 0.7;
+        let duration = 0.5;
+        let profile_cases = [
+            (1_usize, 1_usize, 0.0_f64),
+            (2_usize, 1_usize, 0.0_f64),
+            (1_usize, 1_usize, 0.35_f64),
+        ];
+        let mut all_relative_errors = Vec::new();
+
+        for (profile_case, (mode_x, mode_y, secondary_weight)) in
+            profile_cases.into_iter().enumerate()
+        {
+            let mut relative_errors = Vec::new();
+            for (grid_case, cells) in [17_usize, 33, 65].into_iter().enumerate() {
+                let spacing = 1.0 / (cells - 1) as f64;
+                let required_substeps = (std::f64::consts::SQRT_2 / spacing).ceil() as usize;
+                let substeps = if required_substeps % 2 == 0 {
+                    required_substeps
+                } else {
+                    required_substeps + 1
+                };
+                let mut field = solver(cells, cells, spacing, substeps);
+                let dt = field.time_step();
+                let primary = mode_profile(cells, cells, spacing, 1.0, mode_x, mode_y);
+                let secondary = if secondary_weight == 0.0 {
+                    vec![0.0; cells * cells]
+                } else {
+                    mode_profile(cells, cells, spacing, 1.0, 2, 1)
+                };
+                let mut profile = vec![0.0; cells * cells];
+                let mut forcing = vec![0.0; cells * cells];
+                for index in 0..profile.len() {
+                    profile[index] = primary[index] + secondary_weight * secondary[index];
+                    forcing[index] = amplitude * profile[index];
+                    field.previous[index] = -dt * initial_velocity * profile[index];
+                }
+
+                let mut source = test_source(100.0, 400 + (profile_case * 10 + grid_case) as u64);
+                let mut measured_work = 0.0;
+                for _ in 0..(substeps / 2) {
+                    measured_work += field
+                        .advance_forced_substep(&mut source, &forcing)
+                        .unwrap();
+                }
+
+                let mode_work = |mx: usize, my: usize| {
+                    let omega = std::f64::consts::PI * ((mx * mx + my * my) as f64).sqrt();
+                    initial_velocity / omega * (omega * duration).sin()
+                        + amplitude / omega.powi(2) * (1.0 - (omega * duration).cos())
+                };
+                let primary_displacement = mode_work(mode_x, mode_y);
+                let secondary_displacement = if secondary_weight == 0.0 {
+                    0.0
+                } else {
+                    mode_work(2, 1)
+                };
+                let continuum_work = amplitude
+                    * (primary_displacement
+                        + secondary_weight.powi(2) * secondary_displacement)
+                    * 0.25;
+                let relative_error =
+                    (measured_work - continuum_work).abs() / continuum_work.abs();
+                assert!(relative_error.is_finite() && relative_error < 1.0);
+                assert!(
+                    (source.account().cumulative_field_transfer() - measured_work).abs() < 1.0e-9,
+                    "source transfer did not equal accumulated work"
+                );
+                relative_errors.push(relative_error);
+            }
+
+            assert!(
+                relative_errors[1] < relative_errors[0] * 0.4,
+                "first grid refinement did not show second-order convergence for profile {profile_case}: {relative_errors:?}"
+            );
+            assert!(
+                relative_errors[2] < relative_errors[1] * 0.4,
+                "second grid refinement did not show second-order convergence for profile {profile_case}: {relative_errors:?}"
+            );
+            all_relative_errors.push(relative_errors);
+        }
+
+        assert_eq!(all_relative_errors.len(), profile_cases.len());
+    }
+
 }
