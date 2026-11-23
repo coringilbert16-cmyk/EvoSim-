@@ -76,6 +76,8 @@ mod organism_viability;
 mod phase3_geometry;
 #[path = "geometry/phase3_numeric.rs"]
 mod phase3_numeric;
+#[path = "geometry/phase3_polygon.rs"]
+mod phase3_polygon;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
 #[path = "geometry/rigid_boundary.rs"]

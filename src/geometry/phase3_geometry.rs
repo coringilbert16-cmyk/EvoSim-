@@ -7,6 +7,7 @@
 //! geometry helpers, so unsupported forms cannot contribute cuts or occlusion.
 
 use crate::organism_geometry::OrganismBodyGeometry;
+use crate::phase3_polygon::checked_polygon_area;
 use crate::resources::Form;
 use crate::source_exposure::{self, ExposedBoundaryInterval, VisibleMaterialPerimeter};
 
@@ -19,6 +20,18 @@ fn is_phase3_polygon(form: &Form) -> bool {
 
 fn is_phase3_supported_part(form: &Form) -> bool {
     is_phase3_polygon(form) || matches!(form, Form::Line { .. })
+}
+
+/// Strict Phase 3 validity is independent of legacy Form::is_valid() polygon
+/// tolerances. Lines retain their existing finite-length validation.
+fn is_phase3_form_valid(form: &Form) -> bool {
+    if is_phase3_polygon(form) {
+        checked_polygon_area(form).is_some()
+    } else if matches!(form, Form::Line { .. }) {
+        form.is_valid()
+    } else {
+        false
+    }
 }
 
 /// Compute conservative world-space bounds from the exact supported geometry.
@@ -85,7 +98,7 @@ fn validate_visibility_snapshot(
         );
         for part in &body.parts {
             if !is_phase3_supported_part(&part.form)
-                || !part.form.is_valid()
+                || !is_phase3_form_valid(&part.form)
                 || !part.x.is_finite()
                 || !part.y.is_finite()
                 || !part.rotation_radians.is_finite()
@@ -173,7 +186,7 @@ pub(crate) fn disjoint_polygonal_material_perimeter(
     if body.parts.is_empty()
         || body.parts.iter().any(|part| {
             !is_phase3_polygon(&part.form)
-                || !part.form.is_valid()
+                || !is_phase3_form_valid(&part.form)
                 || !part.x.is_finite()
                 || !part.y.is_finite()
                 || !part.rotation_radians.is_finite()
