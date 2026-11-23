@@ -73,9 +73,8 @@ fn point_in_polygon(p: (f64, f64), v: &[(f64, f64)]) -> Option<bool> {
 fn union_contains(p: (f64, f64), polys: &[Vec<(f64, f64)>]) -> Option<bool> {
     let mut any = false;
     for poly in polys {
-        match point_in_polygon(p, poly)? {
-            true => any = true,
-            false => {}
+        if point_in_polygon(p, poly)? {
+            any = true;
         }
     }
     Some(any)
@@ -108,13 +107,13 @@ fn edge_intersections(
         let mut out = Vec::new();
         for p in [c, d] {
             let t = ((p.0 - a.0) * r.0 + (p.1 - a.1) * r.1) / rr;
-            if t >= -PARAM_EPS && t <= 1.0 + PARAM_EPS {
+            if (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&t) {
                 out.push((t.clamp(0.0, 1.0), 0.0));
             }
         }
         for p in [a, b] {
             let u = ((p.0 - c.0) * s.0 + (p.1 - c.1) * s.1) / ss;
-            if u >= -PARAM_EPS && u <= 1.0 + PARAM_EPS {
+            if (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&u) {
                 let t = ((p.0 - a.0) * r.0 + (p.1 - a.1) * r.1) / rr;
                 out.push((t.clamp(0.0, 1.0), u.clamp(0.0, 1.0)));
             }
@@ -126,7 +125,9 @@ fn edge_intersections(
     if !t.is_finite() || !u.is_finite() {
         return None;
     }
-    if t >= -PARAM_EPS && t <= 1.0 + PARAM_EPS && u >= -PARAM_EPS && u <= 1.0 + PARAM_EPS {
+    if (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&t)
+        && (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&u)
+    {
         Some(vec![(t.clamp(0.0, 1.0), u.clamp(0.0, 1.0))])
     } else {
         Some(vec![])
