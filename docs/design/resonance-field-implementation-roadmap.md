@@ -234,8 +234,6 @@ Exit criteria:
 
 **Goal:** Connect the independent wave field to real energy sources and physical boundaries, only after the source-to-field work law is derived and validated.
 
-**Goal:** Connect the independent wave field to real energy sources and physical boundaries.
-
 Work:
 - Register existing sources with identity, position, shape, frequency spectrum, phase, schedule, and authoritative available-energy budget.
 - Couple the external sun into the plane through the approved finite-power radiation pattern, retarded source-to-plane travel time, incidence projection, and physical-area integration.
