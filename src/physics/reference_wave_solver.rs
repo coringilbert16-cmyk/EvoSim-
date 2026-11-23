@@ -378,16 +378,20 @@ impl WaveField {
         if !next_energy.is_finite() || next_energy < 0.0 || !signed_transfer.is_finite() {
             return Err(WaveFieldError::InvalidState);
         }
-        let settlement = source.account().prepare_field_transfer(signed_transfer).map_err(|error| {
-            match error {
+        let settlement = source
+            .account()
+            .prepare_field_transfer(signed_transfer)
+            .map_err(|error| match error {
                 SourceAccountError::InsufficientEnergy => WaveFieldError::InsufficientSourceEnergy,
                 SourceAccountError::InvalidTransfer => WaveFieldError::InvalidState,
                 _ => WaveFieldError::InvalidState,
-            }
-        })?;
+            })?;
 
         // Both updates are now fully validated; the following assignments cannot fail.
-        source.account_mut().commit_field_transfer(settlement).map_err(|_| WaveFieldError::InvalidState)?;
+        source
+            .account_mut()
+            .commit_field_transfer(settlement)
+            .map_err(|_| WaveFieldError::InvalidState)?;
         self.previous = next_previous;
         self.current = next_current;
         Ok(signed_transfer)
@@ -645,13 +649,7 @@ mod tests {
         WaveField::new(width, height, spacing, 1.0, substeps, 1.0).expect("stable reference solver")
     }
 
-    fn pulse(
-        field: &mut WaveField,
-        source: &mut SourceInstance,
-        x: f64,
-        y: f64,
-        amplitude: f64,
-    ) {
+    fn pulse(field: &mut WaveField, source: &mut SourceInstance, x: f64, y: f64, amplitude: f64) {
         field
             .inject_compact_pulse(source, x, y, 3.0, amplitude)
             .expect("finite-budget pulse injection");
@@ -807,7 +805,10 @@ mod tests {
         assert!(initial_transfer > 0.0);
         assert!((field.energy() - initial_transfer).abs() < 1.0e-12);
         assert!(
-            (field.energy() + source.account().remaining_energy() - source.account().initial_energy()).abs() < 1.0e-12
+            (field.energy() + source.account().remaining_energy()
+                - source.account().initial_energy())
+            .abs()
+                < 1.0e-12
         );
 
         let initial_energy = field.energy();
@@ -818,7 +819,10 @@ mod tests {
             relative_drift < 1.0e-10,
             "relative energy drift: {relative_drift}"
         );
-        assert_eq!(source.account().cumulative_field_transfer(), initial_transfer);
+        assert_eq!(
+            source.account().cumulative_field_transfer(),
+            initial_transfer
+        );
     }
 
     #[test]
@@ -841,14 +845,20 @@ mod tests {
         assert!((second_transfer - 3.0 * first_transfer).abs() < 1.0e-12);
         assert!((field.energy() - 4.0 * first_transfer).abs() < 1.0e-12);
         assert!(
-            (field.energy() + first_source.account().remaining_energy() + second_source.account().remaining_energy()
+            (field.energy()
+                + first_source.account().remaining_energy()
+                + second_source.account().remaining_energy()
                 - first_source.account().initial_energy()
                 - second_source.account().initial_energy())
             .abs()
                 < 1.0e-12
         );
-        assert!((first_source.account().cumulative_field_transfer() - first_transfer).abs() < 1.0e-12);
-        assert!((second_source.account().cumulative_field_transfer() - second_transfer).abs() < 1.0e-12);
+        assert!(
+            (first_source.account().cumulative_field_transfer() - first_transfer).abs() < 1.0e-12
+        );
+        assert!(
+            (second_source.account().cumulative_field_transfer() - second_transfer).abs() < 1.0e-12
+        );
     }
 
     #[test]
@@ -875,9 +885,18 @@ mod tests {
 
         assert!((returned + emitted).abs() < 1.0e-12);
         assert!(field.energy().abs() < 1.0e-12);
-        assert!((emitter.account().remaining_energy() + absorber.account().remaining_energy() - 10.0).abs() < 1.0e-12);
+        assert!(
+            (emitter.account().remaining_energy() + absorber.account().remaining_energy() - 10.0)
+                .abs()
+                < 1.0e-12
+        );
         assert!((absorber.account().remaining_energy() - emitted).abs() < 1.0e-12);
-        assert!((emitter.account().cumulative_field_transfer() + absorber.account().cumulative_field_transfer()).abs() < 1.0e-12);
+        assert!(
+            (emitter.account().cumulative_field_transfer()
+                + absorber.account().cumulative_field_transfer())
+            .abs()
+                < 1.0e-12
+        );
     }
 
     #[test]
@@ -901,7 +920,10 @@ mod tests {
         assert!(field.sample(124, 100).unwrap().abs() > 1.0e-2);
         assert_eq!(field.logical_time_ticks(), 34.0);
         assert!(
-            (field.energy() + source.account().remaining_energy() - source.account().initial_energy()).abs() < 1.0e-10
+            (field.energy() + source.account().remaining_energy()
+                - source.account().initial_energy())
+            .abs()
+                < 1.0e-10
         );
         assert!((source.account().cumulative_field_transfer() - transfer).abs() < 1.0e-12);
     }
@@ -932,7 +954,9 @@ mod tests {
             expected_centered_velocity
         );
         assert!(
-            (field.energy() + field.boundary_absorbed_energy() + source.account().remaining_energy()
+            (field.energy()
+                + field.boundary_absorbed_energy()
+                + source.account().remaining_energy()
                 - source.account().initial_energy())
             .abs()
                 < 1.0e-10
@@ -1585,7 +1609,9 @@ mod tests {
             "remaining={remaining}, absorbed={absorbed}, emitted={emitted_energy}"
         );
         assert!(
-            (remaining + absorbed + source.account().remaining_energy() - source.account().initial_energy()).abs()
+            (remaining + absorbed + source.account().remaining_energy()
+                - source.account().initial_energy())
+            .abs()
                 < 1.0e-9
         );
     }
