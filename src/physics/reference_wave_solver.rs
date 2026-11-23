@@ -10,7 +10,7 @@
 //! boundaries only; reference measurements must finish before their numerical
 //! domain of dependence can reach those boundaries.
 
-use super::source::{SourceAccountError, SourceEnergyAccount, SourceId};
+use super::source::{SourceAccountError, SourceId, SourceInstance};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WaveFieldError {
@@ -288,7 +288,7 @@ impl WaveField {
     /// are atomic.
     pub(crate) fn inject_initial_profile(
         &mut self,
-        source: &mut SourceEnergyAccount,
+        source: &mut SourceInstance,
         displacement: &[f64],
         velocity: &[f64],
     ) -> Result<f64, WaveFieldError> {
@@ -306,7 +306,7 @@ impl WaveField {
     /// being inserted into the initial condition.
     pub(crate) fn inject_profile_at_current_time(
         &mut self,
-        source: &mut SourceEnergyAccount,
+        source: &mut SourceInstance,
         displacement: &[f64],
         velocity: &[f64],
     ) -> Result<f64, WaveFieldError> {
@@ -378,7 +378,7 @@ impl WaveField {
         if !next_energy.is_finite() || next_energy < 0.0 || !signed_transfer.is_finite() {
             return Err(WaveFieldError::InvalidState);
         }
-        let settlement = source.prepare_field_transfer(signed_transfer).map_err(|error| {
+        let settlement = source.account().prepare_field_transfer(signed_transfer).map_err(|error| {
             match error {
                 SourceAccountError::InsufficientEnergy => WaveFieldError::InsufficientSourceEnergy,
                 SourceAccountError::InvalidTransfer => WaveFieldError::InvalidState,
@@ -387,7 +387,7 @@ impl WaveField {
         })?;
 
         // Both updates are now fully validated; the following assignments cannot fail.
-        source.commit_field_transfer(settlement).map_err(|_| WaveFieldError::InvalidState)?;
+        source.account_mut().commit_field_transfer(settlement).map_err(|_| WaveFieldError::InvalidState)?;
         self.previous = next_previous;
         self.current = next_current;
         Ok(signed_transfer)
@@ -396,7 +396,7 @@ impl WaveField {
     /// Injects a compact-support radial velocity pulse as a mathematical test source.
     pub(crate) fn inject_compact_pulse(
         &mut self,
-        source: &mut SourceEnergyAccount,
+        source: &mut SourceInstance,
         center_x: f64,
         center_y: f64,
         support_radius: f64,
@@ -443,7 +443,7 @@ impl WaveField {
     /// Unlike inject_compact_pulse, this is valid after propagation has begun.
     pub(crate) fn inject_compact_pulse_at_current_time(
         &mut self,
-        source: &mut SourceEnergyAccount,
+        source: &mut SourceInstance,
         center_x: f64,
         center_y: f64,
         support_radius: f64,
@@ -619,9 +619,25 @@ impl WaveField {
 mod tests {
     use super::*;
 
-    fn test_source(energy_budget: f64, id: u64) -> SourceEnergyAccount {
-        SourceEnergyAccount::new(SourceId::new(id).expect("valid test source ID"), energy_budget)
-            .expect("valid finite test-source budget")
+    fn test_source(energy_budget: f64, id: u64) -> SourceInstance {
+        let source_id = SourceId::new(id).expect("valid test source ID");
+        let descriptor = super::super::source::SourceDescriptor::new(
+            source_id,
+            super::super::source::SourceProvenance::MathematicalTest { holder_id: id },
+            super::super::source::SourceClass::MathematicalTest,
+            super::super::source::SourceGeometry::Disk {
+                center_x: 0.0,
+                center_y: 0.0,
+                radius: 1.0,
+            },
+            super::super::source::TickSchedule::new(0, None).expect("valid test schedule"),
+            super::super::source::SourceWaveform::SinglePulse,
+            super::super::source::SourcePowerLaw::MathematicalTestOnly,
+        )
+        .expect("valid mathematical test-source descriptor");
+        let account = super::super::source::SourceEnergyAccount::new(source_id, energy_budget)
+            .expect("valid finite test-source budget");
+        SourceInstance::new(descriptor, account).expect("matching descriptor and account")
     }
 
     fn solver(width: usize, height: usize, spacing: f64, substeps: usize) -> WaveField {
@@ -630,7 +646,7 @@ mod tests {
 
     fn pulse(
         field: &mut WaveField,
-        source: &mut SourceEnergyAccount,
+        source: &mut SourceInstance,
         x: f64,
         y: f64,
         amplitude: f64,
@@ -780,8 +796,8 @@ mod tests {
             Err(WaveFieldError::InsufficientSourceEnergy)
         );
         assert_eq!(field.energy(), 0.0);
-        assert_eq!(insufficient.remaining_energy(), 0.001);
-        assert_eq!(insufficient.cumulative_field_transfer(), 0.0);
+        assert_eq!(insufficient.account().remaining_energy(), 0.001);
+        assert_eq!(insufficient.account().cumulative_field_transfer(), 0.0);
 
         let mut source = test_source(10.0, 2).unwrap();
         let initial_transfer = field
@@ -790,7 +806,7 @@ mod tests {
         assert!(initial_transfer > 0.0);
         assert!((field.energy() - initial_transfer).abs() < 1.0e-12);
         assert!(
-            (field.energy() + source.remaining_energy() - source.initial_energy()).abs() < 1.0e-12
+            (field.energy() + source.account().remaining_energy() - source.account().initial_energy()).abs() < 1.0e-12
         );
 
         let initial_energy = field.energy();
@@ -801,7 +817,7 @@ mod tests {
             relative_drift < 1.0e-10,
             "relative energy drift: {relative_drift}"
         );
-        assert_eq!(source.cumulative_field_transfer(), initial_transfer);
+        assert_eq!(source.account().cumulative_field_transfer(), initial_transfer);
     }
 
     #[test]
@@ -824,14 +840,14 @@ mod tests {
         assert!((second_transfer - 3.0 * first_transfer).abs() < 1.0e-12);
         assert!((field.energy() - 4.0 * first_transfer).abs() < 1.0e-12);
         assert!(
-            (field.energy() + first_source.remaining_energy() + second_source.remaining_energy()
-                - first_source.initial_energy()
-                - second_source.initial_energy())
+            (field.energy() + first_source.account().remaining_energy() + second_source.account().remaining_energy()
+                - first_source.account().initial_energy()
+                - second_source.account().initial_energy())
             .abs()
                 < 1.0e-12
         );
-        assert!((first_source.cumulative_field_transfer() - first_transfer).abs() < 1.0e-12);
-        assert!((second_source.cumulative_field_transfer() - second_transfer).abs() < 1.0e-12);
+        assert!((first_source.account().cumulative_field_transfer() - first_transfer).abs() < 1.0e-12);
+        assert!((second_source.account().cumulative_field_transfer() - second_transfer).abs() < 1.0e-12);
     }
 
     #[test]
@@ -858,9 +874,9 @@ mod tests {
 
         assert!((returned + emitted).abs() < 1.0e-12);
         assert!(field.energy().abs() < 1.0e-12);
-        assert!((emitter.remaining_energy() + absorber.remaining_energy() - 10.0).abs() < 1.0e-12);
-        assert!((absorber.remaining_energy() - emitted).abs() < 1.0e-12);
-        assert!((emitter.cumulative_field_transfer() + absorber.cumulative_field_transfer()).abs() < 1.0e-12);
+        assert!((emitter.account().remaining_energy() + absorber.account().remaining_energy() - 10.0).abs() < 1.0e-12);
+        assert!((absorber.account().remaining_energy() - emitted).abs() < 1.0e-12);
+        assert!((emitter.account().cumulative_field_transfer() + absorber.account().cumulative_field_transfer()).abs() < 1.0e-12);
     }
 
     #[test]
@@ -884,9 +900,9 @@ mod tests {
         assert!(field.sample(124, 100).unwrap().abs() > 1.0e-2);
         assert_eq!(field.logical_time_ticks(), 34.0);
         assert!(
-            (field.energy() + source.remaining_energy() - source.initial_energy()).abs() < 1.0e-10
+            (field.energy() + source.account().remaining_energy() - source.account().initial_energy()).abs() < 1.0e-10
         );
-        assert!((source.cumulative_field_transfer() - transfer).abs() < 1.0e-12);
+        assert!((source.account().cumulative_field_transfer() - transfer).abs() < 1.0e-12);
     }
 
     #[test]
@@ -915,8 +931,8 @@ mod tests {
             expected_centered_velocity
         );
         assert!(
-            (field.energy() + field.boundary_absorbed_energy() + source.remaining_energy()
-                - source.initial_energy())
+            (field.energy() + field.boundary_absorbed_energy() + source.account().remaining_energy()
+                - source.account().initial_energy())
             .abs()
                 < 1.0e-10
         );
@@ -1297,7 +1313,7 @@ mod tests {
             "relative energy drift after 500 ticks: {relative_drift}"
         );
         assert!(
-            (field.energy() + source.remaining_energy() - source.initial_energy()).abs() < 1.0e-10
+            (field.energy() + source.account().remaining_energy() - source.account().initial_energy()).abs() < 1.0e-10
         );
     }
 
@@ -1316,7 +1332,7 @@ mod tests {
         assert!(emitted > 0.0);
         assert!((emitted + returned).abs() < 1.0e-12);
         assert!(field.energy().abs() < 1.0e-12);
-        assert!((absorber.remaining_energy() - emitted).abs() < 1.0e-12);
+        assert!((absorber.account().remaining_energy() - emitted).abs() < 1.0e-12);
     }
 
     #[test]
@@ -1568,7 +1584,7 @@ mod tests {
             "remaining={remaining}, absorbed={absorbed}, emitted={emitted_energy}"
         );
         assert!(
-            (remaining + absorbed + source.remaining_energy() - source.initial_energy()).abs()
+            (remaining + absorbed + source.account().remaining_energy() - source.account().initial_energy()).abs()
                 < 1.0e-9
         );
     }
