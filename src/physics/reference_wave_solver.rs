@@ -853,8 +853,8 @@ mod tests {
         field.configure_absorbing_boundary(12, 0.15).unwrap();
         let mut source = test_source(100.0, 103);
         let mut forcing = vec![0.0; field.width() * field.height()];
-        for y in 30..=50 {
-            for x in 30..=50 {
+        for y in 35..=45 {
+            for x in 4..=8 {
                 forcing[field.index(x, y)] = 0.02;
             }
         }
@@ -866,7 +866,7 @@ mod tests {
         let absorbed = field.boundary_absorbed_energy() - absorbed_before;
 
         assert!(work > 0.0);
-        assert!(absorbed >= 0.0);
+        assert!(absorbed > 0.0, "the forced region overlaps the sponge layer");
         assert!((after - before - work + absorbed).abs() < 1.0e-10);
     }
 
