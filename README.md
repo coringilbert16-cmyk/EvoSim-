@@ -89,7 +89,7 @@ The project is developed in stages: physical simulation and chemistry first, fol
 
 Use the documentation index to find the relevant design authority. In particular, the [resonance-field implementation roadmap](docs/design/resonance-field-implementation-roadmap.md) is the controlling detailed roadmap for resonance-field work. Historical audits and PR plans are evidence of earlier investigations, not automatically current implementation instructions.
 
-Project status is evolving. Treat source code and the latest exact-head CI results as evidence of what currently works; treat specifications and roadmaps as intended behavior unless implementation and tests establish otherwise. Resonance-field progress is tracked in the [controlling roadmap](docs/design/resonance-field-implementation-roadmap.md): Phase 3B.2a source accounting (PR #427) and 3B.2b hotspot profile mathematics (PR #426) are merged; continuous work-conjugate forcing (3B.2c) is the active investigation. No real-source injection or production migration is implemented.
+Project status is evolving. Treat source code and the latest exact-head CI results as evidence of what currently works; treat specifications and roadmaps as intended behavior unless implementation and tests establish otherwise. Resonance-field progress is tracked in the [controlling roadmap](docs/design/resonance-field-implementation-roadmap.md): Phase 3B.2a source accounting (PR #427), 3B.2b hotspot profile mathematics (PR #426), and Candidate A continuous work-conjugate forcing (PR #429) are merged. Deterministic replay validation is now in progress; broader convergence and repeated multi-source validation remain. No real-source injection or production migration is implemented.
 
 ## Contributing and making changes
 
