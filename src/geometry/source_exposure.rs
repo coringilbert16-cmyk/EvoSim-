@@ -5382,9 +5382,11 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                                 && (*other_radius - radius).abs() <= 1e-10
                     )
                 };
+                let mut exposed = Vec::with_capacity(cuts.len().saturating_sub(1));
                 for pair in cuts.windows(2) {
                     let (start_t, end_t) = (pair[0], pair[1]);
                     if end_t - start_t <= 1e-12 {
+                        exposed.push(false);
                         continue;
                     }
                     let midpoint_angle = start + sweep * (start_t + end_t) * 0.5;
@@ -5404,9 +5406,42 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                                 midpoint.1,
                             )
                     });
-                    if hidden {
+                    exposed.push(!hidden);
+                }
+
+                // Join adjacent exposed partitions. Exact intersection,
+                // tangent, and antipode cuts classify intervals; they do not
+                // become output boundaries when visibility is unchanged.
+                let mut intervals = Vec::new();
+                let mut index = 0;
+                while index < exposed.len() {
+                    if !exposed[index] {
+                        index += 1;
                         continue;
                     }
+                    let run_start = index;
+                    while index + 1 < exposed.len() && exposed[index + 1] {
+                        index += 1;
+                    }
+                    intervals.push((cuts[run_start], cuts[index + 1]));
+                    index += 1;
+                }
+
+                // The first and last partitions of a full circle are
+                // adjacent across the parameter seam as well.
+                if sweep >= std::f64::consts::TAU - 1e-10
+                    && intervals.len() >= 2
+                    && intervals.first().is_some_and(|interval| interval.0 <= 1e-12)
+                    && intervals
+                        .last()
+                        .is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
+                {
+                    let first = intervals.remove(0);
+                    let last = intervals.pop().expect("two intervals were checked");
+                    intervals.push((last.0, first.1 + 1.0));
+                }
+
+                for (start_t, end_t) in intervals {
                     curved.push(ExposedCircularArcInterval {
                         body_index,
                         unit_index,
