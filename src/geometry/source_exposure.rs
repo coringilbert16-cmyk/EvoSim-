@@ -5199,7 +5199,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 continue;
             };
             let same_circle = *previous_sweep >= std::f64::consts::TAU - 1e-10
-                && (current_center.0 - previous_center.0).hypot(current_center.1 - previous_center.1)
+                && (current_center.0 - previous_center.0)
+                    .hypot(current_center.1 - previous_center.1)
                     <= 1e-12
                 && (current_radius - previous_radius).abs() <= 1e-10;
             if same_circle {
@@ -5633,10 +5634,12 @@ mod source_global_perimeter_tests {
             assert!(perimeter.straight.is_empty());
             assert_eq!(perimeter.curved.len(), 1);
             assert_eq!(perimeter.curved[0].unit_index, 2);
-            assert!((visible_material_perimeter_length(&perimeter).unwrap()
-                - 3.0 * std::f64::consts::TAU)
-                .abs()
-                < 1e-10);
+            assert!(
+                (visible_material_perimeter_length(&perimeter).unwrap()
+                    - 3.0 * std::f64::consts::TAU)
+                    .abs()
+                    < 1e-10
+            );
         }
     }
 
@@ -5664,10 +5667,11 @@ mod source_global_perimeter_tests {
         let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
         assert_eq!(perimeter.curved.len(), 1);
         assert_eq!(perimeter.curved[0].unit_index, 0);
-        assert!((visible_material_perimeter_length(&perimeter).unwrap()
-            - 6.0 * std::f64::consts::TAU)
-            .abs()
-            < 1e-9);
+        assert!(
+            (visible_material_perimeter_length(&perimeter).unwrap() - 6.0 * std::f64::consts::TAU)
+                .abs()
+                < 1e-9
+        );
     }
 
     #[test]
@@ -5675,8 +5679,7 @@ mod source_global_perimeter_tests {
         let offset = 1e-8;
         let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, offset, 0.0)]);
         let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        let exposed_angle = 2.0 * std::f64::consts::PI
-            - 2.0 * (offset / 2.0).acos();
+        let exposed_angle = 2.0 * std::f64::consts::PI - 2.0 * (offset / 2.0).acos();
         let expected = 2.0 * exposed_angle;
         assert_eq!(perimeter.curved.len(), 2);
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-8);
@@ -5688,7 +5691,10 @@ mod source_global_perimeter_tests {
             parts: vec![
                 PlacedForm {
                     unit_index: 0,
-                    form: Form::Rectangle { width: 4.0, height: 4.0 },
+                    form: Form::Rectangle {
+                        width: 4.0,
+                        height: 4.0,
+                    },
                     x: 0.0,
                     y: 0.0,
                     rotation_radians: 0.0,
@@ -5718,7 +5724,10 @@ mod source_global_perimeter_tests {
             parts: vec![
                 PlacedForm {
                     unit_index: 0,
-                    form: Form::Rectangle { width: 2.0, height: 2.0 },
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
                     x: 0.0,
                     y: 0.0,
                     rotation_radians: 0.0,
