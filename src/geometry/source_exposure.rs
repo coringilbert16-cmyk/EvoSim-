@@ -5139,6 +5139,11 @@ fn add_global_intersection_cuts(
                 center_a.0 + along * dx / distance,
                 center_a.1 + along * dy / distance,
             );
+            // A tangent contact is a zero-measure event and does not change
+            // the open intervals belonging to the material union.
+            if height <= 1e-10 {
+                return Some(());
+            }
             for sign in [-1.0, 1.0] {
                 let point = (
                     base.0 - sign * dy * height / distance,
@@ -5152,9 +5157,6 @@ fn add_global_intersection_cuts(
                 ) {
                     cuts_a.push(t_a);
                     cuts_b.push(t_b);
-                }
-                if height <= 1e-10 {
-                    break;
                 }
             }
         }
@@ -5363,20 +5365,21 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 sweep,
                 mut cuts,
             } => {
-                if sweep >= std::f64::consts::TAU - 1e-10
-                    && cuts.len() > 2
-                    && !cuts.iter().any(|cut| (*cut - 0.5).abs() <= 1e-10)
-                {
-                    // Split a wrapped exposed arc at the antipode only when
-                    // intersections already partition this circle. An
-                    // isolated full circle remains one interval.
-                    cuts.push(0.5);
-                }
                 cuts.sort_by(f64::total_cmp);
-                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+                let is_duplicate_circle = |other: &crate::organism_geometry::PlacedForm| {
+                    matches!(
+                        other.form,
+                        crate::resources::Form::Circle { radius: other_radius }
+                            if (other.x - center.0).hypot(other.y - center.1) <= 1e-12
+                                && (other_radius - radius).abs() <= 1e-10
+                    )
+                };
+                let mut exposed = Vec::with_capacity(cuts.len().saturating_sub(1));
                 for pair in cuts.windows(2) {
                     let (start_t, end_t) = (pair[0], pair[1]);
                     if end_t - start_t <= 1e-12 {
+                        exposed.push(false);
                         continue;
                     }
                     let midpoint_angle = start + sweep * (start_t + end_t) * 0.5;
@@ -5386,6 +5389,7 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     );
                     let hidden = body.parts.iter().enumerate().any(|(other_index, other)| {
                         other_index != part_index
+                            && !is_duplicate_circle(other)
                             && crate::organism_geometry::form_contains_point(
                                 &other.form,
                                 other.x,
@@ -5395,9 +5399,28 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                                 midpoint.1,
                             )
                     });
-                    if hidden {
-                        continue;
+                    exposed.push(!hidden);
+                }
+
+                let mut intervals = Vec::new();
+                for (index, pair) in cuts.windows(2).enumerate() {
+                    if exposed.get(index).copied().unwrap_or(false) {
+                        intervals.push((pair[0], pair[1]));
                     }
+                }
+                // A full circle's parameter endpoints are the same point.
+                // Join exposed intervals across that seam instead of emitting
+                // two artificial pieces for one continuous physical arc.
+                if sweep >= std::f64::consts::TAU - 1e-10
+                    && intervals.len() >= 2
+                    && intervals.first().is_some_and(|interval| interval.0 <= 1e-12)
+                    && intervals.last().is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
+                {
+                    let first = intervals.remove(0);
+                    let last = intervals.pop().expect("two intervals were checked");
+                    intervals.push((last.0, first.1 + 1.0));
+                }
+                for (start_t, end_t) in intervals {
                     curved.push(ExposedCircularArcInterval {
                         body_index,
                         unit_index,
@@ -5411,8 +5434,7 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         },
                     });
                 }
-            }
-        }
+            }        }
     }
 
     // Canonicalize segment direction and ordering so equivalent unions do
@@ -5750,7 +5772,7 @@ mod source_global_perimeter_tests {
         assert_eq!(perimeter.curved.len(), 1);
         assert_eq!(perimeter.curved[0].unit_index, 0);
         assert!(
-            (visible_material_perimeter_length(&perimeter).unwrap() - 6.0 * std::f64::consts::TAU)
+            (visible_material_perimeter_length(&perimeter).unwrap() - 3.0 * std::f64::consts::TAU)
                 .abs()
                 < 1e-9
         );
