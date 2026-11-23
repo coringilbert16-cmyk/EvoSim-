@@ -5166,6 +5166,60 @@ pub(crate) fn disjoint_source_global_material_perimeter(
         }
     }
 
+    // Full-circle constituents with identical geometry describe one boundary
+    // of the material union. Keep the stable lowest (unit_index, part_index)
+    // owner before pairwise intersection processing; coincident circles are
+    // not a zero-area intersection arrangement and must not fail closed.
+    let mut duplicate_circle = vec![false; pieces.len()];
+    for current in 0..pieces.len() {
+        let GlobalBoundaryPiece::Arc {
+            part_index: current_part,
+            unit_index: current_unit,
+            center: current_center,
+            radius: current_radius,
+            sweep: current_sweep,
+            ..
+        } = &pieces[current]
+        else {
+            continue;
+        };
+        if *current_sweep < std::f64::consts::TAU - 1e-10 {
+            continue;
+        }
+        for previous in 0..current {
+            let GlobalBoundaryPiece::Arc {
+                part_index: previous_part,
+                unit_index: previous_unit,
+                center: previous_center,
+                radius: previous_radius,
+                sweep: previous_sweep,
+                ..
+            } = &pieces[previous]
+            else {
+                continue;
+            };
+            let same_circle = *previous_sweep >= std::f64::consts::TAU - 1e-10
+                && (current_center.0 - previous_center.0).abs() <= 1e-10
+                && (current_center.1 - previous_center.1).abs() <= 1e-10
+                && (current_radius - previous_radius).abs() <= 1e-10;
+            if same_circle {
+                if (*current_unit, *current_part) < (*previous_unit, *previous_part) {
+                    duplicate_circle[previous] = true;
+                } else {
+                    duplicate_circle[current] = true;
+                    break;
+                }
+            }
+        }
+    }
+    if duplicate_circle.iter().any(|duplicate| *duplicate) {
+        pieces = pieces
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, piece)| (!duplicate_circle[index]).then_some(piece))
+            .collect();
+    }
+
     for first in 0..pieces.len() {
         for second in (first + 1)..pieces.len() {
             let (left, right) = pieces.split_at_mut(second);
@@ -5550,4 +5604,117 @@ mod source_global_perimeter_tests {
         let second = disjoint_source_global_material_perimeter(&second, 0).unwrap();
         assert_eq!(first.straight, second.straight);
     }
+    fn circle_body(parts: Vec<(usize, f64, f64, f64)>) -> OrganismBodyGeometry {
+        let placed = parts
+            .into_iter()
+            .map(|(unit_index, radius, x, y)| PlacedForm {
+                unit_index,
+                form: Form::Circle { radius },
+                x,
+                y,
+                rotation_radians: 0.0,
+            })
+            .collect();
+        OrganismBodyGeometry {
+            parts: placed,
+            min_x: -10.0,
+            max_x: 10.0,
+            min_y: -10.0,
+            max_y: 10.0,
+        }
+    }
+
+    #[test]
+    fn coincident_circles_emit_one_boundary_with_stable_owner() {
+        let first = circle_body(vec![(9, 1.5, 0.0, 0.0), (2, 1.5, 0.0, 0.0)]);
+        let reversed = circle_body(vec![(2, 1.5, 0.0, 0.0), (9, 1.5, 0.0, 0.0)]);
+        for body in [&first, &reversed] {
+            let perimeter = disjoint_source_global_material_perimeter(body, 0).unwrap();
+            assert!(perimeter.straight.is_empty());
+            assert_eq!(perimeter.curved.len(), 1);
+            assert_eq!(perimeter.curved[0].unit_index, 2);
+            assert!((visible_material_perimeter_length(&perimeter).unwrap()
+                - 3.0 * std::f64::consts::TAU)
+                .abs()
+                < 1e-10);
+        }
+    }
+
+    #[test]
+    fn externally_tangent_circles_keep_both_complete_outer_boundaries() {
+        let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, 2.0, 0.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        let expected = 4.0 * std::f64::consts::PI;
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn internally_tangent_contained_circle_does_not_add_union_perimeter() {
+        let body = circle_body(vec![(0, 2.0, 0.0, 0.0), (1, 1.0, 1.0, 0.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        let expected = 4.0 * std::f64::consts::PI;
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
+        assert_eq!(perimeter.curved.len(), 1);
+        assert_eq!(perimeter.curved[0].unit_index, 0);
+    }
+
+    #[test]
+    fn circle_contained_by_convex_polygon_has_no_exposed_arc() {
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Rectangle { width: 4.0, height: 4.0 },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Circle { radius: 0.5 },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            min_x: -2.0,
+            max_x: 2.0,
+            min_y: -2.0,
+            max_y: 2.0,
+        };
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.curved.len(), 0);
+        assert_eq!(perimeter.straight.len(), 4);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 16.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn tangent_circle_and_polygon_have_no_finite_overlap_to_double_count() {
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Rectangle { width: 2.0, height: 2.0 },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Circle { radius: 1.0 },
+                    x: 2.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            min_x: -1.0,
+            max_x: 3.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        let expected = 8.0 + std::f64::consts::TAU;
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
+    }
+
 }
