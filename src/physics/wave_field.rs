@@ -1214,8 +1214,7 @@ mod tests {
         let mode = mode_profile(321, 321, 1.0, length, mode_x, mode_y);
         let spatial_omega = spatial_mode_frequency(1.0, 1.0, length, mode_x, mode_y);
         let temporal_omega =
-            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos()
-                / field.time_step();
+            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos() / field.time_step();
 
         field.current.clone_from(&mode);
         let previous_phase = (temporal_omega * field.time_step()).cos();
@@ -1229,9 +1228,8 @@ mod tests {
         for y in 158..=162 {
             for x in 158..=162 {
                 let index = field.index(x, y);
-                maximum_error = maximum_error.max(
-                    (field.current[index] - mode[index] * expected_factor).abs(),
-                );
+                maximum_error =
+                    maximum_error.max((field.current[index] - mode[index] * expected_factor).abs());
             }
         }
 
