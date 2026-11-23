@@ -68,6 +68,9 @@ mod juvenile;
 mod molecular_layout;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
+#[path = "geometry/phase3_geometry.rs"]
+#[allow(dead_code)] // Strict Phase 3 reference geometry contract; integrated in later Phase 3 stages.
+mod phase3_geometry;
 #[path = "organism/viability.rs"]
 mod organism_viability;
 #[path = "geometry/physical_geometry.rs"]
@@ -77,9 +80,6 @@ mod rigid_boundary;
 #[path = "geometry/source_exposure.rs"]
 #[allow(dead_code)] // Live sunlight uses analytic exposure; remaining helpers are test-only.
 mod source_exposure;
-#[path = "geometry/phase3_geometry.rs"]
-#[allow(dead_code)] // Strict Phase 3 reference geometry contract; integrated in later Phase 3 stages.
-mod phase3_geometry;
 #[path = "geometry/surface_geometry.rs"]
 mod surface_geometry;
 
