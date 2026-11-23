@@ -1316,6 +1316,41 @@ mod visibility_tests {
             visible_length < 2.0 - 1e-6,
             "the blocker should shadow part of the edge"
         );
+
+        // The two silhouette rays pass exactly through the blocker vertices
+        // nearest the source: x=2.25, y=±0.25. At the receiver edge x=4,
+        // their analytically projected endpoints are y=±9/29.
+        let mut endpoints: Vec<f64> = left_edge
+            .iter()
+            .flat_map(|interval| [interval.start.1, interval.end.1])
+            .collect();
+        endpoints.sort_by(f64::total_cmp);
+        endpoints.dedup_by(|a, b| (*a - *b).abs() < 1e-10);
+        assert_eq!(endpoints.len(), 4, "two visible shoulders must have four distinct endpoints: {endpoints:?}");
+        for (actual, expected) in endpoints.iter().zip([-1.0, -9.0 / 29.0, 9.0 / 29.0, 1.0]) {
+            assert!(
+                (actual - expected).abs() < 1e-10,
+                "polygon-vertex tangent event should be at {expected}, got {actual}"
+            );
+        }
+        assert!(
+            (visible_length - (2.0 - 18.0 / 29.0)).abs() < 1e-10,
+            "disjoint visible measure must match the analytic result"
+        );
+    }
+
+    #[test]
+    fn source_on_or_inside_polygon_target_has_no_receiving_boundary() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+
+        for source in [(4.0, 0.0), (5.0, 0.0)] {
+            let intervals = visible_polygonal_intervals(source, std::slice::from_ref(&target))
+                .expect("source-on-boundary and source-inside cases are valid but non-receiving");
+            assert!(
+                intervals.is_empty(),
+                "a source on or inside a solid target must produce no outward-facing receiving interval: source={source:?}, intervals={intervals:?}"
+            );
+        }
     }
 
     #[test]
