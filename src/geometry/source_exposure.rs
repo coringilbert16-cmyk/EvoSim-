@@ -5281,17 +5281,35 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 sweep,
                 mut cuts,
             } => {
-                if sweep >= std::f64::consts::TAU - 1e-10
-                    && cuts.len() > 2
-                    && !cuts.iter().any(|cut| (*cut - 0.5).abs() <= 1e-10)
-                {
-                    // Keep a stable antipode partition for full circles with
-                    // intersections; it avoids classifying an entire exposed
-                    // side from a midpoint that can coincide with a tangent.
-                    cuts.push(0.5);
-                }
                 cuts.sort_by(f64::total_cmp);
                 cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+                // Preserve the historical stable partition for genuine
+                // multi-point intersections, but not for tangencies or
+                // near-coincident circles whose tiny overlap is numerically
+                // ill-conditioned. Those cases are classified from their
+                // actual intersection cuts and then coalesced normally.
+                let near_coincident_circle = body.parts.iter().enumerate().any(
+                    |(other_index, other)| {
+                        other_index != part_index
+                            && matches!(
+                                &other.form,
+                                crate::resources::Form::Circle { radius: other_radius }
+                                    if (other.x - center.0).hypot(other.y - center.1)
+                                        <= 1e-6 * radius.max(*other_radius)
+                            )
+                    },
+                );
+                let preserve_intersection_partition = sweep
+                    >= std::f64::consts::TAU - 1e-10
+                    && cuts.len() > 3
+                    && !near_coincident_circle;
+                if preserve_intersection_partition
+                    && !cuts.iter().any(|cut| (*cut - 0.5).abs() <= 1e-10)
+                {
+                    cuts.push(0.5);
+                    cuts.sort_by(f64::total_cmp);
+                    cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+                }
                 let is_duplicate_circle = |other: &crate::organism_geometry::PlacedForm| {
                     matches!(
                         &other.form,
@@ -5351,7 +5369,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
 
                 // The first and last partitions of a full circle are
                 // adjacent across the parameter seam as well.
-                if sweep >= std::f64::consts::TAU - 1e-10
+                if !preserve_intersection_partition
+                    && sweep >= std::f64::consts::TAU - 1e-10
                     && intervals.len() >= 2
                     && intervals
                         .first()
