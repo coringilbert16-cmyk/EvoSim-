@@ -1482,6 +1482,112 @@ mod visibility_tests {
     }
 
     #[test]
+    fn polygon_visibility_is_deterministic_under_body_reordering_and_winding_reversal() {
+        let polygon_body = |unit_index: usize,
+                            x: f64,
+                            y: f64,
+                            mut vertices: Vec<(f64, f64)>| {
+            let min_x = vertices
+                .iter()
+                .map(|point| point.0)
+                .fold(f64::INFINITY, f64::min);
+            let max_x = vertices
+                .iter()
+                .map(|point| point.0)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let min_y = vertices
+                .iter()
+                .map(|point| point.1)
+                .fold(f64::INFINITY, f64::min);
+            let max_y = vertices
+                .iter()
+                .map(|point| point.1)
+                .fold(f64::NEG_INFINITY, f64::max);
+            OrganismBodyGeometry {
+                parts: vec![PlacedForm {
+                    unit_index,
+                    form: Form::Polygon {
+                        vertices: std::mem::take(&mut vertices),
+                    },
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                min_x: x + min_x,
+                max_x: x + max_x,
+                min_y: y + min_y,
+                max_y: y + max_y,
+            }
+        };
+        let target_vertices = vec![
+            (-1.0, -1.0),
+            (1.0, -1.0),
+            (1.0, 1.0),
+            (-1.0, 1.0),
+        ];
+        let blocker_vertices = vec![
+            (-0.25, -0.4),
+            (0.25, -0.4),
+            (0.25, 0.4),
+            (-0.25, 0.4),
+        ];
+        let reversed = |vertices: &[(f64, f64)]| {
+            vertices.iter().copied().rev().collect::<Vec<_>>()
+        };
+
+        let target = polygon_body(10, 5.0, 0.0, target_vertices.clone());
+        let blocker = polygon_body(20, 2.5, 0.0, blocker_vertices.clone());
+        let baseline = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("valid polygon arrangement");
+
+        let blocker_reversed =
+            polygon_body(20, 2.5, 0.0, reversed(&blocker_vertices));
+        let target_reversed =
+            polygon_body(10, 5.0, 0.0, reversed(&target_vertices));
+        let reordered = visible_polygonal_intervals(
+            (-5.0, 0.0),
+            &[blocker_reversed, target_reversed],
+        )
+        .expect("reordered and reversed polygons remain valid");
+
+        let canonical = |intervals: &[ExposedBoundaryInterval], target_body_index: usize| {
+            let mut segments: Vec<_> = intervals
+                .iter()
+                .filter(|interval| {
+                    interval.body_index == target_body_index && interval.unit_index == 10
+                })
+                .map(|interval| {
+                    let (start, end) = if (interval.start.0, interval.start.1)
+                        <= (interval.end.0, interval.end.1)
+                    {
+                        (interval.start, interval.end)
+                    } else {
+                        (interval.end, interval.start)
+                    };
+                    (start, end, interval.outward_normal)
+                })
+                .collect();
+            segments.sort_by(|a, b| {
+                a.0 .0
+                    .total_cmp(&b.0 .0)
+                    .then_with(|| a.0 .1.total_cmp(&b.0 .1))
+                    .then_with(|| a.1 .0.total_cmp(&b.1 .0))
+                    .then_with(|| a.1 .1.total_cmp(&b.1 .1))
+                    .then_with(|| a.2 .0.total_cmp(&b.2 .0))
+                    .then_with(|| a.2 .1.total_cmp(&b.2 .1))
+            });
+            segments
+        };
+
+        let first = canonical(&baseline, 0);
+        let second = canonical(&reordered, 1);
+        assert_eq!(
+            first, second,
+            "visible intervals and outward normals must not depend on body order or polygon winding"
+        );
+    }
+
+    #[test]
     fn straight_boundary_query_skips_curved_targets_without_polygonization() {
         let circle = OrganismBodyGeometry {
             parts: vec![PlacedForm {
