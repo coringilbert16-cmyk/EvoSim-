@@ -1416,10 +1416,13 @@ mod tests {
         field: &mut WaveField,
         angle: f64,
         wave_number: f64,
+        center_offset: f64,
+        envelope_radius: f64,
     ) -> (usize, usize, f64) {
-        let center_x = (field.width / 2) as f64 - 15.0 * angle.cos();
-        let center_y = (field.height / 2) as f64 - 15.0 * angle.sin();
-        let envelope_radius = 9.0;
+        let center_x = (field.width / 2) as f64 * field.spacing
+            - center_offset * angle.cos();
+        let center_y = (field.height / 2) as f64 * field.spacing
+            - center_offset * angle.sin();
         let spatial_eigenvalue = 4.0 / field.spacing.powi(2)
             * ((0.5 * wave_number * field.spacing * angle.cos())
                 .sin()
@@ -1509,9 +1512,10 @@ mod tests {
             let mut absorbing = solver(201, 201, 1.0, 2);
             let mut reflective = solver(201, 201, 1.0, 2);
             absorbing.configure_absorbing_boundary(72, 0.2).unwrap();
-            let (center_x, center_y, _) = outgoing_wave_packet(&mut absorbing, angle, wave_number);
+            let (center_x, center_y, _) =
+                outgoing_wave_packet(&mut absorbing, angle, wave_number, 15.0, 9.0);
             let (reflective_x, reflective_y, _) =
-                outgoing_wave_packet(&mut reflective, angle, wave_number);
+                outgoing_wave_packet(&mut reflective, angle, wave_number, 15.0, 9.0);
             absorbing.advance_ticks(260).unwrap();
             reflective.advance_ticks(260).unwrap();
 
@@ -1537,8 +1541,10 @@ mod tests {
         let mut smaller = solver(201, 201, 1.0, 2);
         let mut larger = solver(321, 321, 1.0, 2);
         smaller.configure_absorbing_boundary(72, 0.2).unwrap();
-        let (small_x, small_y, initial_norm) = outgoing_wave_packet(&mut smaller, 0.0, 0.18);
-        let (large_x, large_y, _) = outgoing_wave_packet(&mut larger, 0.0, 0.18);
+        let (small_x, small_y, initial_norm) =
+            outgoing_wave_packet(&mut smaller, 0.0, 0.18, 15.0, 9.0);
+        let (large_x, large_y, _) =
+            outgoing_wave_packet(&mut larger, 0.0, 0.18, 15.0, 9.0);
 
         smaller.advance_ticks(260).unwrap();
         larger.advance_ticks(260).unwrap();
@@ -1566,6 +1572,38 @@ mod tests {
         assert!(
             normalized_error < 0.01,
             "absorbing-window error relative to initial packet envelope: {normalized_error}"
+        );
+    }
+
+    #[test]
+    fn absorbing_boundary_retains_low_reflection_when_grid_resolution_is_refined() {
+        let mut absorbing = WaveField::new(241, 241, 0.5, 1.0, 4, 1.0).unwrap();
+        let mut reflective = WaveField::new(241, 241, 0.5, 1.0, 4, 1.0).unwrap();
+        absorbing.configure_absorbing_boundary(88, 0.2).unwrap();
+
+        let angle = std::f64::consts::FRAC_PI_4;
+        let (center_x, center_y, _) =
+            outgoing_wave_packet(&mut absorbing, angle, 0.18, 7.5, 4.5);
+        let (reflective_x, reflective_y, _) =
+            outgoing_wave_packet(&mut reflective, angle, 0.18, 7.5, 4.5);
+
+        absorbing.advance_ticks(180).unwrap();
+        reflective.advance_ticks(180).unwrap();
+
+        let absorbed_return = local_amplitude_norm(&absorbing, center_x, center_y, 24);
+        let reflected_return =
+            local_amplitude_norm(&reflective, reflective_x, reflective_y, 24);
+        let reflection_ratio = absorbed_return / reflected_return.max(1.0e-15);
+        assert!(
+            reflection_ratio < 0.03,
+            "refined-grid residual ratio: {reflection_ratio}"
+        );
+
+        let remaining_energy = absorbing.energy();
+        let absorbed_energy = absorbing.boundary_absorbed_energy();
+        assert!(
+            absorbed_energy > 0.99 * (absorbed_energy + remaining_energy),
+            "refined-grid absorbed={absorbed_energy}, remaining={remaining_energy}"
         );
     }
 
