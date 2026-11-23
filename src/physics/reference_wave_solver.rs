@@ -2193,10 +2193,8 @@ mod tests {
             for y in 1..field.height - 1 {
                 for x in 1..field.width - 1 {
                     let index = field.index(x, y);
-                    first_profile[index] =
-                        1.0e-4 * ((x * 7 + y * 11) as f64 * 0.031).sin();
-                    second_profile[index] =
-                        1.0e-4 * ((x * 13 + y * 3) as f64 * 0.027).cos();
+                    first_profile[index] = 1.0e-4 * ((x * 7 + y * 11) as f64 * 0.031).sin();
+                    second_profile[index] = 1.0e-4 * ((x * 13 + y * 3) as f64 * 0.027).cos();
                 }
             }
 
@@ -2266,10 +2264,9 @@ mod tests {
 
         assert_eq!(left_first.descriptor(), right_first.descriptor());
         assert_eq!(left_second.descriptor(), right_second.descriptor());
-        for (left_source, right_source) in [
-            (&left_first, &right_first),
-            (&left_second, &right_second),
-        ] {
+        for (left_source, right_source) in
+            [(&left_first, &right_first), (&left_second, &right_second)]
+        {
             assert_eq!(
                 left_source.account().initial_energy().to_bits(),
                 right_source.account().initial_energy().to_bits()
@@ -2279,19 +2276,17 @@ mod tests {
                 right_source.account().remaining_energy().to_bits()
             );
             assert_eq!(
-                left_source
-                    .account()
-                    .cumulative_field_transfer()
-                    .to_bits(),
-                right_source
-                    .account()
-                    .cumulative_field_transfer()
-                    .to_bits()
+                left_source.account().cumulative_field_transfer().to_bits(),
+                right_source.account().cumulative_field_transfer().to_bits()
             );
         }
         assert_eq!(left_work.len(), right_work.len());
         for (step, (left_step, right_step)) in left_work.iter().zip(&right_work).enumerate() {
-            assert_bits_equal(left_step, right_step, &format!("source work at step {step}"));
+            assert_bits_equal(
+                left_step,
+                right_step,
+                &format!("source work at step {step}"),
+            );
         }
         assert!(left.boundary_absorbed_energy > 0.0);
         assert!(left_work.iter().flatten().any(|work| *work > 0.0));
