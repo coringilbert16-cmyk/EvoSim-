@@ -125,9 +125,7 @@ fn edge_intersections(
     if !t.is_finite() || !u.is_finite() {
         return None;
     }
-    if (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&t)
-        && (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&u)
-    {
+    if (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&t) && (-PARAM_EPS..=1.0 + PARAM_EPS).contains(&u) {
         Some(vec![(t.clamp(0.0, 1.0), u.clamp(0.0, 1.0))])
     } else {
         Some(vec![])
