@@ -1514,6 +1514,46 @@ mod visibility_tests {
         assert!(shoulders[0].1 < shoulders[1].0);
         assert!(shoulders[1].1 < shoulders[2].0);
         assert!(shoulders[2].1 <= 1.0 + 1e-8);
+
+        // The two blocker silhouettes have analytic target-edge cuts at
+        // ±27/29 and ±63/145. The three visible intervals must be disjoint,
+        // with a total visible measure of 146/145.
+        let mut visible: Vec<(f64, f64)> = intervals
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && interval.unit_index == 10
+                    && (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .map(|interval| (
+                interval.start.1.min(interval.end.1),
+                interval.start.1.max(interval.end.1),
+            ))
+            .collect();
+        visible.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(visible.len(), 3);
+        for pair in visible.windows(2) {
+            assert!(
+                pair[0].1 <= pair[1].0 + 1e-10,
+                "visible intervals overlap or duplicate boundary measure: {visible:?}"
+            );
+        }
+        let endpoints: Vec<f64> = visible.iter().flat_map(|(a, b)| [*a, *b]).collect();
+        for (actual, expected) in endpoints.iter().zip([
+            -1.0, -27.0 / 29.0, -63.0 / 145.0,
+            63.0 / 145.0, 27.0 / 29.0, 1.0,
+        ]) {
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "analytic visible endpoint mismatch: expected {expected}, got {actual}"
+            );
+        }
+        let visible_measure: f64 = visible.iter().map(|(a, b)| b - a).sum();
+        assert!(
+            (visible_measure - 146.0 / 145.0).abs() < 1e-9,
+            "disjoint visible measure mismatch: {visible_measure}"
+        );
     }
 
     #[test]
@@ -6290,7 +6330,7 @@ mod source_global_perimeter_tests {
             assert_eq!(perimeter.curved[0].unit_index, 2);
             assert!(
                 (visible_material_perimeter_length(&perimeter).unwrap()
-                    - 1.5 * std::f64::consts::TAU)
+                    - 3.0 * std::f64::consts::TAU)
                     .abs()
                     < 1e-10
             );
@@ -6322,7 +6362,7 @@ mod source_global_perimeter_tests {
         assert_eq!(perimeter.curved.len(), 1);
         assert_eq!(perimeter.curved[0].unit_index, 0);
         assert!(
-            (visible_material_perimeter_length(&perimeter).unwrap() - 3.0 * std::f64::consts::TAU)
+            (visible_material_perimeter_length(&perimeter).unwrap() - 6.0 * std::f64::consts::TAU)
                 .abs()
                 < 1e-9
         );
