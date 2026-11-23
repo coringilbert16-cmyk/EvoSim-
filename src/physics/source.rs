@@ -547,10 +547,10 @@ mod tests {
     #[test]
     fn source_account_rejects_overdraw_without_mutation() {
         let mut account = SourceEnergyAccount::new(SourceId::new(3).unwrap(), 1.0).unwrap();
-        assert_eq!(
+        assert!(matches!(
             account.prepare_field_transfer(1.5),
             Err(SourceAccountError::InsufficientEnergy)
-        );
+        ));
         assert_eq!(account.remaining_energy(), 1.0);
         assert_eq!(account.cumulative_field_transfer(), 0.0);
     }
