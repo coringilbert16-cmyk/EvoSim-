@@ -1524,6 +1524,76 @@ mod tests {
     }
 
     #[test]
+    fn phase3_segment_intersection_counts_blocker_vertex_tangency_before_target() {
+        // The ray touches the blocker only at its first endpoint. This is a
+        // visibility event even though the intersection has zero measure.
+        assert!(segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (5.0, 0.0),
+            (5.0, 2.0),
+        ));
+    }
+
+    #[test]
+    fn phase3_segment_intersection_respects_target_endpoint_ownership() {
+        // Contact only at the receiver endpoint belongs to the receiver, not
+        // to an occluder strictly before it.
+        assert!(!segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 2.0),
+        ));
+        assert!(!segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (11.0, -1.0),
+            (11.0, 1.0),
+        ));
+    }
+
+    #[test]
+    fn phase3_segment_intersection_detects_collinear_overlap_before_target() {
+        assert!(segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (3.0, 0.0),
+            (6.0, 0.0),
+        ));
+        // A collinear segment that starts exactly at the target endpoint does
+        // not occlude any open portion of the source-to-target path.
+        assert!(!segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 0.0),
+            (13.0, 0.0),
+        ));
+    }
+
+    #[test]
+    fn phase3_segment_intersection_handles_shared_polygon_vertex() {
+        // A ray through a polygon vertex intersects both incident edges at
+        // their shared endpoint. Either edge must independently report the
+        // same blocking event.
+        let ray_start = (0.0, 0.0);
+        let ray_end = (10.0, 0.0);
+        let vertex = (5.0, 0.0);
+        assert!(segment_intersection_before_target(
+            ray_start,
+            ray_end,
+            vertex,
+            (6.0, 1.0),
+        ));
+        assert!(segment_intersection_before_target(
+            ray_start,
+            ray_end,
+            (4.0, 1.0),
+            vertex,
+        ));
+    }
+
+    #[test]
     fn non_area_line_does_not_create_containment() {
         let geometry = body(Form::Line { length: 4.0 });
         assert!(!geometry.contains_point(0.0, 0.0));
