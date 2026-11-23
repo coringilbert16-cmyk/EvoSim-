@@ -1545,7 +1545,19 @@ mod visibility_tests {
                     } else {
                         (interval.end, interval.start)
                     };
-                    (start, end, interval.outward_normal)
+                    let normal = (
+                        if interval.outward_normal.0 == 0.0 {
+                            0.0
+                        } else {
+                            interval.outward_normal.0
+                        },
+                        if interval.outward_normal.1 == 0.0 {
+                            0.0
+                        } else {
+                            interval.outward_normal.1
+                        },
+                    );
+                    (start, end, normal)
                 })
                 .collect();
             segments.sort_by(|a, b| {
