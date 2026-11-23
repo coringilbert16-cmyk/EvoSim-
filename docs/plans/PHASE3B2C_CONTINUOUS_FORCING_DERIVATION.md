@@ -1,6 +1,6 @@
 # Phase 3B.2c — Continuous Work-Conjugate Forcing Derivation
 
-**Status:** Candidate A's isolated single-source forcing step is implemented in the extracted reference solver; numerical verification is pending CI. No physical source law is approved.
+**Status:** Candidate A's isolated forcing, replay, sustained discrete-modal comparison, spatial/temporal refinement, and multi-source reconciliation are merged and validated. Candidate B has an initial isolated reciprocal oscillator/field implementation on the Phase 3B.2e branch. No physical source law is approved.
 
 **Authority:** Phase 1 unified energy/continuous wave-field specification; the controlling [resonance-field implementation roadmap](../design/resonance-field-implementation-roadmap.md); the Phase 3B.2 source-interface proposal; merged PR #426 and PR #427.
 
@@ -212,13 +212,54 @@ No production code or real-source integration is authorized by this investigatio
 - Implemented and covered by tests: zero-work at a centered velocity node, force sign reversal, multiple simultaneous sources with per-source work attribution, duplicate-source rejection, and all-account rollback when any source overdraws. Deterministic replay remains to be tested.
 - Added, pending CI: a paired spatial/time-refinement test compares discrete work against the analytic continuum work integral for a smooth nonseparable profile and requires second-order convergence. Further convergence studies across source profiles and longer forcing intervals remain required. \(\int\!\int K u_t f\,dA\,dt\) under paired spatial/time refinement. Report convergence order and normalized residual; do not claim continuum equivalence from a single grid.
 
-### 7.2 Then evaluate Candidate B
+### 7.2 Candidate B — reciprocal source oscillator (initial implementation)
 
-- Derive the discrete coupled field/source update from one discrete total-energy function.
-- Include coupling-potential energy explicitly in the inventory.
-- Verify source/field energy exchange and total conservation over many periods.
-- Test phase, frequency, coupling strength, spatial refinement, time refinement, and deterministic replay.
-- Compare its emitted spatial field and measured average source work with Candidate A under controlled initial conditions.
+The first isolated implementation is in `src/physics/reciprocal_source_field.rs` and is registered as a private crate module. It implements one closed oscillator coupled reciprocally to the scalar field. It does not use the finite Candidate A source-account transaction because the oscillator and its coupling potential are explicit parts of one closed Hamiltonian inventory.
+
+Let the normalized spatial profile satisfy:
+
+```
+U^n = dx² Σ_i g_i u_i^n
+dx² Σ_i g_i = 1
+```
+
+The centered coupled recurrence is:
+
+```
+u_i^(n+1) = 2u_i^n - u_i^(n-1)
+          + dt² [c² (L_h u^n)_i
+          + (κ/K) (q^n - U^n) g_i]
+
+q^(n+1) = 2q^n - q^(n-1)
+        - dt² [ω² q^n + (κ/M)(q^n - U^n)]
+```
+
+The corresponding cross-time discrete total energy is:
+
+```
+E_total^n = E_field^n
+          + (M/2) [(q^n - q^(n-1))/dt]²
+          + (Mω²/2) q^n q^(n-1)
+          + (κ/2)(q^n - U^n)(q^(n-1) - U^(n-1))
+```
+
+Here `E_field` is the existing leapfrog field invariant. The final term is the coupling-potential inventory and is counted separately; it is not hidden in either field or oscillator energy. The field and oscillator updates use the same centered time level and the same normalized profile, making the coupling reciprocal.
+
+**Implemented on the isolated branch:**
+- A deterministic centered-difference update for the coupled field and one finite-energy oscillator.
+- Explicit field, oscillator, and coupling-potential energy components.
+- Profile normalization and fixed-boundary validation.
+- A conservative stability guard based on a bound for the coupled stiffness operator.
+- A 20,000-step conservation test with nonzero field transfer and coupling energy.
+- Zero-coupling decoupling, unstable-step rejection, and bit-for-bit replay tests.
+- No sponge, replenishment, live source registration, production ledger, material response, or physical parameter calibration.
+
+**Still required before Candidate B can be considered validated:**
+- Frequency and coupling-strength sweeps, including measured stability margins.
+- Independent spatial and temporal refinement against continuum solutions.
+- Longer conservation/reversibility checks and tests with multiple oscillators.
+- A controlled comparison against Candidate A, including emitted field shape and signed/average work. A prescribed Candidate A waveform and a finite reciprocal oscillator are not automatically equivalent; comparisons must state matched initial conditions and limits.
+- Review whether this closed oscillator is the appropriate representation for an externally powered hotspot or a material-origin emitter. It is not a sun model.
 
 ### 7.3 Physical hotspot decision gate
 
@@ -235,8 +276,10 @@ No live hotspot or sun injection is authorized until this gate passes review.
 
 ## 8. Current conclusion and next action
 
-The exact discrete work identity for additive acceleration forcing can be derived directly from the existing leapfrog invariant. This provides a sound, narrowly scoped next numerical test and avoids repeating the already merged source-account and hotspot-normalization work.
+Candidate A is a validated mathematical forcing/accounting mechanism, not a physical incident-power law. Its signed work identity, replay, sustained discrete-modal agreement, separate spatial/temporal refinement, and repeated multi-source reconciliation have passed their repository gates.
 
-However, Candidate A is an accounting-compatible mathematical forcing mechanism, not yet a physical incident-power law. Candidate B offers a reciprocal physical source model but introduces a coupling-energy inventory and a coupled-integrator requirement. The present evidence does not justify choosing one as the production hotspot law.
+Candidate B has an isolated reciprocal oscillator/field implementation with an explicit coupling-potential term and a discrete total-energy invariant. Its conservation, decoupling, exchange, stability, deterministic replay, 3×3×3 parameter sweep, and independent spatial/temporal refinement checks have passed full CI.
 
-**Next action:** Deterministic replay is complete and merged in PR #430. Extend Candidate A continuum validation with sustained forcing over a fixed physical-time interval, multiple smooth profiles, and paired spatial/time refinement against analytic modal solutions. Report normalized work error and observed order. Then validate repeated multi-source attribution with mixed signed work and active sponge absorption. Only after these Candidate A gates should Candidate B's reciprocal source oscillator be implemented as an isolated comparison. Keep hotspot power mapping unresolved and do not connect either candidate to the live simulation.
+The controlled Candidate A/B replay comparison passed full CI. Candidate A is driven by the instantaneous coupling-acceleration history generated by Candidate B, with matched field grid, timestep, and zero initial field. The test checks field-state agreement, field-energy agreement, Candidate A signed-work reconciliation, and Candidate B total-energy conservation. This tests the shared field response under an identical prescribed force history. It does **not** make the source models equivalent: Candidate A remains externally prescribed and has no oscillator state, while Candidate B contains a finite reciprocal source degree of freedom and coupling potential.
+
+This evidence is not sufficient to choose a production source model or calibrate hotspot power. Candidate A and Candidate B are distinct mathematical mechanisms, not competing universal implementations. The next work is source-specific physical coupling derivation, recorded in [Phase 3B.3](PHASE3B3_PHYSICAL_SOURCE_COUPLING.md). In particular, incident radiative/distributed power density must not be equated with the wave-equation forcing or signed field work. Keep live sun/hotspot sources, receivers/materials, chemistry, and production energy-ledger integration gated until each source's physical mechanism and ownership are justified.

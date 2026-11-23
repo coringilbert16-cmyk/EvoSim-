@@ -15,6 +15,11 @@ mod source;
 #[allow(dead_code)]
 mod reference_wave_solver;
 
+// Isolated Phase 3B Candidate B reciprocal source/field comparator.
+#[path = "physics/reciprocal_source_field.rs"]
+#[allow(dead_code)]
+mod reciprocal_source_field;
+
 // Core environment, resources, and physical material/structure.
 #[path = "organism/developmental_blueprint.rs"]
 mod developmental_blueprint;
