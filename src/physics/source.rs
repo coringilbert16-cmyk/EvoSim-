@@ -206,6 +206,35 @@ pub(crate) struct PreparedFieldSettlement {
     cumulative_field_transfer: f64,
 }
 
+/// Owns one immutable descriptor and its one mutable, non-clonable energy account.
+#[derive(Debug)]
+pub(crate) struct SourceInstance {
+    descriptor: SourceDescriptor,
+    account: SourceEnergyAccount,
+}
+
+impl SourceInstance {
+    pub(crate) fn new(
+        descriptor: SourceDescriptor,
+        account: SourceEnergyAccount,
+    ) -> Result<Self, SourceAccountError> {
+        descriptor.validate_account(&account)?;
+        Ok(Self { descriptor, account })
+    }
+
+    pub(crate) fn descriptor(&self) -> &SourceDescriptor {
+        &self.descriptor
+    }
+
+    pub(crate) fn account(&self) -> &SourceEnergyAccount {
+        &self.account
+    }
+
+    pub(crate) fn account_mut(&mut self) -> &mut SourceEnergyAccount {
+        &mut self.account
+    }
+}
+
 impl SourceEnergyAccount {
     pub(crate) fn new(
         source_id: SourceId,
