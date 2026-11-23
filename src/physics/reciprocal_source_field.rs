@@ -633,7 +633,7 @@ mod tests {
             candidate_b_energy_residual <= 1.0e-8,
             "Candidate B total-energy residual: {candidate_b_energy_residual}"
         );
-        assert_eq!(candidate_a.substeps_elapsed(), steps as u64);
+        assert_eq!(candidate_a.logical_time_ticks(), steps as f64 / substeps_per_tick as f64);
         assert_eq!(candidate_b.steps_elapsed(), steps as u64);
         assert!(candidate_b.source_energy().is_finite());
         assert!(candidate_b.coupling_energy().is_finite());
