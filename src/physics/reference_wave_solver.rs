@@ -845,6 +845,49 @@ mod tests {
     }
 
     #[test]
+    fn prescribed_forcing_has_zero_work_at_a_centered_velocity_node() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut source = test_source(0.0, 106);
+        let center = field.index(20, 20);
+        field.current[center] = 1.0;
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        // With dt=0.5 and the five-point Laplacian, -4 cancels the
+        // center's next displacement so its centered midpoint velocity is zero.
+        forcing[center] = -4.0;
+
+        let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+
+        assert_eq!(work, 0.0);
+        assert_eq!(source.account().remaining_energy(), 0.0);
+        assert_eq!(source.account().cumulative_field_transfer(), 0.0);
+    }
+
+    #[test]
+    fn reversing_force_reverses_signed_work_for_a_preexisting_field_velocity() {
+        let mut positive_field = solver(41, 41, 1.0, 2);
+        let mut negative_field = solver(41, 41, 1.0, 2);
+        let mut positive_source = test_source(10.0, 107);
+        let mut negative_source = test_source(10.0, 108);
+        let center = positive_field.index(20, 20);
+        positive_field.previous[center] = 1.0;
+        negative_field.previous[center] = 1.0;
+        let mut positive_force = vec![0.0; positive_field.width() * positive_field.height()];
+        let mut negative_force = vec![0.0; negative_field.width() * negative_field.height()];
+        positive_force[center] = 1.0;
+        negative_force[center] = -1.0;
+
+        let positive_work = positive_field
+            .advance_forced_substep(&mut positive_source, &positive_force)
+            .unwrap();
+        let negative_work = negative_field
+            .advance_forced_substep(&mut negative_source, &negative_force)
+            .unwrap();
+
+        assert!(positive_work < 0.0);
+        assert!(negative_work > 0.0);
+    }
+
+    #[test]
     fn prescribed_forcing_accounts_for_work_and_sponge_absorption_together() {
         let mut field = solver(81, 81, 1.0, 2);
         field.configure_absorbing_boundary(12, 0.15).unwrap();
