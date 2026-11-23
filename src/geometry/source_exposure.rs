@@ -5749,5 +5749,4 @@ mod source_global_perimeter_tests {
         let expected = 8.0 + std::f64::consts::TAU;
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
     }
-
 }
