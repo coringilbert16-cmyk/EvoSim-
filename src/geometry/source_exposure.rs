@@ -5431,7 +5431,9 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 // adjacent across the parameter seam as well.
                 if sweep >= std::f64::consts::TAU - 1e-10
                     && intervals.len() >= 2
-                    && intervals.first().is_some_and(|interval| interval.0 <= 1e-12)
+                    && intervals
+                        .first()
+                        .is_some_and(|interval| interval.0 <= 1e-12)
                     && intervals
                         .last()
                         .is_some_and(|interval| interval.1 >= 1.0 - 1e-12)
