@@ -167,7 +167,7 @@ The legacy 2,400-tick orbit and 86,400-second conversion are recorded as impleme
 
 ### Phase 2 — Independent reference wave solver
 
-**Status: IN PROGRESS — standalone solver and candidate energy-accounted sponge boundary are under review in PR #410; full validation and independent numerical review remain pending.**
+**Status: IN PROGRESS — standalone solver and energy-accounted sponge boundary are validated within the tested reference envelope in PR #410. Expanded CI run #14979 passed 1,111 tests; exact-head CI after a naming-only clarification is pending. Independent numerical review remains outstanding.**
 
 **Goal:** Prove real finite-speed wave propagation in empty space before adding molecular complexity.
 
