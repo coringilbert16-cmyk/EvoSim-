@@ -301,4 +301,17 @@ mod tests {
         let translated_length = checked_exposed_boundary_length(&translated).unwrap();
         assert!((translated_length.world_units - 12.0).abs() < 1e-3);
     }
+    #[test]
+    fn disjoint_collinear_intervals_and_input_reordering_are_stable() {
+        let separated = vec![
+            interval((0.0, 0.0), (1.0, 0.0), (0.0, -1.0), 0),
+            interval((2.0, 0.0), (3.0, 0.0), (0.0, -1.0), 1),
+        ];
+        let forward = checked_exposed_boundary_length(&separated).unwrap();
+        let reversed_order = separated.iter().rev().copied().collect::<Vec<_>>();
+        let reverse = checked_exposed_boundary_length(&reversed_order).unwrap();
+        assert!((forward.world_units - 2.0).abs() < 1e-12);
+        assert_eq!(forward.world_units, reverse.world_units);
+    }
+
 }
