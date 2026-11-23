@@ -2374,5 +2374,4 @@ mod tests {
 
         assert_eq!(all_relative_errors.len(), profile_cases.len());
     }
-
 }
