@@ -1401,6 +1401,87 @@ mod visibility_tests {
     }
 
     #[test]
+    fn two_separated_polygon_blockers_partition_target_into_three_visible_regions() {
+        let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
+        let lower = rectangle_body(20, 2.5, -0.55, 0.5, 0.4);
+        let upper = rectangle_body(30, 2.5, 0.55, 0.5, 0.4);
+        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, lower, upper])
+            .expect("all three bodies have supported polygonal geometry");
+
+        let mut shoulders: Vec<(f64, f64)> = intervals
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && interval.unit_index == 10
+                    && (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .map(|interval| {
+                (
+                    interval.start.1.min(interval.end.1),
+                    interval.start.1.max(interval.end.1),
+                )
+            })
+            .collect();
+        shoulders.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+        assert_eq!(
+            shoulders.len(),
+            3,
+            "two separated blockers must leave three distinct visible regions: {shoulders:?}"
+        );
+        assert!(shoulders[0].0.abs() <= 1.0 + 1e-8);
+        assert!(shoulders[0].1 < shoulders[1].0);
+        assert!(shoulders[1].1 < shoulders[2].0);
+        assert!(shoulders[2].1 <= 1.0 + 1e-8);
+    }
+
+    #[test]
+    fn finite_line_endpoint_rays_are_retained_as_exact_partition_events() {
+        let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
+        let line = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 20,
+                form: Form::Line { length: 0.5 },
+                x: 2.0,
+                y: 0.5,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            }],
+            min_x: 1.75,
+            max_x: 2.25,
+            min_y: 0.25,
+            max_y: 0.75,
+        };
+        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, line])
+            .expect("finite line blockers are supported");
+
+        // The source is at x=-5, the line at x=2, and the target edge at x=4.
+        // Projecting the line endpoints along source rays gives y=9/28 and
+        // y=27/28 on the target edge.
+        let mut endpoints: Vec<f64> = intervals
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && interval.unit_index == 10
+                    && (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .flat_map(|interval| [interval.start.1, interval.end.1])
+            .collect();
+        endpoints.sort_by(f64::total_cmp);
+        endpoints.dedup_by(|a, b| (*a - *b).abs() < 1e-8);
+
+        assert!(
+            endpoints.iter().any(|y| (*y - 9.0 / 28.0).abs() < 1e-8),
+            "lower finite-line endpoint ray must be an exact cut: {endpoints:?}"
+        );
+        assert!(
+            endpoints.iter().any(|y| (*y - 27.0 / 28.0).abs() < 1e-8),
+            "upper finite-line endpoint ray must be an exact cut: {endpoints:?}"
+        );
+    }
+
+    #[test]
     fn straight_boundary_query_skips_curved_targets_without_polygonization() {
         let circle = OrganismBodyGeometry {
             parts: vec![PlacedForm {
