@@ -552,10 +552,8 @@ impl WaveField {
                 if damping > 0.0 {
                     let midpoint_velocity =
                         (next[index] - self.previous[index]) / (2.0 * self.time_step);
-                    absorbed_this_step += damping
-                        * self.time_step
-                        * midpoint_velocity
-                        * midpoint_velocity;
+                    absorbed_this_step +=
+                        damping * self.time_step * midpoint_velocity * midpoint_velocity;
                 }
             }
         }
@@ -1423,28 +1421,30 @@ mod tests {
         let center_y = (field.height / 2) as f64 - 15.0 * angle.sin();
         let envelope_radius = 9.0;
         let spatial_eigenvalue = 4.0 / field.spacing.powi(2)
-            * ((0.5 * wave_number * field.spacing * angle.cos()).sin().powi(2)
-                + (0.5 * wave_number * field.spacing * angle.sin()).sin().powi(2));
+            * ((0.5 * wave_number * field.spacing * angle.cos())
+                .sin()
+                .powi(2)
+                + (0.5 * wave_number * field.spacing * angle.sin())
+                    .sin()
+                    .powi(2));
         let spatial_omega = field.propagation_speed * spatial_eigenvalue.sqrt();
-        let temporal_omega = (1.0
-            - 0.5 * (spatial_omega * field.time_step()).powi(2))
-        .acos()
-            / field.time_step();
+        let temporal_omega =
+            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos() / field.time_step();
         let mut envelope_norm_squared = 0.0;
 
         for y in 1..field.height - 1 {
             for x in 1..field.width - 1 {
                 let dx = x as f64 * field.spacing - center_x;
                 let dy = y as f64 * field.spacing - center_y;
-                let envelope = (-(dx * dx + dy * dy)
-                    / (2.0 * envelope_radius * envelope_radius))
-                    .exp();
+                let envelope =
+                    (-(dx * dx + dy * dy) / (2.0 * envelope_radius * envelope_radius)).exp();
                 let phase = wave_number * (dx * angle.cos() + dy * angle.sin());
                 let index = field.index(x, y);
                 field.current[index] = envelope * phase.cos();
                 // The previous level is the same packet one substep earlier,
                 // making its carrier propagate in the selected direction.
-                field.previous[index] = envelope * (phase + temporal_omega * field.time_step()).cos();
+                field.previous[index] =
+                    envelope * (phase + temporal_omega * field.time_step()).cos();
                 envelope_norm_squared += envelope * envelope;
             }
         }
@@ -1509,8 +1509,7 @@ mod tests {
             let mut absorbing = solver(201, 201, 1.0, 2);
             let mut reflective = solver(201, 201, 1.0, 2);
             absorbing.configure_absorbing_boundary(72, 0.2).unwrap();
-            let (center_x, center_y, _) =
-                outgoing_wave_packet(&mut absorbing, angle, wave_number);
+            let (center_x, center_y, _) = outgoing_wave_packet(&mut absorbing, angle, wave_number);
             let (reflective_x, reflective_y, _) =
                 outgoing_wave_packet(&mut reflective, angle, wave_number);
             absorbing.advance_ticks(260).unwrap();
@@ -1538,8 +1537,7 @@ mod tests {
         let mut smaller = solver(201, 201, 1.0, 2);
         let mut larger = solver(321, 321, 1.0, 2);
         smaller.configure_absorbing_boundary(72, 0.2).unwrap();
-        let (small_x, small_y, initial_norm) =
-            outgoing_wave_packet(&mut smaller, 0.0, 0.18);
+        let (small_x, small_y, initial_norm) = outgoing_wave_packet(&mut smaller, 0.0, 0.18);
         let (large_x, large_y, _) = outgoing_wave_packet(&mut larger, 0.0, 0.18);
 
         smaller.advance_ticks(260).unwrap();
