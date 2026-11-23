@@ -4751,6 +4751,95 @@ enum GlobalBoundaryPiece {
     },
 }
 
+
+/// Return whether a point lies on a finite straight boundary segment.
+/// The tolerance matches the arrangement predicates used by this module.
+fn global_point_on_segment(
+    point: (f64, f64),
+    start: (f64, f64),
+    end: (f64, f64),
+) -> bool {
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
+    let px = point.0 - start.0;
+    let py = point.1 - start.1;
+    let cross = dx * py - dy * px;
+    let dot = px * (point.0 - end.0) + py * (point.1 - end.1);
+    cross.is_finite() && dot.is_finite() && cross.abs() <= 1e-10 && dot <= 1e-10
+}
+
+/// Classify a split straight interval against the complete composite union.
+///
+/// A coincident boundary with an opposing outward normal is internal and is
+/// removed. A same-side coincident boundary is emitted once by the stable
+/// (unit_index, part_index) owner. Other containing shapes hide the interval.
+/// This avoids treating a shared boundary point as ordinary interior
+/// containment, which would otherwise suppress both copies of a duplicate
+/// outer edge.
+fn global_straight_interval_is_exposed(
+    body: &crate::organism_geometry::OrganismBodyGeometry,
+    pieces: &[GlobalBoundaryPiece],
+    part_index: usize,
+    unit_index: usize,
+    midpoint: (f64, f64),
+    normal: (f64, f64),
+) -> bool {
+    for (other_index, other) in body.parts.iter().enumerate() {
+        if other_index == part_index {
+            continue;
+        }
+
+        let mut coincident_normals = Vec::new();
+        for piece in pieces {
+            if let GlobalBoundaryPiece::Segment {
+                part_index: candidate_part,
+                unit_index: candidate_unit,
+                start,
+                end,
+                normal: candidate_normal,
+                ..
+            } = piece
+            {
+                if *candidate_part == other_index
+                    && global_point_on_segment(midpoint, *start, *end)
+                {
+                    coincident_normals.push((*candidate_unit, *candidate_normal));
+                }
+            }
+        }
+
+        if !coincident_normals.is_empty() {
+            for (other_unit, other_normal) in coincident_normals {
+                let alignment =
+                    normal.0 * other_normal.0 + normal.1 * other_normal.1;
+                if alignment < -0.5 {
+                    // Opposing sides of the same shared interval: internal.
+                    return false;
+                }
+                if alignment > 0.5
+                    && (other_unit, other_index) < (unit_index, part_index)
+                {
+                    // Same-side duplicate: retain one deterministic owner.
+                    return false;
+                }
+            }
+            continue;
+        }
+
+        if crate::organism_geometry::form_contains_point(
+            &other.form,
+            other.x,
+            other.y,
+            other.rotation_radians,
+            midpoint.0,
+            midpoint.1,
+        ) {
+            return false;
+        }
+    }
+    true
+}
+
 fn angle_on_global_arc(angle: f64, start: f64, sweep: f64) -> Option<f64> {
     let relative = (angle - start).rem_euclid(std::f64::consts::TAU);
     (relative <= sweep + 1e-10).then_some((relative / sweep).clamp(0.0, 1.0))
@@ -4831,10 +4920,35 @@ fn add_global_intersection_cuts(
             if cross.abs() <= 1e-12 {
                 if q_cross.abs() <= 1e-10 {
                     let rr = r.0 * r.0 + r.1 * r.1;
+                    let ss = s.0 * s.0 + s.1 * s.1;
+                    if !rr.is_finite() || !ss.is_finite() || rr <= 0.0 || ss <= 0.0 {
+                        return None;
+                    }
+
+                    // Project both segment endpoints onto the other segment.
+                    // Every endpoint within the opposite segment becomes a cut
+                    // in both parameterizations. This handles positive-length
+                    // shared intervals and collinear point contacts without
+                    // returning a partial arrangement.
                     let t0 = (q.0 * r.0 + q.1 * r.1) / rr;
                     let t1 = t0 + (s.0 * r.0 + s.1 * r.1) / rr;
-                    if t0.max(t1) >= 0.0 && t0.min(t1) <= 1.0 {
-                        return None;
+                    let overlap_start = t0.min(t1).max(0.0);
+                    let overlap_end = t0.max(t1).min(1.0);
+                    if overlap_start <= overlap_end + 1e-10 {
+                        for t in [t0, t1] {
+                            if (-1e-10..=1.0 + 1e-10).contains(&t) {
+                                cuts_a.push(t.clamp(0.0, 1.0));
+                            }
+                        }
+
+                        let reverse_q = (start_a.0 - start_b.0, start_a.1 - start_b.1);
+                        let u0 = (reverse_q.0 * s.0 + reverse_q.1 * s.1) / ss;
+                        let u1 = u0 + (r.0 * s.0 + r.1 * s.1) / ss;
+                        for u in [u0, u1] {
+                            if (-1e-10..=1.0 + 1e-10).contains(&u) {
+                                cuts_b.push(u.clamp(0.0, 1.0));
+                            }
+                        }
                     }
                 }
                 return Some(());
@@ -5092,18 +5206,14 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         start.0 + (end.0 - start.0) * midpoint_t,
                         start.1 + (end.1 - start.1) * midpoint_t,
                     );
-                    let hidden = body.parts.iter().enumerate().any(|(other_index, other)| {
-                        other_index != part_index
-                            && crate::organism_geometry::form_contains_point(
-                                &other.form,
-                                other.x,
-                                other.y,
-                                other.rotation_radians,
-                                midpoint.0,
-                                midpoint.1,
-                            )
-                    });
-                    if hidden {
+                    if !global_straight_interval_is_exposed(
+                        body,
+                        &pieces,
+                        part_index,
+                        unit_index,
+                        midpoint,
+                        normal,
+                    ) {
                         continue;
                     }
                     let point_at = |t: f64| {
@@ -5181,6 +5291,25 @@ pub(crate) fn disjoint_source_global_material_perimeter(
             }
         }
     }
+
+    // Canonicalize segment direction and ordering so equivalent unions do
+    // not depend on constituent enumeration or polygon winding.
+    for interval in &mut straight {
+        if interval.end.0 < interval.start.0
+            || (interval.end.0 == interval.start.0 && interval.end.1 < interval.start.1)
+        {
+            std::mem::swap(&mut interval.start, &mut interval.end);
+        }
+    }
+    straight.sort_by(|a, b| {
+        a.start
+            .0
+            .total_cmp(&b.start.0)
+            .then_with(|| a.start.1.total_cmp(&b.start.1))
+            .then_with(|| a.end.0.total_cmp(&b.end.0))
+            .then_with(|| a.end.1.total_cmp(&b.end.1))
+            .then_with(|| a.unit_index.cmp(&b.unit_index))
+    });
 
     let perimeter = VisibleMaterialPerimeter { straight, curved };
     let length = visible_material_perimeter_length(&perimeter)?;
