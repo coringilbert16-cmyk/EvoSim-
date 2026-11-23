@@ -131,6 +131,10 @@ Older plans that explicitly say “reuse the existing aura; do not add a second 
 
 ### Phase 0 — Baseline and code/ledger audit
 
+**Status: COMPLETE**
+
+The code/ledger/geometry audit and reproducible baseline data are recorded. Do not repeat Phase 0 unless a later controlled comparison explicitly requires a new baseline.
+
 **Goal:** Know exactly what is being replaced and what must remain invariant.
 
 Work:
@@ -167,6 +171,10 @@ The legacy 2,400-tick orbit and 86,400-second conversion are recorded as impleme
 
 ### Phase 2 — Independent reference wave solver
 
+**Status: COMPLETE — formally closed 2026-11-22.**
+
+Completed and validated as an isolated reference solver under PR #410. Its tested numerical envelope, energy-accounted computational-boundary treatment, and limitations are recorded in that PR. The solver remains separate from production and intentionally unmerged; Phase 2 closure does not authorize production integration or a rebuild of the solver.
+
 **Goal:** Prove real finite-speed wave propagation in empty space before adding molecular complexity.
 
 Work:
@@ -195,6 +203,26 @@ Exit criteria:
 - The solver can run independently of molecule count and molecular collision/reaction discovery.
 
 ### Phase 3 — Sources, propagation energy, and material coupling
+
+**Current status:** Phase 3A geometry/measurement slices listed below are complete where explicitly marked. Phase 3B source-to-field coupling has not started. Do not treat geometry completion as source registration, field injection, propagation, or energy settlement.
+
+#### Phase 3A — Geometry and measurement foundation: completed slices
+
+| Slice | Status | Verified work |
+|---|---|---|
+| 3A.2.1 — Collinear straight-boundary union cases | **COMPLETE** | PR #412: deterministic splitting/classification of shared and overlapping straight intervals, duplicate-edge ownership, and invariance/regression tests. |
+| 3A.3 — Strict Phase 3 geometry boundary | **COMPLETE** | PR #414: polygonal solid receivers/occluders and finite straight-line blockers; unsupported circles/fluids fail closed in the Phase 3 adapter without changing legacy callers. |
+| 3A.4 — Physical area and boundary measures proposal | **COMPLETE** | PR #416: reviewed/documented distinct L and L² measures and the checked polygon-union approach. |
+| 3A.4a — Checked polygon area | **COMPLETE** | PR #417: checked convex polygon area with uncertainty estimate and fail-closed validation. |
+| 3A.4b — Checked exposed-boundary length | **COMPLETE** | PR #419: checked straight exposed-boundary length with scale/translation-aware validation. PR #418 was superseded and is not counted as a separate completion. |
+| 3A.4c — Checked polygon-union measurement | **COMPLETE** | PR #420: deterministic checked polygon-union area/perimeter with fail-closed topology handling. |
+| 3A.4d — Source-footprint geometry | **COMPLETE** | PR #422: checked physical source support area, reusing polygon-union measurement; overlaps/coincident pieces count once. |
+
+**Not marked complete:** PR #411's standalone Phase 3A.1 planning artifact was closed without merge. The merged work above does not establish that every geometry arrangement or continuous perimeter-coupling requirement is solved. Preserve fail-closed behavior for unsupported arrangements and retain the remaining geometry/visibility gaps below as open work.
+
+#### Phase 3B — Source-to-field coupling: NOT STARTED
+
+The next source-integration work must be specified against the Phase 1 contracts and the completed geometry interfaces. This stage is not authorized by completion of the geometry slices. It must define and validate the source-to-field boundary, source identity and provenance, deterministic emission, physical source measures, and conservative injection before any production migration. Do not assume numerical source parameters are already calibrated, and do not combine receiver/material settlement into this stage unless the controlling plan explicitly assigns it here.
 
 **Goal:** Connect the independent wave field to real energy sources and physical boundaries.
 
@@ -339,9 +367,9 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 ## 9. Current status and next action
 
-**Current status:** Architecture direction approved. PR #377 and PR #378 are merged. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). The audit confirms that the live system consists of separate material-origin movement, local chemistry activation, external world-tone input, and hotspot input paths; none is yet a persistent finite-speed wave field. The shape-aware perimeter geometry is a starting foundation, not a completed field implementation. The independent persistent wave field, finite-speed propagation, field energy lifecycle, complete perimeter coupling, and production migration remain future work.
+**Current status:** Phase 0 baseline/audit is complete; Phase 1 specification is complete; Phase 2 independent reference solver is formally closed; and the merged Phase 3A slices listed above are complete. PR #410 remains an isolated, unmerged reference solver and is not production code. Phase 3 source coupling and all later receiver/material and production-integration work remain unimplemented. The legacy production resonance paths remain authoritative until their separately gated migration passes.
 
-**Next action:** Phase 1 is complete at the specification level. Proceed to Phase 2 only: implement and validate the independent empty-space reference wave solver using a controlled finite-budget mathematical test source. Do not connect the live sun, hotspot, material emitters, chemistry, or movement during Phase 2.
+**Next action:** Audit the remaining Phase 3 geometry/visibility requirements against the merged polygon/line-only contract and completed 3A.4 measures, then prepare a narrowly scoped Phase 3B source-to-field coupling proposal for approval. Do not repeat Phase 0 or Phase 2, and do not begin production source injection before the Phase 3B scope and acceptance tests are approved.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
@@ -388,14 +416,14 @@ There must be one conservation/accounting authority for the complete system. The
 
 ### 10.4 Roadmap phase clarifications
 
-- **Phase 0** remains open until the reproducible current-main baseline is recorded. The existing code/ledger/geometry audit is complete, but no new baseline benchmark was run during that audit.
-- **Phase 1** is a unified energy-and-wave physics specification, not merely selection of a wave equation. It must include energy forms, units, source ownership, local availability, transfer equations, heat/thermal semantics, structural-energy limits, infinite-plane geometry, laboratory-wall/material-interface behavior, nonphysical observation-window behavior, finite computational-window treatment, numerics, determinism, and this reuse/retirement map.
+- **Phase 0 is complete:** the code/ledger/geometry audit and reproducible baseline data are recorded. Do not reopen it as routine next work.
+- **Phase 1 is complete:** the unified specification covers energy forms, units, source ownership, local availability, transfer equations, heat/thermal semantics, structural-energy limits, infinite-plane geometry, laboratory-wall/material-interface behavior, nonphysical observation-window behavior, finite computational-window treatment, numerics, determinism, and the reuse/retirement map.
 - **Phase 3–4** must transfer energy through the single redesigned conservation authority. Do not presume the existing usable-energy pool or resonant reservoir remains the funding mechanism.
 - **Chemistry activation is not energy.** Field influence may affect activation, but reaction energy must come from physically available local transfers or validated structural-energy changes.
 - **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
 - The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
 
-**Phase 1 disposition:** The approved logical clock is 24,000 ticks per simulated day and per solar orbit; 440 and 880 are carrier cycles per day, not additional time scales. Project-native L/tick/E units are authoritative; there is no wall-clock or SI-time calibration. The sun, hotspot, powered material oscillator, passive material response, source ownership, and atomic energy-transfer contracts are specified in the Phase 1 specification. The legacy 2,400-tick orbit and 86,400-second conversion are implementation discrepancies, not model choices. Phase 1 is complete at the specification level. Phase 2 may implement only the independent empty-space reference solver with a controlled finite-budget test source. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
+**Phase 1 disposition:** COMPLETE. The approved logical clock is 24,000 ticks per simulated day and per solar orbit; 440 and 880 are carrier cycles per day, not additional time scales. Project-native L/tick/E units are authoritative; there is no wall-clock or SI-time calibration. The sun, hotspot, powered material oscillator, passive material response, source ownership, and atomic energy-transfer contracts are specified in the Phase 1 specification. The legacy 2,400-tick orbit and 86,400-second conversion are implementation discrepancies, not model choices. **Phase 2 disposition:** COMPLETE and formally closed as an isolated reference solver; no production integration is implied. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
 
 ## 11. User-approved Phase 1 modeling defaults
 
@@ -414,4 +442,4 @@ The world-origin anchor is a coordinate convention, not a physical center of the
 
 **Project-native parameter values remain open:** orbit radius/height, finite source budgets and power, propagation speed in L/tick, hotspot power/support radius, material response coefficients, field normalization, grid spacing, and solver time step. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required.
 
-**Phase status:** Phase 1 specification is complete. Project-native numerical parameter values remain open for controlled Phase 2 reference experiments; no physical-time/SI conversion is required. Production integration remains blocked until the independent reference solver and later integration phases pass their own exit gates.
+**Phase status:** Phase 0, Phase 1, and Phase 2 are complete. Phase 3A.2.1, 3A.3, and 3A.4a–d are complete as individually listed above. Project-native numerical source/propagation parameters remain open for later controlled experiments; no physical-time/SI conversion is required. Phase 3B source-to-field coupling has not started, and production integration remains gated.
