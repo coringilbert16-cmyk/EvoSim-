@@ -167,7 +167,7 @@ The legacy 2,400-tick orbit and 86,400-second conversion are recorded as impleme
 
 ### Phase 2 — Independent reference wave solver
 
-**Status: IN PROGRESS — standalone solver and energy-accounted sponge boundary are validated within the tested reference envelope in PR #410. Expanded CI run #14979 passed 1,111 tests; exact-head CI after a naming-only clarification is pending. Independent numerical review remains outstanding.**
+**Status: IN PROGRESS — standalone solver and energy-accounted sponge boundary are validated within the tested reference envelope in PR #410. Exact-head CI run #14980 passed for code commit `8e65297a7abed04217be90d7a926fc98fe1648ea` (formatting, architecture checks, offline analyzers, Rust tests, chemistry smoke simulation, manifest validation, both analysis stages, artifact upload, and Clippy). The internal numerical audit of the leapfrog invariant, centered-damping energy identity, and regional boundary-flux derivation is complete. Remaining work is our final Phase 2 scope/exit review; no outside reviewer is required.
 
 **Goal:** Prove real finite-speed wave propagation in empty space before adding molecular complexity.
 
@@ -367,9 +367,9 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 ## 9. Current status and next action
 
-**Current status:** Architecture direction approved. PR #377 and PR #378 are merged. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). The audit confirms that the live system consists of separate material-origin movement, local chemistry activation, external world-tone input, and hotspot input paths; none is yet a persistent finite-speed wave field. The shape-aware perimeter geometry is a starting foundation, not a completed field implementation. The independent persistent wave field, finite-speed propagation, field energy lifecycle, complete perimeter coupling, and production migration remain future work.
+**Current status:** Phase 1 is complete. PR #377 and PR #378 remain the merged geometry/movement foundations. The Phase 0 code/ledger/geometry audit is recorded in [resonance-field-phase-0-audit.md](../audits/resonance-field-phase-0-audit.md). PR #410 contains the isolated Phase 2 reference solver and graded sponge boundary; exact-head CI run #14980 passed. The internal audit checked the discrete leapfrog energy invariant, the per-step damping sink identity, and the independently integrated regional boundary-flux expression. The live simulation remains unchanged: no sun, hotspot, material, chemistry, or movement coupling has been added. Complete perimeter coupling and production migration remain later-phase work.
 
-**Next action:** Phase 1 is complete at the specification level. Proceed to Phase 2 only: implement and validate the independent empty-space reference wave solver using a controlled finite-budget mathematical test source. Do not connect the live sun, hotspot, material emitters, chemistry, or movement during Phase 2.
+**Next action:** Complete the Phase 2 exit review together, using the documented test envelope and limitations. Decide whether the reference solver has met its phase criteria or needs a narrowly scoped additional test. Do not connect the live sun, hotspot, material emitters, chemistry, or movement during Phase 2.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
@@ -423,7 +423,7 @@ There must be one conservation/accounting authority for the complete system. The
 - **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
 - The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
 
-**Phase 1 disposition:** The approved logical clock is 24,000 ticks per simulated day and per solar orbit; 440 and 880 are carrier cycles per day, not additional time scales. Project-native L/tick/E units are authoritative; there is no wall-clock or SI-time calibration. The sun, hotspot, powered material oscillator, passive material response, source ownership, and atomic energy-transfer contracts are specified in the Phase 1 specification. The legacy 2,400-tick orbit and 86,400-second conversion are implementation discrepancies, not model choices. Phase 1 is complete at the specification level. Phase 2 may implement only the independent empty-space reference solver with a controlled finite-budget test source. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
+**Phase 1 disposition:** The approved logical clock is 24,000 ticks per simulated day and per solar orbit; 440 and 880 are carrier cycles per day, not additional time scales. Project-native L/tick/E units are authoritative; there is no wall-clock or SI-time calibration. The sun, hotspot, powered material oscillator, passive material response, source ownership, and atomic energy-transfer contracts are specified in the Phase 1 specification. The legacy 2,400-tick orbit and 86,400-second conversion are implementation discrepancies, not model choices. Phase 1 is complete at the specification level. Phase 2 is limited to the independent empty-space reference solver, its controlled finite-budget mathematical source, and the validated computational-window treatment. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
 
 ## 11. User-approved Phase 1 modeling defaults
 
@@ -442,4 +442,4 @@ The world-origin anchor is a coordinate convention, not a physical center of the
 
 **Project-native parameter values remain open:** orbit radius/height, finite source budgets and power, propagation speed in L/tick, hotspot power/support radius, material response coefficients, field normalization, grid spacing, and solver time step. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required.
 
-**Phase status:** Phase 1 specification is complete. Project-native numerical parameter values remain open for controlled Phase 2 reference experiments; no physical-time/SI conversion is required. Production integration remains blocked until the independent reference solver and later integration phases pass their own exit gates.
+**Phase status:** Phase 1 specification is complete. The isolated Phase 2 reference solver and computational sponge treatment are implemented and exact-head CI is green; project-native physical parameter values remain open for later controlled calibration. Phase 2 exit is still subject to our final scope review. Production integration remains blocked until Phase 2 and the later integration phases pass their own exit gates.
