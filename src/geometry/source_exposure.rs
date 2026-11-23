@@ -5422,7 +5422,6 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 }
             }
         }
-    }        }
     }
 
     // Canonicalize segment direction and ordering so equivalent unions do
