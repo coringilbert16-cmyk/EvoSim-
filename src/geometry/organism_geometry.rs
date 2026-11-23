@@ -798,7 +798,7 @@ fn source_path_blocked_inner(
         || !source.1.is_finite()
         || !target.0.is_finite()
         || !target.1.is_finite()
-        || (target.0 - source.0).hypot(target.1 - source.1) <= f64::EPSILON
+        || (target.0 - source.0).hypot(target.1 - source.1) == 0.0
     {
         return true;
     }
@@ -1021,9 +1021,15 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
 fn parameter_before_target(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> bool {
     let dx = b.0 - a.0;
     let dy = b.1 - a.1;
-    let length_squared = dx * dx + dy * dy;
-    length_squared > f64::EPSILON
-        && ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length_squared < 1.0 - 1e-9
+    let length = dx.hypot(dy);
+    let tolerance = crate::phase3_numeric::linear_tolerance(&[a, b, point], length);
+    if !length.is_finite() || length <= tolerance {
+        return false;
+    }
+    let parameter_tolerance =
+        crate::phase3_numeric::parameter_tolerance(tolerance, length);
+    ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / (length * length)
+        < 1.0 - parameter_tolerance
 }
 
 fn segment_intersection_before_target(
@@ -1038,28 +1044,50 @@ fn segment_intersection_before_target(
     let sy = d.1 - c.1;
     let qx = c.0 - a.0;
     let qy = c.1 - a.1;
+    let ray_length = rx.hypot(ry);
+    let blocker_length = sx.hypot(sy);
+    let linear_tolerance = crate::phase3_numeric::linear_tolerance(
+        &[a, b, c, d],
+        ray_length.max(blocker_length),
+    );
+    if ray_length <= linear_tolerance || blocker_length <= linear_tolerance {
+        return false;
+    }
+    let parameter_tolerance =
+        crate::phase3_numeric::parameter_tolerance(linear_tolerance, ray_length);
+    let blocker_parameter_tolerance =
+        crate::phase3_numeric::parameter_tolerance(linear_tolerance, blocker_length);
     let denominator = rx * sy - ry * sx;
+    let denominator_tolerance = crate::phase3_numeric::cross_tolerance(
+        (rx, ry),
+        (sx, sy),
+        linear_tolerance,
+    );
 
-    if denominator.abs() <= 1e-12 {
+    if denominator.abs() <= denominator_tolerance {
         // Parallel segments only intersect when collinear. Handle that case
         // explicitly: a ray running along a polygon edge is still occluded.
-        if (qx * ry - qy * rx).abs() > 1e-9 {
+        let collinear_tolerance = crate::phase3_numeric::cross_tolerance(
+            (qx, qy),
+            (rx, ry),
+            linear_tolerance,
+        );
+        if (qx * ry - qy * rx).abs() > collinear_tolerance {
             return false;
         }
         let ray_length_squared = rx * rx + ry * ry;
-        if ray_length_squared <= f64::EPSILON {
-            return false;
-        }
         let tc = (qx * rx + qy * ry) / ray_length_squared;
         let td = ((d.0 - a.0) * rx + (d.1 - a.1) * ry) / ray_length_squared;
         let overlap_start = tc.min(td).max(0.0);
         let overlap_end = tc.max(td).min(1.0);
-        return overlap_start <= overlap_end && overlap_start < 1.0 - 1e-9;
+        return overlap_start <= overlap_end
+            && overlap_start < 1.0 - parameter_tolerance;
     }
 
     let t = (qx * sy - qy * sx) / denominator;
     let u = (qx * ry - qy * rx) / denominator;
-    (-1e-9..=1.0 - 1e-9).contains(&t) && (-1e-9..=1.0 + 1e-9).contains(&u)
+    (-parameter_tolerance..=1.0 - parameter_tolerance).contains(&t)
+        && (-blocker_parameter_tolerance..=1.0 + blocker_parameter_tolerance).contains(&u)
 }
 
 #[cfg(test)]
