@@ -504,16 +504,50 @@ impl WaveField {
         source: &mut SourceInstance,
         forcing: &[f64],
     ) -> Result<f64, WaveFieldError> {
-        if forcing.len() != self.current.len() || forcing.iter().any(|value| !value.is_finite()) {
+        let mut entries = [(source, forcing)];
+        self.advance_forced_substep_multi(&mut entries)
+            .map(|mut work| work.remove(0))
+    }
+
+    /// Advances one step with multiple additive mathematical acceleration sources.
+    /// All source accounts are staged before any account or field state is committed.
+    pub(crate) fn advance_forced_substep_multi(
+        &mut self,
+        sources: &mut [(&mut SourceInstance, &[f64])],
+    ) -> Result<Vec<f64>, WaveFieldError> {
+        if sources.is_empty() {
             return Err(WaveFieldError::InvalidProfile);
         }
-        for y in 0..self.height {
-            for x in 0..self.width {
-                if (x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height)
-                    && forcing[self.index(x, y)] != 0.0
-                {
-                    return Err(WaveFieldError::InvalidProfile);
+        let mut total_forcing = vec![0.0; self.current.len()];
+        let mut source_work_sums = vec![0.0; sources.len()];
+        for (source_index, (_, forcing)) in sources.iter().enumerate() {
+            if forcing.len() != self.current.len()
+                || forcing.iter().any(|value| !value.is_finite())
+            {
+                return Err(WaveFieldError::InvalidProfile);
+            }
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = self.index(x, y);
+                    if (x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height)
+                        && forcing[index] != 0.0
+                    {
+                        return Err(WaveFieldError::InvalidProfile);
+                    }
+                    total_forcing[index] += forcing[index];
                 }
+            }
+            if !total_forcing.iter().all(|value| value.is_finite()) {
+                return Err(WaveFieldError::InvalidProfile);
+            }
+            // A source must appear exactly once so its prepared settlement cannot
+            // overwrite another staged transfer against the same original balance.
+            let source_id = sources[source_index].0.descriptor().id();
+            if sources[..source_index]
+                .iter()
+                .any(|(prior, _)| prior.descriptor().id() == source_id)
+            {
+                return Err(WaveFieldError::InvalidProfile);
             }
         }
 
@@ -521,7 +555,6 @@ impl WaveField {
         let wave_step_squared = self.propagation_speed.powi(2) * dt.powi(2);
         let old_energy = self.energy();
         let mut next = vec![0.0; self.current.len()];
-        let mut source_work_sum = 0.0;
         let mut absorbed_sum = 0.0;
 
         for y in 1..self.height - 1 {
@@ -531,35 +564,45 @@ impl WaveField {
                 next[index] = (2.0 * self.current[index]
                     - (1.0 - damping_step) * self.previous[index]
                     + wave_step_squared * self.laplacian(&self.current, x, y)
-                    + dt.powi(2) * forcing[index])
+                    + dt.powi(2) * total_forcing[index])
                     / (1.0 + damping_step);
 
                 let midpoint_velocity = (next[index] - self.previous[index]) / (2.0 * dt);
-                source_work_sum += midpoint_velocity * forcing[index];
+                for (source_index, (_, forcing)) in sources.iter().enumerate() {
+                    source_work_sums[source_index] += midpoint_velocity * forcing[index];
+                }
                 absorbed_sum +=
                     self.boundary_damping[index] * dt * midpoint_velocity * midpoint_velocity;
             }
         }
 
-        if next.iter().any(|value| !value.is_finite()) {
+        if next.iter().any(|value| !value.is_finite())
+            || source_work_sums.iter().any(|value| !value.is_finite())
+        {
             return Err(WaveFieldError::InvalidState);
         }
 
-        let source_work = self.energy_normalization * dt * self.spacing.powi(2) * source_work_sum;
-        let absorbed_this_step = self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
+        let scale = self.energy_normalization * dt * self.spacing.powi(2);
+        let source_works: Vec<f64> = source_work_sums
+            .iter()
+            .map(|sum| scale * sum)
+            .collect();
+        let total_source_work: f64 = source_works.iter().sum();
+        let absorbed_this_step =
+            self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
         let next_energy = self.discrete_energy(&self.current, &next);
         let measured_change = next_energy - old_energy;
-        let expected_change = source_work - absorbed_this_step;
+        let expected_change = total_source_work - absorbed_this_step;
         let accounting_tolerance = 1.0e-10
             * old_energy
                 .abs()
                 .max(next_energy.abs())
-                .max(source_work.abs())
+                .max(total_source_work.abs())
                 .max(absorbed_this_step.abs())
                 .max(1.0);
         let next_absorbed_energy = self.boundary_absorbed_energy + absorbed_this_step;
 
-        if !source_work.is_finite()
+        if !total_source_work.is_finite()
             || !absorbed_this_step.is_finite()
             || absorbed_this_step < 0.0
             || !next_energy.is_finite()
@@ -576,24 +619,32 @@ impl WaveField {
             .substeps_elapsed
             .checked_add(1)
             .ok_or(WaveFieldError::CounterOverflow)?;
-        let settlement = source
-            .account()
-            .prepare_field_transfer(source_work)
-            .map_err(|error| match error {
-                SourceAccountError::InsufficientEnergy => WaveFieldError::InsufficientSourceEnergy,
-                SourceAccountError::InvalidTransfer => WaveFieldError::InvalidState,
-                _ => WaveFieldError::InvalidState,
-            })?;
+        let mut settlements = Vec::with_capacity(sources.len());
+        for ((source, _), work) in sources.iter().zip(source_works.iter().copied()) {
+            let settlement = source
+                .account()
+                .prepare_field_transfer(work)
+                .map_err(|error| match error {
+                    SourceAccountError::InsufficientEnergy => {
+                        WaveFieldError::InsufficientSourceEnergy
+                    }
+                    SourceAccountError::InvalidTransfer => WaveFieldError::InvalidState,
+                    _ => WaveFieldError::InvalidState,
+                })?;
+            settlements.push(settlement);
+        }
 
-        source
-            .account_mut()
-            .commit_field_transfer(settlement)
-            .map_err(|_| WaveFieldError::InvalidState)?;
+        for ((source, _), settlement) in sources.iter_mut().zip(settlements) {
+            source
+                .account_mut()
+                .commit_field_transfer(settlement)
+                .map_err(|_| WaveFieldError::InvalidState)?;
+        }
         self.previous.clone_from(&self.current);
         self.current = next;
         self.boundary_absorbed_energy = next_absorbed_energy;
         self.substeps_elapsed = next_substeps_elapsed;
-        Ok(source_work)
+        Ok(source_works)
     }
 
     pub(crate) fn advance_substeps(&mut self, count: u64) -> Result<(), WaveFieldError> {
