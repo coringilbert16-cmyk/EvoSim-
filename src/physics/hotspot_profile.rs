@@ -257,7 +257,7 @@ mod tests {
         ];
         let values: Vec<f64> = offsets
             .iter()
-            .map(|(x, y)| profile.integrate_cartesian_grid(0.5, *x, *y).unwrap())
+            .map(|(x, y)| profile.integrate_cartesian_grid(0.25, *x, *y).unwrap())
             .collect();
         for value in &values {
             close(*value, 1.0, 2.0e-7);
