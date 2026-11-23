@@ -892,7 +892,7 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
     };
     let a = to_local(source);
     let b = to_local(target);
-    if form_contains_point(&part.form, 0.0, 0.0, 0.0, a.0, a.1) {
+    if phase3_form_contains_point(&part.form, a) {
         return true;
     }
 
@@ -1016,6 +1016,58 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
             false
         }
     }
+}
+
+fn phase3_form_contains_point(form: &Form, point: (f64, f64)) -> bool {
+    match form {
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            form.polygon_vertices()
+                .is_some_and(|vertices| phase3_polygon_contains_point(point, &vertices))
+        }
+        // Phase 3 rejects circles and fluids before this predicate is reached.
+        // Keep their legacy containment behavior untouched for other callers.
+        _ => form_contains_point(form, 0.0, 0.0, 0.0, point.0, point.1),
+    }
+}
+
+fn phase3_polygon_contains_point(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+
+    let mut inside = false;
+    for index in 0..vertices.len() {
+        let a = vertices[index];
+        let b = vertices[(index + 1) % vertices.len()];
+        let edge = (b.0 - a.0, b.1 - a.1);
+        let offset = (point.0 - a.0, point.1 - a.1);
+        let edge_length = edge.0.hypot(edge.1);
+        let linear_tolerance =
+            crate::phase3_numeric::linear_tolerance(&[point, a, b], edge_length);
+        let cross = edge.0 * offset.1 - edge.1 * offset.0;
+        let cross_tolerance =
+            crate::phase3_numeric::cross_tolerance(edge, offset, linear_tolerance);
+        if cross.abs() <= cross_tolerance {
+            let parameter = if edge_length > 0.0 {
+                (offset.0 * edge.0 + offset.1 * edge.1) / (edge_length * edge_length)
+            } else {
+                0.0
+            };
+            let parameter_tolerance =
+                crate::phase3_numeric::parameter_tolerance(linear_tolerance, edge_length);
+            if (-parameter_tolerance..=1.0 + parameter_tolerance).contains(&parameter) {
+                return true;
+            }
+        }
+
+        if (a.1 > point.1) != (b.1 > point.1) {
+            let crossing_x = a.0 + (point.1 - a.1) * edge.0 / edge.1;
+            if point.0 < crossing_x {
+                inside = !inside;
+            }
+        }
+    }
+    inside
 }
 
 fn parameter_before_target(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> bool {
