@@ -294,7 +294,7 @@ mod tests {
 
     fn normalized_gaussian_profile(width: usize, height: usize, spacing: f64) -> Vec<f64> {
         let center = (width as f64 - 1.0) * spacing * 0.5;
-        let sigma = 0.25;
+        let sigma = 0.25_f64;
         let mut profile = Vec::with_capacity(width * height);
         for y in 0..height {
             for x in 0..width {
