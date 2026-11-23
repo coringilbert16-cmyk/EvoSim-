@@ -245,7 +245,17 @@ pub(crate) fn checked_polygon_union(forms: &[Form]) -> Option<PolygonUnionBounda
                 }
                 let t = (((mid.0 - other.2 .0) * v.0 + (mid.1 - other.2 .1) * v.1) / vv)
                     .clamp(0.0, 1.0);
-                nearest = nearest.min(distance(mid, add(other.2, mul(v, t))));
+                let closest = add(other.2, mul(v, t));
+                let separation = distance(mid, closest);
+                // Coincident/overlapping collinear source edges are expected
+                // in a union arrangement. They must not collapse the probe
+                // clearance to zero; union occupancy determines exposure.
+                let other_len = vv.sqrt();
+                let collinear = cross(dir, v).abs() <= tol * len.max(other_len)
+                    && cross(v, sub(mid, other.2)).abs() / other_len <= tol;
+                if !(collinear && separation <= tol * 4.0) {
+                    nearest = nearest.min(separation);
+                }
             }
             let offset = (len * 1.0e-7).min(nearest * 0.2).max(tol * 8.0);
             if !offset.is_finite() || offset >= nearest * 0.45 {
@@ -383,7 +393,7 @@ mod tests {
     fn disjoint_and_overlap_are_measured_once() {
         let a = rect(2., 2.);
         let b = Form::Polygon {
-            vertices: vec![(1., 0.), (3., 0.), (3., 2.), (1., 2.)],
+            vertices: vec![(0., -1.), (2., -1.), (2., 1.), (0., 1.)],
         };
         let u = checked_polygon_union(&[a, b]).unwrap();
         assert!((u.area.square_units - 6.).abs() < 1e-8);
@@ -412,7 +422,7 @@ mod tests {
             height: 2.,
         };
         let b = Form::Polygon {
-            vertices: vec![(2., 0.), (4., 0.), (4., 2.), (2., 2.)],
+            vertices: vec![(1., -1.), (3., -1.), (3., 1.), (1., 1.)],
         };
         assert!(
             (checked_polygon_union(&[a.clone(), a])
