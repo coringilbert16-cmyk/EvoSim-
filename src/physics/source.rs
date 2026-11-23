@@ -74,9 +74,13 @@ pub(crate) enum SourceWaveform {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SourcePowerLaw {
+    /// No physical power calibration; permitted only for isolated mathematical tests.
     MathematicalTestOnly,
+    /// Total source power, with units E/tick.
     TotalPowerPerTick(f64),
+    /// In-plane distributed power density, with units E/(L²·tick).
     AreaPowerDensityPerTick(f64),
+    /// True line-emitter power density, with units E/(L·tick).
     LinePowerDensityPerTick(f64),
 }
 
@@ -348,6 +352,60 @@ mod tests {
             TickSchedule::new(5, Some(5)),
             Err(SourceAccountError::InvalidDescriptor)
         );
+    }
+
+    #[test]
+    fn physical_source_descriptors_enforce_power_measure_dimensions() {
+        let schedule = TickSchedule::new(0, None).unwrap();
+        let hotspot_id = SourceId::new(20).unwrap();
+        assert!(SourceDescriptor::new(
+            hotspot_id,
+            SourceProvenance::External { origin_id: 1 },
+            SourceClass::InPlaneDistributed,
+            SourceGeometry::Disk { center_x: 5.0, center_y: 7.0, radius: 2.0 },
+            schedule,
+            SourceWaveform::Periodic { frequency_cycles_per_tick: 1.0 / 24000.0, phase_cycles: 0.0 },
+            SourcePowerLaw::AreaPowerDensityPerTick(0.25),
+        ).is_ok());
+        assert_eq!(
+            SourceDescriptor::new(
+                hotspot_id,
+                SourceProvenance::External { origin_id: 1 },
+                SourceClass::InPlaneDistributed,
+                SourceGeometry::Disk { center_x: 5.0, center_y: 7.0, radius: 2.0 },
+                schedule,
+                SourceWaveform::SinglePulse,
+                SourcePowerLaw::TotalPowerPerTick(0.25),
+            ),
+            Err(SourceAccountError::InvalidDescriptor)
+        );
+
+        let sun_id = SourceId::new(21).unwrap();
+        assert!(SourceDescriptor::new(
+            sun_id,
+            SourceProvenance::External { origin_id: 2 },
+            SourceClass::ExternalRadiative,
+            SourceGeometry::Point { x: 0.0, y: 100.0 },
+            schedule,
+            SourceWaveform::Periodic { frequency_cycles_per_tick: 440.0 / 24000.0, phase_cycles: 0.0 },
+            SourcePowerLaw::TotalPowerPerTick(1.0),
+        ).is_ok());
+    }
+
+    #[test]
+    fn prepared_settlement_cannot_be_committed_to_another_source() {
+        let first_id = SourceId::new(30).unwrap();
+        let second_id = SourceId::new(31).unwrap();
+        let first = SourceEnergyAccount::new(first_id, 4.0).unwrap();
+        let mut second = SourceEnergyAccount::new(second_id, 9.0).unwrap();
+        let prepared = first.prepare_field_transfer(2.0).unwrap();
+
+        assert_eq!(
+            second.commit_field_transfer(prepared),
+            Err(SourceAccountError::IdentityMismatch)
+        );
+        assert_eq!(second.remaining_energy(), 9.0);
+        assert_eq!(second.cumulative_field_transfer(), 0.0);
     }
 
     #[test]
