@@ -1020,10 +1020,9 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
 
 fn phase3_form_contains_point(form: &Form, point: (f64, f64)) -> bool {
     match form {
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-            form.polygon_vertices()
-                .is_some_and(|vertices| phase3_polygon_contains_point(point, &vertices))
-        }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => form
+            .polygon_vertices()
+            .is_some_and(|vertices| phase3_polygon_contains_point(point, &vertices)),
         // Phase 3 rejects circles and fluids before this predicate is reached.
         // Keep their legacy containment behavior untouched for other callers.
         _ => form_contains_point(form, 0.0, 0.0, 0.0, point.0, point.1),
@@ -1042,8 +1041,7 @@ fn phase3_polygon_contains_point(point: (f64, f64), vertices: &[(f64, f64)]) -> 
         let edge = (b.0 - a.0, b.1 - a.1);
         let offset = (point.0 - a.0, point.1 - a.1);
         let edge_length = edge.0.hypot(edge.1);
-        let linear_tolerance =
-            crate::phase3_numeric::linear_tolerance(&[point, a, b], edge_length);
+        let linear_tolerance = crate::phase3_numeric::linear_tolerance(&[point, a, b], edge_length);
         let cross = edge.0 * offset.1 - edge.1 * offset.0;
         let cross_tolerance =
             crate::phase3_numeric::cross_tolerance(edge, offset, linear_tolerance);
@@ -1078,10 +1076,8 @@ fn parameter_before_target(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> b
     if !length.is_finite() || length <= tolerance {
         return false;
     }
-    let parameter_tolerance =
-        crate::phase3_numeric::parameter_tolerance(tolerance, length);
-    ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / (length * length)
-        < 1.0 - parameter_tolerance
+    let parameter_tolerance = crate::phase3_numeric::parameter_tolerance(tolerance, length);
+    ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / (length * length) < 1.0 - parameter_tolerance
 }
 
 fn segment_intersection_before_target(
@@ -1098,10 +1094,8 @@ fn segment_intersection_before_target(
     let qy = c.1 - a.1;
     let ray_length = rx.hypot(ry);
     let blocker_length = sx.hypot(sy);
-    let linear_tolerance = crate::phase3_numeric::linear_tolerance(
-        &[a, b, c, d],
-        ray_length.max(blocker_length),
-    );
+    let linear_tolerance =
+        crate::phase3_numeric::linear_tolerance(&[a, b, c, d], ray_length.max(blocker_length));
     if ray_length <= linear_tolerance || blocker_length <= linear_tolerance {
         return false;
     }
@@ -1110,20 +1104,14 @@ fn segment_intersection_before_target(
     let blocker_parameter_tolerance =
         crate::phase3_numeric::parameter_tolerance(linear_tolerance, blocker_length);
     let denominator = rx * sy - ry * sx;
-    let denominator_tolerance = crate::phase3_numeric::cross_tolerance(
-        (rx, ry),
-        (sx, sy),
-        linear_tolerance,
-    );
+    let denominator_tolerance =
+        crate::phase3_numeric::cross_tolerance((rx, ry), (sx, sy), linear_tolerance);
 
     if denominator.abs() <= denominator_tolerance {
         // Parallel segments only intersect when collinear. Handle that case
         // explicitly: a ray running along a polygon edge is still occluded.
-        let collinear_tolerance = crate::phase3_numeric::cross_tolerance(
-            (qx, qy),
-            (rx, ry),
-            linear_tolerance,
-        );
+        let collinear_tolerance =
+            crate::phase3_numeric::cross_tolerance((qx, qy), (rx, ry), linear_tolerance);
         if (qx * ry - qy * rx).abs() > collinear_tolerance {
             return false;
         }
@@ -1132,8 +1120,7 @@ fn segment_intersection_before_target(
         let td = ((d.0 - a.0) * rx + (d.1 - a.1) * ry) / ray_length_squared;
         let overlap_start = tc.min(td).max(0.0);
         let overlap_end = tc.max(td).min(1.0);
-        return overlap_start <= overlap_end
-            && overlap_start < 1.0 - parameter_tolerance;
+        return overlap_start <= overlap_end && overlap_start < 1.0 - parameter_tolerance;
     }
 
     let t = (qx * sy - qy * sx) / denominator;
