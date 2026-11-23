@@ -490,6 +490,158 @@ impl WaveField {
         self.inject_profile_at_current_time(source, &displacement, &velocity)
     }
 
+    /// Advances one leapfrog substep with one prescribed acceleration profile.
+    ///
+    /// The profile is an acceleration term in the wave equation, not incident
+    /// power density. Its signed discrete work is computed from the actual
+    /// centered midpoint velocity and settled atomically against this source.
+    /// The identity is exact for this centered update, including the configured
+    /// diagonal sponge damping:
+    ///   delta(field energy) = source work - absorbed energy.
+    /// This remains an isolated mathematical forcing experiment.
+    pub(crate) fn advance_forced_substep(
+        &mut self,
+        source: &mut SourceInstance,
+        forcing: &[f64],
+    ) -> Result<f64, WaveFieldError> {
+        let mut entries = [(source, forcing)];
+        self.advance_forced_substep_multi(&mut entries)
+            .map(|mut work| work.remove(0))
+    }
+
+    /// Advances one step with multiple additive mathematical acceleration sources.
+    /// All source accounts are staged before any account or field state is committed.
+    pub(crate) fn advance_forced_substep_multi(
+        &mut self,
+        sources: &mut [(&mut SourceInstance, &[f64])],
+    ) -> Result<Vec<f64>, WaveFieldError> {
+        if sources.is_empty() {
+            return Err(WaveFieldError::InvalidProfile);
+        }
+        let mut total_forcing = vec![0.0; self.current.len()];
+        let mut source_work_sums = vec![0.0; sources.len()];
+        for (source_index, (_, forcing)) in sources.iter().enumerate() {
+            if forcing.len() != self.current.len() || forcing.iter().any(|value| !value.is_finite())
+            {
+                return Err(WaveFieldError::InvalidProfile);
+            }
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = self.index(x, y);
+                    if (x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height)
+                        && forcing[index] != 0.0
+                    {
+                        return Err(WaveFieldError::InvalidProfile);
+                    }
+                    total_forcing[index] += forcing[index];
+                }
+            }
+            if !total_forcing.iter().all(|value| value.is_finite()) {
+                return Err(WaveFieldError::InvalidProfile);
+            }
+            // A source must appear exactly once so its prepared settlement cannot
+            // overwrite another staged transfer against the same original balance.
+            let source_id = sources[source_index].0.descriptor().id();
+            if sources[..source_index]
+                .iter()
+                .any(|(prior, _)| prior.descriptor().id() == source_id)
+            {
+                return Err(WaveFieldError::InvalidProfile);
+            }
+        }
+
+        let dt = self.time_step;
+        let wave_step_squared = self.propagation_speed.powi(2) * dt.powi(2);
+        let old_energy = self.energy();
+        let mut next = vec![0.0; self.current.len()];
+        let mut absorbed_sum = 0.0;
+
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let index = self.index(x, y);
+                let damping_step = 0.5 * self.boundary_damping[index] * dt;
+                next[index] = (2.0 * self.current[index]
+                    - (1.0 - damping_step) * self.previous[index]
+                    + wave_step_squared * self.laplacian(&self.current, x, y)
+                    + dt.powi(2) * total_forcing[index])
+                    / (1.0 + damping_step);
+
+                let midpoint_velocity = (next[index] - self.previous[index]) / (2.0 * dt);
+                for (source_index, (_, forcing)) in sources.iter().enumerate() {
+                    source_work_sums[source_index] += midpoint_velocity * forcing[index];
+                }
+                absorbed_sum +=
+                    self.boundary_damping[index] * dt * midpoint_velocity * midpoint_velocity;
+            }
+        }
+
+        if next.iter().any(|value| !value.is_finite())
+            || source_work_sums.iter().any(|value| !value.is_finite())
+        {
+            return Err(WaveFieldError::InvalidState);
+        }
+
+        let scale = self.energy_normalization * dt * self.spacing.powi(2);
+        let source_works: Vec<f64> = source_work_sums.iter().map(|sum| scale * sum).collect();
+        let total_source_work: f64 = source_works.iter().sum();
+        let absorbed_this_step = self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
+        let next_energy = self.discrete_energy(&self.current, &next);
+        let measured_change = next_energy - old_energy;
+        let expected_change = total_source_work - absorbed_this_step;
+        let accounting_tolerance = 1.0e-10
+            * old_energy
+                .abs()
+                .max(next_energy.abs())
+                .max(total_source_work.abs())
+                .max(absorbed_this_step.abs())
+                .max(1.0);
+        let next_absorbed_energy = self.boundary_absorbed_energy + absorbed_this_step;
+
+        if !total_source_work.is_finite()
+            || !absorbed_this_step.is_finite()
+            || absorbed_this_step < 0.0
+            || !next_energy.is_finite()
+            || next_energy < 0.0
+            || !measured_change.is_finite()
+            || !expected_change.is_finite()
+            || (measured_change - expected_change).abs() > accounting_tolerance
+            || !next_absorbed_energy.is_finite()
+        {
+            return Err(WaveFieldError::InvalidState);
+        }
+
+        let next_substeps_elapsed = self
+            .substeps_elapsed
+            .checked_add(1)
+            .ok_or(WaveFieldError::CounterOverflow)?;
+        let mut settlements = Vec::with_capacity(sources.len());
+        for ((source, _), work) in sources.iter().zip(source_works.iter().copied()) {
+            let settlement = source
+                .account()
+                .prepare_field_transfer(work)
+                .map_err(|error| match error {
+                    SourceAccountError::InsufficientEnergy => {
+                        WaveFieldError::InsufficientSourceEnergy
+                    }
+                    SourceAccountError::InvalidTransfer => WaveFieldError::InvalidState,
+                    _ => WaveFieldError::InvalidState,
+                })?;
+            settlements.push(settlement);
+        }
+
+        for ((source, _), settlement) in sources.iter_mut().zip(settlements) {
+            source
+                .account_mut()
+                .commit_field_transfer(settlement)
+                .map_err(|_| WaveFieldError::InvalidState)?;
+        }
+        self.previous.clone_from(&self.current);
+        self.current = next;
+        self.boundary_absorbed_energy = next_absorbed_energy;
+        self.substeps_elapsed = next_substeps_elapsed;
+        Ok(source_works)
+    }
+
     pub(crate) fn advance_substeps(&mut self, count: u64) -> Result<(), WaveFieldError> {
         self.substeps_elapsed
             .checked_add(count)
@@ -687,6 +839,282 @@ mod tests {
         let eigenvalue = 4.0 / spacing.powi(2)
             * ((0.5 * kx * spacing).sin().powi(2) + (0.5 * ky * spacing).sin().powi(2));
         speed * eigenvalue.sqrt()
+    }
+
+    #[test]
+    fn prescribed_forcing_matches_exact_discrete_work_identity() {
+        let mut field = solver(81, 81, 1.0, 2);
+        let mut source = test_source(100.0, 101);
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        for y in 35..=45 {
+            for x in 35..=45 {
+                let dx = x as f64 - 40.0;
+                let dy = y as f64 - 40.0;
+                forcing[field.index(x, y)] = 0.03 * (-(dx * dx + dy * dy) / 18.0).exp();
+            }
+        }
+
+        let before = field.energy();
+        let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+        let after = field.energy();
+
+        assert!(work > 0.0);
+        assert!((after - before - work).abs() < 1.0e-10);
+        assert!((source.account().cumulative_field_transfer() - work).abs() < 1.0e-12);
+        assert!(
+            (after + source.account().remaining_energy() - source.account().initial_energy()).abs()
+                < 1.0e-10
+        );
+    }
+
+    #[test]
+    fn prescribed_forcing_returns_energy_when_work_is_negative() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut source = test_source(0.0, 102);
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        let center = field.index(20, 20);
+        field.current[center] = 0.0;
+        field.previous[center] = 1.0;
+        // The existing field is moving opposite the positive applied force.
+        forcing[center] = 1.0;
+
+        let before = field.energy();
+        let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+        let after = field.energy();
+
+        assert!(
+            work < 0.0,
+            "expected signed work to return energy, got {work}"
+        );
+        assert!((after - before - work).abs() < 1.0e-10);
+        assert!((source.account().remaining_energy() + work).abs() < 1.0e-10);
+    }
+
+    #[test]
+    fn multiple_sources_settle_their_signed_work_as_one_field_step() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut first = test_source(10.0, 109);
+        let mut second = test_source(10.0, 110);
+        let mut first_force = vec![0.0; field.width() * field.height()];
+        let mut second_force = vec![0.0; field.width() * field.height()];
+        let center = field.index(20, 20);
+        first_force[center] = 0.4;
+        second_force[center] = 0.6;
+        let before = field.energy();
+
+        let mut sources = [
+            (&mut first, first_force.as_slice()),
+            (&mut second, second_force.as_slice()),
+        ];
+        let works = field.advance_forced_substep_multi(&mut sources).unwrap();
+
+        assert_eq!(works.len(), 2);
+        assert!(works.iter().all(|work| *work > 0.0));
+        assert!((works[0] + works[1] - (field.energy() - before)).abs() < 1.0e-10);
+        assert!((first.account().cumulative_field_transfer() - works[0]).abs() < 1.0e-12);
+        assert!((second.account().cumulative_field_transfer() - works[1]).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn multiple_source_overdraw_rolls_back_every_account_and_field_state() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut funded = test_source(10.0, 111);
+        let mut unfunded = test_source(0.0, 112);
+        let mut first_force = vec![0.0; field.width() * field.height()];
+        let mut second_force = vec![0.0; field.width() * field.height()];
+        let center = field.index(20, 20);
+        first_force[center] = 0.4;
+        second_force[center] = 0.6;
+        let previous = field.previous.clone();
+        let current = field.current.clone();
+        let energy = field.energy();
+
+        let mut sources = [
+            (&mut funded, first_force.as_slice()),
+            (&mut unfunded, second_force.as_slice()),
+        ];
+        assert_eq!(
+            field.advance_forced_substep_multi(&mut sources),
+            Err(WaveFieldError::InsufficientSourceEnergy)
+        );
+
+        assert_eq!(field.previous, previous);
+        assert_eq!(field.current, current);
+        assert_eq!(field.energy(), energy);
+        assert_eq!(funded.account().remaining_energy(), 10.0);
+        assert_eq!(funded.account().cumulative_field_transfer(), 0.0);
+        assert_eq!(unfunded.account().remaining_energy(), 0.0);
+        assert_eq!(unfunded.account().cumulative_field_transfer(), 0.0);
+        assert_eq!(field.substeps_elapsed, 0);
+    }
+
+    #[test]
+    fn multiple_source_step_rejects_duplicate_source_identity() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut first = test_source(10.0, 113);
+        let mut duplicate_identity = test_source(10.0, 113);
+        let forcing = vec![0.0; field.width() * field.height()];
+        let mut sources = [
+            (&mut first, forcing.as_slice()),
+            (&mut duplicate_identity, forcing.as_slice()),
+        ];
+        assert_eq!(
+            field.advance_forced_substep_multi(&mut sources),
+            Err(WaveFieldError::InvalidProfile)
+        );
+        assert_eq!(field.substeps_elapsed, 0);
+    }
+
+    #[test]
+    fn prescribed_forcing_work_converges_to_the_continuum_integral() {
+        let integral_x =
+            0.5 + 0.1 + 0.04 * (1.0 / 6.0 - 1.0 / (4.0 * std::f64::consts::PI.powi(2)));
+        let continuum_profile_squared_integral = 0.5 * integral_x;
+        let amplitude = 0.4;
+        let initial_velocity = 0.7;
+        let mut relative_errors = Vec::new();
+
+        for (case, cells) in [17_usize, 33, 65].into_iter().enumerate() {
+            let spacing = 1.0 / (cells - 1) as f64;
+            let substeps = (std::f64::consts::SQRT_2 / spacing).ceil() as usize;
+            let mut field = solver(cells, cells, spacing, substeps);
+            let mut source = test_source(10.0, 114 + case as u64);
+            let dt = field.time_step();
+            let mut forcing = vec![0.0; cells * cells];
+
+            for y in 1..cells - 1 {
+                for x in 1..cells - 1 {
+                    let px = x as f64 * spacing;
+                    let py = y as f64 * spacing;
+                    let profile = (std::f64::consts::PI * px).sin()
+                        * (std::f64::consts::PI * py).sin()
+                        * (1.0 + 0.2 * px);
+                    let index = field.index(x, y);
+                    field.previous[index] = -dt * initial_velocity * profile;
+                    forcing[index] = amplitude * profile;
+                }
+            }
+
+            let measured_work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+            let continuum_work = dt
+                * amplitude
+                * (initial_velocity + 0.5 * dt * amplitude)
+                * continuum_profile_squared_integral;
+            relative_errors.push((measured_work - continuum_work).abs() / continuum_work.abs());
+        }
+
+        assert!(
+            relative_errors[1] < relative_errors[0] / 3.0,
+            "first refinement did not show second-order convergence: {relative_errors:?}"
+        );
+        assert!(
+            relative_errors[2] < relative_errors[1] / 3.0,
+            "second refinement did not show second-order convergence: {relative_errors:?}"
+        );
+    }
+
+    #[test]
+    fn prescribed_forcing_has_zero_work_at_a_centered_velocity_node() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut source = test_source(0.0, 106);
+        let center = field.index(20, 20);
+        field.current[center] = 1.0;
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        // With dt=0.5 and the five-point Laplacian, -4 cancels the
+        // center's next displacement so its centered midpoint velocity is zero.
+        forcing[center] = -4.0;
+
+        let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+
+        assert_eq!(work, 0.0);
+        assert_eq!(source.account().remaining_energy(), 0.0);
+        assert_eq!(source.account().cumulative_field_transfer(), 0.0);
+    }
+
+    #[test]
+    fn reversing_force_reverses_signed_work_for_a_preexisting_field_velocity() {
+        let mut positive_field = solver(41, 41, 1.0, 2);
+        let mut negative_field = solver(41, 41, 1.0, 2);
+        let mut positive_source = test_source(10.0, 107);
+        let mut negative_source = test_source(10.0, 108);
+        let center = positive_field.index(20, 20);
+        positive_field.previous[center] = 1.0;
+        negative_field.previous[center] = 1.0;
+        let mut positive_force = vec![0.0; positive_field.width() * positive_field.height()];
+        let mut negative_force = vec![0.0; negative_field.width() * negative_field.height()];
+        positive_force[center] = 1.0;
+        negative_force[center] = -1.0;
+
+        let positive_work = positive_field
+            .advance_forced_substep(&mut positive_source, &positive_force)
+            .unwrap();
+        let negative_work = negative_field
+            .advance_forced_substep(&mut negative_source, &negative_force)
+            .unwrap();
+
+        assert!(positive_work < 0.0);
+        assert!(negative_work > 0.0);
+    }
+
+    #[test]
+    fn prescribed_forcing_accounts_for_work_and_sponge_absorption_together() {
+        let mut field = solver(81, 81, 1.0, 2);
+        field.configure_absorbing_boundary(12, 0.15).unwrap();
+        let mut source = test_source(100.0, 103);
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        for y in 35..=45 {
+            for x in 4..=8 {
+                forcing[field.index(x, y)] = 0.02;
+            }
+        }
+
+        let before = field.energy();
+        let absorbed_before = field.boundary_absorbed_energy();
+        let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+        let after = field.energy();
+        let absorbed = field.boundary_absorbed_energy() - absorbed_before;
+
+        assert!(work > 0.0);
+        assert!(
+            absorbed > 0.0,
+            "the forced region overlaps the sponge layer"
+        );
+        assert!((after - before - work + absorbed).abs() < 1.0e-10);
+    }
+
+    #[test]
+    fn insufficient_forcing_budget_rolls_back_field_and_source() {
+        let mut field = solver(41, 41, 1.0, 2);
+        let mut source = test_source(0.0, 104);
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        forcing[field.index(20, 20)] = 1.0;
+        let previous = field.previous.clone();
+        let current = field.current.clone();
+        let energy = field.energy();
+
+        assert_eq!(
+            field.advance_forced_substep(&mut source, &forcing),
+            Err(WaveFieldError::InsufficientSourceEnergy)
+        );
+        assert_eq!(field.previous, previous);
+        assert_eq!(field.current, current);
+        assert_eq!(field.energy(), energy);
+        assert_eq!(source.account().remaining_energy(), 0.0);
+        assert_eq!(source.account().cumulative_field_transfer(), 0.0);
+    }
+
+    #[test]
+    fn prescribed_forcing_rejects_nonzero_fixed_boundary_values() {
+        let mut field = solver(21, 21, 1.0, 2);
+        let mut source = test_source(10.0, 105);
+        let mut forcing = vec![0.0; field.width() * field.height()];
+        forcing[field.index(0, 10)] = 1.0;
+        assert_eq!(
+            field.advance_forced_substep(&mut source, &forcing),
+            Err(WaveFieldError::InvalidProfile)
+        );
+        assert_eq!(field.substeps_elapsed, 0);
+        assert_eq!(field.energy(), 0.0);
     }
 
     #[test]

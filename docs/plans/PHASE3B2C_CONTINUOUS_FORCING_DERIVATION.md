@@ -1,6 +1,6 @@
 # Phase 3B.2c — Continuous Work-Conjugate Forcing Derivation
 
-**Status:** Active mathematical investigation. No implementation or physical source law is approved by this note.
+**Status:** Candidate A's isolated single-source forcing step is implemented in the extracted reference solver; numerical verification is pending CI. No physical source law is approved.
 
 **Authority:** Phase 1 unified energy/continuous wave-field specification; the controlling [resonance-field implementation roadmap](../design/resonance-field-implementation-roadmap.md); the Phase 3B.2 source-interface proposal; merged PR #426 and PR #427.
 
@@ -93,9 +93,23 @@ W_{s,h}^n=K\Delta t\,\Delta x^2
 
 Equivalently, \(W_{s,h}^n=(K\Delta x^2/2)\sum_i f_{s,i}^n(u_i^{n+1}-u_i^{n-1})\). The sign convention matches PR #427: positive work increases field energy and debits the source; negative work returns energy to that source.
 
-This identity is exact for the stated undamped leapfrog update, up to floating-point summation error. It is not merely a continuum quadrature approximation. With multiple sources, the same midpoint field velocity attributes the total work linearly to each additive forcing term; the sum of source works equals the measured discrete field-energy change.
+This identity is exact for the stated undamped leapfrog update, up to floating-point summation error. It is not merely a continuum quadrature approximation. For additive sources, the same midpoint field velocity attributes work linearly to each forcing term; the sum of source works equals the measured discrete field-energy change, provided all source settlements are staged and committed together.
 
-**Damping/boundary caveat:** The identity above is stated for the undamped interior update. If a source overlaps a damped region, or a computational absorber is active during the same step, derive and test the combined source-work and damping-sink identity for the actual centered-damping recurrence. Do not reuse the undamped formula while silently omitting the sink. The first forcing tests should keep the source support away from the absorbing layer and use zero empty-space damping.
+The extracted solver's actual discrete invariant uses the same cross-time gradient term. Its centered sponge recurrence is
+\[
+(1+\sigma_i\Delta t/2)u_i^{n+1}
+=2u_i^n-(1-\sigma_i\Delta t/2)u_i^{n-1}
++c^2\Delta t^2(L_hu^n)_i+\Delta t^2 f_i^n.
+\]
+The exact combined balance is therefore
+\[
+\boxed{E_h^{n+1}-E_h^n
+=K\Delta t\Delta x^2\sum_i v_i^{n+1/2}f_i^n
+-K\Delta x^2\Delta t\sum_i\sigma_i(v_i^{n+1/2})^2.}
+\]
+The second term is exactly the solver's already-accounted sponge absorption. Thus source forcing and damping can operate in the same substep without conflating source work with boundary loss. The isolated implementation validates the measured field-energy change against signed source work minus the increment in boundary-absorbed energy.
+
+This identity assumes fixed-zero outer nodes and the solver's symmetric five-point stencil; the discrete summation-by-parts boundary contribution vanishes because the boundary nodes are fixed at zero. It does not establish behavior for a physical open boundary or a different spatial operator.
 
 ## 4. Candidate A — prescribed acceleration forcing
 
@@ -193,13 +207,10 @@ No production code or real-source integration is authorized by this investigatio
 
 ### 7.1 First, validate Candidate A's exact discrete work identity
 
-- Add a test-only acceleration-forcing path to a local copy or isolated test harness around the PR #427 reference solver; do not modify production behavior.
-- Use a compact spatial profile with physical-area normalization and source support separated from numerical boundaries.
-- Test zero forcing, positive work, negative work, sign reversal, and a field-velocity node.
-- Test two simultaneous sources and verify per-source work sums to the exact total discrete field-energy change.
-- Verify finite source accounts, overdraw rejection, and exact rollback of all field arrays and all source accounts.
-- Compare the exact discrete work with independently converged quadrature of the continuum integral \(\int\!\int K u_t f\,dA\,dt\) under paired spatial/time refinement.
-- Report the convergence order and normalized residual; do not claim continuum equivalence from a single grid.
+- **Implemented, pending CI:** an isolated one-source acceleration-forcing substep on the PR #427 extracted reference solver. It stages the forced update, computes signed work from the actual midpoint velocity, checks the exact combined source-work/sponge-loss identity, stages the finite source-account transfer, and commits only after validation. It does not touch production simulation paths.
+- Focused tests cover positive work, negative work returned to a zero-budget source, simultaneous forcing and sponge absorption, insufficient-budget rollback, and rejection of nonzero forcing on fixed boundary nodes.
+- Implemented and covered by tests: zero-work at a centered velocity node, force sign reversal, multiple simultaneous sources with per-source work attribution, duplicate-source rejection, and all-account rollback when any source overdraws. Deterministic replay remains to be tested.
+- Added, pending CI: a paired spatial/time-refinement test compares discrete work against the analytic continuum work integral for a smooth nonseparable profile and requires second-order convergence. Further convergence studies across source profiles and longer forcing intervals remain required. \(\int\!\int K u_t f\,dA\,dt\) under paired spatial/time refinement. Report convergence order and normalized residual; do not claim continuum equivalence from a single grid.
 
 ### 7.2 Then evaluate Candidate B
 
@@ -228,4 +239,4 @@ The exact discrete work identity for additive acceleration forcing can be derive
 
 However, Candidate A is an accounting-compatible mathematical forcing mechanism, not yet a physical incident-power law. Candidate B offers a reciprocal physical source model but introduces a coupling-energy inventory and a coupled-integrator requirement. The present evidence does not justify choosing one as the production hotspot law.
 
-**Next action:** Validate Candidate A's discrete work identity in an isolated mathematical test, then compare the resulting behavior with a conservative reciprocal source-degree-of-freedom model. Keep the hotspot power mapping unresolved until the comparison and physical source semantics are reviewed. Do not connect either candidate to the live simulation yet.
+**Next action:** Complete CI for the expanded isolated forcing tests. Then add deterministic replay and extend continuum convergence beyond the one-step smooth-profile case. Only after those should Candidate B's reciprocal source oscillator be implemented for comparison. Only after Candidate A's discrete and continuum validation should Candidate B's reciprocal source oscillator be implemented for comparison. Keep hotspot power mapping unresolved and do not connect either candidate to the live simulation.
