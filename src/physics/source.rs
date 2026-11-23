@@ -32,6 +32,7 @@ pub(crate) enum SourceClass {
     MathematicalTest,
     InPlaneDistributed,
     ExternalRadiative,
+    BoundaryEmitter,
     MaterialOscillator,
 }
 
@@ -104,19 +105,26 @@ impl SourceDescriptor {
         let valid_provenance = match (class, provenance) {
             (SourceClass::MathematicalTest, SourceProvenance::MathematicalTest { holder_id }) => holder_id > 0,
             (SourceClass::InPlaneDistributed | SourceClass::ExternalRadiative, SourceProvenance::External { origin_id }) => origin_id > 0,
+            (SourceClass::BoundaryEmitter, SourceProvenance::External { origin_id }) => origin_id > 0,
             (SourceClass::MaterialOscillator, SourceProvenance::Internal { owner_id }) => owner_id > 0,
             _ => false,
         };
-        if !valid_provenance || !valid_geometry(geometry) || !valid_waveform(waveform) {
+        let valid_geometry = match (class, geometry) {
+            (SourceClass::MathematicalTest | SourceClass::InPlaneDistributed, SourceGeometry::Disk { .. }) => true,
+            (SourceClass::ExternalRadiative, SourceGeometry::Point { .. }) => true,
+            (SourceClass::BoundaryEmitter, SourceGeometry::LineSegment { .. }) => true,
+            (SourceClass::MaterialOscillator, SourceGeometry::Point { .. } | SourceGeometry::Disk { .. }) => true,
+            _ => false,
+        };
+        if !valid_provenance || !valid_geometry || !valid_geometry_values(geometry) || !valid_waveform(waveform) {
             return Err(SourceAccountError::InvalidDescriptor);
         }
 
         let valid_power_law = match (class, power_law) {
             (SourceClass::MathematicalTest, SourcePowerLaw::MathematicalTestOnly) => true,
-            (SourceClass::InPlaneDistributed | SourceClass::ExternalRadiative | SourceClass::MaterialOscillator,
-                SourcePowerLaw::TotalPowerPerTick(value)
-                | SourcePowerLaw::AreaPowerDensityPerTick(value)
-                | SourcePowerLaw::LinePowerDensityPerTick(value)) => value.is_finite() && value > 0.0,
+            (SourceClass::InPlaneDistributed, SourcePowerLaw::AreaPowerDensityPerTick(value)) => value.is_finite() && value > 0.0,
+            (SourceClass::ExternalRadiative | SourceClass::MaterialOscillator, SourcePowerLaw::TotalPowerPerTick(value)) => value.is_finite() && value > 0.0,
+            (SourceClass::BoundaryEmitter, SourcePowerLaw::LinePowerDensityPerTick(value)) => value.is_finite() && value > 0.0,
             _ => false,
         };
         if !valid_power_law {
@@ -145,7 +153,7 @@ impl SourceDescriptor {
     }
 }
 
-fn valid_geometry(geometry: SourceGeometry) -> bool {
+fn valid_geometry_values(geometry: SourceGeometry) -> bool {
     match geometry {
         SourceGeometry::Point { x, y } => x.is_finite() && y.is_finite(),
         SourceGeometry::Disk { center_x, center_y, radius } => {
@@ -246,10 +254,16 @@ impl SourceEnergyAccount {
     }
 
     /// Commits a previously validated settlement. No fallible work remains.
-    pub(crate) fn commit_field_transfer(&mut self, settlement: PreparedFieldSettlement) {
-        debug_assert_eq!(self.source_id, settlement.source_id);
+    pub(crate) fn commit_field_transfer(
+        &mut self,
+        settlement: PreparedFieldSettlement,
+    ) -> Result<(), SourceAccountError> {
+        if self.source_id != settlement.source_id {
+            return Err(SourceAccountError::IdentityMismatch);
+        }
         self.remaining_energy = settlement.remaining_energy;
         self.cumulative_field_transfer = settlement.cumulative_field_transfer;
+        Ok(())
     }
 }
 
@@ -311,12 +325,12 @@ mod tests {
     fn source_account_settles_positive_and_negative_work() {
         let mut account = SourceEnergyAccount::new(SourceId::new(2).unwrap(), 10.0).unwrap();
         let debit = account.prepare_field_transfer(3.5).unwrap();
-        account.commit_field_transfer(debit);
+        account.commit_field_transfer(debit).unwrap();
         assert_eq!(account.remaining_energy(), 6.5);
         assert_eq!(account.cumulative_field_transfer(), 3.5);
 
         let return_transfer = account.prepare_field_transfer(-1.25).unwrap();
-        account.commit_field_transfer(return_transfer);
+        account.commit_field_transfer(return_transfer).unwrap();
         assert_eq!(account.remaining_energy(), 7.75);
         assert_eq!(account.cumulative_field_transfer(), 2.25);
     }
