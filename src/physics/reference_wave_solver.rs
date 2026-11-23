@@ -2292,5 +2292,4 @@ mod tests {
         assert!(left_work.iter().flatten().any(|work| *work > 0.0));
         assert!(left_work.iter().flatten().any(|work| *work < 0.0));
     }
-
 }
