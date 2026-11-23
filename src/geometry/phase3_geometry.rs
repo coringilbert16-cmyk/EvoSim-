@@ -287,12 +287,8 @@ mod tests {
 
         for blocker in [degenerate, self_intersecting] {
             assert!(
-                visible_polygonal_intervals_for_targets(
-                    (-5.0, 0.0),
-                    &[target(), blocker],
-                    &[0]
-                )
-                .is_none(),
+                visible_polygonal_intervals_for_targets((-5.0, 0.0), &[target(), blocker], &[0])
+                    .is_none(),
                 "malformed polygon blockers must fail closed"
             );
         }
