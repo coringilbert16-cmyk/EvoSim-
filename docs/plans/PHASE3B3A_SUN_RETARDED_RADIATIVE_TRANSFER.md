@@ -215,3 +215,45 @@ This derivation answers how external radiative energy reaches the plane. It does
 The next separate decision must specify a physical interface between incident radiation and the field: which fraction is reflected/transmitted, stored in a defined coupling state, converted to thermal energy, or delivered as signed field work. The local energy balance must close without treating incident flux as acceleration forcing, without a hidden efficiency factor, and without double-counting source energy.
 
 No live sun injection, field forcing law, production ledger migration, or chemistry/material coupling is authorized by this document.
+
+
+## 9. Dimensionless orbit-family calibration and reference checks
+
+The user approved **\(R=1\)** as a conventional project-native length normalization. This is a coordinate choice only; it does not claim that the physical orbit radius is one meter, one world cell, or any measured distance. With the approved period \(T_o=24000\), define
+
+\[
+\Omega=\frac{2\pi}{T_o},\qquad
+\eta=\frac{H}{R},\qquad
+\beta=\frac{\Omega R}{c}.
+\]
+
+The orbit can then be written, after choosing its coordinate origin and phase for the reference calculation, as
+
+\[
+x_s(\tau)=\cos(\Omega\tau+\theta_0),\qquad
+z_s(\tau)=\eta+\sin(\Omega\tau+\theta_0),\qquad
+c=\frac{\Omega}{\beta}.
+\]
+
+This leaves only two dimensionless physical controls in the ideal circular reference family: height ratio \(\eta>1\), and orbital-speed ratio \(0<\beta<1\). The latter enforces sub-propagation-speed source motion under the selected project-frame convention. The horizontal center, plane orientation, and phase origin are coordinate choices for the ideal reference problem; any nontrivial physical offset or orientation must be recorded if later calibrated.
+
+**No single \(\eta\) or \(\beta\) value is selected as the physical sun.** The reference suite sweeps \(\eta\in\{1.25,2,4\}\) and \(\beta\in\{0.02,0.15,0.60\}\), with additional boundary checks approaching \(\eta=1\) and \(\beta=1\). These are deliberately broad numerical test points, not estimates or tuning targets.
+
+A new independent standard-library test, tests/test_sun_dimensionless_orbit_reference.py, is wired into the CI offline-analyzer stage. It checks:
+- the analytic arrival Jacobian against a central finite-difference determinant across the dimensionless parameter family;
+- positivity/orientation of the retarded map throughout sampled orbital phases, directions, and sub-c source speeds;
+- minimum source-plane clearance and the declared \(\beta=\Omega R/c\) normalization.
+
+The local independent calculation observed a maximum relative determinant discrepancy of **\(1.638\times10^{-8}\)** over the 144 family/phase/direction combinations, against a test tolerance of \(2\times10^{-6}\). This is an additional algebra/reference check, not a calibrated-orbit arrival-density convergence result.
+
+### Remaining arrival-density convergence work
+
+The next numerical slice must compare two independently constructed representations of the same pushforward measure:
+1. emitted ray parcels mapped directly into arrival-time/plane-area bins, with each parcel weighted from the emitted measure; and
+2. the Jacobian density integrated over the corresponding arrival bins, including all preimages if present.
+
+Use a declared finite angular domain \(\mu\in[\mu_{min},1]\) for each finite computation, and separately account for the exact omitted grazing measure \(P\mu_{min}/2\) per unit emission time. Repeat at decreasing \(\mu_{min}\), finer emission-time/angular quadrature, and successively refined arrival bins. Report both binwise convergence and global conservation. Do not mistake a stable total integral for convergence of the spatial/temporal density.
+
+The test must first be developed on the dimensionless family. Once its numerical behavior is established, choose and document a physically justified \((\eta,\beta)\) calibration—or explicitly retain a family of admissible models if no external calibration exists. A chosen numerical point alone does not become a physical calibration.
+
+**Current status:** orbit normalization and broad-family Jacobian/clearance reference checks are implemented and wired into CI. Full arrival-density bin convergence, grazing-cutoff convergence of the resolved density, and physical selection of \((\eta,\beta)\) remain open. No radiation-to-field coupling or production source behavior is changed.
