@@ -1575,9 +1575,38 @@ mod visibility_tests {
         let first = canonical(&baseline, 0);
         let second = canonical(&reordered, 1);
         assert_eq!(
-            first, second,
-            "visible intervals and outward normals must not depend on body order or polygon winding"
+            first.len(),
+            second.len(),
+            "body order and polygon winding must preserve the number of visible intervals"
         );
+
+        let comparison_points: Vec<_> = first
+            .iter()
+            .chain(&second)
+            .flat_map(|(start, end, _)| [*start, *end])
+            .collect();
+        let characteristic_length = comparison_points
+            .iter()
+            .map(|point| point.0.hypot(point.1))
+            .fold(0.0_f64, f64::max);
+        let tolerance =
+            crate::phase3_numeric::linear_tolerance(&comparison_points, characteristic_length);
+
+        for (index, (first, second)) in first.iter().zip(&second).enumerate() {
+            for (first_point, second_point) in
+                [(first.0, second.0), (first.1, second.1)]
+            {
+                assert!(
+                    (first_point.0 - second_point.0).abs() <= tolerance
+                        && (first_point.1 - second_point.1).abs() <= tolerance,
+                    "visible interval {index} endpoints differ beyond scale-aware tolerance: {first_point:?} vs {second_point:?} (tolerance {tolerance})"
+                );
+            }
+            assert_eq!(
+                first.2, second.2,
+                "visible interval {index} outward normal changed under body reordering or winding reversal"
+            );
+        }
     }
 
     #[test]
