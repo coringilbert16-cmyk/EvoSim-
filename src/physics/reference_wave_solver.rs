@@ -10,6 +10,8 @@
 //! boundaries only; reference measurements must finish before their numerical
 //! domain of dependence can reach those boundaries.
 
+use super::source::{SourceAccountError, SourceEnergyAccount, SourceId};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WaveFieldError {
     InvalidDimensions,
@@ -385,9 +387,9 @@ impl WaveField {
         })?;
 
         // Both updates are now fully validated; the following assignments cannot fail.
+        source.commit_field_transfer(settlement).map_err(|_| WaveFieldError::InvalidState)?;
         self.previous = next_previous;
         self.current = next_current;
-        source.commit_field_transfer(settlement);
         Ok(signed_transfer)
     }
 
