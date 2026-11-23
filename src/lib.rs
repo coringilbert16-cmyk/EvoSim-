@@ -74,6 +74,7 @@ mod organism_viability;
 #[allow(dead_code)]
 // Strict Phase 3 reference geometry contract; integrated in later Phase 3 stages.
 mod phase3_geometry;
+#[path = "geometry/phase3_numeric.rs"]
 mod phase3_numeric;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
