@@ -246,6 +246,21 @@ impl WaveField {
         if self.substeps_elapsed != 0 {
             return Err(WaveFieldError::AlreadyStarted);
         }
+        self.inject_profile_at_current_time(source, displacement, velocity)
+    }
+
+    /// Applies a source profile at the field's current logical time.
+    ///
+    /// Call only between completed substeps. The signed transfer is settled
+    /// against the exact change in the discrete leapfrog invariant, so a
+    /// scheduled emission can be funded at its activation time rather than
+    /// being inserted into the initial condition.
+    pub(crate) fn inject_profile_at_current_time(
+        &mut self,
+        source: &mut FiniteEnergySource,
+        displacement: &[f64],
+        velocity: &[f64],
+    ) -> Result<f64, WaveFieldError> {
         if displacement.len() != self.current.len() || velocity.len() != self.current.len() {
             return Err(WaveFieldError::InvalidProfile);
         }
@@ -374,6 +389,53 @@ impl WaveField {
         }
         let displacement = vec![0.0; self.current.len()];
         self.inject_initial_profile(source, &displacement, &velocity)
+    }
+
+    /// Emits a compact radial velocity pulse at the current logical time.
+    /// Unlike inject_compact_pulse, this is valid after propagation has begun.
+    pub(crate) fn inject_compact_pulse_at_current_time(
+        &mut self,
+        source: &mut FiniteEnergySource,
+        center_x: f64,
+        center_y: f64,
+        support_radius: f64,
+        peak_velocity: f64,
+    ) -> Result<f64, WaveFieldError> {
+        let maximum_x = (self.width - 1) as f64 * self.spacing;
+        let maximum_y = (self.height - 1) as f64 * self.spacing;
+        let radius_squared = support_radius.powi(2);
+        if !center_x.is_finite()
+            || !center_y.is_finite()
+            || !support_radius.is_finite()
+            || support_radius <= 0.0
+            || !radius_squared.is_finite()
+            || !peak_velocity.is_finite()
+            || !maximum_x.is_finite()
+            || !maximum_y.is_finite()
+            || center_x - support_radius <= 0.0
+            || center_y - support_radius <= 0.0
+            || center_x + support_radius >= maximum_x
+            || center_y + support_radius >= maximum_y
+        {
+            return Err(WaveFieldError::InvalidParameter);
+        }
+
+        let mut velocity = vec![0.0; self.current.len()];
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let world_x = x as f64 * self.spacing;
+                let world_y = y as f64 * self.spacing;
+                let dx = world_x - center_x;
+                let dy = world_y - center_y;
+                let normalized_radius_squared = (dx * dx + dy * dy) / radius_squared;
+                if normalized_radius_squared < 1.0 {
+                    let profile = (1.0 - 1.0 / (1.0 - normalized_radius_squared)).exp();
+                    velocity[self.index(x, y)] = peak_velocity * profile;
+                }
+            }
+        }
+        let displacement = vec![0.0; self.current.len()];
+        self.inject_profile_at_current_time(source, &displacement, &velocity)
     }
 
     pub(crate) fn advance_substeps(&mut self, count: u64) -> Result<(), WaveFieldError> {
@@ -689,6 +751,32 @@ mod tests {
         assert!((emitter.available_energy() + absorber.available_energy() - 10.0).abs() < 1.0e-12);
         assert!((absorber.available_energy() - emitted).abs() < 1.0e-12);
         assert!((emitter.net_energy_debit() + absorber.net_energy_debit()).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn scheduled_source_emission_begins_propagating_at_its_activation_time() {
+        let mut field = solver(201, 201, 1.0, 2);
+        let mut source = FiniteEnergySource::new(10.0).unwrap();
+
+        field.advance_ticks(10).unwrap();
+        assert_eq!(field.logical_time_ticks(), 10.0);
+        let transfer = field
+            .inject_compact_pulse_at_current_time(&mut source, 100.0, 100.0, 3.0, 0.5)
+            .unwrap();
+        assert!(transfer > 0.0);
+        assert!((field.energy() - transfer).abs() < 1.0e-12);
+
+        field.advance_ticks(10).unwrap();
+        assert_eq!(field.sample(124, 100).unwrap(), 0.0);
+        field.advance_ticks(10).unwrap();
+        assert!(field.sample(124, 100).unwrap().abs() < 1.0e-2);
+        field.advance_ticks(4).unwrap();
+        assert!(field.sample(124, 100).unwrap().abs() > 1.0e-2);
+        assert_eq!(field.logical_time_ticks(), 34.0);
+        assert!(
+            (field.energy() + source.available_energy() - source.initial_budget()).abs() < 1.0e-10
+        );
+        assert!((source.net_energy_debit() - transfer).abs() < 1.0e-12);
     }
 
     #[test]
