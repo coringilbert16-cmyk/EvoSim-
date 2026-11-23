@@ -167,7 +167,14 @@ pub(crate) fn checked_polygon_union(forms:&[Form])->Option<PolygonUnionBoundary>
             let left=union_contains(add(mid,mul(normal,offset)),&polys)?;
             let right=union_contains(add(mid,mul(normal,-offset)),&polys)?;
             if left==right{continue;}
-            if left {boundary.push((a,b));} else {boundary.push((b,a));}
+            let oriented=if left {(a,b)} else {(b,a)};
+            // Coincident source polygons produce the same union edge more
+            // than once. Keep one deterministic geometric copy before loop
+            // assembly; perimeter validation independently guards duplicates.
+            if !boundary.iter().any(|(u,v)|distance(*u,oriented.0)<=tol*4.0
+                && distance(*v,oriented.1)<=tol*4.0) {
+                boundary.push(oriented);
+            }
         }
     }
     if boundary.is_empty(){return None;}
