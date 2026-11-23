@@ -169,6 +169,7 @@ pub(crate) fn disjoint_polygonal_material_perimeter(
     if body.parts.is_empty()
         || body.parts.iter().any(|part| {
             !is_phase3_polygon(&part.form)
+                || !part.form.is_valid()
                 || !part.x.is_finite()
                 || !part.y.is_finite()
                 || !part.rotation_radians.is_finite()
@@ -368,8 +369,18 @@ mod tests {
             (-1.0, -1.0),
             (1.0, 1.0),
         );
+        let malformed_polygon = body(
+            Form::Polygon {
+                vertices: vec![(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)],
+            },
+            0.0,
+            0.0,
+            (0.0, 0.0),
+            (2.0, 0.0),
+        );
         assert!(disjoint_polygonal_material_perimeter(&circle, 0).is_none());
         assert!(disjoint_polygonal_material_perimeter(&fluid, 0).is_none());
+        assert!(disjoint_polygonal_material_perimeter(&malformed_polygon, 0).is_none());
     }
 
     #[test]
