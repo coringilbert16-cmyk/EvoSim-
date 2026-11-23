@@ -914,7 +914,6 @@ pub(crate) fn visible_phase3_polygonal_intervals_for_targets(
     visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, true)
 }
 
-
 #[cfg(test)]
 fn visible_polygonal_intervals_for_targets_unpruned(
     source: (f64, f64),
