@@ -318,11 +318,7 @@ mod tests {
         profile
     }
 
-    fn refined_model(
-        cells: usize,
-        spacing: f64,
-        time_step: f64,
-    ) -> ReciprocalSourceField {
+    fn refined_model(cells: usize, spacing: f64, time_step: f64) -> ReciprocalSourceField {
         ReciprocalSourceField::new(
             cells,
             cells,
