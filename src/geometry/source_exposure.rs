@@ -4501,12 +4501,14 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                 if vertices.len() < 3 {
                     return None;
                 }
+                let origin = vertices[0];
                 let area_twice: f64 = vertices
                     .iter()
                     .enumerate()
                     .map(|(i, &(x, y))| {
                         let (nx, ny) = vertices[(i + 1) % vertices.len()];
-                        x * ny - nx * y
+                        (x - origin.0) * (ny - origin.1)
+                            - (nx - origin.0) * (y - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
@@ -4842,12 +4844,14 @@ fn parallel_exposure_with_exact_intersections(
                     _ => part.form.polygon_vertices(),
                 })?;
                 let vertices: Vec<_> = vertices.into_iter().map(world).collect();
+                let origin = vertices[0];
                 let area_twice: f64 = vertices
                     .iter()
                     .enumerate()
                     .map(|(index, &(x, y))| {
                         let (nx, ny) = vertices[(index + 1) % vertices.len()];
-                        x * ny - nx * y
+                        (x - origin.0) * (ny - origin.1)
+                            - (nx - origin.0) * (y - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
@@ -6292,12 +6296,14 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     .into_iter()
                     .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                     .collect();
+                let origin = vertices[0];
                 let area_twice: f64 = vertices
                     .iter()
                     .enumerate()
                     .map(|(index, &point)| {
                         let next = vertices[(index + 1) % vertices.len()];
-                        point.0 * next.1 - next.0 * point.1
+                        (point.0 - origin.0) * (next.1 - origin.1)
+                            - (next.0 - origin.0) * (point.1 - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice == 0.0 {
