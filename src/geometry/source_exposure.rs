@@ -421,12 +421,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
-    visible_polygonal_intervals_for_targets_with_pruning(
-        source,
-        bodies,
-        target_body_indices,
-        true,
-    )
+    visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, true)
 }
 
 #[cfg(test)]
@@ -973,8 +968,7 @@ mod visibility_tests {
         ];
 
         for (arrangement_index, bodies) in arrangements.iter().enumerate() {
-            let pruned =
-                visible_polygonal_intervals_for_targets(source, bodies, &[0]).unwrap();
+            let pruned = visible_polygonal_intervals_for_targets(source, bodies, &[0]).unwrap();
             let unpruned =
                 visible_polygonal_intervals_for_targets_unpruned(source, bodies, &[0]).unwrap();
 
@@ -1012,12 +1006,9 @@ mod visibility_tests {
                         continue;
                     }
                     for endpoint in [reference.start, reference.end] {
-                        if let Some(t) = segment_parameter(
-                            endpoint,
-                            interval.start,
-                            interval.end,
-                            1e-8,
-                        ) {
+                        if let Some(t) =
+                            segment_parameter(endpoint, interval.start, interval.end, 1e-8)
+                        {
                             if t > 1e-10 && t < 1.0 - 1e-10 {
                                 cuts.push(t);
                             }
