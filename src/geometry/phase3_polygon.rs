@@ -92,7 +92,11 @@ pub(crate) fn checked_polygon_area(form: &Form) -> Option<PolygonArea> {
 
     let vertices = form.polygon_vertices()?;
     let count = vertices.len();
-    if count < 3 || vertices.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+    if count < 3
+        || vertices
+            .iter()
+            .any(|(x, y)| !x.is_finite() || !y.is_finite())
+    {
         return None;
     }
 
@@ -196,14 +200,9 @@ pub(crate) fn checked_polygon_area(form: &Form) -> Option<PolygonArea> {
         sum = next;
     }
     let area = sum.abs() * 0.5;
-    let uncertainty = (linear_tolerance * perimeter
-        + f64::EPSILON * ROUNDING_ULPS * absolute_products)
-        * 0.5;
-    if !area.is_finite()
-        || !uncertainty.is_finite()
-        || area <= uncertainty
-        || area <= 0.0
-    {
+    let uncertainty =
+        (linear_tolerance * perimeter + f64::EPSILON * ROUNDING_ULPS * absolute_products) * 0.5;
+    if !area.is_finite() || !uncertainty.is_finite() || area <= uncertainty || area <= 0.0 {
         return None;
     }
 
@@ -249,7 +248,9 @@ mod tests {
     fn winding_and_large_translation_do_not_change_area() {
         let vertices = [(-2.0, -1.0), (2.0, -1.0), (2.0, 1.0), (-2.0, 1.0)];
         let forward = checked_polygon_area(&polygon(&vertices)).unwrap();
-        let reverse = checked_polygon_area(&polygon(&vertices.into_iter().rev().collect::<Vec<_>>())).unwrap();
+        let reverse =
+            checked_polygon_area(&polygon(&vertices.into_iter().rev().collect::<Vec<_>>()))
+                .unwrap();
         let translated = polygon(
             &vertices
                 .iter()
@@ -264,17 +265,37 @@ mod tests {
 
     #[test]
     fn area_scales_with_square_of_geometry_scale() {
-        let small = checked_polygon_area(&Form::Rectangle { width: 1e-6, height: 2e-6 }).unwrap();
-        let large = checked_polygon_area(&Form::Rectangle { width: 1e6, height: 2e6 }).unwrap();
+        let small = checked_polygon_area(&Form::Rectangle {
+            width: 1e-6,
+            height: 2e-6,
+        })
+        .unwrap();
+        let large = checked_polygon_area(&Form::Rectangle {
+            width: 1e6,
+            height: 2e6,
+        })
+        .unwrap();
         assert!((small.square_units / 2e-12 - 1.0).abs() < 1e-12);
         assert!((large.square_units / 2e12 - 1.0).abs() < 1e-12);
     }
 
     #[test]
     fn concave_self_intersecting_degenerate_and_non_finite_polygons_fail_closed() {
-        assert!(checked_polygon_area(&polygon(&[(0.0, 0.0), (2.0, 0.0), (1.0, 0.5), (2.0, 2.0), (0.0, 2.0)])).is_none());
-        assert!(checked_polygon_area(&polygon(&[(0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0)])).is_none());
+        assert!(checked_polygon_area(&polygon(&[
+            (0.0, 0.0),
+            (2.0, 0.0),
+            (1.0, 0.5),
+            (2.0, 2.0),
+            (0.0, 2.0)
+        ]))
+        .is_none());
+        assert!(
+            checked_polygon_area(&polygon(&[(0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0)]))
+                .is_none()
+        );
         assert!(checked_polygon_area(&polygon(&[(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)])).is_none());
-        assert!(checked_polygon_area(&polygon(&[(0.0, 0.0), (1.0, 0.0), (f64::NAN, 1.0)])).is_none());
+        assert!(
+            checked_polygon_area(&polygon(&[(0.0, 0.0), (1.0, 0.0), (f64::NAN, 1.0)])).is_none()
+        );
     }
 }
