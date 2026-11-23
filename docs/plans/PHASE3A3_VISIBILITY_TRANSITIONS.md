@@ -26,6 +26,14 @@ Phase 3 material perimeter is polygonal only. A finite line can occlude but cann
 
 This is geometry only. No source power, field coupling, receiver material response, energy allocation, heat, or production simulation behavior belongs in this milestone.
 
+## Phase 3 numerical policy
+
+- `linear_tolerance` uses 16 machine-epsilon units times the larger of participating coordinate magnitude and characteristic feature length. Including coordinate magnitude accounts for precision lost when subtracting translated world coordinates; omitting a unit floor preserves scale invariance near the origin.
+- `cross_tolerance` combines coordinate uncertainty times the sum of vector lengths with floating-point product error. It is used for parallelism and collinearity decisions.
+- `parameter_tolerance` converts a world-space linear tolerance into a normalized segment parameter using the actual segment length. Event endpoint exclusion and cut deduplication therefore scale with the edge rather than using a fixed normalized epsilon.
+- A tolerance represents numerical uncertainty only. It is not a physical clearance or an instruction to merge distinct geometry. Events closer than the derived uncertainty cannot be reliably distinguished in the represented coordinates; events farther apart remain separate.
+- The straight polygon/line Phase 3 visibility and blocker paths use this policy. Legacy circle/fluid and curved-boundary paths remain outside the strict Phase 3 contract.
+
 ## Required event completeness
 
 For a straight target edge, visibility can change only at:
@@ -42,7 +50,7 @@ All event calculations must respect finite segment extents. Infinite extensions 
 ## Audit findings and risks to resolve
 
 - Candidate-body pruning uses angular bounds and AABB minimum/maximum distances. Prove that every rejection is conservative for all supported polygon/line geometry, including source-inside-bounds and angular wrap cases. Otherwise remove the rejection or fail closed.
-- Fixed absolute tolerances currently appear in event intersection, cut deduplication, and classification. Establish a documented scale-aware numerical policy; do not silently treat a tolerance as a physical gap or merge distinct events.
+- The Phase 3 straight-polygon visibility path now uses the shared `phase3_numeric` policy: linear tolerances scale with coordinate magnitude and local feature size; cross-product tolerances account for both vector lengths; segment-parameter tolerances derive from linear tolerance divided by segment length. The polygon area calculation is translated to a local origin before accumulation. Candidate-pruning angular and distance margins use the same scale-aware linear bound. The policy deliberately has no unit-sized floor. The policy and scale/translation regression tests are in `src/geometry/phase3_numeric.rs` and `source_exposure.rs`. Curved/legacy-only paths retain their existing tolerances and are not part of the strict Phase 3 polygon/line boundary.
 - Tangencies to polygon vertices and line endpoints are zero-measure events but can change interval visibility. Retain their exact rays as partition events.
 - Coincident and collinear arrangements must either be handled by canonical interval ownership or rejected explicitly. They must never produce duplicate exposure.
 - The exact blocker predicate and event generator must agree on boundary-touch semantics. A ray that only touches a blocker at one point must have a defined, consistently tested treatment.
