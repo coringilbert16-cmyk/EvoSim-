@@ -890,6 +890,86 @@ mod visibility_tests {
     }
 
     #[test]
+    fn circular_target_is_split_at_exact_rays_through_finite_line_endpoints() {
+        let source = (-5.0, 0.0);
+        let target = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 1.0 },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let blocker = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 1,
+                form: Form::Line { length: 1.0 },
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            }],
+            min_x: 2.0,
+            max_x: 2.0,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+
+        let intervals = visible_circular_arc_intervals(source, &[target, blocker])
+            .expect("circle and finite-line boundaries have exact visibility geometry");
+        let target_arcs: Vec<_> = intervals
+            .iter()
+            .filter(|interval| interval.body_index == 0 && interval.unit_index == 0)
+            .collect();
+        assert_eq!(
+            target_arcs.len(),
+            2,
+            "the finite segment must split the source-facing circle into two visible shoulders: {target_arcs:?}"
+        );
+
+        // Each line endpoint defines an exact transition ray. Intersect that
+        // ray with the target circle and require the corresponding angle to
+        // appear as an endpoint of one of the returned visible arcs.
+        for endpoint_y in [-0.5_f64, 0.5_f64] {
+            let endpoint = (2.0, endpoint_y);
+            let dx = endpoint.0 - source.0;
+            let dy = endpoint.1 - source.1;
+            let ox = source.0 - 5.0;
+            let oy = source.1;
+            let a = dx * dx + dy * dy;
+            let b = 2.0 * (ox * dx + oy * dy);
+            let c = ox * ox + oy * oy - 1.0;
+            let discriminant = b * b - 4.0 * a * c;
+            assert!(discriminant >= 0.0);
+            let t = (-b - discriminant.sqrt()) / (2.0 * a);
+            assert!(t > 1.0, "the ray must reach the target after the blocker");
+            let hit = (source.0 + t * dx, source.1 + t * dy);
+            let expected_angle = (hit.1).atan2(hit.0 - 5.0).rem_euclid(std::f64::consts::TAU);
+
+            let has_endpoint = target_arcs.iter().any(|interval| {
+                let start = interval.arc.start_angle_radians.rem_euclid(std::f64::consts::TAU);
+                let end = (start + interval.arc.sweep_radians)
+                    .rem_euclid(std::f64::consts::TAU);
+                let angular_distance = |left: f64, right: f64| {
+                    (left - right).abs().min(
+                        std::f64::consts::TAU - (left - right).abs(),
+                    )
+                };
+                angular_distance(start, expected_angle) < 1e-8
+                    || angular_distance(end, expected_angle) < 1e-8
+            });
+            assert!(
+                has_endpoint,
+                "missing exact visibility transition at angle {expected_angle}; intervals: {target_arcs:?}"
+            );
+        }
+    }
+
+    #[test]
     fn candidate_filter_excludes_angularly_overlapping_bodies_behind_target() {
         let source = (-10.0, 0.0);
         let bodies = [
