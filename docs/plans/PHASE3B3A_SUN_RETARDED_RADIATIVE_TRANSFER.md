@@ -151,16 +151,16 @@ The second half remains in the external accounting domain; it is not planar fiel
 
 For a finite observation interval, received energy during that same interval need not equal half of energy emitted during it. The difference is radiation still in flight at the interval boundaries. Grazing rays \(\mu\to0^+\) have unbounded travel time, although the exactly horizontal set has zero solid-angle measure. The accounting must include the emitted-downward, not-yet-arrived energy inventory, or use an equivalent exact boundary term. Do not truncate grazing rays without reporting and conserving the omitted energy.
 
-A valid independent reconciliation is
+Define \(I_{\downarrow}(t)\) as the energy in downward rays that have been emitted but have not yet reached the plane at time \(t\). For any finite interval \([t_0,t_1]\), the exact transport reconciliation is
 
 \[
-E_{\downarrow,\mathrm{emitted}}
-=E_{\mathrm{plane,arrived}}
-+E_{\mathrm{downward,in\ transit}}
-+E_{\mathrm{downward,initial\ transit}},
+E_{\downarrow,\mathrm{emit}}[t_0,t_1]
++I_{\downarrow}(t_0)
+=E_{\mathrm{arrive}}[t_0,t_1]
++I_{\downarrow}(t_1).
 \]
 
-with careful signs for the chosen interval and initial conditions. Separately,
+This explicitly accounts for radiation already in flight at the start and radiation still in flight at the end; no sign convention is left implicit. Separately,
 
 \[
 E_{\mathrm{emitted}}
