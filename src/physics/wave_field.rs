@@ -61,6 +61,8 @@ pub(crate) struct WaveField {
     energy_normalization: f64,
     previous: Vec<f64>,
     current: Vec<f64>,
+    boundary_damping: Vec<f64>,
+    boundary_absorbed_energy: f64,
     substeps_elapsed: u64,
 }
 
@@ -122,6 +124,8 @@ impl WaveField {
             energy_normalization,
             previous: vec![0.0; cell_count],
             current: vec![0.0; cell_count],
+            boundary_damping: vec![0.0; cell_count],
+            boundary_absorbed_energy: 0.0,
             substeps_elapsed: 0,
         })
     }
@@ -152,6 +156,67 @@ impl WaveField {
 
     pub(crate) fn logical_time_ticks(&self) -> f64 {
         self.substeps_elapsed as f64 / self.substeps_per_tick as f64
+    }
+
+    /// Energy removed by the numerical absorbing layer, recorded as
+    /// computational-boundary outflow rather than silently discarded.
+    pub(crate) fn boundary_absorbed_energy(&self) -> f64 {
+        self.boundary_absorbed_energy
+    }
+
+    /// Configures a graded sponge layer inside the fixed-zero computational
+    /// edge. This is an approximate absorber, not a perfectly matched layer:
+    /// its residual reflection must be measured for the frequencies and
+    /// incidence angles used by a reference experiment.
+    ///
+    /// The centered damping term has an exact discrete energy sink:
+    /// normalization * dx^2 * sum(sigma * dt * v_mid^2).
+    /// Configuration is immutable once propagation has started.
+    pub(crate) fn configure_absorbing_boundary(
+        &mut self,
+        layer_width: usize,
+        maximum_damping: f64,
+    ) -> Result<(), WaveFieldError> {
+        if self.substeps_elapsed != 0 {
+            return Err(WaveFieldError::AlreadyStarted);
+        }
+        let twice_layer_width = layer_width
+            .checked_mul(2)
+            .ok_or(WaveFieldError::InvalidParameter)?;
+        if layer_width == 0
+            || twice_layer_width >= self.width.min(self.height)
+            || !maximum_damping.is_finite()
+            || maximum_damping <= 0.0
+            || !(maximum_damping * self.time_step).is_finite()
+        {
+            return Err(WaveFieldError::InvalidParameter);
+        }
+
+        let side_damping = |distance: usize| {
+            if distance >= layer_width {
+                0.0
+            } else {
+                let depth = (layer_width - distance) as f64 / layer_width as f64;
+                maximum_damping * depth * depth
+            }
+        };
+        let mut damping = vec![0.0; self.current.len()];
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let value = side_damping(x)
+                    + side_damping(self.width - 1 - x)
+                    + side_damping(y)
+                    + side_damping(self.height - 1 - y);
+                if !value.is_finite() {
+                    return Err(WaveFieldError::InvalidParameter);
+                }
+                damping[self.index(x, y)] = value;
+            }
+        }
+
+        self.boundary_damping = damping;
+        self.boundary_absorbed_energy = 0.0;
+        Ok(())
     }
 
     pub(crate) fn sample(&self, x: usize, y: usize) -> Option<f64> {
@@ -457,26 +522,69 @@ impl WaveField {
 
     fn advance_one_substep(&mut self) -> Result<(), WaveFieldError> {
         let wave_step_squared = self.propagation_speed.powi(2) * self.time_step.powi(2);
+        let old_energy = self.energy();
         let mut next = vec![0.0; self.current.len()];
 
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
                 let index = self.index(x, y);
-                next[index] = 2.0 * self.current[index] - self.previous[index]
-                    + wave_step_squared * self.laplacian(&self.current, x, y);
+                let damping_step = 0.5 * self.boundary_damping[index] * self.time_step;
+                next[index] = (2.0 * self.current[index]
+                    - (1.0 - damping_step) * self.previous[index]
+                    + wave_step_squared * self.laplacian(&self.current, x, y))
+                    / (1.0 + damping_step);
             }
         }
 
         if next.iter().any(|value| !value.is_finite()) {
             return Err(WaveFieldError::InvalidState);
         }
+
+        // Multiplying the centered-damping recurrence by the centered
+        // velocity gives this exact discrete energy loss for each step.
+        // The spatially varying damping coefficient is diagonal, so it
+        // contributes no untracked cross-cell work.
+        let mut absorbed_this_step = 0.0;
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let index = self.index(x, y);
+                let damping = self.boundary_damping[index];
+                if damping > 0.0 {
+                    let midpoint_velocity =
+                        (next[index] - self.previous[index]) / (2.0 * self.time_step);
+                    absorbed_this_step += damping
+                        * self.time_step
+                        * midpoint_velocity
+                        * midpoint_velocity;
+                }
+            }
+        }
+        absorbed_this_step *= self.energy_normalization * self.spacing.powi(2);
+
         let next_energy = self.discrete_energy(&self.current, &next);
-        if !next_energy.is_finite() || next_energy < 0.0 {
+        let measured_loss = old_energy - next_energy;
+        let accounting_tolerance = 1.0e-10
+            * old_energy
+                .abs()
+                .max(next_energy.abs())
+                .max(absorbed_this_step.abs())
+                .max(1.0);
+        let next_absorbed_energy = self.boundary_absorbed_energy + absorbed_this_step;
+        if !next_energy.is_finite()
+            || next_energy < 0.0
+            || !absorbed_this_step.is_finite()
+            || absorbed_this_step < 0.0
+            || !measured_loss.is_finite()
+            || measured_loss < -accounting_tolerance
+            || (measured_loss - absorbed_this_step).abs() > accounting_tolerance
+            || !next_absorbed_energy.is_finite()
+        {
             return Err(WaveFieldError::InvalidState);
         }
 
         self.previous.clone_from(&self.current);
         self.current = next;
+        self.boundary_absorbed_energy = next_absorbed_energy;
         self.substeps_elapsed += 1;
         Ok(())
     }
@@ -1304,6 +1412,158 @@ mod tests {
         let fine = anisotropy_error(0.25, 8);
         assert!(coarse > medium * 1.5, "coarse={coarse}, medium={medium}");
         assert!(medium > fine * 1.1, "medium={medium}, fine={fine}");
+    }
+
+    fn outgoing_wave_packet(
+        field: &mut WaveField,
+        angle: f64,
+        wave_number: f64,
+    ) -> (usize, usize, f64) {
+        let center_x = (field.width / 2) as f64 - 15.0 * angle.cos();
+        let center_y = (field.height / 2) as f64 - 15.0 * angle.sin();
+        let envelope_radius = 9.0;
+        let spatial_eigenvalue = 4.0 / field.spacing.powi(2)
+            * ((0.5 * wave_number * field.spacing * angle.cos()).sin().powi(2)
+                + (0.5 * wave_number * field.spacing * angle.sin()).sin().powi(2));
+        let spatial_omega = field.propagation_speed * spatial_eigenvalue.sqrt();
+        let temporal_omega = (1.0
+            - 0.5 * (spatial_omega * field.time_step()).powi(2))
+        .acos()
+            / field.time_step();
+        let mut envelope_norm_squared = 0.0;
+
+        for y in 1..field.height - 1 {
+            for x in 1..field.width - 1 {
+                let dx = x as f64 * field.spacing - center_x;
+                let dy = y as f64 * field.spacing - center_y;
+                let envelope = (-(dx * dx + dy * dy)
+                    / (2.0 * envelope_radius * envelope_radius))
+                    .exp();
+                let phase = wave_number * (dx * angle.cos() + dy * angle.sin());
+                let index = field.index(x, y);
+                field.current[index] = envelope * phase.cos();
+                // The previous level is the same packet one substep earlier,
+                // making its carrier propagate in the selected direction.
+                field.previous[index] = envelope * (phase + temporal_omega * field.time_step()).cos();
+                envelope_norm_squared += envelope * envelope;
+            }
+        }
+
+        (
+            center_x.round() as usize,
+            center_y.round() as usize,
+            envelope_norm_squared.sqrt(),
+        )
+    }
+
+    fn local_amplitude_norm(
+        field: &WaveField,
+        center_x: usize,
+        center_y: usize,
+        radius: usize,
+    ) -> f64 {
+        let mut sum = 0.0;
+        for y in center_y - radius..=center_y + radius {
+            for x in center_x - radius..=center_x + radius {
+                sum += field.current[field.index(x, y)].powi(2);
+            }
+        }
+        sum.sqrt()
+    }
+
+    #[test]
+    fn absorbing_boundary_accounts_for_removed_energy_without_a_hidden_sink() {
+        let mut field = solver(201, 201, 1.0, 2);
+        field.configure_absorbing_boundary(72, 0.2).unwrap();
+        let mut source = FiniteEnergySource::new(10.0).unwrap();
+        pulse(&mut field, &mut source, 100.0, 100.0, 0.5);
+        let emitted_energy = field.energy();
+
+        field.advance_ticks(260).unwrap();
+
+        let remaining = field.energy();
+        let absorbed = field.boundary_absorbed_energy();
+        assert!(absorbed > emitted_energy * 0.99);
+        assert!(
+            (remaining + absorbed - emitted_energy).abs() < emitted_energy * 1.0e-9,
+            "remaining={remaining}, absorbed={absorbed}, emitted={emitted_energy}"
+        );
+        assert!(
+            (remaining + absorbed + source.available_energy() - source.initial_budget()).abs()
+                < 1.0e-9
+        );
+    }
+
+    #[test]
+    fn absorbing_layer_suppresses_reflection_across_frequencies_and_angles() {
+        let cases = [
+            (0.0, 0.18),
+            (0.0, 0.30),
+            (0.0, 0.45),
+            (std::f64::consts::FRAC_PI_4, 0.18),
+            (std::f64::consts::FRAC_PI_4, 0.30),
+            (std::f64::consts::FRAC_PI_4, 0.45),
+        ];
+
+        for (angle, wave_number) in cases {
+            let mut absorbing = solver(201, 201, 1.0, 2);
+            let mut reflective = solver(201, 201, 1.0, 2);
+            absorbing.configure_absorbing_boundary(72, 0.2).unwrap();
+            let (center_x, center_y, _) =
+                outgoing_wave_packet(&mut absorbing, angle, wave_number);
+            let (reflective_x, reflective_y, _) =
+                outgoing_wave_packet(&mut reflective, angle, wave_number);
+            absorbing.advance_ticks(260).unwrap();
+            reflective.advance_ticks(260).unwrap();
+
+            let absorbed_return = local_amplitude_norm(&absorbing, center_x, center_y, 12);
+            let reflected_return =
+                local_amplitude_norm(&reflective, reflective_x, reflective_y, 12);
+            let reflection_ratio = absorbed_return / reflected_return.max(1.0e-15);
+            assert!(
+                reflection_ratio < 0.12,
+                "angle={angle}, wave_number={wave_number}, residual ratio={reflection_ratio}"
+            );
+            assert!(absorbing.boundary_absorbed_energy() > 0.99 * absorbing.energy());
+        }
+    }
+
+    #[test]
+    fn absorbing_window_matches_a_larger_window_before_its_reflection_returns() {
+        let mut smaller = solver(201, 201, 1.0, 2);
+        let mut larger = solver(321, 321, 1.0, 2);
+        smaller.configure_absorbing_boundary(72, 0.2).unwrap();
+        let (small_x, small_y, initial_norm) =
+            outgoing_wave_packet(&mut smaller, 0.0, 0.18);
+        let (large_x, large_y, _) = outgoing_wave_packet(&mut larger, 0.0, 0.18);
+
+        smaller.advance_ticks(260).unwrap();
+        larger.advance_ticks(260).unwrap();
+
+        let mut difference_squared = 0.0;
+        for offset_y in -12isize..=12 {
+            for offset_x in -12isize..=12 {
+                let small = smaller
+                    .sample(
+                        (small_x as isize + offset_x) as usize,
+                        (small_y as isize + offset_y) as usize,
+                    )
+                    .unwrap();
+                let large = larger
+                    .sample(
+                        (large_x as isize + offset_x) as usize,
+                        (large_y as isize + offset_y) as usize,
+                    )
+                    .unwrap();
+                difference_squared += (small - large).powi(2);
+            }
+        }
+
+        let normalized_error = difference_squared.sqrt() / initial_norm;
+        assert!(
+            normalized_error < 0.01,
+            "absorbing-window error relative to initial packet envelope: {normalized_error}"
+        );
     }
 
     #[test]
