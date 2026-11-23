@@ -81,12 +81,12 @@ mod phase3_geometry;
 mod phase3_numeric;
 #[path = "geometry/phase3_polygon.rs"]
 mod phase3_polygon;
-#[path = "geometry/phase3_union.rs"]
-#[allow(dead_code)] // Strict checked polygon union measurement; integration is staged.
-mod phase3_union;
 #[path = "geometry/phase3_source_footprint.rs"]
 #[allow(dead_code)] // Geometry-only source-footprint measure; source coupling is a later phase.
 mod phase3_source_footprint;
+#[path = "geometry/phase3_union.rs"]
+#[allow(dead_code)] // Strict checked polygon union measurement; integration is staged.
+mod phase3_union;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
 #[path = "geometry/rigid_boundary.rs"]
