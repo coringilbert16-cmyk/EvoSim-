@@ -284,11 +284,9 @@ mod tests {
     fn rectangle_integration_rejects_invalid_geometry() {
         let profile = RadialCosineProfile::new(1.0).unwrap();
         assert!(profile.integrate_rectangle(0.0, 0.0, 0.0, 1.0).is_err());
-        assert!(
-            profile
-                .integrate_rectangle(0.0, 0.0, 1.0, f64::INFINITY)
-                .is_err()
-        );
+        assert!(profile
+            .integrate_rectangle(0.0, 0.0, 1.0, f64::INFINITY)
+            .is_err());
         assert!(profile.integrate_cartesian_grid(0.0, 0.0, 0.0).is_err());
     }
 }
