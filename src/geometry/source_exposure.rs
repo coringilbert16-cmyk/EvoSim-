@@ -5525,7 +5525,6 @@ mod source_global_perimeter_tests {
         assert!(perimeter.straight.iter().all(|edge| edge.unit_index == 0));
     }
 
-
     #[test]
     fn source_global_perimeter_preserves_union_under_translation_and_rotation() {
         let mut body = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.0)]);
