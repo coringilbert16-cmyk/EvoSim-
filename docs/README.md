@@ -10,6 +10,7 @@ The root [README](../README.md) is the project entry point and getting-started g
 - [Resonance-field architecture](design/resonance-field-architecture.md) — high-level field model.
 - [Resonance-field implementation roadmap](design/resonance-field-implementation-roadmap.md) — controlling detailed roadmap; read before any resonance-field work.
 - [Phase 3B.1 source/interface audit](audits/resonance-field-phase-3b1-source-interface-audit.md) — verified source, budget, geometry, and reference-solver interface gaps; audit only, no production changes.
+- [Phase 3B.2 source interface and injection proposal](plans/PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md) — design proposal defining source ownership, discrete work settlement, hotspot integration, and implementation gates; awaiting approval.
 - [Unified energy and continuous wave-field specification](design/unified-energy-physics-specification.md) — active Phase 1 specification and approved modeling defaults for the scalar continuous wave reference field, infinite flat world, isotropic external sun on an above-plane perpendicular orbit, conservative source coupling, powered material oscillators plus passive response, finite-area hotspot, project-native units, and uniform-grid reference solver; Phase 1 specification complete; Phase 2 is the independent empty-space reference solver, with production integration still gated.
 
 ## Chemistry and physical models
