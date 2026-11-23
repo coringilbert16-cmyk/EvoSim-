@@ -167,7 +167,7 @@ The legacy 2,400-tick orbit and 86,400-second conversion are recorded as impleme
 
 ### Phase 2 — Independent reference wave solver
 
-**Status: IN PROGRESS — initial standalone solver implementation is under review in PR #410.**
+**Status: IN PROGRESS — standalone solver and candidate energy-accounted sponge boundary are under review in PR #410; full validation and independent numerical review remain pending.**
 
 **Goal:** Prove real finite-speed wave propagation in empty space before adding molecular complexity.
 
@@ -193,7 +193,7 @@ Initial reference implementation in PR #410:
   \ge 0.
   \]
   This amount is accumulated as computational-boundary outflow. It is not credited as physical heat, material energy, or an additional field reservoir. Field energy plus recorded boundary outflow closes to the pre-step energy within the declared floating-point tolerance.
-- The initial reference profile is a quadratic ramp across the buffer, with additive contributions at corners. The current normalized test profile uses a 72-cell layer and maximum damping 0.2 per project-native time unit. These are numerical test settings, not physical calibrations or production defaults.
+- The initial reference profile is a quadratic ramp across the buffer, with additive contributions at corners. The current normalized coarse-grid test profile uses a 72-cell layer and maximum damping 0.2 per project-native time unit; the half-spacing refinement uses an 88-cell layer to preserve a 44-unit physical buffer. These are numerical test settings, not physical calibrations or production defaults.
 - Current tests cover finite travel delay, two-source constructive/destructive superposition, simultaneous discrete modes and phase, radial isotropy under refinement, second-order space/time convergence, deterministic tick/substep replay, stability rejection, source rollback/return, discrete empty-space energy conservation, integrated regional boundary-flux closure, absorber energy closure, return-amplitude suppression across three carrier wavenumbers and two incidence angles, a refined-grid absorber case, and comparison against a larger window.
 
 Work:
