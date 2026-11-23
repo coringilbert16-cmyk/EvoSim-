@@ -1,5 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 
+// Isolated Phase 3B hotspot profile mathematics; not connected to live sources.
+#[path = "physics/hotspot_profile.rs"]
+#[allow(dead_code)]
+mod hotspot_profile;
+
 // Core environment, resources, and physical material/structure.
 #[path = "organism/developmental_blueprint.rs"]
 mod developmental_blueprint;
