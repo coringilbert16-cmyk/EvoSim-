@@ -1035,6 +1035,47 @@ mod visibility_tests {
     }
 
     #[test]
+    fn candidate_pruning_is_conservative_for_source_inside_bounds_and_angular_wrap() {
+        let source = (0.0, 0.0);
+        let target = rectangle_body(0, 10.0, 0.0, 2.0, 4.0);
+        let mut source_enclosing_bounds = rectangle_body(1, 3.0, 0.0, 1.0, 1.0);
+        // Deliberately conservative aggregate bounds include the source even
+        // though the realized blocker itself does not contain or touch it.
+        source_enclosing_bounds.min_x = -0.5;
+        source_enclosing_bounds.max_x = 3.5;
+        source_enclosing_bounds.min_y = -2.0;
+        source_enclosing_bounds.max_y = 2.0;
+        // Relative to the target's +X reference angle, this body's angular
+        // interval straddles -PI/+PI and must conservatively become full-circle.
+        let angular_wrap = rectangle_body(2, -10.0, 0.0, 2.0, 2.0);
+        let bodies = [target, source_enclosing_bounds, angular_wrap];
+
+        let reference_angle = reference_angle_for_bodies(source, &bodies).unwrap();
+        let intervals = body_angular_intervals(source, &bodies, reference_angle).unwrap();
+        let minimum_distances = body_minimum_distances(source, &bodies).unwrap();
+        assert_eq!(intervals[1], (-std::f64::consts::PI, std::f64::consts::PI));
+        assert_eq!(intervals[2], (-std::f64::consts::PI, std::f64::consts::PI));
+
+        let candidates = candidate_body_indices_for_bounds(
+            source,
+            (9.0, 9.0, -2.0, 2.0),
+            reference_angle,
+            &intervals,
+            &minimum_distances,
+        )
+        .unwrap();
+        assert_eq!(candidates, vec![0, 1, 2]);
+
+        let pruned = visible_polygonal_intervals_for_targets(source, &bodies, &[0]).unwrap();
+        let unpruned =
+            visible_polygonal_intervals_for_targets_unpruned(source, &bodies, &[0]).unwrap();
+        assert_eq!(
+            pruned, unpruned,
+            "source-containing AABBs and angular-wrap bounds must not prune a real blocker or alter visible intervals"
+        );
+    }
+
+    #[test]
     fn candidate_pruning_preserves_visible_coverage_against_unpruned_reference() {
         let source = (-10.0, 0.0);
         let arrangements = [
