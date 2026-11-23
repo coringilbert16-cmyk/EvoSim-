@@ -1588,6 +1588,86 @@ mod visibility_tests {
     }
 
     #[test]
+    fn polygon_visibility_is_invariant_under_rigid_rotation() {
+        let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(20, 2.5, 0.0, 0.5, 0.8);
+        let baseline = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("valid unrotated polygon arrangement");
+
+        let rotate_body = |mut body: OrganismBodyGeometry| {
+            for part in &mut body.parts {
+                (part.x, part.y) = (-part.y, part.x);
+                part.rotation_radians += std::f64::consts::FRAC_PI_2;
+            }
+            // Conservative bounds remain valid after the rigid transform.
+            body.min_x = -10.0;
+            body.max_x = 10.0;
+            body.min_y = -10.0;
+            body.max_y = 10.0;
+            body
+        };
+        let rotated_target = rotate_body(rectangle_body(10, 5.0, 0.0, 2.0, 2.0));
+        let rotated_blocker = rotate_body(rectangle_body(20, 2.5, 0.0, 0.5, 0.8));
+        let rotated = visible_polygonal_intervals(
+            (0.0, -5.0),
+            &[rotated_target, rotated_blocker],
+        )
+        .expect("rigidly rotated polygon arrangement");
+
+        let transform = |point: (f64, f64)| (-point.1, point.0);
+        let canonical = |intervals: &[ExposedBoundaryInterval], transform_points: bool| {
+            let mut segments: Vec<_> = intervals
+                .iter()
+                .filter(|interval| interval.unit_index == 10)
+                .map(|interval| {
+                    let (mut start, mut end) = (interval.start, interval.end);
+                    let mut normal = interval.outward_normal;
+                    if transform_points {
+                        start = transform(start);
+                        end = transform(end);
+                        normal = transform(normal);
+                    }
+                    if (start.0, start.1) > (end.0, end.1) {
+                        std::mem::swap(&mut start, &mut end);
+                    }
+                    (start, end, normal)
+                })
+                .collect();
+            segments.sort_by(|a, b| {
+                a.0 .0
+                    .total_cmp(&b.0 .0)
+                    .then_with(|| a.0 .1.total_cmp(&b.0 .1))
+                    .then_with(|| a.1 .0.total_cmp(&b.1 .0))
+                    .then_with(|| a.1 .1.total_cmp(&b.1 .1))
+            });
+            segments
+        };
+
+        let expected = canonical(&baseline, true);
+        let actual = canonical(&rotated, false);
+        assert_eq!(
+            expected.len(),
+            actual.len(),
+            "rigid rotation must preserve the number of exposed intervals"
+        );
+        for (expected, actual) in expected.iter().zip(&actual) {
+            for (left, right) in [
+                (expected.0 .0, actual.0 .0),
+                (expected.0 .1, actual.0 .1),
+                (expected.1 .0, actual.1 .0),
+                (expected.1 .1, actual.1 .1),
+                (expected.2 .0, actual.2 .0),
+                (expected.2 .1, actual.2 .1),
+            ] {
+                assert!(
+                    (left - right).abs() < 1e-8,
+                    "rotated visibility differs: expected {expected:?}, actual {actual:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn straight_boundary_query_skips_curved_targets_without_polygonization() {
         let circle = OrganismBodyGeometry {
             parts: vec![PlacedForm {
