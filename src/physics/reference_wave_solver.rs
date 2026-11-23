@@ -2293,89 +2293,189 @@ mod tests {
         assert!(left_work.iter().flatten().any(|work| *work < 0.0));
     }
     #[test]
-    fn sustained_modal_forcing_converges_across_profiles_and_time_intervals() {
-        let amplitude = 4.0;
-        let initial_velocity = 0.7;
-        let duration = 0.5;
+    fn sustained_modal_forcing_matches_discrete_solution_and_converges_in_space_and_time() {
+        let amplitude = 4.0_f64;
+        let initial_velocity = 0.7_f64;
+        let duration = 0.5_f64;
         let profile_cases = [
             (1_usize, 1_usize, 0.0_f64),
             (2_usize, 1_usize, 0.0_f64),
             (1_usize, 1_usize, 0.35_f64),
         ];
-        let mut all_relative_errors = Vec::new();
 
-        for (profile_case, (mode_x, mode_y, secondary_weight)) in
-            profile_cases.into_iter().enumerate()
-        {
-            let mut relative_errors = Vec::new();
-            for (grid_case, cells) in [17_usize, 33, 65].into_iter().enumerate() {
-                let spacing = 1.0 / (cells - 1) as f64;
-                let required_substeps = (std::f64::consts::SQRT_2 / spacing).ceil() as usize;
-                let substeps = if required_substeps % 2 == 0 {
-                    required_substeps
-                } else {
-                    required_substeps + 1
-                };
-                let mut field = solver(cells, cells, spacing, substeps);
-                let dt = field.time_step();
-                let primary = mode_profile(cells, cells, spacing, 1.0, mode_x, mode_y);
-                let secondary = if secondary_weight == 0.0 {
-                    vec![0.0; cells * cells]
-                } else {
-                    mode_profile(cells, cells, spacing, 1.0, 2, 1)
-                };
-                let mut profile = vec![0.0; cells * cells];
-                let mut forcing = vec![0.0; cells * cells];
-                for index in 0..profile.len() {
-                    profile[index] = primary[index] + secondary_weight * secondary[index];
-                    forcing[index] = amplitude * profile[index];
-                    // Leapfrog stores the previous integer-time level. Include the half-step
-                    // acceleration term so the centered initial velocity is exactly v(0),
-                    // rather than v(0) + O(dt) from a first-order startup.
-                    field.previous[index] =
-                        -dt * initial_velocity * profile[index] + 0.5 * dt.powi(2) * forcing[index];
+        // Independent scalar leapfrog reference for each orthogonal sine mode.
+        // This uses the exact eigenvalue of the five-point spatial Laplacian,
+        // the exact leapfrog recurrence, and the solver's midpoint-work rule.
+        let discrete_modal_work = |cells: usize,
+                                   spacing: f64,
+                                   dt: f64,
+                                   steps: usize,
+                                   mode_x: usize,
+                                   mode_y: usize,
+                                   weight: f64| {
+            let kx = std::f64::consts::PI * mode_x as f64;
+            let ky = std::f64::consts::PI * mode_y as f64;
+            let spatial_eigenvalue = 4.0 / spacing.powi(2)
+                * ((0.5 * kx * spacing).sin().powi(2)
+                    + (0.5 * ky * spacing).sin().powi(2));
+            let omega_squared = spatial_eigenvalue;
+            let mut previous = -dt * initial_velocity * weight
+                + 0.5 * dt.powi(2) * amplitude * weight;
+            let mut current = 0.0_f64;
+            let mut work = 0.0_f64;
+            // The discrete sine norm is evaluated from the actual grid values,
+            // rather than assumed to equal its continuum integral.
+            let mut norm_squared = 0.0_f64;
+            for y in 1..cells - 1 {
+                for x in 1..cells - 1 {
+                    let px = (std::f64::consts::PI * mode_x as f64 * x as f64
+                        * spacing)
+                        .sin();
+                    let py = (std::f64::consts::PI * mode_y as f64 * y as f64
+                        * spacing)
+                        .sin();
+                    norm_squared += (px * py).powi(2);
                 }
+            }
+            norm_squared *= spacing.powi(2);
 
-                let mut source = test_source(100.0, 400 + (profile_case * 10 + grid_case) as u64);
-                let mut measured_work = 0.0;
-                for _ in 0..(substeps / 2) {
-                    measured_work += field.advance_forced_substep(&mut source, &forcing).unwrap();
-                }
+            for _ in 0..steps {
+                let next = 2.0 * current - previous
+                    - dt.powi(2) * omega_squared * current
+                    + dt.powi(2) * amplitude * weight;
+                let midpoint_velocity = (next - previous) / (2.0 * dt);
+                work += dt
+                    * norm_squared
+                    * amplitude
+                    * weight
+                    * midpoint_velocity;
+                previous = current;
+                current = next;
+            }
+            work
+        };
 
-                let mode_work = |mx: usize, my: usize| {
-                    let omega = std::f64::consts::PI * ((mx * mx + my * my) as f64).sqrt();
-                    initial_velocity / omega * (omega * duration).sin()
-                        + amplitude / omega.powi(2) * (1.0 - (omega * duration).cos())
-                };
-                let primary_displacement = mode_work(mode_x, mode_y);
-                let secondary_displacement = if secondary_weight == 0.0 {
-                    0.0
-                } else {
-                    mode_work(2, 1)
-                };
-                let continuum_work = amplitude
-                    * (primary_displacement + secondary_weight.powi(2) * secondary_displacement)
-                    * 0.25;
-                let relative_error = (measured_work - continuum_work).abs() / continuum_work.abs();
-                assert!(relative_error.is_finite() && relative_error < 1.0);
-                assert!(
-                    (source.account().cumulative_field_transfer() - measured_work).abs() < 1.0e-9,
-                    "source transfer did not equal accumulated work"
+        let continuum_modal_work = |mode_x: usize, mode_y: usize, weight: f64| {
+            let omega = std::f64::consts::PI
+                * ((mode_x * mode_x + mode_y * mode_y) as f64).sqrt();
+            let displacement = initial_velocity / omega * (omega * duration).sin()
+                + amplitude / omega.powi(2) * (1.0 - (omega * duration).cos());
+            amplitude * weight.powi(2) * 0.25 * displacement
+        };
+
+        let run_case = |cells: usize,
+                        substeps_per_tick: usize,
+                        mode_x: usize,
+                        mode_y: usize,
+                        secondary_weight: f64,
+                        source_id: u64| {
+            let spacing = 1.0 / (cells - 1) as f64;
+            let mut field = solver(cells, cells, spacing, substeps_per_tick);
+            let dt = field.time_step();
+            let primary = mode_profile(cells, cells, spacing, 1.0, mode_x, mode_y);
+            let secondary = if secondary_weight == 0.0 {
+                vec![0.0; cells * cells]
+            } else {
+                mode_profile(cells, cells, spacing, 1.0, 2, 1)
+            };
+            let mut profile = vec![0.0; cells * cells];
+            let mut forcing = vec![0.0; cells * cells];
+            for index in 0..profile.len() {
+                profile[index] = primary[index] + secondary_weight * secondary[index];
+                forcing[index] = amplitude * profile[index];
+                field.previous[index] =
+                    -dt * initial_velocity * profile[index]
+                        + 0.5 * dt.powi(2) * forcing[index];
+            }
+
+            let mut source = test_source(100.0, source_id);
+            let steps = (duration / dt).round() as usize;
+            let mut measured_work = 0.0_f64;
+            for _ in 0..steps {
+                measured_work +=
+                    field.advance_forced_substep(&mut source, &forcing).unwrap();
+            }
+
+            let mut discrete_work = discrete_modal_work(
+                cells,
+                spacing,
+                dt,
+                steps,
+                mode_x,
+                mode_y,
+                1.0,
+            );
+            let mut continuum_work =
+                continuum_modal_work(mode_x, mode_y, 1.0);
+            if secondary_weight != 0.0 {
+                discrete_work += discrete_modal_work(
+                    cells,
+                    spacing,
+                    dt,
+                    steps,
+                    2,
+                    1,
+                    secondary_weight,
                 );
-                relative_errors.push(relative_error);
+                continuum_work +=
+                    continuum_modal_work(2, 1, secondary_weight);
             }
 
             assert!(
-                relative_errors[1] < relative_errors[0] * 0.4,
-                "first grid refinement did not show second-order convergence for profile {profile_case}: {relative_errors:?}"
+                (source.account().cumulative_field_transfer() - measured_work).abs() < 1.0e-9,
+                "source account did not equal measured work"
             );
+            let discrete_error =
+                (measured_work - discrete_work).abs() / discrete_work.abs().max(1.0e-15);
             assert!(
-                relative_errors[2] < relative_errors[1] * 0.4,
-                "second grid refinement did not show second-order convergence for profile {profile_case}: {relative_errors:?}"
+                discrete_error < 1.0e-9,
+                "solver disagrees with independent discrete modal reference: cells={cells}, dt={dt}, error={discrete_error}"
             );
-            all_relative_errors.push(relative_errors);
-        }
+            let continuum_error =
+                (discrete_work - continuum_work).abs() / continuum_work.abs().max(1.0e-15);
+            (measured_work, discrete_work, continuum_work, continuum_error)
+        };
 
-        assert_eq!(all_relative_errors.len(), profile_cases.len());
+        for (profile_index, (mode_x, mode_y, secondary_weight)) in
+            profile_cases.into_iter().enumerate()
+        {
+            // Spatial refinement at fixed timestep (dt = 1/128).
+            let mut spatial_errors = Vec::new();
+            for (grid_index, cells) in [17_usize, 33, 65].into_iter().enumerate() {
+                let (_, _, _, continuum_error) = run_case(
+                    cells,
+                    128,
+                    mode_x,
+                    mode_y,
+                    secondary_weight,
+                    500 + (profile_index * 10 + grid_index) as u64,
+                );
+                spatial_errors.push(continuum_error);
+            }
+            assert!(
+                spatial_errors[1] < spatial_errors[0]
+                    && spatial_errors[2] < spatial_errors[1],
+                "spatial refinement did not reduce continuum error for profile {profile_index}: {spatial_errors:?}"
+            );
+
+            // Temporal refinement at fixed spatial grid (65x65).
+            let mut temporal_errors = Vec::new();
+            for (time_index, substeps) in [128_usize, 256, 512].into_iter().enumerate() {
+                let (_, _, _, continuum_error) = run_case(
+                    65,
+                    substeps,
+                    mode_x,
+                    mode_y,
+                    secondary_weight,
+                    600 + (profile_index * 10 + time_index) as u64,
+                );
+                temporal_errors.push(continuum_error);
+            }
+            assert!(
+                temporal_errors[1] < temporal_errors[0]
+                    && temporal_errors[2] < temporal_errors[1],
+                "temporal refinement did not reduce continuum error for profile {profile_index}: {temporal_errors:?}"
+            );
+        }
     }
 }
