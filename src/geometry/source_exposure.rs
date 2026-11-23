@@ -5525,6 +5525,24 @@ mod source_global_perimeter_tests {
         assert!(perimeter.straight.iter().all(|edge| edge.unit_index == 0));
     }
 
+
+    #[test]
+    fn source_global_perimeter_preserves_union_under_translation_and_rotation() {
+        let mut body = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.0)]);
+        let angle: f64 = 0.37;
+        let (sin, cos) = angle.sin_cos();
+        for part in &mut body.parts {
+            let (x, y) = (part.x, part.y);
+            part.x = 17.0 + x * cos - y * sin;
+            part.y = -9.0 + x * sin + y * cos;
+            part.rotation_radians = angle;
+        }
+
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.straight.len(), 6);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 12.0).abs() < 1e-9);
+    }
+
     #[test]
     fn source_global_perimeter_is_canonical_under_part_reordering() {
         let first = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.0)]);
