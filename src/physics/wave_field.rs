@@ -1451,8 +1451,8 @@ mod tests {
         }
 
         (
-            center_x.round() as usize,
-            center_y.round() as usize,
+            (center_x / field.spacing).round() as usize,
+            (center_y / field.spacing).round() as usize,
             envelope_norm_squared.sqrt(),
         )
     }
