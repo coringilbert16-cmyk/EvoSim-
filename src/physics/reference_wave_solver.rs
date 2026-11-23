@@ -2173,9 +2173,10 @@ mod tests {
     }
     #[test]
     fn forced_multi_source_runs_replay_field_work_and_accounts_bit_for_bit() {
-        fn run_replay() -> (WaveField, SourceInstance, SourceInstance, Vec<[f64; 2]>) {
+        fn run_replay() -> (WaveField, SourceInstance, SourceInstance, Vec<[f64; 2]>, f64) {
             let mut field = solver(65, 65, 1.0, 2);
             field.configure_absorbing_boundary(8, 0.04).unwrap();
+            let initial_field_energy = field.energy();
             let mut first_source = test_source(1_000.0, 260);
             let mut second_source = test_source(1_000.0, 261);
 
@@ -2218,7 +2219,7 @@ mod tests {
                 work_history.push([works[0], works[1]]);
             }
 
-            (field, first_source, second_source, work_history)
+            (field, first_source, second_source, work_history, initial_field_energy)
         }
 
         fn assert_bits_equal(left: &[f64], right: &[f64], label: &str) {
@@ -2232,8 +2233,8 @@ mod tests {
             }
         }
 
-        let (left, left_first, left_second, left_work) = run_replay();
-        let (right, right_first, right_second, right_work) = run_replay();
+        let (left, left_first, left_second, left_work, initial_field_energy) = run_replay();
+        let (right, right_first, right_second, right_work, _) = run_replay();
 
         assert_eq!(left.width, right.width);
         assert_eq!(left.height, right.height);
@@ -2291,6 +2292,43 @@ mod tests {
         assert!(left.boundary_absorbed_energy > 0.0);
         assert!(left_work.iter().flatten().any(|work| *work > 0.0));
         assert!(left_work.iter().flatten().any(|work| *work < 0.0));
+
+        // Reconcile each source's complete signed-work history with its account.
+        for (source_index, source) in [(&left_first, 0_usize), (&left_second, 1_usize)] {
+            let history_work: f64 = left_work.iter().map(|step| step[source]).sum();
+            let account = source.account();
+            let account_scale = history_work
+                .abs()
+                .max(account.cumulative_field_transfer().abs())
+                .max(1.0);
+            assert!(
+                (history_work - account.cumulative_field_transfer()).abs()
+                    <= 1.0e-10 * account_scale,
+                "source {source} history does not reconcile with its cumulative account"
+            );
+            let ownership_change = account.initial_energy() - account.remaining_energy();
+            assert!(
+                (ownership_change - account.cumulative_field_transfer()).abs()
+                    <= 1.0e-10 * account_scale,
+                "source {source} inventory does not reconcile with its signed transfers"
+            );
+        }
+
+        // Whole-system balance: source inventories + field energy + absorbed
+        // boundary energy remain constant across all 160 mixed-sign substeps.
+        let initial_total = initial_field_energy
+            + left_first.account().initial_energy()
+            + left_second.account().initial_energy();
+        let final_total = left.energy()
+            + left_first.account().remaining_energy()
+            + left_second.account().remaining_energy()
+            + left.boundary_absorbed_energy;
+        let total_scale = initial_total.abs().max(final_total.abs()).max(1.0);
+        assert!(
+            (final_total - initial_total).abs() <= 1.0e-9 * total_scale,
+            "multi-source whole-system energy residual: {}",
+            final_total - initial_total
+        );
     }
     #[test]
     fn sustained_modal_forcing_matches_discrete_solution_and_converges_in_space_and_time() {
