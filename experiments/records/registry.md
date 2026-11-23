@@ -12,6 +12,7 @@ This is the master index. Detailed completed-run results live under [results/](r
 | EXP-2026-002 | Five-seed short chemistry observation | 300 seconds per seed; seeds 42–46; historical inventory metadata is inconsistent | Completed; interpret cautiously | [Historical result summary](results/historical-experiments.md) |
 | EXP-2026-003 | Five-seed extended chemistry observation | 25 minutes per seed; seeds 42–46 | Completed; reanalyzed | [Historical result summary](results/historical-experiments.md) |
 | EXP-2026-004 | Five-seed one-hour chemistry observation | 3,600 seconds per seed; seeds 42–46; 1,200 independent resources + 80 two-constituent molecules; six active elements | Completed; scientific result validated; legacy v1 compact compatibility partial/uncertified | [Full result, analysis, and compatibility limits](results/2026-11-19-one-hour-five-seed.md) |
+| EXP-2026-005 | PLAN-004 paired resource-feed comparison | Five paired seeds (42–46); 3,600 seconds per arm; no-feed control versus six pulses of 72 free atoms (12 of each active element) at 5, 15, 25, 35, 45, and 55 minutes | Completed; specialist aggregation recovered; scientific result inconclusive | [Pre-registration and protocol](results/2026-11-20-plan-004-resource-feed-paired-experiment.md) · [Five-pair recovery](results/2026-11-20-plan-004-five-pair-recovery.md) |
 
 ## Registered experiments
 
@@ -24,12 +25,12 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 | ID | Research question | Status | Plan |
 |---|---|---|---|
-| PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **In progress — artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
+| PLAN-001 | Which instance-level pathways demonstrate reusable intermediates, reversible transformations, or possible facilitation? | **Completed — EXP-2026-004 artifact analysis; no new run** | [Pathway analysis](plans/README.md#plan-001-existing-pathway-and-molecular-lineage-analysis) |
 | PLAN-002 | Does a molecule facilitate a reaction while remaining chemically available? | Planned — depends on PLAN-001 and matched controls | [Catalytic facilitation](plans/README.md#plan-002-catalytic-facilitation) |
 | PLAN-003 | Does a product promote net production of additional copies of its own structure? | Planned — requires a defined self-production pathway and seeded/unseeded controls | [Autocatalysis](plans/README.md#plan-003-autocatalysis) |
-| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | Planned — requires validated pathways and turnover | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
+| PLAN-004 | Can a connected network repeatedly transform resources and regenerate intermediates? | **In progress — EXP-2026-005 paired resource-feed comparison complete; result inconclusive; pathway-level analysis pending** | [Pseudo-metabolism](plans/README.md#plan-004-pseudo-metabolism) |
 | PLAN-005 | Can distinct pathways facilitate one another and form a cooperative chemical network? | Planned — depends on controlled facilitation methodology | [Cross-catalysis](plans/PLAN-005-cross-catalysis.md) |
-| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | Planned — requires controlled spatial comparisons | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
+| PLAN-006 | Do environmental fields and transport create persistent spatial reaction organization? | **Descriptive baseline screen complete; causal comparison blocked by incomplete opportunity coverage and unmatched conditions** | [Spatially organized chemistry](plans/PLAN-006-spatial-organization.md) |
 | PLAN-007 | At which stage do ordinary environmental BREAK and DISPLACEMENT candidates fail to become eligible, funded, and committed reactions? | **Registered; EXP-2026-007 prepared, not yet run** | [Environmental reaction-discovery eligibility](plans/PLAN-007-environmental-discovery-eligibility.md) |
 | PLAN-008 | What is the reproducible pre-wave performance and energy-accounting baseline? | **Registered; EXP-2026-008 prepared, not yet run** | [Pre-wave unified-energy performance baseline](plans/PLAN-008-pre-wave-unified-energy-baseline.md) |
 
@@ -41,9 +42,9 @@ This is the master index. Detailed completed-run results live under [results/](r
 
 OBS-001 is an engineering initiative, not a scientific experiment. It has no EXP identifier and does not itself establish a chemistry hypothesis. Its implementation is complete through PRs #398–#405: reaction identity/settlement telemetry, opportunity-coverage semantics, canonical manifests, unified analysis, compact reports, two-file retention, and the unified-analysis path fix. The two historical pilots completed offline in workflow runs [#8](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44964063392) and [#9](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44965815500); they did not rerun simulations and remain legacy datasets without canonical manifests. The remaining acceptance test is the first new experiment to publish exactly the two canonical permanent files through the workflow.
 
-## Current PLAN-001 progress
+## Current PLAN-001 closeout
 
-The first artifact pass identified four exact-instance reversible fragment-reuse cycles across seeds 43, 44, and 45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. These support reusable intermediate chemistry, not catalysis. See [initial findings](results/2026-11-20-plan-001-initial-findings.md).
+Four exact-instance reversible fragment-reuse cycles were confirmed across seeds 43–45: three N–O–P ⇌ N + O–P and one H–O–P ⇌ H + O–P. Three additional exact-instance sequences show H–O–P temporarily incorporated into H–O–P–S and released again in seed 45. A broader scan found 192 exact-pair fragment reunifications across seeds 42–46, dominated by simple two-constituent families. Longest connected identity-lineage walks ranged from 12 to 39 events across seeds. No facilitator can be identified from the available event/opportunity records. These support reusable intermediate chemistry, not catalysis. See [completed PLAN-001 findings](results/2026-11-20-plan-001-initial-findings.md).
 
 ## Interpretation guardrails
 
