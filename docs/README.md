@@ -36,6 +36,7 @@ The root [README](../README.md) is the project entry point and getting-started g
 
 ## Plans and phase records
 
+- [Phase 3A.3 visibility-transition partitioning](plans/PHASE3A3_VISIBILITY_TRANSITIONS.md) — current audit, exact event taxonomy, implementation risks, and acceptance criteria.
 - [Phase 4](plans/PHASE4_PLAN.md), [Phase 5](plans/PHASE5_PLAN.md), and [Phase 6](plans/PHASE6_PLAN.md).
 - [Phase 6 blueprint specification](plans/PHASE6_BLUEPRINT_SPEC.md).
 - [World-tone material response](plans/world-tone-material-response.md).
