@@ -222,15 +222,17 @@ Exit criteria:
 
 #### Phase 3B — Source-to-field coupling
 
-**3B.1 — Source/interface audit: COMPLETE.** The audit is recorded in [resonance-field-phase-3b1-source-interface-audit.md](../audits/resonance-field-phase-3b1-source-interface-audit.md). It traces the isolated Phase 2 test-source API, legacy live sun and hotspot paths, energy-accounting primitives, and the checked source-footprint geometry. It confirms that no production source-to-field interface exists yet and identifies the discrete continuous-forcing work identity, solver-consumption boundary, source-budget ownership/replenishment, and exact hotspot radial normalization/support treatment as prerequisites.
+**3B.1 — Source/interface audit: COMPLETE.** The audit is recorded in [resonance-field-phase-3b1-source-interface-audit.md](../audits/resonance-field-phase-3b1-source-interface-audit.md).
 
-**3B.2 — Source-interface and injection proposal: PREPARED FOR REVIEW.** The proposal is recorded in [PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md](../plans/PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md). It defines the descriptor/account/coupling boundary, exact discrete source-work settlement, atomic rollback, hotspot normalization and area integration, the solver-consumption decision, and separate sun/receiver gates. It explicitly blocks real-source coupling until a work-conjugate physical forcing law is derived. This is a design proposal only; no implementation is authorized until review.
+**3B.2 — Source interface, accounting, and hotspot profile: PARTIALLY COMPLETE.**
+- **3B.2 design contract: COMPLETE.** The source descriptor/account/coupling boundary and discrete settlement contract are recorded in [PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md](../plans/PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md).
+- **3B.2a source identity and finite accounting: IMPLEMENTED, MERGED.** PR #427 adds stable source identity/provenance, immutable descriptors, finite non-clonable source accounts, signed staged transfers, atomic settlement, and an isolated copy of the validated reference solver. It does not connect a real source or implement continuous forcing.
+- **3B.2b normalized hotspot profile: IMPLEMENTED, MERGED.** PR #426 adds the compact-support radial-cosine profile, analytic cumulative radial power, physical-area integration, and normalization/refinement/translation/grid-alignment tests. It does not inject that profile into the field or calibrate physical hotspot power.
+- **3B.2c work-conjugate continuous forcing: OPEN — ACTIVE DERIVATION.** The unresolved question is how a physical source couples continuously to the field while its signed work exactly matches the solver's discrete energy change and has a defensible physical interpretation. The current derivation and candidate models are recorded in [PHASE3B2C_CONTINUOUS_FORCING_DERIVATION.md](../plans/PHASE3B2C_CONTINUOUS_FORCING_DERIVATION.md).
 
-**3B implementation remains NOT STARTED.** 3B.1 audit is complete; 3B.2 proposal is awaiting approval. No source registration, field injection, propagation integration, receiver/material settlement, or production behavior has been implemented. Keep receiver/material coupling and production migration separately gated.
+**Phase 3B is IN PROGRESS, not unstarted.** Source identity/accounting and hotspot profile mathematics are complete. No real hotspot or sun field injection, source registration in the live simulation, receiver/material settlement, or production behavior has been implemented. The physical forcing law is the immediate blocker. Sun integration (3B.3), receiver/material coupling, and production migration remain separately gated.
 
-**3B implementation remains NOT STARTED.** Completion of the 3B.1 audit is planning/research only. No source registration, field injection, propagation integration, receiver/material settlement, or production behavior has been implemented. Keep receiver/material coupling and production migration separately gated.
-
-**Goal:** Connect the independent wave field to real energy sources and physical boundaries.
+**Goal:** Connect the independent wave field to real energy sources and physical boundaries, only after the source-to-field work law is derived and validated.
 
 Work:
 - Register existing sources with identity, position, shape, frequency spectrum, phase, schedule, and authoritative available-energy budget.
@@ -373,9 +375,9 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 ## 9. Current status and next action
 
-**Current status:** Phase 0 baseline/audit is complete; Phase 1 specification is complete; Phase 2 independent reference solver is formally closed; and the merged Phase 3A slices listed above are complete. PR #410 remains an isolated, unmerged reference solver and is not production code. Phase 3 source coupling and all later receiver/material and production-integration work remain unimplemented. The legacy production resonance paths remain authoritative until their separately gated migration passes.
+**Current status (updated after PRs #426 and #427):** Phase 0 baseline/audit is complete; Phase 1 specification is complete; Phase 2 independent reference solver is formally closed; and the listed Phase 3A geometry slices are complete. Phase 3B.1 is complete. Phase 3B.2a source identity/accounting and 3B.2b hotspot normalization/integration are implemented and merged. Phase 3B.2c continuous work-conjugate forcing remains open and is the immediate active investigation. PR #410 remains a closed, isolated, unmerged reference solver; PR #427 contains a separate extracted copy and does not reopen Phase 2. No real hotspot/sun injection, receiver/material settlement, or production integration has been implemented. Legacy production resonance paths remain authoritative.
 
-**Next action:** Audit the remaining Phase 3 geometry/visibility requirements against the merged polygon/line-only contract and completed 3A.4 measures, then prepare a narrowly scoped Phase 3B source-to-field coupling proposal for approval. Do not repeat Phase 0 or Phase 2, and do not begin production source injection before the Phase 3B scope and acceptance tests are approved.
+**Next action:** Complete the 3B.2c derivation and numerical acceptance design. Start from the exact leapfrog discrete-energy identity, compare prescribed forcing with reciprocal source-degree-of-freedom coupling, and determine how physical hotspot power/profile parameters can be related to that coupling without equating incident power density with field forcing. Implement only isolated mathematical forcing experiments after the coupling model is selected; keep real-source and production integration gated. Do not repeat Phase 0, Phase 2, 3B.1, 3B.2a, or 3B.2b.
 
 **Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
 
