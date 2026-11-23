@@ -220,9 +220,13 @@ Exit criteria:
 
 **Not marked complete:** PR #411's standalone Phase 3A.1 planning artifact was closed without merge. The merged work above does not establish that every geometry arrangement or continuous perimeter-coupling requirement is solved. Preserve fail-closed behavior for unsupported arrangements and retain the remaining geometry/visibility gaps below as open work.
 
-#### Phase 3B — Source-to-field coupling: NOT STARTED
+#### Phase 3B — Source-to-field coupling
 
-The next source-integration work must be specified against the Phase 1 contracts and the completed geometry interfaces. This stage is not authorized by completion of the geometry slices. It must define and validate the source-to-field boundary, source identity and provenance, deterministic emission, physical source measures, and conservative injection before any production migration. Do not assume numerical source parameters are already calibrated, and do not combine receiver/material settlement into this stage unless the controlling plan explicitly assigns it here.
+**3B.1 — Source/interface audit: COMPLETE.** The audit is recorded in [resonance-field-phase-3b1-source-interface-audit.md](../audits/resonance-field-phase-3b1-source-interface-audit.md). It traces the isolated Phase 2 test-source API, legacy live sun and hotspot paths, energy-accounting primitives, and the checked source-footprint geometry. It confirms that no production source-to-field interface exists yet and identifies the discrete continuous-forcing work identity, solver-consumption boundary, source-budget ownership/replenishment, and exact hotspot radial normalization/support treatment as prerequisites.
+
+**3B.2 — Source-interface and injection implementation proposal: NOT STARTED.** This proposal must define the exact source descriptor, source-energy account, and field-coupling operation; specify discrete signed work and atomic rollback; and define source-area integration and tests. It must not reopen Phase 2, merge PR #410, or change live production source settlement. Do not assume numerical source parameters are calibrated.
+
+**3B implementation remains NOT STARTED.** Completion of the 3B.1 audit is planning/research only. No source registration, field injection, propagation integration, receiver/material settlement, or production behavior has been implemented. Keep receiver/material coupling and production migration separately gated.
 
 **Goal:** Connect the independent wave field to real energy sources and physical boundaries.
 
