@@ -118,8 +118,7 @@ fn validate_visibility_snapshot(
                 }
                 _ => {}
             }
-            let (part_min_x, part_max_x, part_min_y, part_max_y) =
-                phase3_part_bounds(part)?;
+            let (part_min_x, part_max_x, part_min_y, part_max_y) = phase3_part_bounds(part)?;
             actual_min_x = actual_min_x.min(part_min_x);
             actual_max_x = actual_max_x.max(part_max_x);
             actual_min_y = actual_min_y.min(part_min_y);
@@ -267,13 +266,7 @@ mod tests {
     fn phase3_visibility_accepts_finite_line_blockers_and_polygon_receivers() {
         let bodies = vec![
             target(),
-            body(
-                Form::Line { length: 1.0 },
-                2.0,
-                0.0,
-                (1.5, 0.0),
-                (2.5, 0.0),
-            ),
+            body(Form::Line { length: 1.0 }, 2.0, 0.0, (1.5, 0.0), (2.5, 0.0)),
         ];
         let intervals = visible_polygonal_intervals_for_targets((-5.0, 0.0), &bodies, &[0])
             .expect("polygon receiver and finite line blocker are Phase 3 geometry");
