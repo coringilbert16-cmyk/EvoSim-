@@ -206,7 +206,7 @@ pub(crate) fn checked_polygon_union(forms:&[Form])->Option<PolygonUnionBoundary>
             current=candidates[0].1;
         }
         let (signed,perim)=signed_area(&vertices)?;
-        area_sum+=signed;total_perimeter+=perim;
+        let adjusted=signed-area_comp;let next=area_sum+adjusted;area_comp=(next-area_sum)-adjusted;area_sum=next;total_perimeter+=perim;
         loops.push(PolygonBoundaryLoop{vertices,signed_area:signed});
     }
     if unused.iter().any(|x|*x){return None;}
@@ -246,4 +246,25 @@ mod tests{
   assert!((checked_polygon_union(&[a.clone(),a]).unwrap().area.square_units-4.).abs()<1e-8);
   assert!((checked_polygon_union(&[Form::Rectangle{width:2.,height:2.},b]).unwrap().area.square_units-8.).abs()<1e-8);
  }
+
+ #[test] fn frame_preserves_hole_with_signed_inner_loop(){
+  let p=|v:Vec<(f64,f64)>|Form::Polygon{vertices:v};
+  let forms=vec![
+   p(vec![(-2.,1.),(2.,1.),(2.,2.),(-2.,2.)]),
+   p(vec![(-2.,-2.),(2.,-2.),(2.,-1.),(-2.,-1.)]),
+   p(vec![(-2.,-1.),(-1.,-1.),(-1.,1.),(-2.,1.)]),
+   p(vec![(1.,-1.),(2.,-1.),(2.,1.),(1.,1.)])
+  ];
+  let u=checked_polygon_union(&forms).unwrap();
+  assert!((u.area.square_units-12.).abs()<1e-7);
+  assert!((u.perimeter-24.).abs()<1e-7);
+  assert_eq!(u.loops.len(),2);
+  assert!(u.loops.iter().any(|l|l.signed_area<0.));
+ }
+ #[test] fn large_translation_is_reported_with_uncertainty(){
+  let p=Form::Polygon{vertices:vec![(1e10,1e10),(1e10+4.,1e10),(1e10+4.,1e10+2.),(1e10,1e10+2.)]};
+  let u=checked_polygon_union(&[p]).unwrap();
+  assert!((u.area.square_units-8.).abs()<u.area.uncertainty+1e-4);
+ }
+
 }
