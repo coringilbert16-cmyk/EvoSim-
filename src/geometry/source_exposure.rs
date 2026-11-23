@@ -5184,7 +5184,7 @@ pub(crate) fn disjoint_source_global_material_perimeter(
 
     let mut straight = Vec::new();
     let mut curved = Vec::new();
-    for piece in pieces {
+    for piece in pieces.iter().cloned() {
         match piece {
             GlobalBoundaryPiece::Segment {
                 part_index,
@@ -5449,4 +5449,103 @@ mod source_global_perimeter_tests {
         };
         assert!(disjoint_source_global_material_perimeter(&body, 0).is_none());
     }
+    fn rectangle_body(parts: Vec<(usize, f64, f64)>) -> OrganismBodyGeometry {
+        let placed = parts
+            .into_iter()
+            .map(|(unit_index, x, y)| PlacedForm {
+                unit_index,
+                form: Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x,
+                y,
+                rotation_radians: 0.0,
+            })
+            .collect();
+        OrganismBodyGeometry {
+            parts: placed,
+            min_x: -10.0,
+            max_x: 10.0,
+            min_y: -10.0,
+            max_y: 10.0,
+        }
+    }
+
+    #[test]
+    fn source_global_perimeter_removes_complete_shared_straight_edge() {
+        let body = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.straight.len(), 6);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 12.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn source_global_perimeter_removes_only_partial_shared_straight_edge() {
+        let body = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.5)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.straight.len(), 10);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 13.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn source_global_perimeter_preserves_collinear_endpoint_contact() {
+        // The top edge of the first rectangle and bottom edge of the second
+        // are collinear and meet at exactly one endpoint.
+        let body = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 2.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.straight.len(), 8);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 16.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn source_global_perimeter_emits_coincident_same_side_polygon_once() {
+        let body = rectangle_body(vec![(0, 0.0, 0.0), (1, 0.0, 0.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.straight.len(), 4);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 8.0).abs() < 1e-12);
+        assert!(perimeter.straight.iter().all(|edge| edge.unit_index == 0));
+    }
+
+    #[test]
+    fn source_global_perimeter_is_independent_of_polygon_winding() {
+        let forward = vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+        let reverse = forward.iter().copied().rev().collect();
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Polygon { vertices: forward },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Polygon { vertices: reverse },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            min_x: -1.0,
+            max_x: 1.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.straight.len(), 4);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - 8.0).abs() < 1e-12);
+        assert!(perimeter.straight.iter().all(|edge| edge.unit_index == 0));
+    }
+
+    #[test]
+    fn source_global_perimeter_is_canonical_under_part_reordering() {
+        let first = rectangle_body(vec![(0, 0.0, 0.0), (1, 2.0, 0.0)]);
+        let second = rectangle_body(vec![(1, 2.0, 0.0), (0, 0.0, 0.0)]);
+        let first = disjoint_source_global_material_perimeter(&first, 0).unwrap();
+        let second = disjoint_source_global_material_perimeter(&second, 0).unwrap();
+        assert_eq!(first.straight, second.straight);
+    }
+
 }
