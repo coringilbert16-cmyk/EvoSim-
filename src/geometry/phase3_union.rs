@@ -57,9 +57,7 @@ fn point_in_polygon(p: (f64, f64), v: &[(f64, f64)]) -> Option<bool> {
         let b = v[(i + 1) % v.len()];
         let ab = sub(b, a);
         let ap = sub(p, a);
-        if cross(ab, ap) == 0.0
-            && (p.0 - a.0) * (p.0 - b.0) + (p.1 - a.1) * (p.1 - b.1) <= 0.0
-        {
+        if cross(ab, ap) == 0.0 && (p.0 - a.0) * (p.0 - b.0) + (p.1 - a.1) * (p.1 - b.1) <= 0.0 {
             return None; // boundary sample: classification unresolved
         }
         if (a.1 > p.1) != (b.1 > p.1) {
@@ -245,7 +243,7 @@ pub(crate) fn checked_polygon_union(forms: &[Form]) -> Option<PolygonUnionBounda
                 if vv <= 0.0 {
                     continue;
                 }
-                let t = (((mid.0 - other.2.0) * v.0 + (mid.1 - other.2.1) * v.1) / vv)
+                let t = (((mid.0 - other.2 .0) * v.0 + (mid.1 - other.2 .1) * v.1) / vv)
                     .clamp(0.0, 1.0);
                 nearest = nearest.min(distance(mid, add(other.2, mul(v, t))));
             }
