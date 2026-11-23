@@ -4751,14 +4751,9 @@ enum GlobalBoundaryPiece {
     },
 }
 
-
 /// Return whether a point lies on a finite straight boundary segment.
 /// The tolerance matches the arrangement predicates used by this module.
-fn global_point_on_segment(
-    point: (f64, f64),
-    start: (f64, f64),
-    end: (f64, f64),
-) -> bool {
+fn global_point_on_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> bool {
     let dx = end.0 - start.0;
     let dy = end.1 - start.1;
     let px = point.0 - start.0;
@@ -4800,8 +4795,7 @@ fn global_straight_interval_is_exposed(
                 ..
             } = piece
             {
-                if *candidate_part == other_index
-                    && global_point_on_segment(midpoint, *start, *end)
+                if *candidate_part == other_index && global_point_on_segment(midpoint, *start, *end)
                 {
                     coincident_normals.push((*candidate_unit, *candidate_normal));
                 }
@@ -4810,15 +4804,12 @@ fn global_straight_interval_is_exposed(
 
         if !coincident_normals.is_empty() {
             for (other_unit, other_normal) in coincident_normals {
-                let alignment =
-                    normal.0 * other_normal.0 + normal.1 * other_normal.1;
+                let alignment = normal.0 * other_normal.0 + normal.1 * other_normal.1;
                 if alignment < -0.5 {
                     // Opposing sides of the same shared interval: internal.
                     return false;
                 }
-                if alignment > 0.5
-                    && (other_unit, other_index) < (unit_index, part_index)
-                {
+                if alignment > 0.5 && (other_unit, other_index) < (unit_index, part_index) {
                     // Same-side duplicate: retain one deterministic owner.
                     return false;
                 }
@@ -5207,12 +5198,7 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         start.1 + (end.1 - start.1) * midpoint_t,
                     );
                     if !global_straight_interval_is_exposed(
-                        body,
-                        &pieces,
-                        part_index,
-                        unit_index,
-                        midpoint,
-                        normal,
+                        body, &pieces, part_index, unit_index, midpoint, normal,
                     ) {
                         continue;
                     }
@@ -5547,5 +5533,4 @@ mod source_global_perimeter_tests {
         let second = disjoint_source_global_material_perimeter(&second, 0).unwrap();
         assert_eq!(first.straight, second.straight);
     }
-
 }
