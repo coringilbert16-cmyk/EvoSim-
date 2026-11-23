@@ -75,7 +75,9 @@ impl ReciprocalSourceField {
             .checked_mul(height)
             .ok_or(ReciprocalModelError::InvalidDimensions)?;
         if normalized_profile.len() != cell_count
-            || normalized_profile.iter().any(|value| !value.is_finite() || *value < 0.0)
+            || normalized_profile
+                .iter()
+                .any(|value| !value.is_finite() || *value < 0.0)
         {
             return Err(ReciprocalModelError::InvalidProfile);
         }
@@ -99,11 +101,13 @@ impl ReciprocalSourceField {
         // A conservative Gershgorin-style bound for the largest eigenvalue of
         // the mass-normalized coupled stiffness operator. Central differences
         // require dt^2 * lambda_max < 4 for linear stability.
-        let profile_norm = normalized_profile.iter().map(|value| value.powi(2)).sum::<f64>();
+        let profile_norm = normalized_profile
+            .iter()
+            .map(|value| value.powi(2))
+            .sum::<f64>();
         let maximum_eigenvalue_bound = 8.0 * propagation_speed.powi(2) / area
             + source_frequency.powi(2)
-            + coupling_strength
-                * (1.0 / source_mass + area * profile_norm / field_normalization);
+            + coupling_strength * (1.0 / source_mass + area * profile_norm / field_normalization);
         let stability_number = time_step.powi(2) * maximum_eigenvalue_bound;
         if !maximum_eigenvalue_bound.is_finite()
             || !stability_number.is_finite()
@@ -188,8 +192,7 @@ impl ReciprocalSourceField {
                     * self.profile[index];
                 let acceleration =
                     self.propagation_speed.powi(2) * laplacian + coupling_acceleration;
-                next_field[index] = 2.0 * self.current_field[index]
-                    - self.previous_field[index]
+                next_field[index] = 2.0 * self.current_field[index] - self.previous_field[index]
                     + self.time_step.powi(2) * acceleration;
             }
         }
@@ -255,7 +258,8 @@ impl ReciprocalSourceField {
 
     fn source_average(&self, field: &[f64]) -> f64 {
         self.spacing.powi(2)
-            * self.profile
+            * self
+                .profile
                 .iter()
                 .zip(field)
                 .map(|(weight, value)| weight * value)
@@ -288,11 +292,7 @@ mod tests {
         profile
     }
 
-    fn model(
-        frequency: f64,
-        coupling: f64,
-        time_step: f64,
-    ) -> ReciprocalSourceField {
+    fn model(frequency: f64, coupling: f64, time_step: f64) -> ReciprocalSourceField {
         let width = 15;
         let height = 15;
         let spacing = 0.2;
@@ -339,9 +339,7 @@ mod tests {
             system.step().unwrap();
         }
         assert_eq!(system.field_energy(), 0.0);
-        assert!(
-            (system.source_energy() - initial_source_energy).abs() < 1.0e-10
-        );
+        assert!((system.source_energy() - initial_source_energy).abs() < 1.0e-10);
         assert_eq!(system.coupling_energy(), 0.0);
     }
 
@@ -382,9 +380,18 @@ mod tests {
         for (a, b) in left.current_field.iter().zip(&right.current_field) {
             assert_eq!(a.to_bits(), b.to_bits());
         }
-        assert_eq!(left.previous_source.to_bits(), right.previous_source.to_bits());
-        assert_eq!(left.current_source.to_bits(), right.current_source.to_bits());
-        assert_eq!(left.total_energy().to_bits(), right.total_energy().to_bits());
+        assert_eq!(
+            left.previous_source.to_bits(),
+            right.previous_source.to_bits()
+        );
+        assert_eq!(
+            left.current_source.to_bits(),
+            right.current_source.to_bits()
+        );
+        assert_eq!(
+            left.total_energy().to_bits(),
+            right.total_energy().to_bits()
+        );
     }
 
     #[test]
