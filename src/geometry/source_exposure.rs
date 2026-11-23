@@ -6302,7 +6302,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     .enumerate()
                     .map(|(index, &point)| {
                         let next = vertices[(index + 1) % vertices.len()];
-                        (point.0 - origin.0) * (next.1 - origin.1) - (next.0 - origin.0) * (point.1 - origin.1)
+                        (point.0 - origin.0) * (next.1 - origin.1)
+                            - (next.0 - origin.0) * (point.1 - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice == 0.0 {
