@@ -68,11 +68,12 @@ mod juvenile;
 mod molecular_layout;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
-#[path = "geometry/phase3_geometry.rs"]
-#[allow(dead_code)] // Strict Phase 3 reference geometry contract; integrated in later Phase 3 stages.
-mod phase3_geometry;
 #[path = "organism/viability.rs"]
 mod organism_viability;
+#[path = "geometry/phase3_geometry.rs"]
+#[allow(dead_code)]
+// Strict Phase 3 reference geometry contract; integrated in later Phase 3 stages.
+mod phase3_geometry;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
 #[path = "geometry/rigid_boundary.rs"]
