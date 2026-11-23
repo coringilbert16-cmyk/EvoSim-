@@ -31,13 +31,6 @@ pub(crate) struct PolygonUnionBoundary {
     pub(crate) loops: Vec<PolygonBoundaryLoop>,
 }
 
-#[derive(Clone, Copy)]
-struct Edge {
-    a: (f64, f64),
-    b: (f64, f64),
-    cuts: [f64; 0], // placeholder removed during arrangement construction
-}
-
 fn cross(a: (f64, f64), b: (f64, f64)) -> f64 { a.0*b.1-a.1*b.0 }
 fn sub(a: (f64, f64), b: (f64, f64)) -> (f64,f64) { (a.0-b.0,a.1-b.1) }
 fn add(a: (f64, f64), b: (f64, f64)) -> (f64,f64) { (a.0+b.0,a.1+b.1) }
@@ -129,10 +122,8 @@ pub(crate) fn checked_polygon_union(forms:&[Form])->Option<PolygonUnionBoundary>
         area_bounds+=area.square_units; area_unc+=area.uncertainty;
         let vertices=form.polygon_vertices()?;
         if vertices.iter().any(|p|!finite(*p)){return None;}
-        let origin=vertices[0];
-        let world:Vec<_>=vertices.iter().map(|p|sub(*p,origin)).collect();
-        // Form vertices are local; translation origin is intentionally kept at
-        // zero here. This validates and normalizes the edge arrangement.
+        // Form vertices are local coordinates; each form's authored polygon
+        // coordinates define its placement within the union arrangement.
         let world=vertices.clone();
         for p in &world {coord=coord.max(p.0.abs()).max(p.1.abs());}
         for i in 0..world.len(){
@@ -232,9 +223,9 @@ pub(crate) fn checked_polygon_union(forms:&[Form])->Option<PolygonUnionBoundary>
 #[cfg(test)]
 mod tests{
  use super::*;
- fn rect(x:f64,y:f64,w:f64,h:f64)->Form{Form::Rectangle{width:w,height:h}}
+ fn rect(w:f64,h:f64)->Form{Form::Rectangle{width:w,height:h}}
  #[test] fn disjoint_and_overlap_are_measured_once(){
-  let a=rect(0.,0.,2.,2.);let b=Form::Polygon{vertices:vec![(1.,0.),(3.,0.),(3.,2.),(1.,2.)]};
+  let a=rect(2.,2.);let b=Form::Polygon{vertices:vec![(1.,0.),(3.,0.),(3.,2.),(1.,2.)]};
   let u=checked_polygon_union(&[a,b]).unwrap();assert!((u.area.square_units-6.).abs()<1e-8);
   assert!((u.perimeter-10.).abs()<1e-8);
  }
