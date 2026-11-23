@@ -798,7 +798,7 @@ fn source_path_blocked_inner(
         || !source.1.is_finite()
         || !target.0.is_finite()
         || !target.1.is_finite()
-        || (target.0 - source.0).hypot(target.1 - source.1) <= f64::EPSILON
+        || (target.0 - source.0).hypot(target.1 - source.1) == 0.0
     {
         return true;
     }
@@ -892,7 +892,7 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
     };
     let a = to_local(source);
     let b = to_local(target);
-    if form_contains_point(&part.form, 0.0, 0.0, 0.0, a.0, a.1) {
+    if phase3_form_contains_point(&part.form, a) {
         return true;
     }
 
@@ -1018,12 +1018,66 @@ fn segment_crosses_part(source: (f64, f64), target: (f64, f64), part: &PlacedFor
     }
 }
 
+fn phase3_form_contains_point(form: &Form, point: (f64, f64)) -> bool {
+    match form {
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => form
+            .polygon_vertices()
+            .is_some_and(|vertices| phase3_polygon_contains_point(point, &vertices)),
+        // Phase 3 rejects circles and fluids before this predicate is reached.
+        // Keep their legacy containment behavior untouched for other callers.
+        _ => form_contains_point(form, 0.0, 0.0, 0.0, point.0, point.1),
+    }
+}
+
+fn phase3_polygon_contains_point(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+
+    let mut inside = false;
+    for index in 0..vertices.len() {
+        let a = vertices[index];
+        let b = vertices[(index + 1) % vertices.len()];
+        let edge = (b.0 - a.0, b.1 - a.1);
+        let offset = (point.0 - a.0, point.1 - a.1);
+        let edge_length = edge.0.hypot(edge.1);
+        let linear_tolerance = crate::phase3_numeric::linear_tolerance(&[point, a, b], edge_length);
+        let cross = edge.0 * offset.1 - edge.1 * offset.0;
+        let cross_tolerance =
+            crate::phase3_numeric::cross_tolerance(edge, offset, linear_tolerance);
+        if cross.abs() <= cross_tolerance {
+            let parameter = if edge_length > 0.0 {
+                (offset.0 * edge.0 + offset.1 * edge.1) / (edge_length * edge_length)
+            } else {
+                0.0
+            };
+            let parameter_tolerance =
+                crate::phase3_numeric::parameter_tolerance(linear_tolerance, edge_length);
+            if (-parameter_tolerance..=1.0 + parameter_tolerance).contains(&parameter) {
+                return true;
+            }
+        }
+
+        if (a.1 > point.1) != (b.1 > point.1) {
+            let crossing_x = a.0 + (point.1 - a.1) * edge.0 / edge.1;
+            if point.0 < crossing_x {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
 fn parameter_before_target(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> bool {
     let dx = b.0 - a.0;
     let dy = b.1 - a.1;
-    let length_squared = dx * dx + dy * dy;
-    length_squared > f64::EPSILON
-        && ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length_squared < 1.0 - 1e-9
+    let length = dx.hypot(dy);
+    let tolerance = crate::phase3_numeric::linear_tolerance(&[a, b, point], length);
+    if !length.is_finite() || length <= tolerance {
+        return false;
+    }
+    let parameter_tolerance = crate::phase3_numeric::parameter_tolerance(tolerance, length);
+    ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / (length * length) < 1.0 - parameter_tolerance
 }
 
 fn segment_intersection_before_target(
@@ -1038,28 +1092,41 @@ fn segment_intersection_before_target(
     let sy = d.1 - c.1;
     let qx = c.0 - a.0;
     let qy = c.1 - a.1;
+    let ray_length = rx.hypot(ry);
+    let blocker_length = sx.hypot(sy);
+    let linear_tolerance =
+        crate::phase3_numeric::linear_tolerance(&[a, b, c, d], ray_length.max(blocker_length));
+    if ray_length <= linear_tolerance || blocker_length <= linear_tolerance {
+        return false;
+    }
+    let parameter_tolerance =
+        crate::phase3_numeric::parameter_tolerance(linear_tolerance, ray_length);
+    let blocker_parameter_tolerance =
+        crate::phase3_numeric::parameter_tolerance(linear_tolerance, blocker_length);
     let denominator = rx * sy - ry * sx;
+    let denominator_tolerance =
+        crate::phase3_numeric::cross_tolerance((rx, ry), (sx, sy), linear_tolerance);
 
-    if denominator.abs() <= 1e-12 {
+    if denominator.abs() <= denominator_tolerance {
         // Parallel segments only intersect when collinear. Handle that case
         // explicitly: a ray running along a polygon edge is still occluded.
-        if (qx * ry - qy * rx).abs() > 1e-9 {
+        let collinear_tolerance =
+            crate::phase3_numeric::cross_tolerance((qx, qy), (rx, ry), linear_tolerance);
+        if (qx * ry - qy * rx).abs() > collinear_tolerance {
             return false;
         }
         let ray_length_squared = rx * rx + ry * ry;
-        if ray_length_squared <= f64::EPSILON {
-            return false;
-        }
         let tc = (qx * rx + qy * ry) / ray_length_squared;
         let td = ((d.0 - a.0) * rx + (d.1 - a.1) * ry) / ray_length_squared;
         let overlap_start = tc.min(td).max(0.0);
         let overlap_end = tc.max(td).min(1.0);
-        return overlap_start <= overlap_end && overlap_start < 1.0 - 1e-9;
+        return overlap_start <= overlap_end && overlap_start < 1.0 - parameter_tolerance;
     }
 
     let t = (qx * sy - qy * sx) / denominator;
     let u = (qx * ry - qy * rx) / denominator;
-    (-1e-9..=1.0 - 1e-9).contains(&t) && (-1e-9..=1.0 + 1e-9).contains(&u)
+    (-parameter_tolerance..=1.0 - parameter_tolerance).contains(&t)
+        && (-blocker_parameter_tolerance..=1.0 + blocker_parameter_tolerance).contains(&u)
 }
 
 #[cfg(test)]
@@ -1454,6 +1521,76 @@ mod tests {
         );
         assert!(inside);
         assert!(!outside);
+    }
+
+    #[test]
+    fn phase3_segment_intersection_counts_blocker_vertex_tangency_before_target() {
+        // The ray touches the blocker only at its first endpoint. This is a
+        // visibility event even though the intersection has zero measure.
+        assert!(segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (5.0, 0.0),
+            (5.0, 2.0),
+        ));
+    }
+
+    #[test]
+    fn phase3_segment_intersection_respects_target_endpoint_ownership() {
+        // Contact only at the receiver endpoint belongs to the receiver, not
+        // to an occluder strictly before it.
+        assert!(!segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 2.0),
+        ));
+        assert!(!segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (11.0, -1.0),
+            (11.0, 1.0),
+        ));
+    }
+
+    #[test]
+    fn phase3_segment_intersection_detects_collinear_overlap_before_target() {
+        assert!(segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (3.0, 0.0),
+            (6.0, 0.0),
+        ));
+        // A collinear segment that starts exactly at the target endpoint does
+        // not occlude any open portion of the source-to-target path.
+        assert!(!segment_intersection_before_target(
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 0.0),
+            (13.0, 0.0),
+        ));
+    }
+
+    #[test]
+    fn phase3_segment_intersection_handles_shared_polygon_vertex() {
+        // A ray through a polygon vertex intersects both incident edges at
+        // their shared endpoint. Either edge must independently report the
+        // same blocking event.
+        let ray_start = (0.0, 0.0);
+        let ray_end = (10.0, 0.0);
+        let vertex = (5.0, 0.0);
+        assert!(segment_intersection_before_target(
+            ray_start,
+            ray_end,
+            vertex,
+            (6.0, 1.0),
+        ));
+        assert!(segment_intersection_before_target(
+            ray_start,
+            ray_end,
+            (4.0, 1.0),
+            vertex,
+        ));
     }
 
     #[test]

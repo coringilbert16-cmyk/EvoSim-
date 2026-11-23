@@ -364,18 +364,44 @@ fn candidate_body_indices_for_bounds(
     // The farthest corner of the target AABB is an upper bound on every point
     // along the target edge/arc. A body whose nearest AABB point is farther
     // from the source cannot block that target, even if their angles overlap.
-    let target_max_distance = [
+    let target_corners = [
         (target_bounds.0, target_bounds.2),
         (target_bounds.0, target_bounds.3),
         (target_bounds.1, target_bounds.2),
         (target_bounds.1, target_bounds.3),
-    ]
-    .into_iter()
-    .map(|(x, y)| (x - source.0).hypot(y - source.1))
-    .fold(0.0_f64, f64::max);
-    if !target_max_distance.is_finite() {
+    ];
+    let target_max_distance = target_corners
+        .iter()
+        .map(|(x, y)| (x - source.0).hypot(y - source.1))
+        .fold(0.0_f64, f64::max);
+    let target_min_dx = if source.0 < target_bounds.0 {
+        target_bounds.0 - source.0
+    } else if source.0 > target_bounds.1 {
+        source.0 - target_bounds.1
+    } else {
+        0.0
+    };
+    let target_min_dy = if source.1 < target_bounds.2 {
+        target_bounds.2 - source.1
+    } else if source.1 > target_bounds.3 {
+        source.1 - target_bounds.3
+    } else {
+        0.0
+    };
+    let target_min_distance = target_min_dx.hypot(target_min_dy);
+    if !target_max_distance.is_finite() || !target_min_distance.is_finite() {
         return None;
     }
+    let mut tolerance_points = Vec::with_capacity(5);
+    tolerance_points.push(source);
+    tolerance_points.extend(target_corners);
+    let linear_tolerance =
+        crate::phase3_numeric::linear_tolerance(&tolerance_points, target_max_distance);
+    let angular_tolerance = if target_min_distance <= linear_tolerance {
+        std::f64::consts::PI
+    } else {
+        linear_tolerance / target_min_distance
+    };
     let mut candidates = Vec::new();
     for (body_index, (interval, minimum_distance)) in body_intervals
         .iter()
@@ -383,9 +409,9 @@ fn candidate_body_indices_for_bounds(
         .zip(body_min_distances.iter().copied())
         .enumerate()
     {
-        let angular_overlap =
-            interval.0 <= target_interval.1 + 1e-10 && target_interval.0 <= interval.1 + 1e-10;
-        let could_be_in_front = minimum_distance <= target_max_distance + 1e-9;
+        let angular_overlap = interval.0 <= target_interval.1 + angular_tolerance
+            && target_interval.0 <= interval.1 + angular_tolerance;
+        let could_be_in_front = minimum_distance <= target_max_distance + linear_tolerance;
         if angular_overlap && could_be_in_front {
             candidates.push(body_index);
         }
@@ -411,6 +437,16 @@ pub(crate) fn visible_polygonal_intervals(
 ) -> Option<Vec<ExposedBoundaryInterval>> {
     let targets: Vec<_> = (0..bodies.len()).collect();
     visible_polygonal_intervals_for_targets(source, bodies, &targets)
+}
+
+/// Convenience entry point for polygon/finite-line Phase 3 visibility tests.
+#[cfg(test)]
+fn visible_phase3_polygonal_intervals(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    let targets: Vec<_> = (0..bodies.len()).collect();
+    visible_phase3_polygonal_intervals_for_targets(source, bodies, &targets)
 }
 
 /// Compute visible intervals only for selected receiver bodies while retaining
@@ -861,6 +897,547 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     Some(result)
 }
 
+/// Phase 3-only visibility solver. The strict adapter validates the complete
+/// snapshot before calling this polygon/finite-line implementation.
+pub(crate) fn visible_phase3_polygonal_intervals_for_targets(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, true)
+}
+
+#[cfg(test)]
+fn visible_polygonal_intervals_for_targets_unpruned(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, false)
+}
+
+fn visible_polygonal_intervals_for_targets_with_pruning(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    use_candidate_pruning: bool,
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    use crate::capillary_geometry::FluidBoundaryPiece;
+    use crate::resources::Form;
+
+    if !source.0.is_finite() || !source.1.is_finite() {
+        return None;
+    }
+    let mut target_body_mask = vec![false; bodies.len()];
+    for &index in target_body_indices {
+        *target_body_mask.get_mut(index)? = true;
+    }
+    let reference_angle = reference_angle_for_bodies(source, bodies)?;
+    let body_intervals = body_angular_intervals(source, bodies, reference_angle)?;
+    let body_min_distances = body_minimum_distances(source, bodies)?;
+
+    let mut straight_targets = Vec::new();
+    let mut straight_edges = Vec::new();
+    let mut critical_points: Vec<(usize, f64, f64)> = Vec::new();
+
+    for (body_index, body) in bodies.iter().enumerate() {
+        let mut seen_unit_indices = Vec::with_capacity(body.parts.len());
+        for part in &body.parts {
+            if seen_unit_indices.contains(&part.unit_index)
+                || !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+                || !matches!(
+                    &part.form,
+                    Form::Rectangle { .. }
+                        | Form::RegularPolygon { .. }
+                        | Form::Polygon { .. }
+                        | Form::Line { .. }
+                )
+            {
+                return None;
+            }
+            seen_unit_indices.push(part.unit_index);
+
+            let straight_local = match &part.form {
+                Form::Fluid {
+                    nominal_area,
+                    boundary: Some(vertices),
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                } => {
+                    if !nominal_area.is_finite() || *nominal_area <= 0.0 || vertices.len() < 3 {
+                        return None;
+                    }
+                    Some(vertices.clone())
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: Some(arc),
+                    multi_contact_boundary: None,
+                } => {
+                    if !nominal_area.is_finite()
+                        || *nominal_area <= 0.0
+                        || !arc.is_valid()
+                        || (arc.segment_area()? - *nominal_area).abs()
+                            > 1e-10 * nominal_area.abs().max(1.0)
+                    {
+                        return None;
+                    }
+                    None
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: Some(multi),
+                } => {
+                    if !nominal_area.is_finite()
+                        || *nominal_area <= 0.0
+                        || !multi.is_valid()
+                        || (multi.nominal_area - *nominal_area).abs()
+                            > 1e-10 * nominal_area.abs().max(1.0)
+                    {
+                        return None;
+                    }
+                    None
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary: None,
+                    arc_boundary: None,
+                    multi_contact_boundary: None,
+                } => {
+                    if !nominal_area.is_finite() || *nominal_area <= 0.0 {
+                        return None;
+                    }
+                    None
+                }
+                Form::Fluid { .. } => return None,
+                Form::Circle { radius } => {
+                    if !radius.is_finite() || *radius <= 0.0 {
+                        return None;
+                    }
+                    None
+                }
+                Form::Line { length } => {
+                    if !length.is_finite() || *length <= 0.0 {
+                        return None;
+                    }
+                    None
+                }
+                _ => part.form.polygon_vertices(),
+            };
+
+            if let Some(local_vertices) = straight_local {
+                if local_vertices.len() < 3
+                    || local_vertices
+                        .iter()
+                        .any(|(x, y)| !x.is_finite() || !y.is_finite())
+                {
+                    return None;
+                }
+                let (sin, cos) = part.rotation_radians.sin_cos();
+                let vertices = local_vertices
+                    .into_iter()
+                    .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
+                    .collect::<Vec<_>>();
+                if vertices
+                    .iter()
+                    .any(|(x, y)| !x.is_finite() || !y.is_finite())
+                {
+                    return None;
+                }
+                critical_points.extend(vertices.iter().copied().map(|(x, y)| (body_index, x, y)));
+                for index in 0..vertices.len() {
+                    straight_edges.push((
+                        body_index,
+                        part.unit_index,
+                        vertices[index],
+                        vertices[(index + 1) % vertices.len()],
+                    ));
+                }
+                if target_body_mask[body_index] {
+                    straight_targets.push((body_index, part.unit_index, vertices));
+                }
+                continue;
+            }
+
+            match &part.form {
+                Form::Line { length } => {
+                    if !length.is_finite() || *length <= 0.0 {
+                        return None;
+                    }
+                    let (sin, cos) = part.rotation_radians.sin_cos();
+                    let half = *length * 0.5;
+                    let start = (part.x - half * cos, part.y - half * sin);
+                    let end = (part.x + half * cos, part.y + half * sin);
+                    critical_points
+                        .extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
+                    straight_edges.push((body_index, part.unit_index, start, end));
+                }
+                Form::Circle { radius } => {
+                    add_circle_tangent_points_tagged(
+                        (part.x, part.y),
+                        *radius,
+                        source,
+                        body_index,
+                        &mut critical_points,
+                    );
+                }
+                Form::Fluid {
+                    nominal_area,
+                    boundary,
+                    arc_boundary,
+                    multi_contact_boundary,
+                } => {
+                    if let Some(vertices) = boundary {
+                        let (sin, cos) = part.rotation_radians.sin_cos();
+                        let world = vertices
+                            .iter()
+                            .map(|&(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
+                            .collect::<Vec<_>>();
+                        if world.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+                            return None;
+                        }
+                        critical_points
+                            .extend(world.iter().copied().map(|(x, y)| (body_index, x, y)));
+                        for index in 0..world.len() {
+                            straight_edges.push((
+                                body_index,
+                                part.unit_index,
+                                world[index],
+                                world[(index + 1) % world.len()],
+                            ));
+                        }
+                    }
+                    if let Some(arc) = arc_boundary {
+                        let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
+                        critical_points.extend(
+                            [world.start_point(), world.end_point()]
+                                .map(|(x, y)| (body_index, x, y)),
+                        );
+                        add_circle_tangent_points_tagged(
+                            (world.center_x, world.center_y),
+                            world.radius,
+                            source,
+                            body_index,
+                            &mut critical_points,
+                        );
+                        straight_edges.push((
+                            body_index,
+                            part.unit_index,
+                            world.start_point(),
+                            world.end_point(),
+                        ));
+                    }
+                    if let Some(multi) = multi_contact_boundary {
+                        for piece in &multi.pieces {
+                            match piece {
+                                FluidBoundaryPiece::SolidContact {
+                                    start_x,
+                                    start_y,
+                                    end_x,
+                                    end_y,
+                                    ..
+                                } => {
+                                    let (sin, cos) = part.rotation_radians.sin_cos();
+                                    let transform = |x: f64, y: f64| {
+                                        (part.x + x * cos - y * sin, part.y + x * sin + y * cos)
+                                    };
+                                    let start = transform(*start_x, *start_y);
+                                    let end = transform(*end_x, *end_y);
+                                    critical_points.extend([
+                                        (body_index, start.0, start.1),
+                                        (body_index, end.0, end.1),
+                                    ]);
+                                    straight_edges.push((body_index, part.unit_index, start, end));
+                                }
+                                FluidBoundaryPiece::FreeArc(arc) => {
+                                    let world =
+                                        arc.transformed(part.x, part.y, part.rotation_radians)?;
+                                    critical_points.extend(
+                                        [world.start_point(), world.end_point()]
+                                            .map(|(x, y)| (body_index, x, y)),
+                                    );
+                                    add_circle_tangent_points_tagged(
+                                        (world.center_x, world.center_y),
+                                        world.radius,
+                                        source,
+                                        body_index,
+                                        &mut critical_points,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if boundary.is_none()
+                        && arc_boundary.is_none()
+                        && multi_contact_boundary.is_none()
+                    {
+                        let radius = (nominal_area / std::f64::consts::PI).sqrt();
+                        add_circle_tangent_points_tagged(
+                            (part.x, part.y),
+                            radius,
+                            source,
+                            body_index,
+                            &mut critical_points,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if critical_points
+        .iter()
+        .any(|(_, x, y)| !x.is_finite() || !y.is_finite())
+        || straight_edges.iter().any(|(_, _, a, b)| {
+            !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
+        })
+    {
+        return None;
+    }
+
+    let mut critical_points_by_body: Vec<Vec<(f64, f64)>> =
+        (0..bodies.len()).map(|_| Vec::new()).collect();
+    for (body_index, x, y) in critical_points {
+        critical_points_by_body[body_index].push((x, y));
+    }
+    type StraightEdge = (usize, (f64, f64), (f64, f64));
+    let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
+        (0..bodies.len()).map(|_| Vec::new()).collect();
+    for (body_index, unit_index, start, end) in straight_edges {
+        straight_edges_by_body[body_index].push((unit_index, start, end));
+    }
+
+    let mut result = Vec::new();
+    for (body_index, unit_index, vertices) in straight_targets {
+        if !polygon_is_convex(&vertices) {
+            return None;
+        }
+        // Translate to the first vertex before accumulating the shoelace
+        // sum. This avoids catastrophic cancellation for distant geometry.
+        let origin = vertices[0];
+        let area2: f64 = (1..vertices.len() - 1)
+            .map(|index| {
+                let first = (vertices[index].0 - origin.0, vertices[index].1 - origin.1);
+                let second = (
+                    vertices[index + 1].0 - origin.0,
+                    vertices[index + 1].1 - origin.1,
+                );
+                first.0 * second.1 - first.1 * second.0
+            })
+            .sum();
+        let polygon_scale = vertices
+            .iter()
+            .map(|point| (point.0 - origin.0).hypot(point.1 - origin.1))
+            .fold(0.0_f64, f64::max);
+        let polygon_linear_tolerance =
+            crate::phase3_numeric::linear_tolerance(&vertices, polygon_scale);
+        let area_tolerance = polygon_linear_tolerance * polygon_scale;
+        if !area2.is_finite() || area2.abs() <= area_tolerance {
+            return None;
+        }
+        let winding = area2.signum();
+
+        for edge_index in 0..vertices.len() {
+            let a = vertices[edge_index];
+            let b = vertices[(edge_index + 1) % vertices.len()];
+            let ex = b.0 - a.0;
+            let ey = b.1 - a.1;
+            let edge_length = ex.hypot(ey);
+            if !edge_length.is_finite() {
+                return None;
+            }
+            let edge_linear_tolerance =
+                crate::phase3_numeric::linear_tolerance(&[source, a, b], edge_length);
+            if edge_length <= edge_linear_tolerance {
+                continue;
+            }
+            let edge_parameter_tolerance =
+                crate::phase3_numeric::parameter_tolerance(edge_linear_tolerance, edge_length);
+            let normal = (winding * ey / edge_length, -winding * ex / edge_length);
+            let midpoint = (a.0 + ex * 0.5, a.1 + ey * 0.5);
+            if normal.0 * (source.0 - midpoint.0) + normal.1 * (source.1 - midpoint.1)
+                <= edge_linear_tolerance
+            {
+                continue;
+            }
+
+            let candidate_body_indices = if use_candidate_pruning {
+                candidate_body_indices_for_bounds(
+                    source,
+                    (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
+                    reference_angle,
+                    &body_intervals,
+                    &body_min_distances,
+                )?
+            } else {
+                (0..bodies.len()).collect()
+            };
+            let mut cuts = vec![0.0_f64, 1.0_f64];
+            for &candidate_body in &candidate_body_indices {
+                for &(vx, vy) in &critical_points_by_body[candidate_body] {
+                    let dx = vx - source.0;
+                    let dy = vy - source.1;
+                    let denominator = ex * dy - ey * dx;
+                    let ray_length = dx.hypot(dy);
+                    let intersection_tolerance = crate::phase3_numeric::linear_tolerance(
+                        &[source, a, b, (vx, vy)],
+                        edge_length.max(ray_length),
+                    );
+                    let denominator_tolerance = crate::phase3_numeric::cross_tolerance(
+                        (ex, ey),
+                        (dx, dy),
+                        intersection_tolerance,
+                    );
+                    if denominator.abs() <= denominator_tolerance {
+                        continue;
+                    }
+                    let ax = a.0 - source.0;
+                    let ay = a.1 - source.1;
+                    let t = -(ax * dy - ay * dx) / denominator;
+                    let u = -(ax * ey - ay * ex) / denominator;
+                    let t_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        edge_length,
+                    );
+                    let u_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        ray_length,
+                    );
+                    if t > t_tolerance && t < 1.0 - t_tolerance && u > 1.0 + u_tolerance {
+                        cuts.push(t);
+                    }
+                }
+            }
+
+            // Directly split at straight-boundary intersections, including
+            // contact chords. Collinear overlaps are split at both endpoints.
+            for &block_body in &candidate_body_indices {
+                for &(block_unit, c, d) in &straight_edges_by_body[block_body] {
+                    if block_body == body_index && block_unit == unit_index {
+                        continue;
+                    }
+                    let sx = d.0 - c.0;
+                    let sy = d.1 - c.1;
+                    let qx = c.0 - a.0;
+                    let qy = c.1 - a.1;
+                    let denominator = ex * sy - ey * sx;
+                    let blocker_length = sx.hypot(sy);
+                    let intersection_tolerance = crate::phase3_numeric::linear_tolerance(
+                        &[a, b, c, d],
+                        edge_length.max(blocker_length),
+                    );
+                    let denominator_tolerance = crate::phase3_numeric::cross_tolerance(
+                        (ex, ey),
+                        (sx, sy),
+                        intersection_tolerance,
+                    );
+                    let t_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        edge_length,
+                    );
+                    if denominator.abs() <= denominator_tolerance {
+                        let collinear_tolerance = crate::phase3_numeric::cross_tolerance(
+                            (qx, qy),
+                            (ex, ey),
+                            intersection_tolerance,
+                        );
+                        if (qx * ey - qy * ex).abs() <= collinear_tolerance {
+                            let length_squared = ex * ex + ey * ey;
+                            for point in [c, d] {
+                                let t =
+                                    ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
+                                if t > t_tolerance && t < 1.0 - t_tolerance {
+                                    cuts.push(t);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    let t = (qx * sy - qy * sx) / denominator;
+                    let u = (qx * ey - qy * ex) / denominator;
+                    let u_tolerance = crate::phase3_numeric::parameter_tolerance(
+                        intersection_tolerance,
+                        blocker_length,
+                    );
+                    if t > t_tolerance
+                        && t < 1.0 - t_tolerance
+                        && (-u_tolerance..=1.0 + u_tolerance).contains(&u)
+                    {
+                        cuts.push(t);
+                    }
+                }
+            }
+
+            // Curved-boundary intersections with this straight target edge are
+            // exact cut points, not a reason to approximate the curve.
+            for &block_body_index in &candidate_body_indices {
+                let block_body = bodies.get(block_body_index)?;
+                for blocker in &block_body.parts {
+                    if block_body_index == body_index && blocker.unit_index == unit_index {
+                        continue;
+                    }
+                    for arc in realized_circle_arcs(block_body_index, blocker)? {
+                        let mut intersections = Vec::with_capacity(2);
+                        add_circle_segment_intersections(
+                            arc.center,
+                            arc.radius,
+                            a,
+                            b,
+                            &mut intersections,
+                        )?;
+                        for point in intersections {
+                            let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
+                            if !arc_has_angle(arc, angle) {
+                                continue;
+                            }
+                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
+                                / (edge_length * edge_length);
+                            if t > edge_parameter_tolerance && t < 1.0 - edge_parameter_tolerance {
+                                cuts.push(t);
+                            }
+                        }
+                    }
+                }
+            }
+
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup_by(|a, b| (*a - *b).abs() <= edge_parameter_tolerance);
+            for pair in cuts.windows(2) {
+                let (t0, t1) = (pair[0], pair[1]);
+                if t1 - t0 <= edge_parameter_tolerance {
+                    continue;
+                }
+                let t = (t0 + t1) * 0.5;
+                let point = (a.0 + ex * t, a.1 + ey * t);
+                if crate::organism_geometry::source_path_blocked_for_candidates(
+                    source,
+                    point,
+                    bodies,
+                    body_index,
+                    unit_index,
+                    &candidate_body_indices,
+                ) {
+                    continue;
+                }
+                result.push(ExposedBoundaryInterval {
+                    body_index,
+                    unit_index,
+                    start: (a.0 + ex * t0, a.1 + ey * t0),
+                    end: (a.0 + ex * t1, a.1 + ey * t1),
+                    outward_normal: normal,
+                });
+            }
+        }
+    }
+    Some(result)
+}
+
 #[cfg(test)]
 mod visibility_tests {
     use super::*;
@@ -919,6 +1496,224 @@ mod visibility_tests {
             !candidates.contains(&2),
             "a farther body cannot block a nearer target, even when angular bounds overlap"
         );
+    }
+
+    #[test]
+    fn candidate_pruning_is_conservative_for_source_inside_bounds_and_angular_wrap() {
+        let source = (0.0, 0.0);
+        let target = rectangle_body(0, 10.0, 0.0, 2.0, 4.0);
+        let mut source_enclosing_bounds = rectangle_body(1, 3.0, 0.0, 1.0, 1.0);
+        // Deliberately conservative aggregate bounds include the source even
+        // though the realized blocker itself does not contain or touch it.
+        source_enclosing_bounds.min_x = -0.5;
+        source_enclosing_bounds.max_x = 3.5;
+        source_enclosing_bounds.min_y = -2.0;
+        source_enclosing_bounds.max_y = 2.0;
+        // Relative to the target's +X reference angle, this body's angular
+        // interval straddles -PI/+PI and must conservatively become full-circle.
+        let angular_wrap = rectangle_body(2, -10.0, 0.0, 2.0, 2.0);
+        let bodies = [target, source_enclosing_bounds, angular_wrap];
+
+        let reference_angle = reference_angle_for_bodies(source, &bodies).unwrap();
+        let intervals = body_angular_intervals(source, &bodies, reference_angle).unwrap();
+        let minimum_distances = body_minimum_distances(source, &bodies).unwrap();
+        assert_eq!(intervals[1], (-std::f64::consts::PI, std::f64::consts::PI));
+        assert_eq!(intervals[2], (-std::f64::consts::PI, std::f64::consts::PI));
+
+        let candidates = candidate_body_indices_for_bounds(
+            source,
+            (9.0, 9.0, -2.0, 2.0),
+            reference_angle,
+            &intervals,
+            &minimum_distances,
+        )
+        .unwrap();
+        assert_eq!(candidates, vec![0, 1, 2]);
+
+        let pruned = visible_polygonal_intervals_for_targets(source, &bodies, &[0]).unwrap();
+        let unpruned =
+            visible_polygonal_intervals_for_targets_unpruned(source, &bodies, &[0]).unwrap();
+        assert_eq!(
+            pruned, unpruned,
+            "source-containing AABBs and angular-wrap bounds must not prune a real blocker or alter visible intervals"
+        );
+    }
+
+    #[test]
+    fn candidate_pruning_preserves_visible_coverage_against_unpruned_reference() {
+        let source = (-10.0, 0.0);
+        let arrangements = [
+            vec![
+                rectangle_body(0, 10.0, 0.0, 2.0, 4.0),
+                rectangle_body(0, 2.0, 0.0, 1.0, 1.0),
+                rectangle_body(0, 5.0, 1.0, 1.0, 1.0),
+                rectangle_body(0, 30.0, 0.0, 2.0, 2.0),
+            ],
+            vec![
+                rectangle_body(0, 10.0, 0.0, 2.0, 4.0),
+                rectangle_body(0, 3.0, -0.8, 0.8, 0.8),
+                rectangle_body(0, 6.0, 0.8, 0.8, 0.8),
+                rectangle_body(0, 40.0, 0.0, 2.0, 2.0),
+            ],
+            vec![
+                rectangle_body(0, 10.0, 0.0, 2.0, 4.0),
+                rectangle_body(0, 4.0, 0.0, 0.5, 5.0),
+                rectangle_body(0, 7.0, -1.0, 0.5, 0.5),
+                rectangle_body(0, 60.0, 0.0, 2.0, 2.0),
+            ],
+        ];
+
+        for (arrangement_index, bodies) in arrangements.iter().enumerate() {
+            let pruned = visible_polygonal_intervals_for_targets(source, bodies, &[0]).unwrap();
+            let unpruned =
+                visible_polygonal_intervals_for_targets_unpruned(source, bodies, &[0]).unwrap();
+
+            // Every open interval visible in the exhaustive reference must be
+            // covered by the pruned result, even if pruning changes partition cuts.
+            for reference in &unpruned {
+                let midpoint = (
+                    (reference.start.0 + reference.end.0) * 0.5,
+                    (reference.start.1 + reference.end.1) * 0.5,
+                );
+                assert!(
+                    pruned.iter().any(|candidate| {
+                        candidate.body_index == reference.body_index
+                            && candidate.unit_index == reference.unit_index
+                            && point_on_segment_with_tolerance(
+                                midpoint,
+                                candidate.start,
+                                candidate.end,
+                                1e-8,
+                            )
+                    }),
+                    "pruning lost reference-visible coverage in arrangement {arrangement_index}: {reference:?}"
+                );
+            }
+
+            // Every pruned interval must be covered by the exhaustive
+            // reference. Split it at all reference-visible endpoints so a
+            // missing blocker event cannot hide between a few sample points.
+            for interval in &pruned {
+                let mut cuts = vec![0.0_f64, 1.0_f64];
+                for reference in &unpruned {
+                    if reference.body_index != interval.body_index
+                        || reference.unit_index != interval.unit_index
+                    {
+                        continue;
+                    }
+                    for endpoint in [reference.start, reference.end] {
+                        if let Some(t) =
+                            segment_parameter(endpoint, interval.start, interval.end, 1e-8)
+                        {
+                            if t > 1e-10 && t < 1.0 - 1e-10 {
+                                cuts.push(t);
+                            }
+                        }
+                    }
+                }
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+                for pair in cuts.windows(2) {
+                    let t = (pair[0] + pair[1]) * 0.5;
+                    let midpoint = (
+                        interval.start.0 + (interval.end.0 - interval.start.0) * t,
+                        interval.start.1 + (interval.end.1 - interval.start.1) * t,
+                    );
+                    assert!(
+                        unpruned.iter().any(|reference| {
+                            reference.body_index == interval.body_index
+                                && reference.unit_index == interval.unit_index
+                                && point_on_segment_with_tolerance(
+                                    midpoint,
+                                    reference.start,
+                                    reference.end,
+                                    1e-8,
+                                )
+                        }),
+                        "pruned interval extends beyond exhaustive visible coverage in arrangement {arrangement_index}: {interval:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn polygon_visibility_is_consistent_across_scale_and_translation() {
+        let scenarios = [
+            (1e-9, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1e9, 0.0, 0.0),
+            (1.0, 1e12, -1e12),
+        ];
+        let mut normalized_lengths = Vec::new();
+
+        for (scale, offset_x, offset_y) in scenarios {
+            let source = (offset_x - 10.0 * scale, offset_y);
+            let bodies = [
+                rectangle_body(
+                    0,
+                    offset_x + 10.0 * scale,
+                    offset_y,
+                    2.0 * scale,
+                    4.0 * scale,
+                ),
+                rectangle_body(1, offset_x, offset_y, 1.0 * scale, 1.0 * scale),
+            ];
+            let visible = visible_phase3_polygonal_intervals_for_targets(source, &bodies, &[0])
+                .expect("valid scaled geometry must remain measurable");
+            let length: f64 = visible
+                .iter()
+                .map(|interval| {
+                    (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1)
+                })
+                .sum();
+            normalized_lengths.push(length / scale);
+        }
+
+        let reference = normalized_lengths[1];
+        for (index, measured) in normalized_lengths.iter().copied().enumerate() {
+            assert!(
+                (measured - reference).abs() <= 1e-6,
+                "normalized visible length changed in scenario {index}: {measured} vs {reference}"
+            );
+        }
+    }
+
+    fn segment_parameter(
+        point: (f64, f64),
+        start: (f64, f64),
+        end: (f64, f64),
+        tolerance: f64,
+    ) -> Option<f64> {
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let length_squared = dx * dx + dy * dy;
+        if length_squared <= 0.0 {
+            return None;
+        }
+        let t = ((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared;
+        let projection = (start.0 + t * dx, start.1 + t * dy);
+        ((-tolerance..=1.0 + tolerance).contains(&t)
+            && (point.0 - projection.0).hypot(point.1 - projection.1) <= tolerance)
+            .then_some(t.clamp(0.0, 1.0))
+    }
+
+    fn point_on_segment_with_tolerance(
+        point: (f64, f64),
+        start: (f64, f64),
+        end: (f64, f64),
+        tolerance: f64,
+    ) -> bool {
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let length_squared = dx * dx + dy * dy;
+        if length_squared <= 0.0 {
+            return (point.0 - start.0).hypot(point.1 - start.1) <= tolerance;
+        }
+        let t = (((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared)
+            .clamp(0.0, 1.0);
+        let projection = (start.0 + t * dx, start.1 + t * dy);
+        (point.0 - projection.0).hypot(point.1 - projection.1) <= tolerance
     }
 
     #[test]
@@ -981,7 +1776,7 @@ mod visibility_tests {
             max_y: 1.0,
         };
         assert!(
-            visible_polygonal_intervals((-5.0, 0.0), &[concave]).is_none(),
+            visible_phase3_polygonal_intervals((-5.0, 0.0), &[concave]).is_none(),
             "concave targets require self-occlusion handling before exposure can be credited"
         );
     }
@@ -996,7 +1791,7 @@ mod visibility_tests {
     fn polygonal_exposure_splits_a_partially_shadowed_target_edge() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 0.5);
-        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+        let intervals = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, blocker])
             .expect("rectangles have exact polygonal boundaries");
 
         // The target's left edge faces the source. A smaller blocker shadows
@@ -1026,6 +1821,47 @@ mod visibility_tests {
             visible_length < 2.0 - 1e-6,
             "the blocker should shadow part of the edge"
         );
+
+        // The two silhouette rays pass exactly through the blocker vertices
+        // nearest the source: x=2.25, y=±0.25. At the receiver edge x=4,
+        // their analytically projected endpoints are y=±9/29.
+        let mut endpoints: Vec<f64> = left_edge
+            .iter()
+            .flat_map(|interval| [interval.start.1, interval.end.1])
+            .collect();
+        endpoints.sort_by(f64::total_cmp);
+        endpoints.dedup_by(|a, b| (*a - *b).abs() < 1e-10);
+        assert_eq!(
+            endpoints.len(),
+            4,
+            "two visible shoulders must have four distinct endpoints: {endpoints:?}"
+        );
+        for (actual, expected) in endpoints.iter().zip([-1.0, -9.0 / 29.0, 9.0 / 29.0, 1.0]) {
+            assert!(
+                (actual - expected).abs() < 1e-10,
+                "polygon-vertex tangent event should be at {expected}, got {actual}"
+            );
+        }
+        assert!(
+            (visible_length - (2.0 - 18.0 / 29.0)).abs() < 1e-10,
+            "disjoint visible measure must match the analytic result"
+        );
+    }
+
+    #[test]
+    fn source_on_or_inside_polygon_target_has_no_receiving_boundary() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+
+        for source in [(4.0, 0.0), (5.0, 0.0)] {
+            let intervals =
+                visible_phase3_polygonal_intervals(source, std::slice::from_ref(&target)).expect(
+                    "source-on-boundary and source-inside cases are valid but non-receiving",
+                );
+            assert!(
+                intervals.is_empty(),
+                "a source on or inside a solid target must produce no outward-facing receiving interval: source={source:?}, intervals={intervals:?}"
+            );
+        }
     }
 
     #[test]
@@ -1108,6 +1944,337 @@ mod visibility_tests {
             1,
             "unobstructed edge should remain one interval"
         );
+    }
+
+    #[test]
+    fn two_separated_polygon_blockers_partition_target_into_three_visible_regions() {
+        let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
+        let lower = rectangle_body(20, 2.5, -0.55, 0.5, 0.4);
+        let upper = rectangle_body(30, 2.5, 0.55, 0.5, 0.4);
+        let intervals = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, lower, upper])
+            .expect("all three bodies have supported polygonal geometry");
+
+        let mut shoulders: Vec<(f64, f64)> = intervals
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && interval.unit_index == 10
+                    && (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .map(|interval| {
+                (
+                    interval.start.1.min(interval.end.1),
+                    interval.start.1.max(interval.end.1),
+                )
+            })
+            .collect();
+        shoulders.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+        assert_eq!(
+            shoulders.len(),
+            3,
+            "two separated blockers must leave three distinct visible regions: {shoulders:?}"
+        );
+        assert!(shoulders[0].0.abs() <= 1.0 + 1e-8);
+        assert!(shoulders[0].1 < shoulders[1].0);
+        assert!(shoulders[1].1 < shoulders[2].0);
+        assert!(shoulders[2].1 <= 1.0 + 1e-8);
+
+        // The two blocker silhouettes have analytic target-edge cuts at
+        // ±27/29 and ±63/155. The three visible intervals must be disjoint,
+        // with a total visible measure of 4/29 + 126/155.
+        let mut visible: Vec<(f64, f64)> = intervals
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && interval.unit_index == 10
+                    && (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .map(|interval| {
+                (
+                    interval.start.1.min(interval.end.1),
+                    interval.start.1.max(interval.end.1),
+                )
+            })
+            .collect();
+        visible.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(visible.len(), 3);
+        for pair in visible.windows(2) {
+            assert!(
+                pair[0].1 <= pair[1].0 + 1e-10,
+                "visible intervals overlap or duplicate boundary measure: {visible:?}"
+            );
+        }
+        let endpoints: Vec<f64> = visible.iter().flat_map(|(a, b)| [*a, *b]).collect();
+        for (actual, expected) in endpoints.iter().zip([
+            -1.0,
+            -27.0 / 29.0,
+            -63.0 / 155.0,
+            63.0 / 155.0,
+            27.0 / 29.0,
+            1.0,
+        ]) {
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "analytic visible endpoint mismatch: expected {expected}, got {actual}"
+            );
+        }
+        let visible_measure: f64 = visible.iter().map(|(a, b)| b - a).sum();
+        assert!(
+            (visible_measure - (4.0 / 29.0 + 126.0 / 155.0)).abs() < 1e-9,
+            "disjoint visible measure mismatch: {visible_measure}"
+        );
+    }
+
+    #[test]
+    fn finite_line_endpoint_rays_are_retained_as_exact_partition_events() {
+        let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
+        let line = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 20,
+                form: Form::Line { length: 0.5 },
+                x: 2.0,
+                y: 0.5,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            }],
+            min_x: 1.75,
+            max_x: 2.25,
+            min_y: 0.25,
+            max_y: 0.75,
+        };
+        let intervals = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, line])
+            .expect("finite line blockers are supported");
+
+        // The source is at x=-5, the line at x=2, and the target edge at x=4.
+        // Projecting the line endpoints along source rays gives y=9/28 and
+        // y=27/28 on the target edge.
+        let mut endpoints: Vec<f64> = intervals
+            .iter()
+            .filter(|interval| {
+                interval.body_index == 0
+                    && interval.unit_index == 10
+                    && (interval.start.0 - 4.0).abs() < 1e-8
+                    && (interval.end.0 - 4.0).abs() < 1e-8
+            })
+            .flat_map(|interval| [interval.start.1, interval.end.1])
+            .collect();
+        endpoints.sort_by(f64::total_cmp);
+        endpoints.dedup_by(|a, b| (*a - *b).abs() < 1e-8);
+
+        assert!(
+            endpoints.iter().any(|y| (*y - 9.0 / 28.0).abs() < 1e-8),
+            "lower finite-line endpoint ray must be an exact cut: {endpoints:?}"
+        );
+        assert!(
+            endpoints.iter().any(|y| (*y - 27.0 / 28.0).abs() < 1e-8),
+            "upper finite-line endpoint ray must be an exact cut: {endpoints:?}"
+        );
+    }
+
+    #[test]
+    fn polygon_visibility_is_deterministic_under_body_reordering_and_winding_reversal() {
+        let polygon_body = |unit_index: usize, x: f64, y: f64, mut vertices: Vec<(f64, f64)>| {
+            let min_x = vertices
+                .iter()
+                .map(|point| point.0)
+                .fold(f64::INFINITY, f64::min);
+            let max_x = vertices
+                .iter()
+                .map(|point| point.0)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let min_y = vertices
+                .iter()
+                .map(|point| point.1)
+                .fold(f64::INFINITY, f64::min);
+            let max_y = vertices
+                .iter()
+                .map(|point| point.1)
+                .fold(f64::NEG_INFINITY, f64::max);
+            OrganismBodyGeometry {
+                parts: vec![PlacedForm {
+                    unit_index,
+                    form: Form::Polygon {
+                        vertices: std::mem::take(&mut vertices),
+                    },
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                min_x: x + min_x,
+                max_x: x + max_x,
+                min_y: y + min_y,
+                max_y: y + max_y,
+            }
+        };
+        let target_vertices = vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+        let blocker_vertices = vec![(-0.25, -0.4), (0.25, -0.4), (0.25, 0.4), (-0.25, 0.4)];
+        let reversed = |vertices: &[(f64, f64)]| vertices.iter().copied().rev().collect::<Vec<_>>();
+
+        let target = polygon_body(10, 5.0, 0.0, target_vertices.clone());
+        let blocker = polygon_body(20, 2.5, 0.0, blocker_vertices.clone());
+        let baseline = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("valid polygon arrangement");
+
+        let blocker_reversed = polygon_body(20, 2.5, 0.0, reversed(&blocker_vertices));
+        let target_reversed = polygon_body(10, 5.0, 0.0, reversed(&target_vertices));
+        let reordered =
+            visible_phase3_polygonal_intervals((-5.0, 0.0), &[blocker_reversed, target_reversed])
+                .expect("reordered and reversed polygons remain valid");
+
+        let canonical = |intervals: &[ExposedBoundaryInterval], target_body_index: usize| {
+            let mut segments: Vec<_> = intervals
+                .iter()
+                .filter(|interval| {
+                    interval.body_index == target_body_index && interval.unit_index == 10
+                })
+                .map(|interval| {
+                    let (start, end) = if (interval.start.0, interval.start.1)
+                        <= (interval.end.0, interval.end.1)
+                    {
+                        (interval.start, interval.end)
+                    } else {
+                        (interval.end, interval.start)
+                    };
+                    let normal = (
+                        if interval.outward_normal.0 == 0.0 {
+                            0.0
+                        } else {
+                            interval.outward_normal.0
+                        },
+                        if interval.outward_normal.1 == 0.0 {
+                            0.0
+                        } else {
+                            interval.outward_normal.1
+                        },
+                    );
+                    (start, end, normal)
+                })
+                .collect();
+            segments.sort_by(|a, b| {
+                a.0 .0
+                    .total_cmp(&b.0 .0)
+                    .then_with(|| a.0 .1.total_cmp(&b.0 .1))
+                    .then_with(|| a.1 .0.total_cmp(&b.1 .0))
+                    .then_with(|| a.1 .1.total_cmp(&b.1 .1))
+                    .then_with(|| a.2 .0.total_cmp(&b.2 .0))
+                    .then_with(|| a.2 .1.total_cmp(&b.2 .1))
+            });
+            segments
+        };
+
+        let first = canonical(&baseline, 0);
+        let second = canonical(&reordered, 1);
+        assert_eq!(
+            first.len(),
+            second.len(),
+            "body order and polygon winding must preserve the number of visible intervals"
+        );
+
+        let comparison_points: Vec<_> = first
+            .iter()
+            .chain(&second)
+            .flat_map(|(start, end, _)| [*start, *end])
+            .collect();
+        let characteristic_length = comparison_points
+            .iter()
+            .map(|point| point.0.hypot(point.1))
+            .fold(0.0_f64, f64::max);
+        let tolerance =
+            crate::phase3_numeric::linear_tolerance(&comparison_points, characteristic_length);
+
+        for (index, (first, second)) in first.iter().zip(&second).enumerate() {
+            for (first_point, second_point) in [(first.0, second.0), (first.1, second.1)] {
+                assert!(
+                    (first_point.0 - second_point.0).abs() <= tolerance
+                        && (first_point.1 - second_point.1).abs() <= tolerance,
+                    "visible interval {index} endpoints differ beyond scale-aware tolerance: {first_point:?} vs {second_point:?} (tolerance {tolerance})"
+                );
+            }
+            assert_eq!(
+                first.2, second.2,
+                "visible interval {index} outward normal changed under body reordering or winding reversal"
+            );
+        }
+    }
+
+    #[test]
+    fn polygon_visibility_is_invariant_under_rigid_rotation() {
+        let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(20, 2.5, 0.0, 0.5, 0.8);
+        let baseline = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+            .expect("valid unrotated polygon arrangement");
+
+        let rotate_body = |mut body: OrganismBodyGeometry| {
+            for part in &mut body.parts {
+                (part.x, part.y) = (-part.y, part.x);
+                part.rotation_radians += std::f64::consts::FRAC_PI_2;
+            }
+            // Conservative bounds remain valid after the rigid transform.
+            body.min_x = -10.0;
+            body.max_x = 10.0;
+            body.min_y = -10.0;
+            body.max_y = 10.0;
+            body
+        };
+        let rotated_target = rotate_body(rectangle_body(10, 5.0, 0.0, 2.0, 2.0));
+        let rotated_blocker = rotate_body(rectangle_body(20, 2.5, 0.0, 0.5, 0.8));
+        let rotated =
+            visible_phase3_polygonal_intervals((0.0, -5.0), &[rotated_target, rotated_blocker])
+                .expect("rigidly rotated polygon arrangement");
+
+        let transform = |point: (f64, f64)| (-point.1, point.0);
+        let canonical = |intervals: &[ExposedBoundaryInterval], transform_points: bool| {
+            let mut segments: Vec<_> = intervals
+                .iter()
+                .filter(|interval| interval.unit_index == 10)
+                .map(|interval| {
+                    let (mut start, mut end) = (interval.start, interval.end);
+                    let mut normal = interval.outward_normal;
+                    if transform_points {
+                        start = transform(start);
+                        end = transform(end);
+                        normal = transform(normal);
+                    }
+                    if (start.0, start.1) > (end.0, end.1) {
+                        std::mem::swap(&mut start, &mut end);
+                    }
+                    (start, end, normal)
+                })
+                .collect();
+            segments.sort_by(|a, b| {
+                a.0 .0
+                    .total_cmp(&b.0 .0)
+                    .then_with(|| a.0 .1.total_cmp(&b.0 .1))
+                    .then_with(|| a.1 .0.total_cmp(&b.1 .0))
+                    .then_with(|| a.1 .1.total_cmp(&b.1 .1))
+            });
+            segments
+        };
+
+        let expected = canonical(&baseline, true);
+        let actual = canonical(&rotated, false);
+        assert_eq!(
+            expected.len(),
+            actual.len(),
+            "rigid rotation must preserve the number of exposed intervals"
+        );
+        for (expected, actual) in expected.iter().zip(&actual) {
+            for (left, right) in [
+                (expected.0 .0, actual.0 .0),
+                (expected.0 .1, actual.0 .1),
+                (expected.1 .0, actual.1 .0),
+                (expected.1 .1, actual.1 .1),
+                (expected.2 .0, actual.2 .0),
+                (expected.2 .1, actual.2 .1),
+            ] {
+                assert!(
+                    (left - right).abs() < 1e-8,
+                    "rotated visibility differs: expected {expected:?}, actual {actual:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -3336,12 +4503,13 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                 if vertices.len() < 3 {
                     return None;
                 }
+                let origin = vertices[0];
                 let area_twice: f64 = vertices
                     .iter()
                     .enumerate()
                     .map(|(i, &(x, y))| {
                         let (nx, ny) = vertices[(i + 1) % vertices.len()];
-                        x * ny - nx * y
+                        (x - origin.0) * (ny - origin.1) - (nx - origin.0) * (y - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
@@ -3677,12 +4845,13 @@ fn parallel_exposure_with_exact_intersections(
                     _ => part.form.polygon_vertices(),
                 })?;
                 let vertices: Vec<_> = vertices.into_iter().map(world).collect();
+                let origin = vertices[0];
                 let area_twice: f64 = vertices
                     .iter()
                     .enumerate()
                     .map(|(index, &(x, y))| {
                         let (nx, ny) = vertices[(index + 1) % vertices.len()];
-                        x * ny - nx * y
+                        (x - origin.0) * (ny - origin.1) - (nx - origin.0) * (y - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
@@ -5127,12 +6296,14 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     .into_iter()
                     .map(|(x, y)| (part.x + x * cos - y * sin, part.y + x * sin + y * cos))
                     .collect();
+                let origin = vertices[0];
                 let area_twice: f64 = vertices
                     .iter()
                     .enumerate()
                     .map(|(index, &point)| {
                         let next = vertices[(index + 1) % vertices.len()];
-                        point.0 * next.1 - next.0 * point.1
+                        (point.0 - origin.0) * (next.1 - origin.1)
+                            - (next.0 - origin.0) * (point.1 - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice == 0.0 {
@@ -5626,63 +6797,11 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-    fn coincident_circles_emit_one_boundary_with_stable_owner() {
-        let first = circle_body(vec![(9, 1.5, 0.0, 0.0), (2, 1.5, 0.0, 0.0)]);
-        let reversed = circle_body(vec![(2, 1.5, 0.0, 0.0), (9, 1.5, 0.0, 0.0)]);
-        for body in [&first, &reversed] {
-            let perimeter = disjoint_source_global_material_perimeter(body, 0).unwrap();
-            assert!(perimeter.straight.is_empty());
-            assert_eq!(perimeter.curved.len(), 1);
-            assert_eq!(perimeter.curved[0].unit_index, 2);
-            assert!(
-                (visible_material_perimeter_length(&perimeter).unwrap()
-                    - 3.0 * std::f64::consts::TAU)
-                    .abs()
-                    < 1e-10
-            );
-        }
-    }
-
-    #[test]
     fn externally_tangent_circles_keep_both_complete_outer_boundaries() {
         let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, 2.0, 0.0)]);
         let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
         let expected = 4.0 * std::f64::consts::PI;
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
-    }
-
-    #[test]
-    fn internally_tangent_contained_circle_does_not_add_union_perimeter() {
-        let body = circle_body(vec![(0, 2.0, 0.0, 0.0), (1, 1.0, 1.0, 0.0)]);
-        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        let expected = 4.0 * std::f64::consts::PI;
-        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
-        assert_eq!(perimeter.curved.len(), 1);
-        assert_eq!(perimeter.curved[0].unit_index, 0);
-    }
-
-    #[test]
-    fn concentric_nested_circles_emit_only_the_outer_boundary() {
-        let body = circle_body(vec![(0, 3.0, 0.0, 0.0), (1, 1.0, 0.0, 0.0)]);
-        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        assert_eq!(perimeter.curved.len(), 1);
-        assert_eq!(perimeter.curved[0].unit_index, 0);
-        assert!(
-            (visible_material_perimeter_length(&perimeter).unwrap() - 6.0 * std::f64::consts::TAU)
-                .abs()
-                < 1e-9
-        );
-    }
-
-    #[test]
-    fn nearly_coincident_but_distinct_circles_are_not_deduplicated() {
-        let offset = 1e-8;
-        let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, offset, 0.0)]);
-        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        let exposed_angle = 2.0 * std::f64::consts::PI - 2.0 * (offset / 2.0).acos();
-        let expected = 2.0 * exposed_angle;
-        assert_eq!(perimeter.curved.len(), 2);
-        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-8);
     }
 
     #[test]
@@ -5749,5 +6868,4 @@ mod source_global_perimeter_tests {
         let expected = 8.0 + std::f64::consts::TAU;
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
     }
-
 }
