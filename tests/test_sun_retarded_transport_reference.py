@@ -82,6 +82,30 @@ class SunTransportReferenceTests(unittest.TestCase):
                                emitted_power * 0.55 / n)
         self.assertAlmostEqual(emitted_power * 0.5, 3.65, places=14)
 
+    def test_full_orbit_emission_partition(self):
+        # Integrate a constant power envelope over the approved orbital
+        # period. Radius/height remain numerical fixtures, not calibration.
+        period, n_t = 24000.0, 2400
+        power, mu_min, n_mu = 1.7, 0.12, 400
+        dt = period / n_t
+        dmu = (1.0 - mu_min) / n_mu
+        downward = 0.0
+        for it in range(n_t):
+            t = (it + 0.5) * dt
+            self.assertGreater(trajectory(t)[2], 0.0)
+            for im in range(n_mu):
+                mu = mu_min + (im + 0.5) * dmu
+                self.assertGreater(t + trajectory(t)[2] / (0.35 * mu), t)
+                downward += (power * 0.5) * dt * dmu
+        resolved = power * period * 0.5 * (1.0 - mu_min)
+        self.assertAlmostEqual(downward, resolved, places=6)
+        upward_external = power * period * 0.5
+        grazing_unresolved = power * period * 0.5 * mu_min
+        self.assertAlmostEqual(downward + grazing_unresolved,
+                               power * period * 0.5, places=6)
+        self.assertAlmostEqual(upward_external,
+                               power * period * 0.5, places=6)
+
     def test_finite_window_emission_arrival_and_in_flight_balance(self):
         # Deterministic ray parcels. The grazing range mu<mu_min is excluded
         # from this finite quadrature and its omitted power is reported below.
