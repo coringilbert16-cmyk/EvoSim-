@@ -934,9 +934,7 @@ fn visible_polygonal_intervals_for_targets_with_pruning(
                             }
                             let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
                                 / (edge_length * edge_length);
-                            if t > edge_parameter_tolerance
-                                && t < 1.0 - edge_parameter_tolerance
-                            {
+                            if t > edge_parameter_tolerance && t < 1.0 - edge_parameter_tolerance {
                                 cuts.push(t);
                             }
                         }
@@ -1154,21 +1152,14 @@ mod visibility_tests {
                     2.0 * scale,
                     4.0 * scale,
                 ),
-                rectangle_body(
-                    1,
-                    offset_x,
-                    offset_y,
-                    1.0 * scale,
-                    1.0 * scale,
-                ),
+                rectangle_body(1, offset_x, offset_y, 1.0 * scale, 1.0 * scale),
             ];
             let visible = visible_polygonal_intervals_for_targets(source, &bodies, &[0])
                 .expect("valid scaled geometry must remain measurable");
             let length: f64 = visible
                 .iter()
                 .map(|interval| {
-                    (interval.end.0 - interval.start.0)
-                        .hypot(interval.end.1 - interval.start.1)
+                    (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1)
                 })
                 .sum();
             normalized_lengths.push(length / scale);
