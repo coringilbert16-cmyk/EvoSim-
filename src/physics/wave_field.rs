@@ -1563,10 +1563,10 @@ mod tests {
             let absorbed_return = local_amplitude_norm(&absorbing, center_x, center_y, 12);
             let reflected_return =
                 local_amplitude_norm(&reflective, reflective_x, reflective_y, 12);
-            let reflection_ratio = absorbed_return / reflected_return.max(1.0e-15);
+            let return_amplitude_ratio = absorbed_return / reflected_return.max(1.0e-15);
             assert!(
-                reflection_ratio < 0.12,
-                "angle={angle}, wave_number={wave_number}, residual ratio={reflection_ratio}"
+                return_amplitude_ratio < 0.12,
+                "angle={angle}, wave_number={wave_number}, residual ratio={return_amplitude_ratio}"
             );
             let remaining_energy = absorbing.energy();
             let absorbed_energy = absorbing.boundary_absorbed_energy();
@@ -1631,10 +1631,10 @@ mod tests {
 
         let absorbed_return = local_amplitude_norm(&absorbing, center_x, center_y, 24);
         let reflected_return = local_amplitude_norm(&reflective, reflective_x, reflective_y, 24);
-        let reflection_ratio = absorbed_return / reflected_return.max(1.0e-15);
+        let return_amplitude_ratio = absorbed_return / reflected_return.max(1.0e-15);
         assert!(
-            reflection_ratio < 0.03,
-            "refined-grid residual ratio: {reflection_ratio}"
+            return_amplitude_ratio < 0.03,
+            "refined-grid return-amplitude ratio: {return_amplitude_ratio}"
         );
 
         let remaining_energy = absorbing.energy();
