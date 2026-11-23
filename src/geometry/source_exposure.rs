@@ -1108,6 +1108,55 @@ mod visibility_tests {
         }
     }
 
+    #[test]
+    fn polygon_visibility_is_consistent_across_scale_and_translation() {
+        let scenarios = [
+            (1e-9, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1e9, 0.0, 0.0),
+            (1.0, 1e12, -1e12),
+        ];
+        let mut normalized_lengths = Vec::new();
+
+        for (scale, offset_x, offset_y) in scenarios {
+            let source = (offset_x - 10.0 * scale, offset_y);
+            let bodies = [
+                rectangle_body(
+                    0,
+                    offset_x + 10.0 * scale,
+                    offset_y,
+                    2.0 * scale,
+                    4.0 * scale,
+                ),
+                rectangle_body(
+                    1,
+                    offset_x,
+                    offset_y,
+                    1.0 * scale,
+                    1.0 * scale,
+                ),
+            ];
+            let visible = visible_polygonal_intervals_for_targets(source, &bodies, &[0])
+                .expect("valid scaled geometry must remain measurable");
+            let length: f64 = visible
+                .iter()
+                .map(|interval| {
+                    (interval.end.0 - interval.start.0)
+                        .hypot(interval.end.1 - interval.start.1)
+                })
+                .sum();
+            normalized_lengths.push(length / scale);
+        }
+
+        let reference = normalized_lengths[1];
+        for (index, measured) in normalized_lengths.iter().copied().enumerate() {
+            assert!(
+                (measured - reference).abs() <= 1e-6,
+                "normalized visible length changed in scenario {index}: {measured} vs {reference}"
+            );
+        }
+    }
+
     fn segment_parameter(
         point: (f64, f64),
         start: (f64, f64),
