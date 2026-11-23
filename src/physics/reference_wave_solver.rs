@@ -2171,4 +2171,131 @@ mod tests {
         assert_eq!(left.previous, right.previous);
         assert_eq!(left.energy().to_bits(), right.energy().to_bits());
     }
+    #[test]
+    fn forced_multi_source_runs_replay_field_work_and_accounts_bit_for_bit() {
+        fn run_replay() -> (WaveField, SourceInstance, SourceInstance, Vec<[f64; 2]>) {
+            let mut field = solver(65, 65, 1.0, 2);
+            field.configure_absorbing_boundary(8, 0.04).unwrap();
+            let mut first_source = test_source(1_000.0, 260);
+            let mut second_source = test_source(1_000.0, 261);
+
+            for y in 1..field.height - 1 {
+                for x in 1..field.width - 1 {
+                    let phase = (x * 17 + y * 31) as f64;
+                    let index = field.index(x, y);
+                    field.current[index] = 1.0e-3 * (phase * 0.017).sin();
+                    field.previous[index] = 1.0e-3 * (phase * 0.013).cos();
+                }
+            }
+
+            let mut first_profile = vec![0.0; field.current.len()];
+            let mut second_profile = vec![0.0; field.current.len()];
+            for y in 1..field.height - 1 {
+                for x in 1..field.width - 1 {
+                    let index = field.index(x, y);
+                    first_profile[index] =
+                        1.0e-4 * ((x * 7 + y * 11) as f64 * 0.031).sin();
+                    second_profile[index] =
+                        1.0e-4 * ((x * 13 + y * 3) as f64 * 0.027).cos();
+                }
+            }
+
+            let mut first_forcing = vec![0.0; field.current.len()];
+            let mut second_forcing = vec![0.0; field.current.len()];
+            let mut work_history = Vec::with_capacity(160);
+            for step in 0..160 {
+                let logical_step = step as f64;
+                let first_scale = (logical_step * 0.05).cos();
+                let second_scale = (logical_step * 0.037 + 0.4).sin();
+                for index in 0..field.current.len() {
+                    first_forcing[index] = first_profile[index] * first_scale;
+                    second_forcing[index] = second_profile[index] * second_scale;
+                }
+
+                let mut sources = [
+                    (&mut first_source, first_forcing.as_slice()),
+                    (&mut second_source, second_forcing.as_slice()),
+                ];
+                let works = field.advance_forced_substep_multi(&mut sources).unwrap();
+                work_history.push([works[0], works[1]]);
+            }
+
+            (field, first_source, second_source, work_history)
+        }
+
+        fn assert_bits_equal(left: &[f64], right: &[f64], label: &str) {
+            assert_eq!(left.len(), right.len(), "{label} length differs");
+            for (index, (left_value, right_value)) in left.iter().zip(right).enumerate() {
+                assert_eq!(
+                    left_value.to_bits(),
+                    right_value.to_bits(),
+                    "{label} differs at index {index}"
+                );
+            }
+        }
+
+        let (left, left_first, left_second, left_work) = run_replay();
+        let (right, right_first, right_second, right_work) = run_replay();
+
+        assert_eq!(left.width, right.width);
+        assert_eq!(left.height, right.height);
+        assert_eq!(left.spacing.to_bits(), right.spacing.to_bits());
+        assert_eq!(
+            left.propagation_speed.to_bits(),
+            right.propagation_speed.to_bits()
+        );
+        assert_eq!(left.substeps_per_tick, right.substeps_per_tick);
+        assert_eq!(left.time_step.to_bits(), right.time_step.to_bits());
+        assert_eq!(
+            left.energy_normalization.to_bits(),
+            right.energy_normalization.to_bits()
+        );
+        assert_eq!(left.substeps_elapsed, right.substeps_elapsed);
+        assert_bits_equal(&left.previous, &right.previous, "previous field");
+        assert_bits_equal(&left.current, &right.current, "current field");
+        assert_bits_equal(
+            &left.boundary_damping,
+            &right.boundary_damping,
+            "boundary damping",
+        );
+        assert_eq!(
+            left.boundary_absorbed_energy.to_bits(),
+            right.boundary_absorbed_energy.to_bits()
+        );
+        assert_eq!(left.energy().to_bits(), right.energy().to_bits());
+
+        assert_eq!(left_first.descriptor(), right_first.descriptor());
+        assert_eq!(left_second.descriptor(), right_second.descriptor());
+        for (left_source, right_source) in [
+            (&left_first, &right_first),
+            (&left_second, &right_second),
+        ] {
+            assert_eq!(
+                left_source.account().initial_energy().to_bits(),
+                right_source.account().initial_energy().to_bits()
+            );
+            assert_eq!(
+                left_source.account().remaining_energy().to_bits(),
+                right_source.account().remaining_energy().to_bits()
+            );
+            assert_eq!(
+                left_source
+                    .account()
+                    .cumulative_field_transfer()
+                    .to_bits(),
+                right_source
+                    .account()
+                    .cumulative_field_transfer()
+                    .to_bits()
+            );
+        }
+        assert_eq!(left_work.len(), right_work.len());
+        for (step, (left_step, right_step)) in left_work.iter().zip(&right_work).enumerate() {
+            assert_bits_equal(left_step, right_step, &format!("source work at step {step}"));
+        }
+        assert!(left.boundary_absorbed_energy > 0.0);
+        assert!(left_work.iter().flatten().any(|work| *work > 0.0));
+        assert!(left_work.iter().flatten().any(|work| *work < 0.0));
+    }
+
 }
