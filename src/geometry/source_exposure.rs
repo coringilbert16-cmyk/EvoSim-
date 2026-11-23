@@ -6805,9 +6805,6 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-
-
-    #[test]
     fn circle_contained_by_convex_polygon_has_no_exposed_arc() {
         let body = OrganismBodyGeometry {
             parts: vec![
