@@ -5288,8 +5288,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 // near-coincident circles whose tiny overlap is numerically
                 // ill-conditioned. Those cases are classified from their
                 // actual intersection cuts and then coalesced normally.
-                let near_coincident_circle = body.parts.iter().enumerate().any(
-                    |(other_index, other)| {
+                let near_coincident_circle =
+                    body.parts.iter().enumerate().any(|(other_index, other)| {
                         other_index != part_index
                             && matches!(
                                 &other.form,
@@ -5297,10 +5297,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                                     if (other.x - center.0).hypot(other.y - center.1)
                                         <= 1e-6 * radius.max(*other_radius)
                             )
-                    },
-                );
-                let preserve_intersection_partition = sweep
-                    >= std::f64::consts::TAU - 1e-10
+                    });
+                let preserve_intersection_partition = sweep >= std::f64::consts::TAU - 1e-10
                     && cuts.len() > 3
                     && !near_coincident_circle;
                 if preserve_intersection_partition
