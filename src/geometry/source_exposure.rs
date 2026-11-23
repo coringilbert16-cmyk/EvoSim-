@@ -951,13 +951,15 @@ mod visibility_tests {
             let expected_angle = (hit.1).atan2(hit.0 - 5.0).rem_euclid(std::f64::consts::TAU);
 
             let has_endpoint = target_arcs.iter().any(|interval| {
-                let start = interval.arc.start_angle_radians.rem_euclid(std::f64::consts::TAU);
-                let end = (start + interval.arc.sweep_radians)
+                let start = interval
+                    .arc
+                    .start_angle_radians
                     .rem_euclid(std::f64::consts::TAU);
+                let end = (start + interval.arc.sweep_radians).rem_euclid(std::f64::consts::TAU);
                 let angular_distance = |left: f64, right: f64| {
-                    (left - right).abs().min(
-                        std::f64::consts::TAU - (left - right).abs(),
-                    )
+                    (left - right)
+                        .abs()
+                        .min(std::f64::consts::TAU - (left - right).abs())
                 };
                 angular_distance(start, expected_angle) < 1e-8
                     || angular_distance(end, expected_angle) < 1e-8
@@ -5829,5 +5831,4 @@ mod source_global_perimeter_tests {
         let expected = 8.0 + std::f64::consts::TAU;
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
     }
-
 }
