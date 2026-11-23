@@ -235,8 +235,8 @@ impl WaveField {
     /// Discrete energy assigned to an inclusive rectangular control volume.
     /// Edge potential energy is split evenly between its endpoint cells, so
     /// a region and its complement sum exactly to the global field energy.
-    /// In source-free empty space, the region's energy change is its net
-    /// integrated boundary flux.
+    /// In a source-free, undamped control volume, the region's energy
+    /// change is its net integrated boundary flux.
     pub(crate) fn energy_in_region(
         &self,
         x_min: usize,
