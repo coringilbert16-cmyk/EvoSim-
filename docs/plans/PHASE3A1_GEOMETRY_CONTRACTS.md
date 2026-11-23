@@ -302,3 +302,55 @@ This document is a planning artifact only. Its review may refine contracts and t
 3. The implementation scope is explicitly authorized.
 
 **Current implementation status:** No geometry code, solver code, source coupling, energy accounting, or live simulation behavior is changed by this plan.
+
+
+## 13. Repository-grounded first implementation proposal (3A.2.1)
+
+This proposal is based on a follow-up inspection of the current `main` implementation. It narrows the first code increment; it does not authorize that code change.
+
+### Current implementation facts
+
+- `src/geometry/source_exposure.rs` contains `GlobalBoundaryPiece`, `add_global_intersection_cuts`, and `disjoint_source_global_material_perimeter`.
+- The current source-global perimeter routine already handles supported non-collinear segment intersections, segment/arc intersections, and intersecting non-coincident circular arcs. Existing tests cover disjoint polygon/circle parts, an overlapping rectangle/circle, intersecting circles, and fail-closed fluid input.
+- Segment/segment collinear overlap currently returns `None` when the projected intervals overlap or touch. Coincident circular arcs also return `None`. Line and fluid forms currently return `None` from the source-global routine.
+- Exposed candidate intervals are currently classified by testing their midpoint against other constituent forms through `organism_geometry::form_contains_point`. That containment helper treats points on a shape boundary as contained.
+- Consequently, merely adding split parameters for collinear overlap is insufficient: a shared edge between adjacent shapes must disappear from the union boundary, while duplicate same-side coincident boundaries must be emitted once rather than suppressed twice. The union classifier must distinguish local material occupancy on the two sides of a candidate interval and resolve duplicate provenance deterministically.
+- The same source-exposure module also contains other visibility and projection paths. In particular, the legacy parallel-lane path quantizes curved visibility events to 0.01 world units. That path must not be reused as proof of exact transition partitioning for Phase 3A.3.
+
+### Proposed first code increment
+
+**3A.2.1 — Exact straight/straight contact and shared-edge union.** Limit the first implementation to polygonal straight-boundary arrangements; do not add circle coincidence, fluid, or line-form union in this increment.
+
+Scope:
+1. Extend straight/straight arrangement handling to represent proper crossings, endpoint contacts, collinear point contacts, partial shared intervals, and fully coincident intervals without losing either primitive's parameterization.
+2. Classify each resulting open interval against the composite union, not by boundary-inclusive midpoint containment alone. The result must distinguish exposed outer boundary, internal shared boundary, duplicate same-side boundary, and unresolved topology.
+3. Emit each exposed geometric interval once, with deterministic provenance and consistent outward orientation. Internal shared intervals emit zero times; coincident same-side intervals emit once.
+4. Keep the existing exact segment/arc and arc/arc paths unchanged except for regression coverage. Do not broaden their supported arrangements in this increment.
+5. Preserve atomic fail-closed behavior: if a supported straight arrangement cannot be classified consistently, return failure for the complete source-global perimeter rather than a partial perimeter.
+
+Explicit exclusions:
+- No circular coincidence/tangency/nesting changes.
+- No fluid arc/chord or multi-contact union.
+- No line-form union.
+- No receiver visibility-transition work.
+- No area integration or physical source/receiver coupling.
+- No live simulation, chemistry, movement, solver, or energy-ledger changes.
+- No algorithmic performance optimization; retain a correctness-first reference implementation.
+
+### Required tests for 3A.2.1
+
+- Two adjacent rectangles sharing a complete edge: shared edge absent; outer perimeter correct.
+- Two rectangles sharing a partial edge: only shared subinterval absent; all remaining outer intervals retained.
+- Two rectangles touching at one collinear endpoint: point event does not remove a finite interval or create a gap.
+- Two identical polygons with the same winding: coincident boundary emitted once, not zero or twice.
+- Two identical polygons with reversed winding: same union and perimeter as the same-winding case.
+- Multiple collinear segments with reversed endpoint ordering: same canonical result and measure.
+- Input-part reordering: same union measure and canonical geometry.
+- Existing crossing polygon, overlapping rectangle/circle, intersecting-circle, and disjoint-part tests remain green.
+- Translation and rotation of each fixture preserve union measure and topology.
+
+### Acceptance boundary
+
+3A.2.1 is complete only when the straight/straight cases above pass analytic topology and perimeter assertions, existing source-global tests remain green, and unsupported non-straight arrangements still fail closed. This increment does not complete Phase 3A and does not authorize 3A.2.2 or Phase 3B.
+
+**Authorization status:** Proposed scope only. No implementation has been started or authorized by this planning update.
