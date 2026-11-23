@@ -21,6 +21,39 @@ fn is_phase3_supported_part(form: &Form) -> bool {
     is_phase3_polygon(form) || matches!(form, Form::Line { .. })
 }
 
+/// Compute conservative world-space bounds from the exact supported geometry.
+/// These bounds are used by visibility candidate pruning, so caller-supplied
+/// aggregate bounds must never be trusted without checking them against parts.
+fn phase3_part_bounds(part: &crate::organism_geometry::PlacedForm) -> Option<(f64, f64, f64, f64)> {
+    let local_vertices = match &part.form {
+        Form::Line { length } => {
+            if !length.is_finite() || *length <= 0.0 {
+                return None;
+            }
+            vec![(-length * 0.5, 0.0), (length * 0.5, 0.0)]
+        }
+        form if is_phase3_polygon(form) => form.polygon_vertices()?,
+        _ => return None,
+    };
+    let (sin, cos) = part.rotation_radians.sin_cos();
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for (x, y) in local_vertices {
+        let world_x = part.x + x * cos - y * sin;
+        let world_y = part.y + x * sin + y * cos;
+        if !world_x.is_finite() || !world_y.is_finite() {
+            return None;
+        }
+        min_x = min_x.min(world_x);
+        max_x = max_x.max(world_x);
+        min_y = min_y.min(world_y);
+        max_y = max_y.max(world_y);
+    }
+    Some((min_x, max_x, min_y, max_y))
+}
+
 /// Reject circles, fluids, and malformed placements across the entire geometry
 /// snapshot. Lines are supported as finite blockers but are not receiver bodies.
 fn validate_visibility_snapshot(
@@ -44,6 +77,12 @@ fn validate_visibility_snapshot(
         }
 
         let mut has_polygon_receiver = false;
+        let (mut actual_min_x, mut actual_max_x, mut actual_min_y, mut actual_max_y) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
         for part in &body.parts {
             if !is_phase3_supported_part(&part.form)
                 || !part.x.is_finite()
@@ -79,7 +118,22 @@ fn validate_visibility_snapshot(
                 }
                 _ => {}
             }
+            let (part_min_x, part_max_x, part_min_y, part_max_y) =
+                phase3_part_bounds(part)?;
+            actual_min_x = actual_min_x.min(part_min_x);
+            actual_max_x = actual_max_x.max(part_max_x);
+            actual_min_y = actual_min_y.min(part_min_y);
+            actual_max_y = actual_max_y.max(part_max_y);
             has_polygon_receiver |= is_phase3_polygon(&part.form);
+        }
+
+        if !body.parts.is_empty()
+            && (body.min_x > actual_min_x
+                || body.max_x < actual_max_x
+                || body.min_y > actual_min_y
+                || body.max_y < actual_max_y)
+        {
+            return None;
         }
 
         if targets[body_index] && !has_polygon_receiver {
@@ -217,8 +271,8 @@ mod tests {
                 Form::Line { length: 1.0 },
                 2.0,
                 0.0,
-                (2.0, -0.5),
-                (2.0, 0.5),
+                (1.5, 0.0),
+                (2.5, 0.0),
             ),
         ];
         let intervals = visible_polygonal_intervals_for_targets((-5.0, 0.0), &bodies, &[0])
@@ -229,6 +283,40 @@ mod tests {
             "the finite segment must split the front-facing target edge into two visible shoulders"
         );
         assert!(intervals.iter().all(|interval| interval.body_index == 0));
+    }
+
+    #[test]
+    fn phase3_visibility_rejects_undersized_bounds_that_could_hide_a_blocker() {
+        let undersized_blocker = body(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            2.0,
+            0.0,
+            (1.75, -0.25),
+            (2.25, 0.25),
+        );
+        let bodies = vec![target(), undersized_blocker];
+        assert!(visible_polygonal_intervals_for_targets((-5.0, 0.0), &bodies, &[0]).is_none());
+    }
+
+    #[test]
+    fn phase3_visibility_accepts_bounds_enclosing_rotated_polygon_geometry() {
+        let rotated = body(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            2.0,
+            0.0,
+            (-1.0, -2.0),
+            (5.0, 2.0),
+        );
+        let mut rotated = rotated;
+        rotated.parts[0].rotation_radians = std::f64::consts::FRAC_PI_2;
+        let bodies = vec![target(), rotated];
+        assert!(visible_polygonal_intervals_for_targets((-5.0, 0.0), &bodies, &[0]).is_some());
     }
 
     #[test]
