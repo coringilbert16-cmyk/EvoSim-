@@ -541,4 +541,113 @@ mod tests {
             }
         }
     }
+
+
+    #[test]
+    fn candidate_a_replay_of_candidate_b_coupling_matches_field_evolution() {
+        use super::super::reference_wave_solver::WaveField;
+        use super::super::source::{
+            SourceClass, SourceDescriptor, SourceEnergyAccount, SourceGeometry, SourceId,
+            SourceInstance, SourcePowerLaw, SourceProvenance, SourceWaveform, TickSchedule,
+        };
+
+        let cells = 33;
+        let spacing = 0.2;
+        let time_step = 0.005;
+        let substeps_per_tick = (1.0 / time_step) as usize;
+        let mut candidate_b = refined_model(cells, spacing, time_step);
+        let mut candidate_a = WaveField::new(
+            cells,
+            cells,
+            spacing,
+            1.0,
+            substeps_per_tick,
+            1.0,
+        )
+        .unwrap();
+
+        let source_id = SourceId::new(9001).unwrap();
+        let descriptor = SourceDescriptor::new(
+            source_id,
+            SourceProvenance::MathematicalTest { holder_id: 9001 },
+            SourceClass::MathematicalTest,
+            SourceGeometry::Disk {
+                center_x: (cells as f64 - 1.0) * spacing * 0.5,
+                center_y: (cells as f64 - 1.0) * spacing * 0.5,
+                radius: 0.5,
+            },
+            TickSchedule::new(0, None).unwrap(),
+            SourceWaveform::SinglePulse,
+            SourcePowerLaw::MathematicalTestOnly,
+        )
+        .unwrap();
+        let account = SourceEnergyAccount::new(source_id, 100.0).unwrap();
+        let mut prescribed_source = SourceInstance::new(descriptor, account).unwrap();
+
+        let initial_b_energy = candidate_b.total_energy();
+        let mut maximum_field_difference: f64 = 0.0;
+        let mut signed_work = 0.0;
+        let steps = 2_000;
+
+        for _ in 0..steps {
+            // Candidate A receives Candidate B's instantaneous reciprocal
+            // coupling acceleration as a prescribed force. This deliberately
+            // replays the same force history; it does not make the source
+            // models physically equivalent or give Candidate A an oscillator.
+            let gap = candidate_b.current_source
+                - candidate_b.source_average(&candidate_b.current_field);
+            let forcing: Vec<f64> = candidate_b
+                .profile
+                .iter()
+                .map(|weight| {
+                    candidate_b.coupling_strength / candidate_b.field_normalization
+                        * gap
+                        * weight
+                })
+                .collect();
+
+            let work = candidate_a
+                .advance_forced_substep(&mut prescribed_source, &forcing)
+                .unwrap();
+            signed_work += work;
+            candidate_b.step().unwrap();
+
+            for y in 0..cells {
+                for x in 0..cells {
+                    let index = y * cells + x;
+                    let difference = (candidate_a.sample(x, y).unwrap()
+                        - candidate_b.current_field[index])
+                        .abs();
+                    maximum_field_difference = maximum_field_difference.max(difference);
+                }
+            }
+        }
+
+        let field_energy_difference = (candidate_a.energy() - candidate_b.field_energy()).abs();
+        let replayed_work_difference = (signed_work - candidate_b.field_energy()).abs();
+        let candidate_b_energy_residual =
+            (candidate_b.total_energy() - initial_b_energy).abs();
+
+        assert!(
+            maximum_field_difference <= 1.0e-12,
+            "matched forcing did not reproduce Candidate B field: {maximum_field_difference}"
+        );
+        assert!(
+            field_energy_difference <= 1.0e-10,
+            "field energy mismatch: {field_energy_difference}"
+        );
+        assert!(
+            replayed_work_difference <= 1.0e-10,
+            "Candidate A signed work did not match field energy: {replayed_work_difference}"
+        );
+        assert!(
+            candidate_b_energy_residual <= 1.0e-8,
+            "Candidate B total-energy residual: {candidate_b_energy_residual}"
+        );
+        assert_eq!(candidate_a.substeps_elapsed(), steps as u64);
+        assert_eq!(candidate_b.steps_elapsed(), steps as u64);
+        assert!(candidate_b.source_energy().is_finite());
+        assert!(candidate_b.coupling_energy().is_finite());
+    }
+
 }
