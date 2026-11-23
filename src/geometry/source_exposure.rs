@@ -1526,10 +1526,12 @@ mod visibility_tests {
                     && (interval.start.0 - 4.0).abs() < 1e-8
                     && (interval.end.0 - 4.0).abs() < 1e-8
             })
-            .map(|interval| (
-                interval.start.1.min(interval.end.1),
-                interval.start.1.max(interval.end.1),
-            ))
+            .map(|interval| {
+                (
+                    interval.start.1.min(interval.end.1),
+                    interval.start.1.max(interval.end.1),
+                )
+            })
             .collect();
         visible.sort_by(|a, b| a.0.total_cmp(&b.0));
         assert_eq!(visible.len(), 3);
@@ -1541,8 +1543,12 @@ mod visibility_tests {
         }
         let endpoints: Vec<f64> = visible.iter().flat_map(|(a, b)| [*a, *b]).collect();
         for (actual, expected) in endpoints.iter().zip([
-            -1.0, -27.0 / 29.0, -63.0 / 145.0,
-            63.0 / 145.0, 27.0 / 29.0, 1.0,
+            -1.0,
+            -27.0 / 29.0,
+            -63.0 / 145.0,
+            63.0 / 145.0,
+            27.0 / 29.0,
+            1.0,
         ]) {
             assert!(
                 (actual - expected).abs() < 1e-9,
