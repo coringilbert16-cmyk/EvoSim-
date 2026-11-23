@@ -17,6 +17,19 @@ The source follows the approved orbit with height strictly positive. Let its pro
 
 where \(\tau\) is emission time and \(P(\tau)\) is total emitted energy per project tick.
 
+The approved orbit is a circle in a vertical plane perpendicular to the world plane, with period 24,000 ticks. For derivation and test implementation, retain it symbolically as
+
+\[
+\mathbf{s}(\tau)=\mathbf{s}_c
++R\cos(\Omega\tau+\theta_0)\,\mathbf e_x
++(z_c+R\sin(\Omega\tau+\theta_0))\,\mathbf e_z,
+\qquad \Omega=\frac{2\pi}{24000}.
+\]
+
+Here \(R\), center height \(z_c\), horizontal center, plane orientation, and phase origin \(\theta_0\) remain uncalibrated project parameters. Require \(z_c>R\) so the source remains strictly above the plane. This parameterization is a coordinate form for the approved orbit, not a choice of numerical radius, height, or phase.
+
+The 440-cycle/day sun carrier is a separate phase variable from the 24,000-tick orbital phase. The transport map pushes forward the nonnegative emitted-power envelope \(P(\tau)\); it does not itself define the carrier's field waveform or convert carrier amplitude into positive radiative power. The radiation-to-field constitutive stage must specify that relationship without treating a signed carrier as negative emitted energy.
+
 **Frame convention required for this derivation:** rays are emitted isotropically in the project frame, with constant propagation speed \(c\) in that frame. No relativistic Doppler/aberration correction is included. This is a project-native transport convention, not a claim about a physical relativistic sun. If the specification instead intends isotropy in a moving source's rest frame, the emission angular distribution and power transformation must be derived separately before implementation.
 
 ## 2. Ray parameterization
@@ -176,7 +189,7 @@ These transport balances close before any incident-radiation-to-field coupling i
 2. **Moving-source Jacobian:** compare the analytic determinant against an independent finite-difference determinant over trajectory, \(\mu\), and azimuth samples.
 3. **Ray-pushforward agreement:** compare Jacobian-density integration against an independent deterministic emitted-ray binning/reference measure. State resolution error; do not treat histogram noise as conservation tolerance.
 4. **Emission/arrival interval test:** verify energy delayed across both ends of a finite window is assigned to in-transit inventory.
-5. **Full-orbit test:** for the approved 24,000-tick orbit and 440-cycle/day carrier, verify total downward emitted energy, eventual plane arrival, and the external upward half independently of phase and sampling.
+5. **Full-orbit test:** once the approved orbit's still-open radius, center height, orientation, and phase origin are calibrated, run its 24,000-tick trajectory and verify total downward emitted energy, eventual plane arrival, and the external upward half independently of phase and sampling. Keep the 440-cycle/day carrier phase independent of orbital phase; transport conservation is tested on the emitted-power envelope unless a separately defined nonnegative carrier-modulated power law is approved.
 6. **Trajectory safety:** reject height crossing/touching the plane, non-finite derivatives, unsupported superluminal project-frame source speed, singular/negative Jacobian, and invalid power without mutating source state.
 7. **Grid independence:** integrate received energy over physical plane area and time; verify convergence under spatial/time refinement and translation. Do not normalize by object or molecule count.
 
