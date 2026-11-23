@@ -206,4 +206,4 @@ Phase 3B.3 is complete only when:
 - Independent analytic/reference tests validate conservation, deterministic behavior, rollback, and convergence.
 - The design is reviewed before any implementation is authorized.
 
-**Current next action:** Derive and review the three source-to-field coupling mechanisms separately, beginning with the sun's retarded radiative transfer because it has the most distinct geometry and time-of-flight accounting. Do not begin with production injection or a parameter sweep of uncalibrated physical quantities.
+**Current next action:** The sun's transport sub-derivation is now recorded in [Phase 3B.3a](PHASE3B3A_SUN_RETARDED_RADIATIVE_TRANSFER.md). It derives the project-frame moving-source arrival map and its Jacobian, establishes the static \(P/2\) plane-interception check, and specifies finite-window in-transit accounting and independent reference tests. Next, review that derivation against the approved source trajectory/clock and specify the radiation-to-field constitutive interface. Then derive hotspot and powered-material coupling separately. Do not begin production injection or sweep uncalibrated physical quantities.
