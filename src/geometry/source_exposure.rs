@@ -421,7 +421,12 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
-    visible_polygonal_intervals_for_targets_with_pruning(source, bodies, target_body_indices, true)
+    visible_polygonal_intervals_for_targets_with_pruning(
+        source,
+        bodies,
+        target_body_indices,
+        true,
+    )
 }
 
 #[cfg(test)]
@@ -995,27 +1000,73 @@ mod visibility_tests {
                 );
             }
 
-            // Every pruned interval must also be visible when all bodies are
-            // considered by the exact blocker predicate.
-            let all_candidates: Vec<_> = (0..bodies.len()).collect();
+            // Every pruned interval must be covered by the exhaustive
+            // reference. Split it at all reference-visible endpoints so a
+            // missing blocker event cannot hide between a few sample points.
             for interval in &pruned {
-                let midpoint = (
-                    (interval.start.0 + interval.end.0) * 0.5,
-                    (interval.start.1 + interval.end.1) * 0.5,
-                );
-                assert!(
-                    !crate::organism_geometry::source_path_blocked_for_candidates(
-                        source,
-                        midpoint,
-                        bodies,
-                        interval.body_index,
-                        interval.unit_index,
-                        &all_candidates,
-                    ),
-                    "pruning retained globally blocked coverage in arrangement {arrangement_index}: {interval:?}"
-                );
+                let mut cuts = vec![0.0_f64, 1.0_f64];
+                for reference in &unpruned {
+                    if reference.body_index != interval.body_index
+                        || reference.unit_index != interval.unit_index
+                    {
+                        continue;
+                    }
+                    for endpoint in [reference.start, reference.end] {
+                        if let Some(t) = segment_parameter(
+                            endpoint,
+                            interval.start,
+                            interval.end,
+                            1e-8,
+                        ) {
+                            if t > 1e-10 && t < 1.0 - 1e-10 {
+                                cuts.push(t);
+                            }
+                        }
+                    }
+                }
+                cuts.sort_by(f64::total_cmp);
+                cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+                for pair in cuts.windows(2) {
+                    let t = (pair[0] + pair[1]) * 0.5;
+                    let midpoint = (
+                        interval.start.0 + (interval.end.0 - interval.start.0) * t,
+                        interval.start.1 + (interval.end.1 - interval.start.1) * t,
+                    );
+                    assert!(
+                        unpruned.iter().any(|reference| {
+                            reference.body_index == interval.body_index
+                                && reference.unit_index == interval.unit_index
+                                && point_on_segment_with_tolerance(
+                                    midpoint,
+                                    reference.start,
+                                    reference.end,
+                                    1e-8,
+                                )
+                        }),
+                        "pruned interval extends beyond exhaustive visible coverage in arrangement {arrangement_index}: {interval:?}"
+                    );
+                }
             }
         }
+    }
+
+    fn segment_parameter(
+        point: (f64, f64),
+        start: (f64, f64),
+        end: (f64, f64),
+        tolerance: f64,
+    ) -> Option<f64> {
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let length_squared = dx * dx + dy * dy;
+        if length_squared <= 0.0 {
+            return None;
+        }
+        let t = ((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared;
+        let projection = (start.0 + t * dx, start.1 + t * dy);
+        ((-tolerance..=1.0 + tolerance).contains(&t)
+            && (point.0 - projection.0).hypot(point.1 - projection.1) <= tolerance)
+            .then_some(t.clamp(0.0, 1.0))
     }
 
     fn point_on_segment_with_tolerance(
