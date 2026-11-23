@@ -972,6 +972,53 @@ mod tests {
     }
 
     #[test]
+    fn prescribed_forcing_work_converges_to_the_continuum_integral() {
+        let integral_x = 0.5 + 0.1 + 0.04 * (1.0 / 6.0 - 1.0 / (4.0 * std::f64::consts::PI.powi(2)));
+        let continuum_profile_squared_integral = 0.5 * integral_x;
+        let amplitude = 0.4;
+        let initial_velocity = 0.7;
+        let mut relative_errors = Vec::new();
+
+        for (case, cells) in [17_usize, 33, 65].into_iter().enumerate() {
+            let spacing = 1.0 / (cells - 1) as f64;
+            let substeps = (std::f64::consts::SQRT_2 / spacing).ceil() as usize;
+            let mut field = solver(cells, cells, spacing, substeps);
+            let mut source = test_source(10.0, 114 + case as u64);
+            let dt = field.time_step();
+            let mut forcing = vec![0.0; cells * cells];
+
+            for y in 1..cells - 1 {
+                for x in 1..cells - 1 {
+                    let px = x as f64 * spacing;
+                    let py = y as f64 * spacing;
+                    let profile = (std::f64::consts::PI * px).sin()
+                        * (std::f64::consts::PI * py).sin()
+                        * (1.0 + 0.2 * px);
+                    let index = field.index(x, y);
+                    field.previous[index] = -dt * initial_velocity * profile;
+                    forcing[index] = amplitude * profile;
+                }
+            }
+
+            let measured_work = field.advance_forced_substep(&mut source, &forcing).unwrap();
+            let continuum_work = dt
+                * amplitude
+                * (initial_velocity + 0.5 * dt * amplitude)
+                * continuum_profile_squared_integral;
+            relative_errors.push((measured_work - continuum_work).abs() / continuum_work.abs());
+        }
+
+        assert!(
+            relative_errors[1] < relative_errors[0] / 3.0,
+            "first refinement did not show second-order convergence: {relative_errors:?}"
+        );
+        assert!(
+            relative_errors[2] < relative_errors[1] / 3.0,
+            "second refinement did not show second-order convergence: {relative_errors:?}"
+        );
+    }
+
+    #[test]
     fn prescribed_forcing_has_zero_work_at_a_centered_velocity_node() {
         let mut field = solver(41, 41, 1.0, 2);
         let mut source = test_source(0.0, 106);
