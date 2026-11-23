@@ -15,11 +15,7 @@ pub(crate) fn linear_tolerance(points: &[(f64, f64)], characteristic_length: f64
     coordinate_scale * f64::EPSILON * ROUNDING_ULPS
 }
 
-pub(crate) fn cross_tolerance(
-    first: (f64, f64),
-    second: (f64, f64),
-    linear_tolerance: f64,
-) -> f64 {
+pub(crate) fn cross_tolerance(first: (f64, f64), second: (f64, f64), linear_tolerance: f64) -> f64 {
     let first_length = first.0.hypot(first.1);
     let second_length = second.0.hypot(second.1);
     linear_tolerance * (first_length + second_length)
