@@ -439,6 +439,16 @@ pub(crate) fn visible_polygonal_intervals(
     visible_polygonal_intervals_for_targets(source, bodies, &targets)
 }
 
+/// Convenience entry point for polygon/finite-line Phase 3 visibility tests.
+#[cfg(test)]
+fn visible_phase3_polygonal_intervals(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    let targets: Vec<_> = (0..bodies.len()).collect();
+    visible_phase3_polygonal_intervals_for_targets(source, bodies, &targets)
+}
+
 /// Compute visible intervals only for selected receiver bodies while retaining
 /// every body as a potential occluder. This avoids solving exposure for thousands
 /// of environmental particles when only organism energy holders receive input.
@@ -473,7 +483,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 || !part.y.is_finite()
                 || !part.rotation_radians.is_finite()
                 || !matches!(
-                    part.form,
+                    &part.form,
                     Form::Rectangle { .. }
                         | Form::RegularPolygon { .. }
                         | Form::Polygon { .. }
@@ -1767,7 +1777,7 @@ mod visibility_tests {
             max_y: 1.0,
         };
         assert!(
-            visible_polygonal_intervals((-5.0, 0.0), &[concave]).is_none(),
+            visible_phase3_polygonal_intervals((-5.0, 0.0), &[concave]).is_none(),
             "concave targets require self-occlusion handling before exposure can be credited"
         );
     }
@@ -1782,7 +1792,7 @@ mod visibility_tests {
     fn polygonal_exposure_splits_a_partially_shadowed_target_edge() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 0.5);
-        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+        let intervals = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, blocker])
             .expect("rectangles have exact polygonal boundaries");
 
         // The target's left edge faces the source. A smaller blocker shadows
@@ -1844,7 +1854,7 @@ mod visibility_tests {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
 
         for source in [(4.0, 0.0), (5.0, 0.0)] {
-            let intervals = visible_polygonal_intervals(source, std::slice::from_ref(&target))
+            let intervals = visible_phase3_polygonal_intervals(source, std::slice::from_ref(&target))
                 .expect("source-on-boundary and source-inside cases are valid but non-receiving");
             assert!(
                 intervals.is_empty(),
@@ -1940,7 +1950,7 @@ mod visibility_tests {
         let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
         let lower = rectangle_body(20, 2.5, -0.55, 0.5, 0.4);
         let upper = rectangle_body(30, 2.5, 0.55, 0.5, 0.4);
-        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, lower, upper])
+        let intervals = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, lower, upper])
             .expect("all three bodies have supported polygonal geometry");
 
         let mut shoulders: Vec<(f64, f64)> = intervals
@@ -2033,7 +2043,7 @@ mod visibility_tests {
             min_y: 0.25,
             max_y: 0.75,
         };
-        let intervals = visible_polygonal_intervals((-5.0, 0.0), &[target, line])
+        let intervals = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, line])
             .expect("finite line blockers are supported");
 
         // The source is at x=-5, the line at x=2, and the target edge at x=4.
@@ -2103,13 +2113,13 @@ mod visibility_tests {
 
         let target = polygon_body(10, 5.0, 0.0, target_vertices.clone());
         let blocker = polygon_body(20, 2.5, 0.0, blocker_vertices.clone());
-        let baseline = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+        let baseline = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, blocker])
             .expect("valid polygon arrangement");
 
         let blocker_reversed = polygon_body(20, 2.5, 0.0, reversed(&blocker_vertices));
         let target_reversed = polygon_body(10, 5.0, 0.0, reversed(&target_vertices));
         let reordered =
-            visible_polygonal_intervals((-5.0, 0.0), &[blocker_reversed, target_reversed])
+            visible_phase3_polygonal_intervals((-5.0, 0.0), &[blocker_reversed, target_reversed])
                 .expect("reordered and reversed polygons remain valid");
 
         let canonical = |intervals: &[ExposedBoundaryInterval], target_body_index: usize| {
@@ -2192,7 +2202,7 @@ mod visibility_tests {
     fn polygon_visibility_is_invariant_under_rigid_rotation() {
         let target = rectangle_body(10, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(20, 2.5, 0.0, 0.5, 0.8);
-        let baseline = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
+        let baseline = visible_phase3_polygonal_intervals((-5.0, 0.0), &[target, blocker])
             .expect("valid unrotated polygon arrangement");
 
         let rotate_body = |mut body: OrganismBodyGeometry| {
@@ -2209,7 +2219,7 @@ mod visibility_tests {
         };
         let rotated_target = rotate_body(rectangle_body(10, 5.0, 0.0, 2.0, 2.0));
         let rotated_blocker = rotate_body(rectangle_body(20, 2.5, 0.0, 0.5, 0.8));
-        let rotated = visible_polygonal_intervals((0.0, -5.0), &[rotated_target, rotated_blocker])
+        let rotated = visible_phase3_polygonal_intervals((0.0, -5.0), &[rotated_target, rotated_blocker])
             .expect("rigidly rotated polygon arrangement");
 
         let transform = |point: (f64, f64)| (-point.1, point.0);
