@@ -1338,7 +1338,10 @@ mod tests {
             "relative energy drift after 500 ticks: {relative_drift}"
         );
         assert!(
-            (field.energy() + source.account().remaining_energy() - source.account().initial_energy()).abs() < 1.0e-10
+            (field.energy() + source.account().remaining_energy()
+                - source.account().initial_energy())
+            .abs()
+                < 1.0e-10
         );
     }
 
