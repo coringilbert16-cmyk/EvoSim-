@@ -5420,7 +5420,12 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                         continue;
                     }
                     let run_start = index;
-                    while index + 1 < exposed.len() && exposed[index + 1] {
+                    while index + 1 < exposed.len()
+                        && exposed[index + 1]
+                        // The antipode is a deliberate stable partition, unlike
+                        // tangent cuts where visibility remains unchanged.
+                        && (cuts[index + 1] - 0.5).abs() > 1e-12
+                    {
                         index += 1;
                     }
                     intervals.push((cuts[run_start], cuts[index + 1]));
