@@ -145,7 +145,10 @@ impl SourceDescriptor {
                 SourceClass::MathematicalTest | SourceClass::InPlaneDistributed,
                 SourceGeometry::Disk { .. }
             ) | (SourceClass::ExternalRadiative, SourceGeometry::Point { .. })
-                | (SourceClass::BoundaryEmitter, SourceGeometry::LineSegment { .. })
+                | (
+                    SourceClass::BoundaryEmitter,
+                    SourceGeometry::LineSegment { .. }
+                )
                 | (
                     SourceClass::MaterialOscillator,
                     SourceGeometry::Point { .. } | SourceGeometry::Disk { .. }
