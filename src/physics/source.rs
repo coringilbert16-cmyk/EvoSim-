@@ -486,7 +486,11 @@ mod tests {
                 hotspot_id,
                 SourceProvenance::External { origin_id: 1 },
                 SourceClass::InPlaneDistributed,
-                SourceGeometry::Disk { center_x: 5.0, center_y: 7.0, radius: 2.0 },
+                SourceGeometry::Disk {
+                    center_x: 5.0,
+                    center_y: 7.0,
+                    radius: 2.0
+                },
                 schedule,
                 SourceWaveform::SinglePulse,
                 SourcePowerLaw::TotalPowerPerTick(0.25),
