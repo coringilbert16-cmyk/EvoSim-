@@ -5199,8 +5199,8 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                 continue;
             };
             let same_circle = *previous_sweep >= std::f64::consts::TAU - 1e-10
-                && (current_center.0 - previous_center.0).abs() <= 1e-10
-                && (current_center.1 - previous_center.1).abs() <= 1e-10
+                && (current_center.0 - previous_center.0).hypot(current_center.1 - previous_center.1)
+                    <= 1e-12
                 && (current_radius - previous_radius).abs() <= 1e-10;
             if same_circle {
                 if (*current_unit, *current_part) < (*previous_unit, *previous_part) {
@@ -5656,6 +5656,30 @@ mod source_global_perimeter_tests {
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
         assert_eq!(perimeter.curved.len(), 1);
         assert_eq!(perimeter.curved[0].unit_index, 0);
+    }
+
+    #[test]
+    fn concentric_nested_circles_emit_only_the_outer_boundary() {
+        let body = circle_body(vec![(0, 3.0, 0.0, 0.0), (1, 1.0, 0.0, 0.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        assert_eq!(perimeter.curved.len(), 1);
+        assert_eq!(perimeter.curved[0].unit_index, 0);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap()
+            - 6.0 * std::f64::consts::TAU)
+            .abs()
+            < 1e-9);
+    }
+
+    #[test]
+    fn nearly_coincident_but_distinct_circles_are_not_deduplicated() {
+        let offset = 1e-8;
+        let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, offset, 0.0)]);
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        let exposed_angle = 2.0 * std::f64::consts::PI
+            - 2.0 * (offset / 2.0).acos();
+        let expected = 2.0 * exposed_angle;
+        assert_eq!(perimeter.curved.len(), 2);
+        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-8);
     }
 
     #[test]
