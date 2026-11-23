@@ -1483,10 +1483,7 @@ mod visibility_tests {
 
     #[test]
     fn polygon_visibility_is_deterministic_under_body_reordering_and_winding_reversal() {
-        let polygon_body = |unit_index: usize,
-                            x: f64,
-                            y: f64,
-                            mut vertices: Vec<(f64, f64)>| {
+        let polygon_body = |unit_index: usize, x: f64, y: f64, mut vertices: Vec<(f64, f64)>| {
             let min_x = vertices
                 .iter()
                 .map(|point| point.0)
@@ -1519,36 +1516,20 @@ mod visibility_tests {
                 max_y: y + max_y,
             }
         };
-        let target_vertices = vec![
-            (-1.0, -1.0),
-            (1.0, -1.0),
-            (1.0, 1.0),
-            (-1.0, 1.0),
-        ];
-        let blocker_vertices = vec![
-            (-0.25, -0.4),
-            (0.25, -0.4),
-            (0.25, 0.4),
-            (-0.25, 0.4),
-        ];
-        let reversed = |vertices: &[(f64, f64)]| {
-            vertices.iter().copied().rev().collect::<Vec<_>>()
-        };
+        let target_vertices = vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+        let blocker_vertices = vec![(-0.25, -0.4), (0.25, -0.4), (0.25, 0.4), (-0.25, 0.4)];
+        let reversed = |vertices: &[(f64, f64)]| vertices.iter().copied().rev().collect::<Vec<_>>();
 
         let target = polygon_body(10, 5.0, 0.0, target_vertices.clone());
         let blocker = polygon_body(20, 2.5, 0.0, blocker_vertices.clone());
         let baseline = visible_polygonal_intervals((-5.0, 0.0), &[target, blocker])
             .expect("valid polygon arrangement");
 
-        let blocker_reversed =
-            polygon_body(20, 2.5, 0.0, reversed(&blocker_vertices));
-        let target_reversed =
-            polygon_body(10, 5.0, 0.0, reversed(&target_vertices));
-        let reordered = visible_polygonal_intervals(
-            (-5.0, 0.0),
-            &[blocker_reversed, target_reversed],
-        )
-        .expect("reordered and reversed polygons remain valid");
+        let blocker_reversed = polygon_body(20, 2.5, 0.0, reversed(&blocker_vertices));
+        let target_reversed = polygon_body(10, 5.0, 0.0, reversed(&target_vertices));
+        let reordered =
+            visible_polygonal_intervals((-5.0, 0.0), &[blocker_reversed, target_reversed])
+                .expect("reordered and reversed polygons remain valid");
 
         let canonical = |intervals: &[ExposedBoundaryInterval], target_body_index: usize| {
             let mut segments: Vec<_> = intervals
@@ -1608,11 +1589,8 @@ mod visibility_tests {
         };
         let rotated_target = rotate_body(rectangle_body(10, 5.0, 0.0, 2.0, 2.0));
         let rotated_blocker = rotate_body(rectangle_body(20, 2.5, 0.0, 0.5, 0.8));
-        let rotated = visible_polygonal_intervals(
-            (0.0, -5.0),
-            &[rotated_target, rotated_blocker],
-        )
-        .expect("rigidly rotated polygon arrangement");
+        let rotated = visible_polygonal_intervals((0.0, -5.0), &[rotated_target, rotated_blocker])
+            .expect("rigidly rotated polygon arrangement");
 
         let transform = |point: (f64, f64)| (-point.1, point.0);
         let canonical = |intervals: &[ExposedBoundaryInterval], transform_points: bool| {
