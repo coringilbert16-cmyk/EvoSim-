@@ -2173,7 +2173,13 @@ mod tests {
     }
     #[test]
     fn forced_multi_source_runs_replay_field_work_and_accounts_bit_for_bit() {
-        fn run_replay() -> (WaveField, SourceInstance, SourceInstance, Vec<[f64; 2]>, f64) {
+        fn run_replay() -> (
+            WaveField,
+            SourceInstance,
+            SourceInstance,
+            Vec<[f64; 2]>,
+            f64,
+        ) {
             let mut field = solver(65, 65, 1.0, 2);
             field.configure_absorbing_boundary(8, 0.04).unwrap();
             let mut first_source = test_source(1_000.0, 260);
@@ -2219,7 +2225,13 @@ mod tests {
                 work_history.push([works[0], works[1]]);
             }
 
-            (field, first_source, second_source, work_history, initial_field_energy)
+            (
+                field,
+                first_source,
+                second_source,
+                work_history,
+                initial_field_energy,
+            )
         }
 
         fn assert_bits_equal(left: &[f64], right: &[f64], label: &str) {
