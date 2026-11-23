@@ -99,10 +99,7 @@ mod tests {
         let scaled_area = checked_source_footprint_area(&[scaled]).unwrap();
 
         assert!((base_area.square_units - 8.0).abs() <= base_area.uncertainty + 1.0e-9);
-        assert!(
-            (translated_area.square_units - 8.0).abs()
-                <= translated_area.uncertainty + 1.0e-6
-        );
+        assert!((translated_area.square_units - 8.0).abs() <= translated_area.uncertainty + 1.0e-6);
         assert!((scaled_area.square_units - 800.0).abs() <= scaled_area.uncertainty + 1.0e-7);
     }
 
