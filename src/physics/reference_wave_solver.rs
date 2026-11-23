@@ -504,9 +504,7 @@ impl WaveField {
         source: &mut SourceInstance,
         forcing: &[f64],
     ) -> Result<f64, WaveFieldError> {
-        if forcing.len() != self.current.len()
-            || forcing.iter().any(|value| !value.is_finite())
-        {
+        if forcing.len() != self.current.len() || forcing.iter().any(|value| !value.is_finite()) {
             return Err(WaveFieldError::InvalidProfile);
         }
         for y in 0..self.height {
@@ -538,10 +536,8 @@ impl WaveField {
 
                 let midpoint_velocity = (next[index] - self.previous[index]) / (2.0 * dt);
                 source_work_sum += midpoint_velocity * forcing[index];
-                absorbed_sum += self.boundary_damping[index]
-                    * dt
-                    * midpoint_velocity
-                    * midpoint_velocity;
+                absorbed_sum +=
+                    self.boundary_damping[index] * dt * midpoint_velocity * midpoint_velocity;
             }
         }
 
@@ -549,10 +545,8 @@ impl WaveField {
             return Err(WaveFieldError::InvalidState);
         }
 
-        let source_work =
-            self.energy_normalization * dt * self.spacing.powi(2) * source_work_sum;
-        let absorbed_this_step =
-            self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
+        let source_work = self.energy_normalization * dt * self.spacing.powi(2) * source_work_sum;
+        let absorbed_this_step = self.energy_normalization * self.spacing.powi(2) * absorbed_sum;
         let next_energy = self.discrete_energy(&self.current, &next);
         let measured_change = next_energy - old_energy;
         let expected_change = source_work - absorbed_this_step;
@@ -842,7 +836,10 @@ mod tests {
         let work = field.advance_forced_substep(&mut source, &forcing).unwrap();
         let after = field.energy();
 
-        assert!(work < 0.0, "expected signed work to return energy, got {work}");
+        assert!(
+            work < 0.0,
+            "expected signed work to return energy, got {work}"
+        );
         assert!((after - before - work).abs() < 1.0e-10);
         assert!((source.account().remaining_energy() + work).abs() < 1.0e-10);
     }
@@ -866,7 +863,10 @@ mod tests {
         let absorbed = field.boundary_absorbed_energy() - absorbed_before;
 
         assert!(work > 0.0);
-        assert!(absorbed > 0.0, "the forced region overlaps the sponge layer");
+        assert!(
+            absorbed > 0.0,
+            "the forced region overlaps the sponge layer"
+        );
         assert!((after - before - work + absorbed).abs() < 1.0e-10);
     }
 
