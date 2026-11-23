@@ -36,6 +36,8 @@ This is geometry only. No source power, field coupling, receiver material respon
 
 ## Required event completeness
 
+A source on or inside a solid target is not a receiver: the source-facing test excludes every outward boundary interval and the query returns `Some(empty)`. This is deliberate non-reception, distinct from malformed geometry, which returns `None`.
+
 For a straight target edge, visibility can change only at:
 
 1. Target edge endpoints.
@@ -66,7 +68,7 @@ The implementation must include analytic expected results for:
 - A polygon vertex or finite-line endpoint producing the correct visibility transition.
 - A tangent ray through a polygon vertex or finite-line endpoint retained as an exact cut.
 - Straight-boundary intersections and collinear overlaps, including endpoint ownership.
-- Source-on-boundary and source-inside-target cases failing closed or following an explicitly documented non-reception rule.
+- Source-on-boundary and source-inside-target cases returning no receiving intervals (explicit non-reception rule; not a geometry error).
 - Determinism under constituent reordering and polygon winding reversal.
 - Translation and rotation invariance.
 - Conservative candidate pruning compared against an unpruned reference path.
