@@ -21,8 +21,7 @@ fn cross(a: (f64, f64), b: (f64, f64)) -> f64 {
 }
 
 fn interval_length(interval: ExposedBoundaryInterval) -> Option<f64> {
-    let length = (interval.end.0 - interval.start.0)
-        .hypot(interval.end.1 - interval.start.1);
+    let length = (interval.end.0 - interval.start.0).hypot(interval.end.1 - interval.start.1);
     (length.is_finite() && length > 0.0).then_some(length)
 }
 
@@ -47,10 +46,7 @@ fn has_positive_collinear_overlap(
         second.start.0 - first.start.0,
         second.start.1 - first.start.1,
     );
-    let offset_end = (
-        second.end.0 - first.start.0,
-        second.end.1 - first.start.1,
-    );
+    let offset_end = (second.end.0 - first.start.0, second.end.1 - first.start.1);
     if [
         first_direction.0,
         first_direction.1,
@@ -67,8 +63,7 @@ fn has_positive_collinear_overlap(
         return None;
     }
 
-    let parallel_tolerance =
-        tolerance / first_length.max(second_length).max(tolerance);
+    let parallel_tolerance = tolerance / first_length.max(second_length).max(tolerance);
     if cross(first_direction, second_direction).abs() > parallel_tolerance
         || cross(first_direction, offset_start).abs() > tolerance
         || cross(first_direction, offset_end).abs() > tolerance
@@ -76,12 +71,10 @@ fn has_positive_collinear_overlap(
         return Some(false);
     }
 
-    let second_start = offset_start.0 * first_direction.0
-        + offset_start.1 * first_direction.1;
-    let second_end = offset_end.0 * first_direction.0
-        + offset_end.1 * first_direction.1;
-    let overlap = first_length.min(second_start.max(second_end))
-        - 0.0_f64.max(second_start.min(second_end));
+    let second_start = offset_start.0 * first_direction.0 + offset_start.1 * first_direction.1;
+    let second_end = offset_end.0 * first_direction.0 + offset_end.1 * first_direction.1;
+    let overlap =
+        first_length.min(second_start.max(second_end)) - 0.0_f64.max(second_start.min(second_end));
     Some(overlap > tolerance)
 }
 
@@ -123,10 +116,7 @@ pub(crate) fn checked_exposed_boundary_length(
     let mut characteristic_length: f64 = 0.0;
     for interval in intervals {
         let length = interval_length(*interval)?;
-        let normal_length = interval
-            .outward_normal
-            .0
-            .hypot(interval.outward_normal.1);
+        let normal_length = interval.outward_normal.0.hypot(interval.outward_normal.1);
         if !normal_length.is_finite() || (normal_length - 1.0).abs() > UNIT_TOLERANCE {
             return None;
         }
@@ -134,11 +124,9 @@ pub(crate) fn checked_exposed_boundary_length(
             (interval.end.0 - interval.start.0) / length,
             (interval.end.1 - interval.start.1) / length,
         );
-        let normal_dot_tangent = interval.outward_normal.0 * tangent.0
-            + interval.outward_normal.1 * tangent.1;
-        if !normal_dot_tangent.is_finite()
-            || normal_dot_tangent.abs() > UNIT_TOLERANCE
-        {
+        let normal_dot_tangent =
+            interval.outward_normal.0 * tangent.0 + interval.outward_normal.1 * tangent.1;
+        if !normal_dot_tangent.is_finite() || normal_dot_tangent.abs() > UNIT_TOLERANCE {
             return None;
         }
         characteristic_length = characteristic_length.max(length);
@@ -171,8 +159,8 @@ pub(crate) fn checked_exposed_boundary_length(
         compensation = (next - sum) - adjusted;
         sum = next;
     }
-    let uncertainty = linear_tolerance * intervals.len() as f64
-        + f64::EPSILON * ROUNDING_ULPS * sum.abs();
+    let uncertainty =
+        linear_tolerance * intervals.len() as f64 + f64::EPSILON * ROUNDING_ULPS * sum.abs();
     if !sum.is_finite() || !uncertainty.is_finite() || sum <= uncertainty {
         return None;
     }
@@ -236,7 +224,9 @@ mod tests {
             interval((1.0, 0.0), (2.0, 0.0), (0.0, -1.0), 1),
         ];
         assert_eq!(
-            checked_exposed_boundary_length(&touching).unwrap().world_units,
+            checked_exposed_boundary_length(&touching)
+                .unwrap()
+                .world_units,
             2.0
         );
 
@@ -265,18 +255,34 @@ mod tests {
     #[test]
     fn malformed_intervals_fail_closed() {
         assert!(checked_exposed_boundary_length(&[]).is_none());
-        assert!(checked_exposed_boundary_length(&[
-            interval((0.0, 0.0), (0.0, 0.0), (0.0, 1.0), 0)
-        ]).is_none());
-        assert!(checked_exposed_boundary_length(&[
-            interval((0.0, 0.0), (1.0, 0.0), (0.0, 2.0), 0)
-        ]).is_none());
-        assert!(checked_exposed_boundary_length(&[
-            interval((0.0, 0.0), (1.0, 0.0), (1.0, 0.0), 0)
-        ]).is_none());
-        assert!(checked_exposed_boundary_length(&[
-            interval((0.0, 0.0), (f64::INFINITY, 0.0), (0.0, 1.0), 0)
-        ]).is_none());
+        assert!(checked_exposed_boundary_length(&[interval(
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 1.0),
+            0
+        )])
+        .is_none());
+        assert!(checked_exposed_boundary_length(&[interval(
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 2.0),
+            0
+        )])
+        .is_none());
+        assert!(checked_exposed_boundary_length(&[interval(
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (1.0, 0.0),
+            0
+        )])
+        .is_none());
+        assert!(checked_exposed_boundary_length(&[interval(
+            (0.0, 0.0),
+            (f64::INFINITY, 0.0),
+            (0.0, 1.0),
+            0
+        )])
+        .is_none());
     }
 
     #[test]
@@ -313,5 +319,4 @@ mod tests {
         assert!((forward.world_units - 2.0).abs() < 1e-12);
         assert_eq!(forward.world_units, reverse.world_units);
     }
-
 }

@@ -70,15 +70,15 @@ mod molecular_layout;
 mod organism_geometry;
 #[path = "organism/viability.rs"]
 mod organism_viability;
+#[path = "geometry/phase3_boundary.rs"]
+#[allow(dead_code)] // Consumed by the next Phase 3 integration slice.
+mod phase3_boundary;
 #[path = "geometry/phase3_geometry.rs"]
 #[allow(dead_code)]
 // Strict Phase 3 reference geometry contract; integrated in later Phase 3 stages.
 mod phase3_geometry;
 #[path = "geometry/phase3_numeric.rs"]
 mod phase3_numeric;
-#[path = "geometry/phase3_boundary.rs"]
-#[allow(dead_code)] // Consumed by the next Phase 3 integration slice.
-mod phase3_boundary;
 #[path = "geometry/phase3_polygon.rs"]
 mod phase3_polygon;
 #[path = "geometry/physical_geometry.rs"]
