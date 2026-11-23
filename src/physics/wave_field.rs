@@ -1204,6 +1204,48 @@ mod tests {
     }
 
     #[test]
+    fn standing_mode_remains_undisturbed_interior_to_absorbing_edges() {
+        let mut field = solver(321, 321, 1.0, 2);
+        field.configure_absorbing_boundary(72, 0.2).unwrap();
+
+        let length = 320.0;
+        let mode_x = 21;
+        let mode_y = 17;
+        let mode = mode_profile(321, 321, 1.0, length, mode_x, mode_y);
+        let spatial_omega = spatial_mode_frequency(1.0, 1.0, length, mode_x, mode_y);
+        let temporal_omega =
+            (1.0 - 0.5 * (spatial_omega * field.time_step()).powi(2)).acos()
+                / field.time_step();
+
+        field.current.clone_from(&mode);
+        let previous_phase = (temporal_omega * field.time_step()).cos();
+        for (previous, value) in field.previous.iter_mut().zip(mode.iter()) {
+            *previous = *value * previous_phase;
+        }
+
+        field.advance_ticks(40).unwrap();
+        let expected_factor = (temporal_omega * 40.0).cos();
+        let mut maximum_error = 0.0_f64;
+        for y in 158..=162 {
+            for x in 158..=162 {
+                let index = field.index(x, y);
+                maximum_error = maximum_error.max(
+                    (field.current[index] - mode[index] * expected_factor).abs(),
+                );
+            }
+        }
+
+        assert!(
+            maximum_error < 1.0e-10,
+            "interior standing-mode error before boundary influence: {maximum_error}"
+        );
+        assert!(
+            field.boundary_absorbed_energy() > 0.0,
+            "the outer sponge should absorb energy while the interior mode remains undisturbed"
+        );
+    }
+
+    #[test]
     fn empty_space_energy_remains_bounded_over_a_long_reflection_run() {
         let mut field = solver(81, 81, 1.0, 2);
         let mut source = FiniteEnergySource::new(10.0).unwrap();
@@ -1504,6 +1546,9 @@ mod tests {
             (std::f64::consts::FRAC_PI_4, 0.18),
             (std::f64::consts::FRAC_PI_4, 0.30),
             (std::f64::consts::FRAC_PI_4, 0.45),
+            (75.0_f64.to_radians(), 0.18),
+            (75.0_f64.to_radians(), 0.30),
+            (75.0_f64.to_radians(), 0.45),
         ];
 
         for (angle, wave_number) in cases {
