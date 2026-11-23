@@ -139,19 +139,18 @@ impl SourceDescriptor {
             }
             _ => false,
         };
-        let valid_geometry = match (class, geometry) {
+        let valid_geometry = matches!(
+            (class, geometry),
             (
                 SourceClass::MathematicalTest | SourceClass::InPlaneDistributed,
-                SourceGeometry::Disk { .. },
-            ) => true,
-            (SourceClass::ExternalRadiative, SourceGeometry::Point { .. }) => true,
-            (SourceClass::BoundaryEmitter, SourceGeometry::LineSegment { .. }) => true,
-            (
-                SourceClass::MaterialOscillator,
-                SourceGeometry::Point { .. } | SourceGeometry::Disk { .. },
-            ) => true,
-            _ => false,
-        };
+                SourceGeometry::Disk { .. }
+            ) | (SourceClass::ExternalRadiative, SourceGeometry::Point { .. })
+                | (SourceClass::BoundaryEmitter, SourceGeometry::LineSegment { .. })
+                | (
+                    SourceClass::MaterialOscillator,
+                    SourceGeometry::Point { .. } | SourceGeometry::Disk { .. }
+                )
+        );
         if !valid_provenance
             || !valid_geometry
             || !valid_geometry_values(geometry)
@@ -546,7 +545,7 @@ mod tests {
 
     #[test]
     fn source_account_rejects_overdraw_without_mutation() {
-        let mut account = SourceEnergyAccount::new(SourceId::new(3).unwrap(), 1.0).unwrap();
+        let account = SourceEnergyAccount::new(SourceId::new(3).unwrap(), 1.0).unwrap();
         assert!(matches!(
             account.prepare_field_transfer(1.5),
             Err(SourceAccountError::InsufficientEnergy)
