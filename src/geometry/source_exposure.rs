@@ -6797,21 +6797,12 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-
-
-    #[test]
     fn externally_tangent_circles_keep_both_complete_outer_boundaries() {
         let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, 2.0, 0.0)]);
         let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
         let expected = 4.0 * std::f64::consts::PI;
         assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
     }
-
-    #[test]
-
-
-    #[test]
-
 
     #[test]
 
