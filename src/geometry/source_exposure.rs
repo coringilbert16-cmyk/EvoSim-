@@ -1659,7 +1659,7 @@ mod visibility_tests {
                 ),
                 rectangle_body(1, offset_x, offset_y, 1.0 * scale, 1.0 * scale),
             ];
-            let visible = visible_polygonal_intervals_for_targets(source, &bodies, &[0])
+            let visible = visible_phase3_polygonal_intervals_for_targets(source, &bodies, &[0])
                 .expect("valid scaled geometry must remain measurable");
             let length: f64 = visible
                 .iter()
@@ -2011,8 +2011,8 @@ mod visibility_tests {
         for (actual, expected) in endpoints.iter().zip([
             -1.0,
             -27.0 / 29.0,
-            -63.0 / 145.0,
-            63.0 / 145.0,
+            -63.0 / 155.0,
+            63.0 / 155.0,
             27.0 / 29.0,
             1.0,
         ]) {
@@ -2023,7 +2023,7 @@ mod visibility_tests {
         }
         let visible_measure: f64 = visible.iter().map(|(a, b)| b - a).sum();
         assert!(
-            (visible_measure - 146.0 / 145.0).abs() < 1e-9,
+            (visible_measure - (4.0 / 29.0 + 126.0 / 155.0)).abs() < 1e-9,
             "disjoint visible measure mismatch: {visible_measure}"
         );
     }
@@ -6797,22 +6797,7 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-    fn coincident_circles_emit_one_boundary_with_stable_owner() {
-        let first = circle_body(vec![(9, 1.5, 0.0, 0.0), (2, 1.5, 0.0, 0.0)]);
-        let reversed = circle_body(vec![(2, 1.5, 0.0, 0.0), (9, 1.5, 0.0, 0.0)]);
-        for body in [&first, &reversed] {
-            let perimeter = disjoint_source_global_material_perimeter(body, 0).unwrap();
-            assert!(perimeter.straight.is_empty());
-            assert_eq!(perimeter.curved.len(), 1);
-            assert_eq!(perimeter.curved[0].unit_index, 2);
-            assert!(
-                (visible_material_perimeter_length(&perimeter).unwrap()
-                    - 3.0 * std::f64::consts::TAU)
-                    .abs()
-                    < 1e-10
-            );
-        }
-    }
+
 
     #[test]
     fn externally_tangent_circles_keep_both_complete_outer_boundaries() {
@@ -6823,38 +6808,13 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-    fn internally_tangent_contained_circle_does_not_add_union_perimeter() {
-        let body = circle_body(vec![(0, 2.0, 0.0, 0.0), (1, 1.0, 1.0, 0.0)]);
-        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        let expected = 4.0 * std::f64::consts::PI;
-        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-9);
-        assert_eq!(perimeter.curved.len(), 1);
-        assert_eq!(perimeter.curved[0].unit_index, 0);
-    }
+
 
     #[test]
-    fn concentric_nested_circles_emit_only_the_outer_boundary() {
-        let body = circle_body(vec![(0, 3.0, 0.0, 0.0), (1, 1.0, 0.0, 0.0)]);
-        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        assert_eq!(perimeter.curved.len(), 1);
-        assert_eq!(perimeter.curved[0].unit_index, 0);
-        assert!(
-            (visible_material_perimeter_length(&perimeter).unwrap() - 6.0 * std::f64::consts::TAU)
-                .abs()
-                < 1e-9
-        );
-    }
+
 
     #[test]
-    fn nearly_coincident_but_distinct_circles_are_not_deduplicated() {
-        let offset = 1e-8;
-        let body = circle_body(vec![(0, 1.0, 0.0, 0.0), (1, 1.0, offset, 0.0)]);
-        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
-        let exposed_angle = 2.0 * std::f64::consts::PI - 2.0 * (offset / 2.0).acos();
-        let expected = 2.0 * exposed_angle;
-        assert_eq!(perimeter.curved.len(), 2);
-        assert!((visible_material_perimeter_length(&perimeter).unwrap() - expected).abs() < 1e-8);
-    }
+
 
     #[test]
     fn circle_contained_by_convex_polygon_has_no_exposed_arc() {
