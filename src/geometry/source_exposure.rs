@@ -1853,8 +1853,10 @@ mod visibility_tests {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
 
         for source in [(4.0, 0.0), (5.0, 0.0)] {
-            let intervals = visible_phase3_polygonal_intervals(source, std::slice::from_ref(&target))
-                .expect("source-on-boundary and source-inside cases are valid but non-receiving");
+            let intervals =
+                visible_phase3_polygonal_intervals(source, std::slice::from_ref(&target)).expect(
+                    "source-on-boundary and source-inside cases are valid but non-receiving",
+                );
             assert!(
                 intervals.is_empty(),
                 "a source on or inside a solid target must produce no outward-facing receiving interval: source={source:?}, intervals={intervals:?}"
@@ -2218,8 +2220,9 @@ mod visibility_tests {
         };
         let rotated_target = rotate_body(rectangle_body(10, 5.0, 0.0, 2.0, 2.0));
         let rotated_blocker = rotate_body(rectangle_body(20, 2.5, 0.0, 0.5, 0.8));
-        let rotated = visible_phase3_polygonal_intervals((0.0, -5.0), &[rotated_target, rotated_blocker])
-            .expect("rigidly rotated polygon arrangement");
+        let rotated =
+            visible_phase3_polygonal_intervals((0.0, -5.0), &[rotated_target, rotated_blocker])
+                .expect("rigidly rotated polygon arrangement");
 
         let transform = |point: (f64, f64)| (-point.1, point.0);
         let canonical = |intervals: &[ExposedBoundaryInterval], transform_points: bool| {
@@ -4506,8 +4509,7 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
                     .enumerate()
                     .map(|(i, &(x, y))| {
                         let (nx, ny) = vertices[(i + 1) % vertices.len()];
-                        (x - origin.0) * (ny - origin.1)
-                            - (nx - origin.0) * (y - origin.1)
+                        (x - origin.0) * (ny - origin.1) - (nx - origin.0) * (y - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
@@ -4849,8 +4851,7 @@ fn parallel_exposure_with_exact_intersections(
                     .enumerate()
                     .map(|(index, &(x, y))| {
                         let (nx, ny) = vertices[(index + 1) % vertices.len()];
-                        (x - origin.0) * (ny - origin.1)
-                            - (nx - origin.0) * (y - origin.1)
+                        (x - origin.0) * (ny - origin.1) - (nx - origin.0) * (y - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice.abs() <= 1e-12 {
@@ -6301,8 +6302,7 @@ pub(crate) fn disjoint_source_global_material_perimeter(
                     .enumerate()
                     .map(|(index, &point)| {
                         let next = vertices[(index + 1) % vertices.len()];
-                        (point.0 - origin.0) * (next.1 - origin.1)
-                            - (next.0 - origin.0) * (point.1 - origin.1)
+                        (point.0 - origin.0) * (next.1 - origin.1) - (next.0 - origin.0) * (point.1 - origin.1)
                     })
                     .sum();
                 if !area_twice.is_finite() || area_twice == 0.0 {
