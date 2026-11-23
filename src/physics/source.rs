@@ -140,7 +140,10 @@ impl SourceDescriptor {
             _ => false,
         };
         let valid_geometry = match (class, geometry) {
-            (SourceClass::MathematicalTest | SourceClass::InPlaneDistributed, SourceGeometry::Disk { .. }) => true,
+            (
+                SourceClass::MathematicalTest | SourceClass::InPlaneDistributed,
+                SourceGeometry::Disk { .. },
+            ) => true,
             (SourceClass::ExternalRadiative, SourceGeometry::Point { .. }) => true,
             (SourceClass::BoundaryEmitter, SourceGeometry::LineSegment { .. }) => true,
             (
@@ -503,7 +506,8 @@ mod tests {
                 phase_cycles: 0.0
             },
             SourcePowerLaw::TotalPowerPerTick(1.0),
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     #[test]
