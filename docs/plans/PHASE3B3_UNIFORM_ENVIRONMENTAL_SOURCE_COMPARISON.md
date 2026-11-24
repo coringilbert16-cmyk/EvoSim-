@@ -58,6 +58,40 @@ The profile's integrated supply must remain invariant under spatial refinement a
 
 The current isolated reciprocal model requires a zero-valued outer grid ring and normalizes profiles over its computational grid. Before using it for this comparison, establish whether that numerical boundary treatment can represent the required unbounded-plane reference to the needed accuracy. If not, extend the isolated solver with a validated unbounded-domain reference/absorbing numerical treatment; do not interpret a finite-box boundary as a physical wall.
 
+### 4.1 Candidate B uniform reciprocal profile — first implementation slice
+
+For a finite rectangular source-accounting footprint with area \(A_\Omega\), use the normalized profile
+
+\[
+g_\Omega(x,y)=
+\begin{cases}
+1/A_\Omega,&(x,y)\in\Omega,\\
+0,&\text{otherwise},
+\end{cases}
+\qquad
+\int_\Omega g_\Omega\,dA=1.
+\]
+
+On a uniform grid, the isolated implementation represents \(\Omega\) as an interior rectangle of cell indices and sets each covered cell to \(1/(N_\Omega\Delta A)\), where \(\Delta A=\Delta x^2\) and \(N_\Omega\) is the number of covered cells. The footprint must not include the outer numerical boundary ring. Translation and refinement tests must preserve the integrated profile and physical footprint area.
+
+This profile makes the reciprocal field acceleration spatially uniform over \(\Omega\) for a given oscillator gap. The source coordinate remains one coherent global generalized coordinate coupled to the area-weighted field average; it is **not** a set of independent local emitters. That distinction is part of the model definition, not an implementation shortcut to hide.
+
+For the environmental account, each tick makes available
+
+\[
+\Delta E_{\mathrm{env},n}=A_\Omega q_{\mathrm{env}}(t_n)\Delta t.
+\]
+
+This replenishes the finite account. It does not prescribe the oscillator force or require the oscillator to accept all available energy. The generalized-force waveform remains an independent constitutive input; its signed discrete work is settled against the account. Do not infer force by dividing environmental power by oscillator velocity.
+
+The first profile helper and its unit tests are isolated mathematical groundwork only. It does not establish the environmental force law, select the schedule calibration, or resolve the numerical boundary.
+
+### 4.2 Numerical-domain limitation remains open
+
+The reciprocal solver currently fixes the outer grid ring to zero. That is a finite-box Dirichlet boundary and can reflect outgoing waves. A uniform source profile does not remove this artifact and does not make the solver an infinite-plane model.
+
+Before any source-model comparison, validate a numerical treatment against an independent unbounded-plane reference. Candidate approaches may include a sufficiently validated absorbing layer or another transparent-boundary approximation, but no method is selected by this note. Tests must quantify reflected energy, phase/amplitude error, and convergence as the boundary is moved farther from the source footprint. The finite source-accounting footprint and the numerical observation/truncation domain must remain separately named and measured.
+
 ## 5. Experiment stages
 
 ### Stage 1 — derive and freeze the common input protocol
@@ -124,6 +158,10 @@ If both pass, compare fidelity to the intended physical meaning, robustness acro
 
 This experiment does not implement a real sun, hotspot, powered material oscillator in live simulation, receiver absorption, heat/material settlement, chemistry, organisms, GUI changes, or production energy-ledger migration. It does not select numerical solar minimum/maximum values without calibration evidence.
 
-## 8. Current blocker / first implementation gate
+## 8. Current blocker / next implementation gates
 
-Candidate A already has exact signed field-work accounting. Candidate B already has a conservative autonomous source oscillator and a field-coupling invariant. **Neither existing implementation yet defines how the prescribed uniform environmental supply is coupled into its source state.** The first work item is therefore to derive and test the external supply port, especially the driven-oscillator work term for Model B. Do not begin the head-to-head numerical sweep until this port is mathematically closed.
+Candidate B now has an isolated normalized rectangular uniform-profile helper, with tests for uniformity, translation, refinement, and exclusion of the outer numerical boundary ring. This establishes the spatial weighting only. It does not establish a physical source law or an infinite-plane numerical solution.
+
+The external generalized-force port and signed-work settlement have isolated transaction tests, including positive work, returned work, zero work, invalid input, and insufficient-budget rollback. The environmental replenishment method is accounting-only; the authoritative area and schedule integration remain to be wired into a controlled experiment harness.
+
+**Remaining gates before the head-to-head sweep:** (1) validate the uniform profile against a physically defined accounting footprint and shared area budget; (2) resolve and independently validate the finite-grid boundary treatment against an unbounded-plane reference; (3) freeze the deterministic schedule, drive waveform, account replenishment order, and matched initial conditions; (4) verify the complete energy identity under those conditions. Do not begin the A/B sweep or production integration until all gates pass.
