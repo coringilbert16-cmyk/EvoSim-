@@ -302,7 +302,7 @@ impl AdaptiveSpatialGrid {
         }
 
         let parent_bounds = self.bounds_for_key(parent);
-        for (neighbor_key, _) in self.leaves.iter() {
+        for neighbor_key in self.leaves.keys() {
             if children.contains(neighbor_key) {
                 continue;
             }
