@@ -1140,7 +1140,9 @@ mod tests {
             1.0,
         )
         .unwrap();
-        farther_boundary.configure_absorbing_boundary(8, 5.0).unwrap();
+        farther_boundary
+            .configure_absorbing_boundary(8, 5.0)
+            .unwrap();
         let mut expanded = ReciprocalSourceField::new(
             121,
             121,
