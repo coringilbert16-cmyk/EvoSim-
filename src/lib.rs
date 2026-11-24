@@ -20,6 +20,11 @@ mod reference_wave_solver;
 #[allow(dead_code)]
 mod reciprocal_source_field;
 
+// Isolated world-generated uniform ambient resonance mode; not production-integrated.
+#[path = "physics/world_generated_ambient_mode.rs"]
+#[allow(dead_code)]
+mod world_generated_ambient_mode;
+
 // Core environment, resources, and physical material/structure.
 #[path = "organism/developmental_blueprint.rs"]
 mod developmental_blueprint;
