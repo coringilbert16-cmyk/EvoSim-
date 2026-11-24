@@ -439,5 +439,6 @@ The harness checks:
 3. Source-free total energy conservation over 500 implicit-midpoint steps.
 4. Driven, coupled total-energy reconciliation: the only net external work is the signed world-drive integral `sum(dt * s_world * q_t_midpoint)`. Internal material exchange is not added to world generation, and the coupled oscillator is not clamped back to its uncoupled target trajectory.
 5. The intrinsic drive recovers the prescribed uncoupled reference trajectory with second-order convergence under time-step halving, while its signed work closes the oscillator energy balance.
+6. Three nested accounting patches close their local energy balance using the discrete outward field flux and signed world-drive work. The patch energy assigns half of each adjacent field-gradient edge to each neighboring cell; material exchange cancels pointwise and is not counted as external work.
 
 The workflow on the parent branch now conditionally runs this test module when the file is present, so the stacked PR #438 executes it without making the parent PR #437 depend on a file that exists only in the child PR. The test result is pending exact-head CI. This is a finite-dimensional reference only: it does not establish the continuum interface limit, a production integrator, a physical coupling coefficient, or a selected world-generation law. Production integration remains blocked.
