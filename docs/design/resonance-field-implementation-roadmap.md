@@ -231,7 +231,7 @@ The historical Phase 3B work established reusable mathematics and accounting inf
 
 These results remain available as research and reusable code where appropriate. They do **not** authorize or require production Sun, hotspot, or powered-material-oscillator sources. The approved ambient-energy model supersedes the old three-source plan. Do not continue Phase 3B.3, derive its source classes, or repeat its completed numerical work.
 
-#### Phase 3C — Ambient background and spatial field integration: NEXT
+#### Phase 3C — Ambient background and spatial field integration: IN PROGRESS — adaptive numerical verification gate
 
 **Goal:** Integrate the approved ambient background and the validated finite-speed disturbance physics into the live simulation as one persistent resonance field, using the approved adaptive spatial-grid architecture.
 
@@ -239,10 +239,19 @@ These results remain available as research and reusable code where appropriate. 
 1. **Reuse the validated numerical core.** The reusable leapfrog reference copy is `src/physics/reference_wave_solver.rs` (extracted from PR #410 and retained on main through the Phase 3B work). Preserve its discrete energy invariant, CFL condition, and accounted computational outflow. Do not rebuild it or repeat propagation/convergence experiments.
 2. **Preserve the approved ambient background.** Use the existing 24,000-tick/440-cycle schedule and 10 → 1 → 10 cycle-averaged energy envelope. The background remains spatially uniform; the 250 × 250 area is inventory bookkeeping only. Preserve opening/current/generated/withdrawn accounting. No Sun object, external injector, hotspot injector, powered material oscillator, or extra buffer is introduced.
 3. **Compose ambient and disturbance state correctly.** The total displacement is the ambient carrier plus the spatial disturbance. Retain the validated cross-energy, cross-flux, and signed world-drive terms; never add the two energy inventories naïvely. The periodic amplitude correction now makes the carrier-averaged total oscillator energy match the declared envelope exactly.
-4. **Implement the production adaptive spatial grid.** Keep persistent multi-frequency field state in physical coordinates, refine/coarsen resolution according to field variation, and interpolate queries at arbitrary positions. Use the uniform-grid leapfrog solver as the numerical reference; do not turn its fixed dense computational window into the production world or a physical boundary. Preserve conservative energy/flux transfer across refinement interfaces.
+4. **Implement and verify the adaptive spatial operator.** The sparse balanced quadtree, conservative regridding transactions, and fixed-mesh leapfrog evolution are implemented (PR #441); repeated refine/coarsen profiles passed (PR #442), and adaptive/reference comparisons passed their stated bounds (PR #443). PR #444 exposed a spatial-consistency defect in the original two-point coarse/fine flux. A symmetric variational multipoint replacement is now under investigation. Do not treat the adaptive operator as validated until affine patch preservation, energy conservation, convergence, and reference comparisons all pass.
 5. **Integrate with the live simulation clock.** Advance field phase and propagation from logical ticks, independent of runtime pacing. Persist field state wherever the simulation persists its world state.
 6. **Expose physical field queries.** Sample at actual positions and supported material boundaries using the existing geometry foundation. Unsupported geometry remains fail-closed; no centroid or nearest-point shortcuts.
 7. **Run only focused integration checks.** Verify deterministic tick advancement, ambient schedule/accounting, adaptive-grid conservation at refinement interfaces, and agreement with the established uniform-grid reference over the existing validated envelope. Do not rerun the broad Phase 2 validation suite or launch exploratory parameter sweeps.
+
+**Current verification gate — updated 2026-11-24:**
+
+- PR #441 merged: adaptive quadtree, conservative fixed-mesh leapfrog evolution, CFL substeps, and energy-constrained refine/coarsen transactions are implemented but remain isolated from live simulation ticks.
+- PR #442 merged: repeated refine/advance/coarsen tests passed for Gaussian, anisotropic, radial-ring, and oscillatory wave profiles.
+- PR #443 merged: the uniform adaptive mesh matched the uniform reference to the test tolerance; locally refined cases stayed within the explicitly tested error bound. This was bounded agreement, not a convergence-order proof.
+- PR #444 is the active investigation. Its corrected three-resolution continuum-mode test passes. Its affine patch test demonstrated that the original two-point coarse/fine flux is not spatially consistent: a linear field changed by 0.005 in the reported cell after one substep.
+- The active correction replaces nonuniform-mesh two-point interface fluxes with a symmetric variational multipoint stiffness operator. The operator is assembled from face-endpoint linear triangles with massless vertex degrees of freedom statically condensed. Uniform meshes retain the existing two-point stencil to preserve the validated reference comparison. The new formulation must still pass affine patch, energy-drift, convergence, locally refined/reference, regridding, and full repository CI checks.
+- **Live integration remains blocked.** Do not connect the field to Simulation logical ticks, ambient composition, material queries, or energy settlement until the corrected operator is validated and its numerical behavior is documented.
 
 **Phase 3C exit criteria:**
 - The live simulation owns and advances a persistent adaptive spatial resonance field.
@@ -390,9 +399,9 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 **Phase 3C implementation started:** PR #440 adds the periodic envelope-kinetic amplitude correction and the combined ambient/disturbance displacement, energy, cross-flux, and world-drive composition API in production Rust. These use the already completed Phase 3B.3 calculations; no propagation experiment was repeated.
 
-**Current production gap:** The validated leapfrog solver is still isolated from the live simulation, and the production adaptive spatial-grid adapter has not yet been implemented. The ambient schedule and composition contract are now in code. The remaining work is the adaptive field data structure, conservative refinement-interface transfer, and live tick/query integration—not more propagation derivation or source-model research.
+**Current production gap:** The ambient schedule and ambient/disturbance composition contract are implemented, and the adaptive grid/regridding foundation exists. The adaptive solver is still isolated from live simulation ticks. The original two-point coarse/fine operator failed the affine patch test; a symmetric variational multipoint replacement is under validation. The remaining Phase 3C work is to establish adaptive numerical correctness, then integrate persistent field state with logical ticks, queries, and unified accounting—not to repeat Phase 2 propagation research.
 
-**Next action — Phase 3C:** Build the adaptive spatial-grid adapter around the validated leapfrog update and connect it to the live simulation tick. Use the uniform reference solver as the comparison authority. Do not rebuild the propagation solver, rerun Phase 2 tests, revive Sun/hotspot/material-oscillator injection, add a buffer, or introduce a second energy ledger.
+**Next action — Phase 3C:** Complete the multipoint interface-operator investigation and focused numerical gates. After those pass, integrate the persistent adaptive field with the live logical tick and reconcile ambient inventory, field energy, world work, and computational outflow under one accounting authority. Do not connect material interaction or organism behavior prematurely; do not revive Sun/hotspot/material-oscillator injection, add a buffer, or introduce a second energy ledger.
 
 **After Phase 3C:** Complete passive material coupling through supported physical geometry (Phase 3D); integrate field effects with movement and chemistry under one energy authority (Phase 4); optimize measured bottlenecks without physics shortcuts (Phase 5); then retire the legacy resonance path (Phase 6).
 
