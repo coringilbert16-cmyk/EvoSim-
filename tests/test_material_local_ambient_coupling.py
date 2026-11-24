@@ -272,7 +272,7 @@ def _spatial_refinement_solution(size, profile, *, final_time, time_step_ratio=0
     coordinates = [index * spacing for index in range(size)]
     if profile == "sharp":
         coupling = [0.35 if 4.0 <= x < 8.0 else 0.0 for x in coordinates]
-    else:
+    elif profile == "smooth":
         def smoothstep(value):
             return value**2 * (3.0 - 2.0 * value)
 
@@ -287,6 +287,14 @@ def _spatial_refinement_solution(size, profile, *, final_time, time_step_ratio=0
             else:
                 envelope = 1.0 - smoothstep(x - 7.5)
             coupling.append(0.35 * envelope)
+    elif profile == "localized_control":
+        coupling = [0.35 if 8.0 <= x < 12.0 else 0.0 for x in coordinates]
+    elif profile == "bulk_control":
+        coupling = [0.35] * size
+    elif profile == "vacuum":
+        coupling = [0.0] * size
+    else:
+        raise ValueError(f"unknown reference profile: {profile}")
 
     width = 0.8
     displacement = [
@@ -424,6 +432,35 @@ class MaterialLocalAmbientCouplingTests(unittest.TestCase):
             errors.append(math.sqrt(squared_error / size))
         self.assertGreater(errors[0] / errors[1], 12.0)
         self.assertGreater(errors[1] / errors[2], 12.0)
+
+    def test_empty_space_is_unchanged_and_bulk_coupling_is_detected(self):
+        size = 64
+        vacuum = _spatial_refinement_solution(
+            size, "vacuum", final_time=1.0
+        )
+        localized = _spatial_refinement_solution(
+            size, "localized_control", final_time=1.0
+        )
+        bulk = _spatial_refinement_solution(
+            size, "bulk_control", final_time=1.0
+        )
+
+        localized_difference = math.sqrt(
+            sum((left - right) ** 2 for left, right in zip(vacuum, localized))
+            / len(vacuum)
+        )
+        bulk_displacement_difference = math.sqrt(
+            sum(
+                (vacuum[index] - bulk[index]) ** 2
+                for index in range(size)
+            )
+            / size
+        )
+        # The packet has not reached the localized material support at t=1.
+        self.assertLess(localized_difference, 1.0e-9)
+        # The deliberately incorrect bulk coupling changes nominal empty-space
+        # propagation and therefore acts as a sensitivity/negative control.
+        self.assertGreater(bulk_displacement_difference, 1.0e-4)
 
     def test_periodic_amplitude_inversion_matches_exact_average_energy_schedule(self):
         # The 1..10 schedule is interpreted as total carrier-averaged
