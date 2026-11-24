@@ -530,7 +530,7 @@ mod tests {
         let before = system.clone();
         let mut source = mathematical_source(72, 0.0);
         let account_before = source.account().remaining_energy();
-        let result = system.step_with_environmental_source(&mut source, 0.08);
+        let result = system.step_with_environmental_source(&mut source, 5.0);
 
         assert_eq!(
             result,
@@ -539,8 +539,14 @@ mod tests {
         assert_eq!(system.steps_elapsed, before.steps_elapsed);
         assert_eq!(system.previous_field, before.previous_field);
         assert_eq!(system.current_field, before.current_field);
-        assert_eq!(system.previous_source.to_bits(), before.previous_source.to_bits());
-        assert_eq!(system.current_source.to_bits(), before.current_source.to_bits());
+        assert_eq!(
+            system.previous_source.to_bits(),
+            before.previous_source.to_bits()
+        );
+        assert_eq!(
+            system.current_source.to_bits(),
+            before.current_source.to_bits()
+        );
         assert_eq!(source.account().remaining_energy(), account_before);
         assert_eq!(source.account().cumulative_field_transfer(), 0.0);
     }
