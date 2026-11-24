@@ -225,6 +225,95 @@ def _advance(
     return next_state, source_work
 
 
+def _spatial_rhs(state, *, size, spacing, coupling, speed, field_mass, oscillator_mass, omega):
+    """Matrix-free semidiscrete equations for the spatial refinement study."""
+    w = state[:size]
+    velocity = state[size : 2 * size]
+    q = state[2 * size : 3 * size]
+    q_velocity = state[3 * size :]
+    derivative = [0.0] * (4 * size)
+    for index in range(size):
+        previous = (index - 1) % size
+        following = (index + 1) % size
+        derivative[index] = velocity[index]
+        laplacian = (
+            w[following] - 2.0 * w[index] + w[previous]
+        ) / spacing**2
+        derivative[size + index] = (
+            speed**2 * laplacian
+            - coupling[index] * q_velocity[index] / field_mass
+        )
+        derivative[2 * size + index] = q_velocity[index]
+        derivative[3 * size + index] = (
+            -omega**2 * q[index]
+            + coupling[index] * velocity[index] / oscillator_mass
+        )
+    return derivative
+
+
+def _rk4_spatial_step(state, *, step, **parameters):
+    k1 = _spatial_rhs(state, **parameters)
+    stage = [value + 0.5 * step * rate for value, rate in zip(state, k1)]
+    k2 = _spatial_rhs(stage, **parameters)
+    stage = [value + 0.5 * step * rate for value, rate in zip(state, k2)]
+    k3 = _spatial_rhs(stage, **parameters)
+    stage = [value + step * rate for value, rate in zip(state, k3)]
+    k4 = _spatial_rhs(stage, **parameters)
+    return [
+        value + step * (a + 2.0 * b + 2.0 * c + d) / 6.0
+        for value, a, b, c, d in zip(state, k1, k2, k3, k4)
+    ]
+
+
+def _spatial_refinement_solution(size, profile, *, final_time):
+    """Evolve a right-moving packet through sharp or smooth compact material."""
+    domain_length = 16.0
+    spacing = domain_length / size
+    coordinates = [index * spacing for index in range(size)]
+    if profile == "sharp":
+        coupling = [0.35 if 4.0 <= x < 8.0 else 0.0 for x in coordinates]
+    else:
+        def smoothstep(value):
+            return value**2 * (3.0 - 2.0 * value)
+
+        coupling = []
+        for x in coordinates:
+            if x <= 3.5 or x >= 8.5:
+                envelope = 0.0
+            elif x < 4.5:
+                envelope = smoothstep(x - 3.5)
+            elif x <= 7.5:
+                envelope = 1.0
+            else:
+                envelope = 1.0 - smoothstep(x - 7.5)
+            coupling.append(0.35 * envelope)
+
+    width = 0.8
+    displacement = [
+        math.exp(-0.5 * ((x - 2.0) / width) ** 2) for x in coordinates
+    ]
+    velocity = [
+        (x - 2.0) * value / width**2
+        for x, value in zip(coordinates, displacement)
+    ]
+    state = displacement + velocity + [0.0] * (2 * size)
+    parameters = {
+        "size": size,
+        "spacing": spacing,
+        "coupling": coupling,
+        "speed": 1.0,
+        "field_mass": 1.3,
+        "oscillator_mass": 0.8,
+        "omega": 1.7,
+    }
+    step = 0.1 * spacing
+    count = round(final_time / step)
+    step = final_time / count
+    for _ in range(count):
+        state = _rk4_spatial_step(state, step=step, **parameters)
+    return state
+
+
 class MaterialLocalAmbientCouplingTests(unittest.TestCase):
     def setUp(self):
         self.size = 12
@@ -272,6 +361,41 @@ class MaterialLocalAmbientCouplingTests(unittest.TestCase):
             oscillator_mass=self.oscillator_mass,
             omega=self.omega,
         )
+
+    def test_sharp_and_smooth_material_interfaces_show_second_order_spatial_convergence(self):
+        # The 256-cell run is a finer numerical reference, not an exact solution.
+        # All grids share aligned nodes and the same final physical time.
+        for profile in ("sharp", "smooth"):
+            solutions = {
+                size: _spatial_refinement_solution(
+                    size, profile, final_time=5.5
+                )
+                for size in (32, 64, 128, 256)
+            }
+            errors = []
+            reference = solutions[256]
+            for size in (32, 64, 128):
+                ratio = 256 // size
+                coarse = solutions[size]
+                component_errors = []
+                for coarse_offset, reference_offset in (
+                    (0, 0),
+                    (2 * size, 2 * 256),
+                ):
+                    squared_error = sum(
+                        (
+                            coarse[coarse_offset + index]
+                            - reference[reference_offset + index * ratio]
+                        ) ** 2
+                        for index in range(size)
+                    )
+                    component_errors.append(
+                        math.sqrt(squared_error / size)
+                    )
+                errors.append(math.hypot(*component_errors))
+
+            self.assertGreater(errors[0] / errors[1], 3.0, profile)
+            self.assertGreater(errors[1] / errors[2], 3.0, profile)
 
     def test_hamiltonian_is_nonnegative_for_random_finite_states(self):
         generator = random.Random(314159)
