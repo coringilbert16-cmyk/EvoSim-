@@ -2504,4 +2504,167 @@ mod tests {
             );
         }
     }
+
+    fn comparison_profile(kind: usize, x: f64, y: f64) -> f64 {
+        let dx = x - 32.0;
+        let dy = y - 32.0;
+        let radius_squared = dx * dx + dy * dy;
+        let envelope = (-radius_squared / 72.0).exp();
+        match kind {
+            0 => envelope,
+            1 => (-(dx * dx / 100.0 + dy * dy / 25.0)).exp(),
+            2 => (-((radius_squared.sqrt() - 6.0).powi(2)) / 8.0).exp(),
+            _ => (0.18 * dx + 0.31 * dy).sin() * (-radius_squared / 100.0).exp(),
+        }
+    }
+
+    fn assert_relative_close(left: f64, right: f64, tolerance: f64, label: &str) {
+        let scale = left.abs().max(right.abs()).max(1.0);
+        assert!(
+            (left - right).abs() <= tolerance * scale,
+            "{label}: left={left}, right={right}, relative difference={}",
+            (left - right).abs() / scale
+        );
+    }
+
+    #[test]
+    fn uniform_adaptive_mesh_matches_uniform_reference_solver() {
+        use super::super::adaptive_spatial_grid::{
+            AdaptiveCell, AdaptiveSpatialGrid, AdaptiveWaveField, CellKey,
+        };
+
+        for profile_kind in 0..4 {
+            let mut grid = AdaptiveSpatialGrid::new(65, 65, 1.0, 1).unwrap();
+            let mut reference = WaveField::new(65, 65, 1.0, 0.2, 1, 1.3).unwrap();
+
+            for y in 1..64 {
+                for x in 1..64 {
+                    let value = comparison_profile(profile_kind, x as f64, y as f64);
+                    let previous = 0.9 * value;
+                    grid.set_state(
+                        CellKey { level: 0, x: x as u32, y: y as u32 },
+                        AdaptiveCell { previous, current: value },
+                    ).unwrap();
+                    let index = reference.index(x, y);
+                    reference.previous[index] = previous;
+                    reference.current[index] = value;
+                }
+            }
+
+            let mut adaptive = AdaptiveWaveField::new(grid, 0.2, 1.3).unwrap();
+            assert_eq!(adaptive.substeps_per_tick(), reference.substeps_per_tick());
+            assert_relative_close(adaptive.energy(), reference.energy(), 1.0e-12, "initial uniform-grid energy");
+
+            for interval in [1_u64, 9, 10, 20, 20] {
+                adaptive.advance_ticks(interval).unwrap();
+                reference.advance_ticks(interval).unwrap();
+                for y in 0..65 {
+                    for x in 0..65 {
+                        let adaptive_value = adaptive.sample(x as f64 + 0.5, y as f64 + 0.5).unwrap();
+                        let reference_value = reference.sample(x, y).unwrap();
+                        assert_relative_close(adaptive_value, reference_value, 2.0e-11, "uniform-grid field state");
+                    }
+                }
+                assert_relative_close(adaptive.energy(), reference.energy(), 2.0e-11, "uniform-grid energy");
+            }
+        }
+    }
+
+    fn adaptive_base_cell_averages(
+        field: &super::super::adaptive_spatial_grid::AdaptiveWaveField,
+        width: usize,
+        height: usize,
+    ) -> Vec<f64> {
+        let mut integrals = vec![0.0; width * height];
+        let mut areas = vec![0.0; width * height];
+        for (key, state) in field.grid().leaves() {
+            let scale = 1_u32 << key.level;
+            let base_x = key.x / scale;
+            let base_y = key.y / scale;
+            let index = base_y as usize * width + base_x as usize;
+            let area = 1.0 / (scale * scale) as f64;
+            integrals[index] += area * state.current;
+            areas[index] += area;
+        }
+        for index in 0..integrals.len() {
+            assert_relative_close(areas[index], 1.0, 1.0e-12, "adaptive base-cell coverage");
+            integrals[index] /= areas[index];
+        }
+        integrals
+    }
+
+    fn relative_l2_error(adaptive: &[f64], reference: &[f64], width: usize) -> f64 {
+        let mut difference_squared = 0.0;
+        let mut reference_squared = 0.0;
+        for y in 1..reference.len() / width - 1 {
+            for x in 1..width - 1 {
+                let index = y * width + x;
+                difference_squared += (adaptive[index] - reference[index]).powi(2);
+                reference_squared += reference[index].powi(2);
+            }
+        }
+        difference_squared.sqrt() / reference_squared.sqrt().max(1.0e-15)
+    }
+
+    #[test]
+    fn locally_refined_adaptive_field_stays_close_to_uniform_reference() {
+        use super::super::adaptive_spatial_grid::{
+            AdaptiveCell, AdaptiveSpatialGrid, AdaptiveWaveField, CellKey,
+        };
+
+        const WIDTH: usize = 65;
+        const HEIGHT: usize = 65;
+        for profile_kind in 0..4 {
+            let mut grid = AdaptiveSpatialGrid::new(WIDTH as u32, HEIGHT as u32, 1.0, 1).unwrap();
+            for y in 24..41 {
+                for x in 24..41 {
+                    grid.refine(CellKey { level: 0, x, y }).unwrap();
+                }
+            }
+
+            let keys: Vec<_> = grid.leaves().map(|(key, _)| key).collect();
+            for key in keys {
+                let bounds = grid.cell_bounds(key).unwrap();
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x) - 0.5;
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y) - 0.5;
+                let is_boundary = bounds.min_x == 0.0 || bounds.min_y == 0.0
+                    || bounds.max_x == WIDTH as f64 || bounds.max_y == HEIGHT as f64;
+                let value = if is_boundary { 0.0 } else { comparison_profile(profile_kind, center_x, center_y) };
+                grid.set_state(key, AdaptiveCell { previous: 0.9 * value, current: value }).unwrap();
+            }
+
+            let mut adaptive = AdaptiveWaveField::new(grid, 0.2, 1.3).unwrap();
+            let mut reference = WaveField::new(
+                WIDTH, HEIGHT, 1.0, 0.2, adaptive.substeps_per_tick(), 1.3,
+            ).unwrap();
+            for y in 1..HEIGHT - 1 {
+                for x in 1..WIDTH - 1 {
+                    let value = comparison_profile(profile_kind, x as f64, y as f64);
+                    let index = reference.index(x, y);
+                    reference.previous[index] = 0.9 * value;
+                    reference.current[index] = value;
+                }
+            }
+
+            let initial_error = relative_l2_error(
+                &adaptive_base_cell_averages(&adaptive, WIDTH, HEIGHT), &reference.current, WIDTH,
+            );
+            assert!(initial_error < 0.08, "profile={profile_kind}: initial projection error={initial_error}");
+
+            for interval in [10_u64, 10, 10] {
+                adaptive.advance_ticks(interval).unwrap();
+                reference.advance_ticks(interval).unwrap();
+                let error = relative_l2_error(
+                    &adaptive_base_cell_averages(&adaptive, WIDTH, HEIGHT), &reference.current, WIDTH,
+                );
+                assert!(
+                    error < 0.20,
+                    "profile={profile_kind}, ticks={}, adaptive-vs-uniform relative L2 error={error}",
+                    adaptive.logical_time_ticks()
+                );
+                assert!(adaptive.energy().is_finite() && reference.energy().is_finite());
+            }
+        }
+    }
+
 }
