@@ -63,6 +63,9 @@ jobs:
           if [ -f tests/test_material_local_ambient_coupling.py ]; then
             python3 -m unittest discover -s tests -p 'test_material_local_ambient_coupling.py'
           fi
+          if [ -f tests/test_material_local_ambient_leapfrog.py ]; then
+            python3 -m unittest discover -s tests -p 'test_material_local_ambient_leapfrog.py'
+          fi
       - name: Run Rust tests
         if: success()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
