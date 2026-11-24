@@ -267,6 +267,7 @@ pub(crate) enum SourceAccountError {
     InvalidDescriptor,
     InvalidEnergy,
     InvalidTransfer,
+    InvalidReplenishment,
     InsufficientEnergy,
     IdentityMismatch,
 }
@@ -350,6 +351,23 @@ impl SourceEnergyAccount {
     }
     pub(crate) fn cumulative_replenishment(&self) -> f64 {
         self.cumulative_replenishment
+    }
+
+    /// Adds externally supplied energy to the finite account.
+    /// The caller must derive the amount from the environmental schedule and
+    /// authoritative accounting area; this method performs accounting only.
+    pub(crate) fn replenish(&mut self, amount: f64) -> Result<(), SourceAccountError> {
+        if !amount.is_finite() || amount < 0.0 {
+            return Err(SourceAccountError::InvalidReplenishment);
+        }
+        let remaining_energy = self.remaining_energy + amount;
+        let cumulative_replenishment = self.cumulative_replenishment + amount;
+        if !remaining_energy.is_finite() || !cumulative_replenishment.is_finite() {
+            return Err(SourceAccountError::InvalidReplenishment);
+        }
+        self.remaining_energy = remaining_energy;
+        self.cumulative_replenishment = cumulative_replenishment;
+        Ok(())
     }
 
     /// Validates and stages a signed field transfer without changing the account.
@@ -544,6 +562,30 @@ mod tests {
         account.commit_field_transfer(return_transfer).unwrap();
         assert_eq!(account.remaining_energy(), 7.75);
         assert_eq!(account.cumulative_field_transfer(), 2.25);
+    }
+
+    #[test]
+    fn source_account_replenishes_available_environmental_energy() {
+        let mut account = SourceEnergyAccount::new(SourceId::new(32).unwrap(), 1.5).unwrap();
+        account.replenish(2.25).unwrap();
+        assert_eq!(account.remaining_energy(), 3.75);
+        assert_eq!(account.cumulative_replenishment(), 2.25);
+        assert_eq!(account.cumulative_field_transfer(), 0.0);
+    }
+
+    #[test]
+    fn source_account_rejects_invalid_replenishment_without_mutation() {
+        let mut account = SourceEnergyAccount::new(SourceId::new(33).unwrap(), 1.5).unwrap();
+        assert_eq!(
+            account.replenish(f64::INFINITY),
+            Err(SourceAccountError::InvalidReplenishment)
+        );
+        assert_eq!(
+            account.replenish(-0.5),
+            Err(SourceAccountError::InvalidReplenishment)
+        );
+        assert_eq!(account.remaining_energy(), 1.5);
+        assert_eq!(account.cumulative_replenishment(), 0.0);
     }
 
     #[test]
