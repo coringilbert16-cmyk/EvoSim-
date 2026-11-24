@@ -452,7 +452,7 @@ The world-origin anchor is a coordinate convention, not a physical center of the
 
 **Project-native parameter values remain open:** orbit radius/height, finite source budgets and power, propagation speed in L/tick, hotspot power/support radius, material response coefficients, field normalization, grid spacing, and solver time step. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required.
 
-**Phase status:** Phase 0, Phase 1, and Phase 2 are complete. Phase 3A.2.1, 3A.3, and 3A.4a–d are complete as individually listed above. Phase 3B isolated source accounting and Candidate A mathematical forcing are underway; initial discrete-work and continuum-refinement validation passed. Physical source-to-field coupling, project-native parameter calibration, and production integration remain open and gated; no physical-time/SI conversion is required.
+**Phase status:** Phase 0, Phase 1, and Phase 2 are complete. Phase 3A.2.1, 3A.3, and 3A.4a–d are complete as individually listed above. Phase 3B isolated source accounting and Candidate A mathematical forcing are underway. The finite-dimensional material-local reference now includes source-work reconciliation, nested-patch flux/work closure, sharp/smooth spatial refinement, and independent temporal refinement; the latest full CI is still running, and these checks do not establish the continuum interface limit. Physical source-to-field coupling, project-native parameter calibration, and production integration remain open and gated; no physical-time/SI conversion is required.
 
 ## 12. Ambient/disturbance spatial-composition gate
 
