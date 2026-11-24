@@ -1,5 +1,9 @@
 """Leapfrog reference for conservative material-local ambient coupling.
 
+The discrete energy is the staggered-time invariant, not an instantaneous
+continuum-energy approximation. The local velocity solve preserves reciprocal
+exchange while the field retains the Phase 2 leapfrog spatial update.
+
 This module mirrors the second-order staggered wave update used by the isolated
 Phase 2 solver. It remains independent of production code and uses only the
 Python standard library.
