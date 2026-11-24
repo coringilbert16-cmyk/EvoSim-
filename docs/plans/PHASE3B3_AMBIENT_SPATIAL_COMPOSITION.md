@@ -1,6 +1,6 @@
 # Phase 3B.3 — Ambient/Disturbance Spatial Composition
 
-**Status:** Initial algebraic/numerical identities implemented in an isolated Python test module; full patch-flux validation remains open. No composition law selected and no production coupling authorized.
+**Status:** Analytic packet/patch references and an isolated finite-dimensional material-local coupling harness are implemented. The latest exact-head CI is running; continuum interface/convergence validation remains open. No composition law selected and no production coupling authorized.
 
 **Authority:** The [unified energy and continuous wave-field specification](../design/unified-energy-physics-specification.md), the [controlling resonance-field roadmap](../design/resonance-field-implementation-roadmap.md), and the user-approved intrinsic ambient-mode decision recorded in [the isolated ambient-mode plan](PHASE3B3_WORLD_GENERATED_AMBIENT_MODE.md).
 
