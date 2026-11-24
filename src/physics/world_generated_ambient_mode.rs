@@ -100,8 +100,7 @@ impl AmbientModeConfig {
         let sine = carrier_phase_radians.sin();
         let carrier_value = amplitude * cosine;
         let carrier_velocity = amplitude_velocity * cosine - amplitude * angular_frequency * sine;
-        let carrier_acceleration = (amplitude_acceleration
-            - amplitude * angular_frequency.powi(2))
+        let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
         let instantaneous_oscillator_energy_density = 0.5
@@ -161,9 +160,7 @@ impl AmbientModeTrajectory {
             TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
         let denominator = config.field_normalization * angular_frequency.powi(2);
         let mut amplitude: Vec<f64> = (0..count)
-            .map(|tick| {
-                (2.0 * config.energy_density_at(tick as u64) / denominator).sqrt()
-            })
+            .map(|tick| (2.0 * config.energy_density_at(tick as u64) / denominator).sqrt())
             .collect();
 
         // Four periodic fixed-point corrections reproduce the reference
@@ -173,8 +170,8 @@ impl AmbientModeTrajectory {
             for tick in 0..count {
                 let amplitude_velocity = Self::first_derivative(&amplitude, tick);
                 let target = config.energy_density_at(tick as u64);
-                let remaining = target
-                    - 0.25 * config.field_normalization * amplitude_velocity.powi(2);
+                let remaining =
+                    target - 0.25 * config.field_normalization * amplitude_velocity.powi(2);
                 if !remaining.is_finite() || remaining <= 0.0 {
                     return Err(AmbientModeError::InvalidState);
                 }
