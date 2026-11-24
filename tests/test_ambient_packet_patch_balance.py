@@ -191,3 +191,35 @@ def test_accounting_patch_does_not_change_local_analytic_packet_state():
             for x in probes
         ]
         assert observed == reference
+
+
+def test_independent_ambient_mode_is_additive_and_does_not_drive_disturbance():
+    """Control case: separate state spaces have no cross-response."""
+    speed = 1.3
+    packet_initial = [
+        _packet(x, 0.0, amplitude=0.8, width=0.55, speed=speed)
+        for x in (-1.0, -0.2, 0.7, 1.4)
+    ]
+    ambient_phases = (0.0, 0.7, 1.9, 3.1)
+    ambient_inventories = []
+    for phase in ambient_phases:
+        ambient_value = 0.4 * math.cos(phase)
+        ambient_velocity = -0.4 * (2.0 * math.pi * 440.0 / 24_000.0) * math.sin(phase)
+        ambient_inventories.append(0.5 * (ambient_velocity**2 + ambient_value**2))
+        packet_after = [
+            _packet(x, 0.0, amplitude=0.8, width=0.55, speed=speed)
+            for x in (-1.0, -0.2, 0.7, 1.4)
+        ]
+        assert packet_after == packet_initial
+
+    disturbance_inventory = 0.5 * sum(
+        wt**2 + speed**2 * wx**2 for _, wt, wx in packet_initial
+    )
+    combined_inventories = [
+        disturbance_inventory + ambient for ambient in ambient_inventories
+    ]
+    assert all(
+        math.isclose(total, disturbance_inventory + ambient, rel_tol=1e-14)
+        for total, ambient in zip(combined_inventories, ambient_inventories)
+    )
+    assert len(set(ambient_inventories)) > 1
