@@ -792,8 +792,7 @@ fn shared_face_geometry(a: CellBounds, b: CellBounds) -> Option<(f64, f64)> {
             .max(1.0);
     let vertical_overlap = a.max_y.min(b.max_y) - a.min_y.max(b.min_y);
     let horizontal_overlap = a.max_x.min(b.max_x) - a.min_x.max(b.min_x);
-    if ((a.max_x - b.min_x).abs() <= tolerance
-        || (b.max_x - a.min_x).abs() <= tolerance)
+    if ((a.max_x - b.min_x).abs() <= tolerance || (b.max_x - a.min_x).abs() <= tolerance)
         && vertical_overlap > tolerance
     {
         return Some((
@@ -801,8 +800,7 @@ fn shared_face_geometry(a: CellBounds, b: CellBounds) -> Option<(f64, f64)> {
             0.5 * (a.max_x - a.min_x + b.max_x - b.min_x),
         ));
     }
-    if ((a.max_y - b.min_y).abs() <= tolerance
-        || (b.max_y - a.min_y).abs() <= tolerance)
+    if ((a.max_y - b.min_y).abs() <= tolerance || (b.max_y - a.min_y).abs() <= tolerance)
         && horizontal_overlap > tolerance
     {
         return Some((
