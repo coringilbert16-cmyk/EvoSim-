@@ -1,6 +1,6 @@
 # Phase 3 — Live Ambient Energy Implementation
 
-**Status:** Implementation committed for exact-head CI review.
+**Status:** Implemented and validated by full exact-head CI.
 
 ## Contract implemented
 
@@ -16,8 +16,10 @@
 
 The mode is owned by `Simulation`, initialized with the live environment, and advanced once in the environmental simulation tick. It is no longer only an isolated reference harness. Ambient accounting is distinct from chemistry credits and receiver/material settlement.
 
-## Focused validation
+## Validation
 
 Production-level contract tests cover the four daily envelope checkpoints, one-day generation/withdrawal closure and ending inventory, and identical ambient state at different runtime pacing values. The existing wave solver was not modified; no global Klein–Gordon term, speculative coupling, or material rule was added.
 
-Exact-head CI is the compilation/test authority. This report will be updated with its result before the implementation is considered green.
+Full exact-head CI passed on implementation commit `372ee90ead9736e99d824df299a20d94357c3dd4` in [workflow run #45458137482](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/45458137482). All workflow steps passed, including formatting, architecture checks, offline analyzers, Rust tests, environmental chemistry smoke simulation, manifest validation, both experiment analyzers, artifact upload, and Clippy.
+
+The report records the validated implementation commit and its CI result. The subsequent report-only commit must also pass exact-head CI before merge approval.
