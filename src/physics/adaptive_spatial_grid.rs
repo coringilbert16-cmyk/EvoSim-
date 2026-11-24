@@ -1470,7 +1470,11 @@ mod tests {
             }
 
             let mut field = AdaptiveWaveField::new(grid, 0.15, 1.2).unwrap();
-            let parent = CellKey { level: 0, x: 4, y: 4 };
+            let parent = CellKey {
+                level: 0,
+                x: 4,
+                y: 4,
+            };
 
             for _ in 0..6 {
                 field.advance_ticks(2).unwrap();
@@ -1507,5 +1511,4 @@ mod tests {
             }
         }
     }
-
 }
