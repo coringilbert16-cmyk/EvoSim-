@@ -367,7 +367,11 @@ impl ReciprocalSourceField {
         let next_energy = next_field_energy + next_source_energy + next_coupling_energy;
         let measured_balance = old_energy + discrete_external_work - next_energy;
         let tolerance = 1.0e-10
-            * old_energy.abs().max(next_energy.abs()).max(absorbed_this_step.abs()).max(1.0);
+            * old_energy
+                .abs()
+                .max(next_energy.abs())
+                .max(absorbed_this_step.abs())
+                .max(1.0);
         if !discrete_external_work.is_finite()
             || !absorbed_this_step.is_finite()
             || absorbed_this_step < 0.0
@@ -1092,8 +1096,17 @@ mod tests {
             .unwrap()
         };
         let mut damped = ReciprocalSourceField::new(
-            41, 41, spacing, 1.0, time_step, 1.0, 2.0, 1.5, 0.8,
-            profile(41, 41, 18, 23, 18, 23), 1.0,
+            41,
+            41,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.8,
+            profile(41, 41, 18, 23, 18, 23),
+            1.0,
         )
         .unwrap();
         damped.configure_absorbing_boundary(8, 5.0).unwrap();
@@ -1103,8 +1116,17 @@ mod tests {
         )
         .unwrap();
         let mut expanded = ReciprocalSourceField::new(
-            121, 121, spacing, 1.0, time_step, 1.0, 2.0, 1.5, 0.8,
-            profile(121, 121, 58, 63, 58, 63), 1.0,
+            121,
+            121,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.8,
+            profile(121, 121, 58, 63, 58, 63),
+            1.0,
         )
         .unwrap();
 
@@ -1129,12 +1151,10 @@ mod tests {
             for y in 16..25 {
                 for x in 16..25 {
                     let reference = expanded.field_sample(x + 40, y + 40).unwrap();
-                    damped_error = damped_error.max(
-                        (damped.field_sample(x, y).unwrap() - reference).abs(),
-                    );
-                    undamped_error = undamped_error.max(
-                        (undamped.field_sample(x, y).unwrap() - reference).abs(),
-                    );
+                    damped_error =
+                        damped_error.max((damped.field_sample(x, y).unwrap() - reference).abs());
+                    undamped_error = undamped_error
+                        .max((undamped.field_sample(x, y).unwrap() - reference).abs());
                 }
             }
             if step == 399 {
@@ -1145,8 +1165,8 @@ mod tests {
                 undamped_late_error = undamped_error;
             }
 
-            let balance = initial_energy - damped.total_energy()
-                - damped.boundary_absorbed_energy();
+            let balance =
+                initial_energy - damped.total_energy() - damped.boundary_absorbed_energy();
             assert!(
                 balance.abs() <= 2.0e-9 * initial_energy.abs().max(1.0),
                 "absorbing-boundary energy residual at step {step}: {balance}"
