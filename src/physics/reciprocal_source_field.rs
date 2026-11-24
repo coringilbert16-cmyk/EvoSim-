@@ -532,10 +532,7 @@ mod tests {
         let account_before = source.account().remaining_energy();
         let result = system.step_with_environmental_source(&mut source, 5.0);
 
-        assert_eq!(
-            result,
-            Err(ReciprocalModelError::InsufficientSourceEnergy)
-        );
+        assert_eq!(result, Err(ReciprocalModelError::InsufficientSourceEnergy));
         assert_eq!(system.steps_elapsed, before.steps_elapsed);
         assert_eq!(system.previous_field, before.previous_field);
         assert_eq!(system.current_field, before.current_field);
