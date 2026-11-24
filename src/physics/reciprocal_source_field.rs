@@ -1256,8 +1256,7 @@ mod tests {
             let reference_x = (60_isize + dx) as usize;
             let reference_y = (60_isize + dy) as usize;
             let reference = expanded.field_sample(reference_x, reference_y).unwrap();
-            let near_error =
-                (damped.field_sample(near_x, near_y).unwrap() - reference).abs();
+            let near_error = (damped.field_sample(near_x, near_y).unwrap() - reference).abs();
             let far_error =
                 (farther_boundary.field_sample(far_x, far_y).unwrap() - reference).abs();
             assert!(
