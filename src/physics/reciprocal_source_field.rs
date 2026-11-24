@@ -1187,7 +1187,7 @@ mod tests {
                         .max((undamped.field_sample(x, y).unwrap() - reference).abs());
                     // The 61x61 domain's centered source is translated by 30
                     // cells into the same expanded reference.
-                    let farther_reference = expanded.field_sample(x + 30, y + 30).unwrap();
+                    let farther_reference = expanded.field_sample(x + 40, y + 40).unwrap();
                     farther_error = farther_error.max(
                         (farther_boundary.field_sample(x + 10, y + 10).unwrap()
                             - farther_reference)
