@@ -1,15 +1,16 @@
-//! Isolated reference model for the world-generated uniform ambient resonance mode.
+//! Live world-generated model for the spatially uniform ambient resonance mode.
 //!
-//! This module models only the spatially uniform ambient resonance component. Its
+//! The simulation advances this component once per logical tick. Its
 //! cycle-averaged stored energy density follows the approved daily cosine
 //! envelope, while its carrier phase advances at 440 cycles per 24,000-tick
 //! day. Positive changes are explicit world generation; negative changes are
-//! explicit world withdrawal. No sun object, external oscillator, or second
+//! explicit world withdrawal. No Sun object, external injector, or additional
 //! energy reservoir is represented here.
 //!
-//! Local disturbance modes remain governed by the existing nondispersive
-//! scalar wave equation. This module does not modify or replace that solver and
-//! is not yet connected to production materials or chemistry.
+//! Spatial disturbances retain the validated nondispersive scalar wave
+//! equation. Their combined energy and flux identities are implemented in
+//! ambient_spatial_composition; live adaptive-grid and material coupling
+//! integration remain later Phase 3C/3D work.
 
 use std::{f64::consts::TAU, sync::Arc};
 
