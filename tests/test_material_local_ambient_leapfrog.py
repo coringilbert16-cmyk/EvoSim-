@@ -443,7 +443,143 @@ def _run_2d_patch_balance():
     return residuals
 
 
+
+
+def _continuum_scattering(*, length, omega=1.0, ambient_omega=1.7,
+                           coupling_strength=0.35, field_mass=1.3,
+                           oscillator_mass=0.8, speed=1.0):
+    """Exact plane-wave scattering by a uniform material slab."""
+    vacuum_k = omega / speed
+    material_k = vacuum_k * math.sqrt(
+        1.0 + coupling_strength**2
+        / (
+            field_mass * oscillator_mass
+            * (ambient_omega**2 - omega**2)
+        )
+    )
+    cosine = math.cos(material_k * length)
+    sine = math.sin(material_k * length)
+    transfer_a = cosine
+    transfer_b = sine / material_k
+    transfer_c = -material_k * sine
+    transfer_d = cosine
+    coefficient_a = transfer_c - 1j * vacuum_k * transfer_a
+    coefficient_b = 1j * vacuum_k * (
+        transfer_d - 1j * vacuum_k * transfer_b
+    )
+    reflection = -(coefficient_a + coefficient_b) / (
+        coefficient_a - coefficient_b
+    )
+    transmission = (
+        transfer_a * (1.0 + reflection)
+        + transfer_b * 1j * vacuum_k * (1.0 - reflection)
+    )
+    return reflection, transmission
+
+
+def _discrete_scattering(*, spacing, step, length, omega=1.0,
+                         ambient_omega=1.7, coupling_strength=0.35,
+                         field_mass=1.3, oscillator_mass=0.8, speed=1.0):
+    """Leapfrog/FDTD slab scattering from its exact spatial recurrence."""
+    temporal_phase = omega * step
+    omega_tilde = 2.0 * math.sin(temporal_phase / 2.0) / step
+    omega_centered = math.sin(temporal_phase) / step
+    material_potential = (
+        omega_tilde**2
+        + coupling_strength**2 * omega_centered**2
+        / (
+            field_mass * oscillator_mass
+            * (ambient_omega**2 - omega_tilde**2)
+        )
+    )
+    vacuum_k = 2.0 / spacing * math.asin(
+        spacing * omega_tilde / (2.0 * speed)
+    )
+    count = round(length / spacing)
+    recurrence_a = 2.0 - spacing**2 * material_potential / speed**2
+
+    # Transfer across count material nodes. The two interfaces lie halfway
+    # between the first/last material nodes and the adjacent vacuum nodes.
+    p00, p01, p10, p11 = 1.0, 0.0, 0.0, 1.0
+    for _ in range(count):
+        p00, p01, p10, p11 = (
+            recurrence_a * p00 - p10,
+            recurrence_a * p01 - p11,
+            p00,
+            p01,
+        )
+
+    phase = cmath.exp(-1j * vacuum_k * spacing)
+    half_phase = cmath.exp(-0.5j * vacuum_k * spacing)
+    coefficient_a = p10 - phase * p00
+    coefficient_b = p11 - phase * p01
+    reflection = -(
+        coefficient_a / half_phase + coefficient_b * half_phase
+    ) / (
+        coefficient_a * half_phase + coefficient_b / half_phase
+    )
+    transmission = half_phase * (
+        p00 * (1.0 / half_phase + reflection * half_phase)
+        + p01 * (half_phase + reflection / half_phase)
+    )
+    return reflection, transmission
+
+
 class MaterialLocalAmbientLeapfrogTests(unittest.TestCase):
+    def test_sharp_interface_scattering_converges_to_continuum(self):
+        reference = _continuum_scattering(length=4.0)
+        errors = []
+        for spacing in (0.4, 0.2, 0.1, 0.05, 0.025):
+            reflection, transmission = _discrete_scattering(
+                spacing=spacing, step=0.2 * spacing, length=4.0,
+            )
+            errors.append(
+                abs(reflection - reference[0])
+                + abs(transmission - reference[1])
+            )
+        for coarse, fine in zip(errors, errors[1:]):
+            self.assertGreater(coarse / fine, 3.8)
+        self.assertGreater(abs(reference[0]), 1.0e-3)
+
+    def test_sharp_interface_scattering_has_second_order_temporal_refinement(self):
+        spacing = 0.05
+        reference = _discrete_scattering(
+            spacing=spacing, step=1.0e-5, length=4.0,
+        )
+        errors = []
+        for step in (0.05, 0.025, 0.0125, 0.00625):
+            reflection, transmission = _discrete_scattering(
+                spacing=spacing, step=step, length=4.0,
+            )
+            errors.append(
+                abs(reflection - reference[0])
+                + abs(transmission - reference[1])
+            )
+        for coarse, fine in zip(errors, errors[1:]):
+            self.assertGreater(coarse / fine, 3.9)
+
+    def test_uncoupled_scattering_has_no_reflection(self):
+        continuum = _continuum_scattering(
+            length=4.0, coupling_strength=0.0,
+        )
+        self.assertLess(abs(continuum[0]), 1.0e-12)
+        self.assertLess(
+            abs(continuum[1] - cmath.exp(4.0j)),
+            1.0e-12,
+        )
+        spacing, step = 0.05, 0.01
+        discrete = _discrete_scattering(
+            spacing=spacing, step=step, length=4.0,
+            coupling_strength=0.0,
+        )
+        omega_tilde = 2.0 * math.sin(step / 2.0) / step
+        vacuum_k = 2.0 / spacing * math.asin(
+            spacing * omega_tilde / 2.0
+        )
+        expected = cmath.exp(1j * vacuum_k * 4.0)
+        self.assertLess(abs(discrete[0]), 1.0e-10)
+        self.assertLess(abs(discrete[1] - expected), 1.0e-10)
+
     def test_two_dimensional_five_point_update_closes_nested_patch_balances(self):
         cfl_number = math.sqrt(2.0) * 0.1
         self.assertLess(cfl_number, 1.0)
