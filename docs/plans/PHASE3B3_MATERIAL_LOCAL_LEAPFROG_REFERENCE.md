@@ -137,3 +137,96 @@ It does **not** establish the continuum interface limit, two-dimensional behavio
 - Test the coupled update with the Phase 2 computational sponge and prove that outflow, source work, and stored energy reconcile without hidden sinks.
 - Confirm deterministic replay and stability over the intended frequency/time-step envelope.
 - Keep all work isolated. No production solver, material, chemistry, organism, GUI, or production-ledger changes are authorized by these results.
+
+
+## 7. Two-dimensional staggered-leapfrog validation
+
+The same reciprocal local velocity solve was extended to a two-dimensional periodic grid with the five-point Laplacian. The discrete energy assigns half of each cross-time gradient-edge term to each adjacent cell. The face flux uses the centered half-step field velocity and the corresponding normal difference of the integer-time displacement.
+
+Reference settings: 24×24 cells, unit spacing, \(c=1\), \(K=1.3\), \(M=0.8\), \(\Omega=1.7\), coupling 0.35 on the square support \([8,13)\times[8,13)\), \(\Delta t=0.1\), 60 steps. The 2D CFL number is \(c\Delta t\sqrt{\Delta x^{-2}+\Delta y^{-2}}=0.1414<1\).
+
+Three nested accounting patches were checked: 10×10 cells, 14×14 cells, and the complete periodic domain. For each patch the residual is \(\Delta E+F_{out}-W_{world}\):
+
+| Patch | Energy change | Integrated outward flux | World-drive work | Residual |
+|---|---:|---:|---:|---:|
+| 10×10 | 6.1724881567 | 0.8852192113 | 7.0577073680 | 1.78e-15 |
+| 14×14 | 13.0578907235 | 0.7658849190 | 13.8237756425 | -6.39e-14 |
+| Full 24×24 | 40.6061292290 | 0 | 40.6061292290 | 1.99e-13 |
+
+The full-domain flux cancels under periodic boundaries. These results validate the discrete 2D patch identity for this reference fixture; they do not validate a production absorbing boundary.
+
+### 2D spatial refinement
+
+For a sharp compact square support, a right-moving localized packet, final time 3.5, and \(\Delta t=0.2\Delta x\), a 128×128 result is used as the numerical reference:
+
+| Grid | Error |
+|---:|---:|
+| 16×16 | 0.0332349 |
+| 32×32 | 0.00915111 |
+| 64×64 | 0.00201287 |
+
+Error reductions are 3.63× and 4.55×.
+
+### 2D temporal refinement
+
+At fixed 32×32 grid and final time 3.5, the \(\Delta t=0.00625\) result is the numerical reference:
+
+| \(\Delta t/\Delta x\) | Error |
+|---:|---:|
+| 0.2 | 0.000492795 |
+| 0.1 | 0.000121111 |
+| 0.05 | 0.0000287982 |
+| 0.025 | 0.00000575776 |
+
+Successive reductions are 4.07×, 4.21×, and 5.00×.
+
+## 8. Sharp-interface scattering reference
+
+The continuum material-slab problem is solved independently in the frequency domain. For incident frequency \(\omega\), vacuum wavenumber \(k_0=\omega/c\), and constant material coupling \(g\), the material wavenumber is
+
+\[
+k_m^2=\frac{\omega^2}{c^2}
+\left(1+\frac{g^2}{KM(\Omega^2-\omega^2)}\right).
+\]
+
+The continuum transfer matrix across a slab of length \(L\) is
+
+\[
+\begin{pmatrix}
+\cos(k_mL) & \sin(k_mL)/k_m\\
+-k_m\sin(k_mL) & \cos(k_mL)
+\end{pmatrix}.
+\]
+
+Continuity of displacement and normal derivative at both interfaces determines the reflection and transmission amplitudes. The discrete reference independently eliminates the local oscillator from the staggered leapfrog harmonic ansatz, uses its exact temporal dispersion factors, and advances the resulting second-order spatial recurrence. Material nodes are centered between vacuum nodes, placing interfaces on half-grid faces; this avoids a first-order interface-position offset.
+
+For \(c=1\), \(K=1.3\), \(M=0.8\), \(\Omega=1.7\), \(g=0.35\), \(\omega=1\), and \(L=4\), the continuum reference gives:
+
+- \(k_m=1.0306900297\).
+- Reflection amplitude \(R=-0.02088155925+0.01396376412i\).
+- Transmission amplitude \(T=-0.55570170683-0.83100215812i\).
+
+With \(\Delta t=0.2\Delta x\), the combined reflection-plus-transmission amplitude error against the continuum reference is:
+
+| \(\Delta x\) | Error |
+|---:|---:|
+| 0.4 | 0.0301030 |
+| 0.2 | 0.00741032 |
+| 0.1 | 0.00184554 |
+| 0.05 | 0.000460946 |
+| 0.025 | 0.000115209 |
+
+Successive error reductions are 4.06×, 4.02×, 4.004×, and 4.001×.
+
+At fixed \(\Delta x=0.05\), temporal refinement against the semi-discrete \(\Delta t=10^{-5}\) reference gives errors 0.000548194, 0.000137060, 0.0000342656, and 0.00000856642 for time steps 0.05, 0.025, 0.0125, and 0.00625. The successive reductions are approximately 4×.
+
+The uncoupled control gives zero reflection to roundoff and the expected vacuum propagation phase. This is an isolated one-dimensional slab result, not yet a two-dimensional scattering validation or a production-interface test.
+
+## 9. Updated remaining gates
+
+The reference work now covers 1D and 2D staggered energy/work balance, 2D spatial/time convergence, and 1D sharp-slab reflection/transmission with independent spatial/time refinement. The remaining gates are:
+
+- Two-dimensional interface reflection/transmission and smooth-support/interface behavior.
+- Coupled leapfrog interaction with the Phase 2 computational sponge/outflow treatment, with no hidden sinks or double-counted source work.
+- Stability and deterministic replay over the intended frequency/time-step envelope.
+- Only after these isolated gates pass may a coupling candidate be considered for physical selection. No production solver, source, material, chemistry, organism, GUI, or ledger changes are authorized by this note.
