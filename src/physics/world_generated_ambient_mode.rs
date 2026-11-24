@@ -283,13 +283,13 @@ mod tests {
     #[test]
     fn carrier_advances_at_440_cycles_per_simulated_day() {
         let mode = mode_at(0, 1.0);
+        assert_eq!(mode.sample().angular_frequency, TAU * 440.0 / 24_000.0);
         let mut quarter_day = mode;
         for _ in 0..6_000 {
             quarter_day.advance_one_tick().unwrap();
         }
         // 440 * 1/4 day = 110 complete carrier cycles.
         assert!(quarter_day.sample().carrier_phase_radians.abs() < 1.0e-10);
-        assert_eq!(mode.sample().angular_frequency, TAU * 440.0 / 24_000.0);
     }
 
     #[test]
