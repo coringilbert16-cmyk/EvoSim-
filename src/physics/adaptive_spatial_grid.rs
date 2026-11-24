@@ -54,6 +54,9 @@ pub(crate) struct SharedFace {
     pub(crate) length: f64,
     /// Physical distance between the two cell centers, normal to the face.
     pub(crate) center_distance: f64,
+    /// Endpoints of this shared face segment in finest-grid integer coordinates.
+    pub(crate) start_vertex: (u32, u32),
+    pub(crate) end_vertex: (u32, u32),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -388,6 +391,7 @@ impl AdaptiveSpatialGrid {
             &vertical_left,
             finest_spacing,
             self.max_refinement_level,
+            true,
             &mut faces,
         );
         append_shared_faces(
@@ -395,6 +399,7 @@ impl AdaptiveSpatialGrid {
             &horizontal_bottom,
             finest_spacing,
             self.max_refinement_level,
+            false,
             &mut faces,
         );
         faces.sort_by_key(|face| (face.first, face.second));
@@ -431,16 +436,19 @@ impl AdaptiveSpatialGrid {
     }
 }
 
-/// Conservative finite-volume leapfrog evolution on a fixed adaptive mesh.
+/// Conservative leapfrog evolution on a fixed adaptive mesh.
 ///
-/// Each leaf cell contributes its physical area as mass. Shared faces use the
-/// symmetric conductance length / center_distance, making the stiffness
-/// operator symmetric across coarse/fine interfaces. The corresponding
-/// discrete invariant is the mass-weighted kinetic term plus the
-/// cross-time-level face-gradient term.
+/// Cell areas form the diagonal mass matrix. Uniform meshes retain the
+/// validated two-point finite-volume stencil. Nonuniform meshes use a
+/// symmetric variational multipoint stiffness operator: face-endpoint
+/// subtriangles are assembled as linear finite elements and their massless
+/// vertex degrees of freedom are statically condensed. This accounts for
+/// tangential center offsets while retaining a symmetric positive
+/// semidefinite stiffness matrix and a matching discrete energy invariant.
 #[derive(Clone, Debug)]
 pub(crate) struct AdaptiveWaveField {
     grid: AdaptiveSpatialGrid,
+    stiffness: StiffnessMatrix,
     propagation_speed: f64,
     energy_normalization: f64,
     time_step: f64,
@@ -473,11 +481,12 @@ impl AdaptiveWaveField {
             }
         }
 
-        let maximum_row_sum = maximum_stiffness_row_sum(&grid);
+        let stiffness = stiffness_matrix(&grid);
+        let maximum_row_sum = maximum_stiffness_row_sum(&grid, &stiffness);
         let required_substeps = if maximum_row_sum == 0.0 {
             1.0
         } else {
-            let maximum_time_step = (2.0 / maximum_row_sum).sqrt() / propagation_speed;
+            let maximum_time_step = (4.0 / maximum_row_sum).sqrt() / propagation_speed;
             (1.0 / maximum_time_step).ceil().max(1.0)
         };
         if !required_substeps.is_finite() || required_substeps > usize::MAX as f64 {
@@ -486,13 +495,14 @@ impl AdaptiveWaveField {
         let substeps_per_tick = required_substeps as usize;
         let time_step = 1.0 / substeps_per_tick as f64;
         if !time_step.is_finite()
-            || propagation_speed * time_step * (2.0 * maximum_row_sum).sqrt() > 2.0 + 1.0e-12
+            || propagation_speed * time_step * maximum_row_sum.sqrt() > 2.0 + 1.0e-12
         {
             return Err(AdaptiveGridError::UnstableTimeStep);
         }
 
         Ok(Self {
             grid,
+            stiffness,
             propagation_speed,
             energy_normalization,
             time_step,
@@ -546,9 +556,9 @@ impl AdaptiveWaveField {
         // Keep the time step invariant so a topology change cannot alter the
         // kinetic term's temporal metric. Reject refinements that exceed the
         // original solver's stability envelope.
-        let maximum_row_sum = maximum_stiffness_row_sum(&candidate);
-        let stability_measure =
-            self.propagation_speed * self.time_step * (2.0 * maximum_row_sum).sqrt();
+        let candidate_stiffness = stiffness_matrix(&candidate);
+        let maximum_row_sum = maximum_stiffness_row_sum(&candidate, &candidate_stiffness);
+        let stability_measure = self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
         if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
             return Err(AdaptiveGridError::UnstableTimeStep);
         }
@@ -580,6 +590,7 @@ impl AdaptiveWaveField {
         }
 
         self.grid = candidate;
+        self.stiffness = candidate_stiffness;
         Ok(result)
     }
 
@@ -664,15 +675,14 @@ impl AdaptiveWaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), AdaptiveGridError> {
-        let faces = self.grid.shared_faces();
         let mut face_sums: BTreeMap<CellKey, f64> =
             self.grid.leaves.keys().map(|key| (*key, 0.0)).collect();
-        for face in &faces {
-            let first = self.grid.leaves[&face.first].current;
-            let second = self.grid.leaves[&face.second].current;
-            let conductance = face.length / face.center_distance;
-            *face_sums.get_mut(&face.first).unwrap() += conductance * (second - first);
-            *face_sums.get_mut(&face.second).unwrap() += conductance * (first - second);
+        for (row, columns) in &self.stiffness {
+            let applied = columns
+                .iter()
+                .map(|(column, coefficient)| coefficient * self.grid.leaves[column].current)
+                .sum::<f64>();
+            face_sums.insert(*row, -applied);
         }
 
         let dt = self.time_step;
@@ -767,8 +777,9 @@ impl AdaptiveWaveField {
         previous: &BTreeMap<CellKey, f64>,
         current: &BTreeMap<CellKey, f64>,
     ) -> f64 {
-        discrete_energy_for_grid(
+        discrete_energy_with_stiffness(
             &self.grid,
+            &self.stiffness,
             previous,
             current,
             self.time_step,
@@ -780,10 +791,11 @@ impl AdaptiveWaveField {
 
 /// Transfers the energy norm after conservative area projection.
 ///
-/// The two area means are invariant under the grid operations. Their temporal
-/// difference contributes a fixed, spatially uniform kinetic-energy floor.
-/// The remaining zero-mean field is scaled in the positive leapfrog energy
-/// norm, preserving both means while matching the pre-transfer invariant.
+/// In midpoint/velocity coordinates, the leapfrog invariant separates into
+/// two constrained quadratic forms:
+///   mᵀ K m and vᵀ (M - c² dt² K / 4) v.
+/// We solve each constrained minimum, then scale only the zero-integral
+/// residual. The minimum is energy-orthogonal to every admissible residual.
 fn preserve_regridded_energy(
     grid: &mut AdaptiveSpatialGrid,
     time_step: f64,
@@ -791,122 +803,87 @@ fn preserve_regridded_energy(
     normalization: f64,
     target_energy: f64,
 ) -> Result<(), AdaptiveGridError> {
-    let integrated = grid.integrated_state();
-    let mut interior_area = 0.0;
-    for (key, _) in grid.leaves() {
-        if !is_computational_boundary(grid, key) {
-            interior_area += grid.cell_area(key);
-        }
-    }
-    if !interior_area.is_finite() || interior_area <= 0.0 {
+    let stiffness = stiffness_matrix(grid);
+    let keys: Vec<_> = grid
+        .leaves
+        .keys()
+        .copied()
+        .filter(|key| !is_computational_boundary(grid, *key))
+        .collect();
+    if keys.is_empty() {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
+    let areas: Vec<_> = keys.iter().map(|key| grid.cell_area(*key)).collect();
+    let alpha = propagation_speed.powi(2) * time_step.powi(2) * 0.25;
+    let integrals = grid.integrated_state();
+    let mean_target = 0.5 * (integrals.current_displacement + integrals.previous_displacement);
+    let velocity_target =
+        (integrals.current_displacement - integrals.previous_displacement) / time_step;
 
-    // Fixed-zero computational boundary cells are not free degrees of
-    // freedom. Build the minimum-complexity reference state on interior
-    // leaves only, so the transfer preserves the two integrals without
-    // introducing nonzero boundary values.
-    let mean_previous = integrated.previous_displacement / interior_area;
-    let mean_current = integrated.current_displacement / interior_area;
+    let mean_minimum =
+        constrained_quadratic_minimizer(&keys, &areas, &stiffness, 0.0, 1.0, mean_target)?;
+    let velocity_minimum =
+        constrained_quadratic_minimizer(&keys, &areas, &stiffness, 1.0, -alpha, velocity_target)?;
+
     let mut baseline_previous = BTreeMap::new();
     let mut baseline_current = BTreeMap::new();
     let mut projected_previous = BTreeMap::new();
     let mut projected_current = BTreeMap::new();
     for (key, state) in grid.leaves() {
-        let (baseline_previous_value, baseline_current_value) =
-            if is_computational_boundary(grid, key) {
-                (0.0, 0.0)
-            } else {
-                (mean_previous, mean_current)
-            };
-        baseline_previous.insert(key, baseline_previous_value);
-        baseline_current.insert(key, baseline_current_value);
-        projected_previous.insert(key, state.previous);
-        projected_current.insert(key, state.current);
+        if is_computational_boundary(grid, key) {
+            baseline_previous.insert(key, 0.0);
+            baseline_current.insert(key, 0.0);
+            projected_previous.insert(key, 0.0);
+            projected_current.insert(key, 0.0);
+        } else {
+            let mean = mean_minimum[&key];
+            let velocity = velocity_minimum[&key];
+            baseline_previous.insert(key, mean - 0.5 * time_step * velocity);
+            baseline_current.insert(key, mean + 0.5 * time_step * velocity);
+            projected_previous.insert(key, state.previous);
+            projected_current.insert(key, state.current);
+        }
     }
 
-    // Along baseline + scale * (projection - baseline), both area integrals
-    // remain fixed and boundary values remain zero. The discrete energy is a
-    // quadratic in scale; solve it directly rather than assuming the
-    // baseline is an energy-orthogonal projection.
-    let mut opposite_previous = BTreeMap::new();
-    let mut opposite_current = BTreeMap::new();
-    for key in grid.leaves.keys() {
-        opposite_previous.insert(*key, 2.0 * baseline_previous[key] - projected_previous[key]);
-        opposite_current.insert(*key, 2.0 * baseline_current[key] - projected_current[key]);
-    }
-
-    let baseline_energy = discrete_energy_for_grid(
+    let minimum_energy = discrete_energy_with_stiffness(
         grid,
+        &stiffness,
         &baseline_previous,
         &baseline_current,
         time_step,
         propagation_speed,
         normalization,
     );
-    let projected_energy = discrete_energy_for_grid(
+    let projected_energy = discrete_energy_with_stiffness(
         grid,
+        &stiffness,
         &projected_previous,
         &projected_current,
         time_step,
         propagation_speed,
         normalization,
     );
-    let opposite_energy = discrete_energy_for_grid(
-        grid,
-        &opposite_previous,
-        &opposite_current,
-        time_step,
-        propagation_speed,
-        normalization,
-    );
-    let quadratic = 0.5 * (projected_energy + opposite_energy - 2.0 * baseline_energy);
-    let linear_half = 0.25 * (projected_energy - opposite_energy);
-    let constant = baseline_energy - target_energy;
     let energy_scale = target_energy
         .abs()
-        .max(baseline_energy.abs())
+        .max(minimum_energy.abs())
         .max(projected_energy.abs())
-        .max(opposite_energy.abs())
         .max(1.0);
-    let tolerance = 1.0e-11 * energy_scale;
-    if !quadratic.is_finite()
-        || !linear_half.is_finite()
-        || !constant.is_finite()
-        || quadratic < -tolerance
+    let tolerance = 1.0e-10 * energy_scale;
+    let available_energy = projected_energy - minimum_energy;
+    let required_energy = target_energy - minimum_energy;
+    if !minimum_energy.is_finite()
+        || !projected_energy.is_finite()
+        || available_energy < -tolerance
+        || required_energy < -tolerance
     {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
-
-    let transfer_scale = if quadratic.abs() <= tolerance {
-        if linear_half.abs() <= tolerance {
-            if constant.abs() <= tolerance {
-                1.0
-            } else {
-                return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
-            }
-        } else {
-            -constant / (2.0 * linear_half)
-        }
+    let transfer_scale = if required_energy <= tolerance {
+        0.0
+    } else if available_energy <= tolerance {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     } else {
-        let discriminant = linear_half.powi(2) - quadratic * constant;
-        let discriminant_tolerance = 1.0e-12
-            * linear_half
-                .powi(2)
-                .abs()
-                .max((quadratic * constant).abs())
-                .max(1.0);
-        if !discriminant.is_finite() || discriminant < -discriminant_tolerance {
-            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
-        }
-        let root = discriminant.max(0.0).sqrt();
-        let first = (-linear_half + root) / quadratic;
-        let second = (-linear_half - root) / quadratic;
-        if (first - 1.0).abs() <= (second - 1.0).abs() {
-            first
-        } else {
-            second
-        }
+        (required_energy / available_energy).sqrt()
     };
     if !transfer_scale.is_finite() {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
@@ -921,15 +898,19 @@ fn preserve_regridded_energy(
             return Err(AdaptiveGridError::InvalidState);
         }
     }
-
-    let mut previous = BTreeMap::new();
-    let mut current = BTreeMap::new();
-    for (key, state) in grid.leaves() {
-        previous.insert(key, state.previous);
-        current.insert(key, state.current);
-    }
-    let final_energy = discrete_energy_for_grid(
+    let previous: BTreeMap<_, _> = grid
+        .leaves
+        .iter()
+        .map(|(key, state)| (*key, state.previous))
+        .collect();
+    let current: BTreeMap<_, _> = grid
+        .leaves
+        .iter()
+        .map(|(key, state)| (*key, state.current))
+        .collect();
+    let final_energy = discrete_energy_with_stiffness(
         grid,
+        &stiffness,
         &previous,
         &current,
         time_step,
@@ -942,8 +923,283 @@ fn preserve_regridded_energy(
     Ok(())
 }
 
+/// Finds the minimum of xᵀ(beta M + gamma K)x subject to the area-integral
+/// constraint. The midpoint displacement uses (beta, gamma) = (0, 1);
+/// leapfrog velocity uses (1, -c²dt²/4). Boundary cells remain fixed at zero.
+fn constrained_quadratic_minimizer(
+    keys: &[CellKey],
+    areas: &[f64],
+    stiffness: &StiffnessMatrix,
+    mass_coefficient: f64,
+    stiffness_coefficient: f64,
+    target_integral: f64,
+) -> Result<BTreeMap<CellKey, f64>, AdaptiveGridError> {
+    let count = keys.len();
+    let indices: BTreeMap<_, _> = keys.iter().enumerate().map(|(i, key)| (*key, i)).collect();
+    let mut diagonal = vec![0.0; count];
+    let rhs = areas.to_vec();
+    for (index, key) in keys.iter().enumerate() {
+        let kii = stiffness
+            .get(key)
+            .and_then(|row| row.get(key))
+            .copied()
+            .unwrap_or(0.0);
+        diagonal[index] = mass_coefficient * areas[index] + stiffness_coefficient * kii;
+        if !diagonal[index].is_finite() || diagonal[index] <= 0.0 {
+            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+        }
+    }
+    let apply = |input: &[f64]| -> Vec<f64> {
+        let mut output = vec![0.0; count];
+        for (row_index, key) in keys.iter().enumerate() {
+            let mut kx = 0.0;
+            if let Some(columns) = stiffness.get(key) {
+                for (column, coefficient) in columns {
+                    if let Some(column_index) = indices.get(column) {
+                        kx += coefficient * input[*column_index];
+                    }
+                }
+            }
+            output[row_index] =
+                mass_coefficient * areas[row_index] * input[row_index] + stiffness_coefficient * kx;
+        }
+        output
+    };
+
+    // Jacobi-preconditioned conjugate gradients retain sparse matrix storage.
+    let mut solution = vec![0.0; count];
+    let mut residual = rhs.clone();
+    let mut preconditioned: Vec<_> = residual
+        .iter()
+        .zip(&diagonal)
+        .map(|(value, d)| value / d)
+        .collect();
+    let mut direction = preconditioned.clone();
+    let mut residual_product = dot_product(&residual, &preconditioned);
+    let tolerance = 1.0e-12 * dot_product(&rhs, &rhs).sqrt().max(1.0);
+    let maximum_iterations = count.saturating_mul(20).max(100);
+    let mut converged = dot_product(&residual, &residual).sqrt() <= tolerance;
+    for _ in 0..maximum_iterations {
+        if converged {
+            break;
+        }
+        let applied = apply(&direction);
+        let denominator = dot_product(&direction, &applied);
+        if !denominator.is_finite() || denominator <= 0.0 {
+            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+        }
+        let step = residual_product / denominator;
+        for i in 0..count {
+            solution[i] += step * direction[i];
+            residual[i] -= step * applied[i];
+        }
+        if dot_product(&residual, &residual).sqrt() <= tolerance {
+            converged = true;
+            break;
+        }
+        for i in 0..count {
+            preconditioned[i] = residual[i] / diagonal[i];
+        }
+        let next_product = dot_product(&residual, &preconditioned);
+        if !next_product.is_finite() || residual_product <= 0.0 {
+            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+        }
+        let beta = next_product / residual_product;
+        for i in 0..count {
+            direction[i] = preconditioned[i] + beta * direction[i];
+        }
+        residual_product = next_product;
+    }
+    if !converged {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+    let denominator = keys
+        .iter()
+        .enumerate()
+        .map(|(i, _)| areas[i] * solution[i])
+        .sum::<f64>();
+    if !denominator.is_finite() || denominator <= 0.0 {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+    let scale = target_integral / denominator;
+    if !scale.is_finite() {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+    Ok(keys
+        .iter()
+        .enumerate()
+        .map(|(i, key)| (*key, scale * solution[i]))
+        .collect())
+}
+
+fn dot_product(first: &[f64], second: &[f64]) -> f64 {
+    first
+        .iter()
+        .zip(second)
+        .map(|(left, right)| left * right)
+        .sum()
+}
+
+type StiffnessMatrix = BTreeMap<CellKey, BTreeMap<CellKey, f64>>;
+
+#[derive(Default)]
+struct VertexStiffness {
+    cell_block: BTreeMap<(CellKey, CellKey), f64>,
+    cell_vertex: BTreeMap<CellKey, f64>,
+    vertex_diagonal: f64,
+}
+
+fn add_stiffness_entry(matrix: &mut StiffnessMatrix, row: CellKey, column: CellKey, value: f64) {
+    *matrix.entry(row).or_default().entry(column).or_default() += value;
+}
+
+fn triangle_stiffness(first: (f64, f64), second: (f64, f64), vertex: (f64, f64)) -> [[f64; 3]; 3] {
+    let points = [first, second, vertex];
+    let cross = (points[1].0 - points[0].0) * (points[2].1 - points[0].1)
+        - (points[2].0 - points[0].0) * (points[1].1 - points[0].1);
+    let area = 0.5 * cross.abs();
+    let gradients = [
+        [
+            (points[1].1 - points[2].1) / cross,
+            (points[2].0 - points[1].0) / cross,
+        ],
+        [
+            (points[2].1 - points[0].1) / cross,
+            (points[0].0 - points[2].0) / cross,
+        ],
+        [
+            (points[0].1 - points[1].1) / cross,
+            (points[1].0 - points[0].0) / cross,
+        ],
+    ];
+    let mut result = [[0.0; 3]; 3];
+    for row in 0..3 {
+        for column in 0..3 {
+            result[row][column] = area
+                * (gradients[row][0] * gradients[column][0]
+                    + gradients[row][1] * gradients[column][1]);
+        }
+    }
+    result
+}
+
+/// Builds the symmetric stiffness matrix for the adaptive finite-volume state.
+///
+/// On a uniform mesh, the orthogonal two-point operator is retained exactly.
+/// On a nonuniform mesh, each shared-face endpoint defines a triangle between
+/// the two adjacent cell centers and that geometric vertex. Linear finite
+/// elements are assembled around each vertex, then the massless vertex
+/// degree of freedom is statically condensed. The resulting cell-centered
+/// multipoint operator is symmetric and variational, and reproduces affine
+/// fields across hanging-node interfaces.
+fn stiffness_matrix(grid: &AdaptiveSpatialGrid) -> StiffnessMatrix {
+    let mut matrix: StiffnessMatrix = grid
+        .leaves
+        .keys()
+        .map(|key| (*key, BTreeMap::new()))
+        .collect();
+    let Some(first_key) = grid.leaves.keys().next().copied() else {
+        return matrix;
+    };
+    let uniform_level = grid.leaves.keys().all(|key| key.level == first_key.level);
+
+    if uniform_level {
+        for face in grid.shared_faces() {
+            let conductance = face.length / face.center_distance;
+            add_stiffness_entry(&mut matrix, face.first, face.first, conductance);
+            add_stiffness_entry(&mut matrix, face.second, face.second, conductance);
+            add_stiffness_entry(&mut matrix, face.first, face.second, -conductance);
+            add_stiffness_entry(&mut matrix, face.second, face.first, -conductance);
+        }
+        return matrix;
+    }
+
+    let finest_scale = 1_u32 << grid.max_refinement_level;
+    let finest_spacing = grid.base_spacing / finest_scale as f64;
+    let mut vertices: BTreeMap<(u32, u32), VertexStiffness> = BTreeMap::new();
+
+    for face in grid.shared_faces() {
+        let first_bounds = grid.bounds_for_key(face.first);
+        let second_bounds = grid.bounds_for_key(face.second);
+        let first_center = (
+            0.5 * (first_bounds.min_x + first_bounds.max_x),
+            0.5 * (first_bounds.min_y + first_bounds.max_y),
+        );
+        let second_center = (
+            0.5 * (second_bounds.min_x + second_bounds.max_x),
+            0.5 * (second_bounds.min_y + second_bounds.max_y),
+        );
+
+        for vertex_key in [face.start_vertex, face.end_vertex] {
+            let vertex_position = (
+                vertex_key.0 as f64 * finest_spacing,
+                vertex_key.1 as f64 * finest_spacing,
+            );
+            let local = triangle_stiffness(first_center, second_center, vertex_position);
+            let star = vertices.entry(vertex_key).or_default();
+
+            for (local_row, row_key) in [face.first, face.second].into_iter().enumerate() {
+                for (local_column, column_key) in [face.first, face.second].into_iter().enumerate()
+                {
+                    *star.cell_block.entry((row_key, column_key)).or_default() +=
+                        local[local_row][local_column];
+                }
+                *star.cell_vertex.entry(row_key).or_default() += local[local_row][2];
+            }
+            star.vertex_diagonal += local[2][2];
+        }
+    }
+
+    let world_width = grid.width * finest_scale;
+    let world_height = grid.height * finest_scale;
+    for (vertex_key, star) in vertices {
+        for ((row, column), value) in &star.cell_block {
+            add_stiffness_entry(&mut matrix, *row, *column, *value);
+        }
+
+        let on_boundary = vertex_key.0 == 0
+            || vertex_key.1 == 0
+            || vertex_key.0 == world_width
+            || vertex_key.1 == world_height;
+        if !on_boundary && star.vertex_diagonal > 0.0 {
+            for (row, row_coupling) in &star.cell_vertex {
+                for (column, column_coupling) in &star.cell_vertex {
+                    add_stiffness_entry(
+                        &mut matrix,
+                        *row,
+                        *column,
+                        -row_coupling * column_coupling / star.vertex_diagonal,
+                    );
+                }
+            }
+        }
+    }
+    matrix
+}
+
 fn discrete_energy_for_grid(
     grid: &AdaptiveSpatialGrid,
+    previous: &BTreeMap<CellKey, f64>,
+    current: &BTreeMap<CellKey, f64>,
+    time_step: f64,
+    propagation_speed: f64,
+    normalization: f64,
+) -> f64 {
+    let stiffness = stiffness_matrix(grid);
+    discrete_energy_with_stiffness(
+        grid,
+        &stiffness,
+        previous,
+        current,
+        time_step,
+        propagation_speed,
+        normalization,
+    )
+}
+
+fn discrete_energy_with_stiffness(
+    grid: &AdaptiveSpatialGrid,
+    stiffness: &StiffnessMatrix,
     previous: &BTreeMap<CellKey, f64>,
     current: &BTreeMap<CellKey, f64>,
     time_step: f64,
@@ -956,11 +1212,10 @@ fn discrete_energy_for_grid(
         kinetic_sum += grid.cell_area(*key) * velocity.powi(2);
     }
     let mut gradient_cross_sum = 0.0;
-    for face in grid.shared_faces() {
-        let conductance = face.length / face.center_distance;
-        gradient_cross_sum += conductance
-            * (current[&face.first] - current[&face.second])
-            * (previous[&face.first] - previous[&face.second]);
+    for (row, columns) in stiffness {
+        for (column, coefficient) in columns {
+            gradient_cross_sum += current[row] * coefficient * previous[column];
+        }
     }
     0.5 * normalization * (kinetic_sum + propagation_speed.powi(2) * gradient_cross_sum)
 }
@@ -976,18 +1231,14 @@ fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
         || (bounds.max_y - world_height).abs() <= tolerance
 }
 
-fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid) -> f64 {
-    let mut row_sums: BTreeMap<CellKey, f64> = grid.leaves.keys().map(|key| (*key, 0.0)).collect();
-    for face in grid.shared_faces() {
-        let conductance = face.length / face.center_distance;
-        if !is_computational_boundary(grid, face.first) {
-            *row_sums.get_mut(&face.first).unwrap() += conductance / grid.cell_area(face.first);
-        }
-        if !is_computational_boundary(grid, face.second) {
-            *row_sums.get_mut(&face.second).unwrap() += conductance / grid.cell_area(face.second);
-        }
-    }
-    row_sums.values().copied().fold(0.0, f64::max)
+fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid, stiffness: &StiffnessMatrix) -> f64 {
+    stiffness
+        .iter()
+        .filter(|(key, _)| !is_computational_boundary(grid, **key))
+        .map(|(key, columns)| {
+            columns.values().map(|value| value.abs()).sum::<f64>() / grid.cell_area(*key)
+        })
+        .fold(0.0, f64::max)
 }
 
 fn append_shared_faces(
@@ -995,6 +1246,7 @@ fn append_shared_faces(
     second_sides: &BTreeMap<u32, Vec<(u32, u32, CellKey)>>,
     finest_spacing: f64,
     max_refinement_level: u8,
+    vertical: bool,
     output: &mut Vec<SharedFace>,
 ) {
     for (coordinate, first_segments) in first_sides {
@@ -1020,11 +1272,18 @@ fn append_shared_faces(
                 } else {
                     (second_key, first_key)
                 };
+                let (start_vertex, end_vertex) = if vertical {
+                    ((*coordinate, overlap_start), (*coordinate, overlap_end))
+                } else {
+                    ((overlap_start, *coordinate), (overlap_end, *coordinate))
+                };
                 output.push(SharedFace {
                     first: first_key,
                     second: second_key,
                     length: (overlap_end - overlap_start) as f64 * finest_spacing,
                     center_distance,
+                    start_vertex,
+                    end_vertex,
                 });
             }
             if first_end <= second_end {
@@ -1510,6 +1769,448 @@ mod tests {
                     before_coarsen_integrals.previous_displacement,
                 );
             }
+        }
+    }
+
+    #[test]
+    fn uniformly_refined_adaptive_wave_converges_to_continuum_mode() {
+        fn relative_error(refinement_level: u8) -> f64 {
+            let cells = 17_u32;
+            let spacing = 1.0 / 2_u32.pow(refinement_level as u32) as f64;
+            // The solver fixes the outermost cell centers to zero. Their
+            // physical locations move with refinement, so the analytical
+            // standing-wave domain must move with them as well.
+            let length = cells as f64 - spacing;
+            let speed = 0.2_f64;
+            let mut grid = AdaptiveSpatialGrid::new(cells, cells, 1.0, 2).unwrap();
+
+            if refinement_level >= 1 {
+                for y in 0..cells {
+                    for x in 0..cells {
+                        grid.refine(CellKey { level: 0, x, y }).unwrap();
+                    }
+                }
+            }
+            if refinement_level >= 2 {
+                let level_one: Vec<_> = grid.leaves.keys().copied().collect();
+                for key in level_one {
+                    grid.refine(key).unwrap();
+                }
+            }
+
+            let substeps = (0.4 / spacing).ceil() as usize;
+            let dt = 1.0 / substeps as f64;
+            let omega = speed * std::f64::consts::PI * std::f64::consts::SQRT_2 / length;
+            let mut initial_norm = 0.0;
+            for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = grid.cell_bounds(key).unwrap();
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+                let mode = (std::f64::consts::PI * (center_x - 0.5 * spacing) / length).sin()
+                    * (std::f64::consts::PI * (center_y - 0.5 * spacing) / length).sin();
+                let boundary = is_computational_boundary(&grid, key);
+                let value = if boundary { 0.0 } else { mode };
+                initial_norm += grid.cell_area(key) * value.powi(2);
+                grid.set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: value * (omega * dt).cos(),
+                        current: value,
+                    },
+                )
+                .unwrap();
+            }
+
+            let mut field = AdaptiveWaveField::new(grid, speed, 1.0).unwrap();
+            assert_eq!(field.substeps_per_tick(), substeps);
+            field.advance_ticks(4).unwrap();
+            let time = field.logical_time_ticks();
+            let mut error_squared = 0.0;
+            for (key, state) in field.grid().leaves() {
+                let bounds = field.grid().cell_bounds(key).unwrap();
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+                let mode = (std::f64::consts::PI * (center_x - 0.5 * spacing) / length).sin()
+                    * (std::f64::consts::PI * (center_y - 0.5 * spacing) / length).sin();
+                let exact = mode * (omega * time).cos();
+                error_squared += field.grid().cell_area(key) * (state.current - exact).powi(2);
+            }
+            error_squared.sqrt() / initial_norm.sqrt()
+        }
+
+        let coarse = relative_error(0);
+        let medium = relative_error(1);
+        let fine = relative_error(2);
+        assert!(
+            medium < coarse,
+            "first spatial refinement did not reduce continuum error: coarse={coarse}, medium={medium}"
+        );
+        assert!(
+            fine < medium,
+            "second spatial refinement did not reduce continuum error: medium={medium}, fine={fine}"
+        );
+    }
+
+    #[test]
+    fn coarse_fine_interfaces_preserve_a_linear_field_patch() {
+        let width = 20_u32;
+        let height = 20_u32;
+        let mut grid = AdaptiveSpatialGrid::new(width, height, 1.0, 2).unwrap();
+
+        // A level-one patch surrounded by coarse cells, with a level-two
+        // interior. This exercises both coarse/fine and fine/finer interfaces.
+        for y in 6..14 {
+            for x in 6..14 {
+                grid.refine(CellKey { level: 0, x, y }).unwrap();
+            }
+        }
+        let inner_parents: Vec<_> = (8..12)
+            .flat_map(|y| (8..12).map(move |x| CellKey { level: 0, x, y }))
+            .collect();
+        for parent in inner_parents {
+            let children = [
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2,
+                    y: parent.y * 2,
+                },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2 + 1,
+                    y: parent.y * 2,
+                },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2,
+                    y: parent.y * 2 + 1,
+                },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2 + 1,
+                    y: parent.y * 2 + 1,
+                },
+            ];
+            for child in children {
+                grid.refine(child).unwrap();
+            }
+        }
+
+        for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let value = if is_computational_boundary(&grid, key) {
+                0.0
+            } else {
+                center_x + 2.0 * center_y
+            };
+            grid.set_state(
+                key,
+                AdaptiveCell {
+                    previous: value,
+                    current: value,
+                },
+            )
+            .unwrap();
+        }
+
+        let mut field = AdaptiveWaveField::new(grid, 0.05, 1.0).unwrap();
+        let initial: Vec<_> = field
+            .grid()
+            .leaves()
+            .filter_map(|(key, state)| {
+                let bounds = field.grid().cell_bounds(key)?;
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+                (center_x > 2.0
+                    && center_x < width as f64 - 2.0
+                    && center_y > 2.0
+                    && center_y < height as f64 - 2.0)
+                    .then_some((key, state.current))
+            })
+            .collect();
+
+        field.advance_substeps(1).unwrap();
+        for (key, expected) in initial {
+            let actual = field.grid().leaves.get(&key).unwrap().current;
+            let scale = expected.abs().max(1.0);
+            assert!(
+                (actual - expected).abs() <= 1.0e-11 * scale,
+                "linear patch changed at {key:?}: expected={expected}, actual={actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn wave_energy_remains_conserved_during_propagation_across_refined_interfaces() {
+        let width = 40_u32;
+        let height = 24_u32;
+        let mut grid = AdaptiveSpatialGrid::new(width, height, 1.0, 1).unwrap();
+
+        // A full-height refined strip creates two vertical coarse/fine
+        // interfaces. The packet starts on the coarse side and crosses them.
+        for y in 0..height {
+            for x in 16..24 {
+                grid.refine(CellKey { level: 0, x, y }).unwrap();
+            }
+        }
+
+        for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let boundary = is_computational_boundary(&grid, key);
+            let envelope =
+                (-((center_x - 11.0).powi(2) / 24.0 + (center_y - 12.0).powi(2) / 18.0)).exp();
+            let phase = 0.55 * (center_x - 11.0);
+            let current = if boundary {
+                0.0
+            } else {
+                envelope * phase.cos()
+            };
+            let previous = if boundary {
+                0.0
+            } else {
+                envelope * (phase + 0.55 * 0.15).cos()
+            };
+            grid.set_state(key, AdaptiveCell { previous, current })
+                .unwrap();
+        }
+
+        let mut field = AdaptiveWaveField::new(grid, 0.15, 1.0).unwrap();
+        let initial_energy = field.energy();
+        field.advance_ticks(200).unwrap();
+        let final_energy = field.energy();
+        let relative_drift =
+            (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+        assert!(
+            relative_drift < 1.0e-9,
+            "relative energy drift after crossing coarse/fine interfaces: {relative_drift}"
+        );
+    }
+
+    fn adaptive_layout(
+        outer: (u32, u32, u32, u32),
+        inner: (u32, u32, u32, u32),
+    ) -> AdaptiveSpatialGrid {
+        let mut grid = AdaptiveSpatialGrid::new(24, 24, 1.0, 2).unwrap();
+        let (outer_x0, outer_x1, outer_y0, outer_y1) = outer;
+        for y in outer_y0..outer_y1 {
+            for x in outer_x0..outer_x1 {
+                grid.refine(CellKey { level: 0, x, y }).unwrap();
+            }
+        }
+        let (inner_x0, inner_x1, inner_y0, inner_y1) = inner;
+        for y in inner_y0..inner_y1 {
+            for x in inner_x0..inner_x1 {
+                for child in [
+                    CellKey {
+                        level: 1,
+                        x: 2 * x,
+                        y: 2 * y,
+                    },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x + 1,
+                        y: 2 * y,
+                    },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x,
+                        y: 2 * y + 1,
+                    },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x + 1,
+                        y: 2 * y + 1,
+                    },
+                ] {
+                    grid.refine(child).unwrap();
+                }
+            }
+        }
+        grid
+    }
+
+    #[test]
+    fn multipoint_stiffness_is_symmetric_and_positive_semidefinite_on_adaptive_layouts() {
+        let layouts = [
+            adaptive_layout((6, 18, 3, 21), (9, 15, 8, 16)),
+            adaptive_layout((3, 21, 6, 18), (8, 16, 9, 15)),
+            adaptive_layout((4, 19, 4, 19), (5, 11, 11, 17)),
+            adaptive_layout((2, 13, 8, 22), (4, 10, 12, 19)),
+        ];
+
+        for (layout_index, grid) in layouts.iter().enumerate() {
+            let stiffness = stiffness_matrix(grid);
+            for (row, columns) in &stiffness {
+                for (column, value) in columns {
+                    let transpose = stiffness
+                        .get(column)
+                        .and_then(|entries| entries.get(row))
+                        .copied()
+                        .unwrap_or(0.0);
+                    assert!(
+                        (value - transpose).abs() <= 1.0e-11 * value.abs().max(transpose.abs()).max(1.0),
+                        "layout {layout_index}: K[{row:?},{column:?}]={value}, transpose={transpose}"
+                    );
+                }
+            }
+
+            let keys: Vec<_> = grid.leaves.keys().copied().collect();
+            for vector_kind in 0..8 {
+                let values: BTreeMap<_, _> = keys
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| {
+                        let i = index as f64 + 1.0;
+                        let value = match vector_kind {
+                            0 => 1.0,
+                            1 => i,
+                            2 => (0.37 * i).sin(),
+                            3 => (0.19 * i).cos(),
+                            4 => ((index * 17 % 31) as f64 - 15.0) / 15.0,
+                            5 => (0.11 * i).sin() + (0.23 * i).cos(),
+                            6 => (i / 7.0).sin() * (i / 13.0).cos(),
+                            _ => {
+                                if index % 2 == 0 {
+                                    1.0
+                                } else {
+                                    -1.0
+                                }
+                            }
+                        };
+                        (*key, value)
+                    })
+                    .collect();
+                let mut quadratic = 0.0;
+                let mut scale = 0.0;
+                for (row, columns) in &stiffness {
+                    let row_value = values[row];
+                    let applied = columns
+                        .iter()
+                        .map(|(column, coefficient)| coefficient * values[column])
+                        .sum::<f64>();
+                    quadratic += row_value * applied;
+                    scale += row_value.abs() * applied.abs();
+                }
+                assert!(
+                    quadratic >= -1.0e-10 * scale.max(1.0),
+                    "layout {layout_index}, vector {vector_kind}: negative stiffness quadratic form {quadratic}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn affine_patch_is_preserved_across_varied_interface_orientations_and_locations() {
+        let cases = [
+            ((6, 18, 3, 21), (9, 15, 8, 16), (1.0, 2.0, 0.3)),
+            ((3, 21, 6, 18), (8, 16, 9, 15), (-0.7, 1.4, 2.0)),
+            ((4, 19, 4, 19), (5, 11, 11, 17), (0.35, -1.1, 4.0)),
+            ((2, 13, 8, 22), (4, 10, 12, 19), (1.7, 0.25, -2.0)),
+        ];
+
+        for (case_index, (outer, inner, (slope_x, slope_y, offset))) in
+            cases.into_iter().enumerate()
+        {
+            let mut grid = adaptive_layout(outer, inner);
+            for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = grid.cell_bounds(key).unwrap();
+                let x = 0.5 * (bounds.min_x + bounds.max_x);
+                let y = 0.5 * (bounds.min_y + bounds.max_y);
+                let value = if is_computational_boundary(&grid, key) {
+                    0.0
+                } else {
+                    slope_x * x + slope_y * y + offset
+                };
+                grid.set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: value,
+                        current: value,
+                    },
+                )
+                .unwrap();
+            }
+
+            let mut field = AdaptiveWaveField::new(grid, 0.02, 1.0).unwrap();
+            let initial: Vec<_> = field
+                .grid()
+                .leaves()
+                .filter_map(|(key, state)| {
+                    let bounds = field.grid().cell_bounds(key)?;
+                    let x = 0.5 * (bounds.min_x + bounds.max_x);
+                    let y = 0.5 * (bounds.min_y + bounds.max_y);
+                    (x > 2.0 && x < 22.0 && y > 2.0 && y < 22.0).then_some((key, state.current))
+                })
+                .collect();
+            field.advance_substeps(1).unwrap();
+            for (key, expected) in initial {
+                let actual = field.grid().leaves.get(&key).unwrap().current;
+                let tolerance = 2.0e-10 * expected.abs().max(1.0);
+                assert!(
+                    (actual - expected).abs() <= tolerance,
+                    "case {case_index}, cell {key:?}: affine patch changed from {expected} to {actual}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn adaptive_cfl_bound_is_stable_across_distinct_refinement_patterns() {
+        let layouts = [
+            adaptive_layout((6, 18, 3, 21), (9, 15, 8, 16)),
+            adaptive_layout((3, 21, 6, 18), (8, 16, 9, 15)),
+            adaptive_layout((4, 19, 4, 19), (5, 11, 11, 17)),
+            adaptive_layout((2, 13, 8, 22), (4, 10, 12, 19)),
+        ];
+
+        for (layout_index, grid) in layouts.into_iter().enumerate() {
+            let mut initialized = grid;
+            for key in initialized.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = initialized.cell_bounds(key).unwrap();
+                let x = 0.5 * (bounds.min_x + bounds.max_x);
+                let y = 0.5 * (bounds.min_y + bounds.max_y);
+                let boundary = is_computational_boundary(&initialized, key);
+                let envelope = (-((x - 11.0).powi(2) + (y - 12.0).powi(2)) / 30.0).exp();
+                let phase = 0.41 * x + 0.17 * y;
+                let current = if boundary {
+                    0.0
+                } else {
+                    envelope * phase.cos()
+                };
+                let previous = if boundary {
+                    0.0
+                } else {
+                    envelope * (phase + 0.08).cos()
+                };
+                initialized
+                    .set_state(key, AdaptiveCell { previous, current })
+                    .unwrap();
+            }
+
+            let mut field = AdaptiveWaveField::new(initialized, 0.35, 1.0).unwrap();
+            let row_bound = maximum_stiffness_row_sum(field.grid(), &field.stiffness);
+            let stability_measure = field.propagation_speed * field.time_step * row_bound.sqrt();
+            assert!(
+                stability_measure <= 2.0 + 1.0e-12,
+                "layout {layout_index}: CFL measure {stability_measure} exceeds 2"
+            );
+            let initial_energy = field.energy();
+            assert!(initial_energy.is_finite() && initial_energy > 0.0);
+            field.advance_ticks(300).unwrap();
+            let final_energy = field.energy();
+            let relative_drift =
+                (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+            assert!(
+                relative_drift < 2.0e-9,
+                "layout {layout_index}: relative energy drift after 300 ticks is {relative_drift}"
+            );
+            assert!(field
+                .grid()
+                .leaves()
+                .all(|(_, state)| { state.current.is_finite() && state.previous.is_finite() }));
         }
     }
 }
