@@ -35,6 +35,8 @@ pub(crate) struct ReciprocalSourceField {
     current_field: Vec<f64>,
     previous_source: f64,
     current_source: f64,
+    boundary_damping: Vec<f64>,
+    boundary_absorbed_energy: f64,
     steps_elapsed: u64,
 }
 
@@ -187,8 +189,63 @@ impl ReciprocalSourceField {
             current_field: vec![0.0; cell_count],
             previous_source: initial_source_displacement,
             current_source: initial_source_displacement,
+            boundary_damping: vec![0.0; cell_count],
+            boundary_absorbed_energy: 0.0,
             steps_elapsed: 0,
         })
+    }
+
+    /// Energy removed by the numerical absorbing layer, recorded explicitly.
+    pub(crate) fn boundary_absorbed_energy(&self) -> f64 {
+        self.boundary_absorbed_energy
+    }
+
+    /// Configures a graded sponge layer inside the fixed-zero computational edge.
+    /// This is approximate; residual reflection must be measured for each workload.
+    /// The centered damping term has an exact discrete energy sink.
+    pub(crate) fn configure_absorbing_boundary(
+        &mut self,
+        layer_width: usize,
+        maximum_damping: f64,
+    ) -> Result<(), ReciprocalModelError> {
+        if self.steps_elapsed != 0 {
+            return Err(ReciprocalModelError::InvalidState);
+        }
+        let twice_layer_width = layer_width
+            .checked_mul(2)
+            .ok_or(ReciprocalModelError::InvalidParameter)?;
+        if layer_width == 0
+            || twice_layer_width >= self.width.min(self.height)
+            || !maximum_damping.is_finite()
+            || maximum_damping <= 0.0
+            || !(maximum_damping * self.time_step).is_finite()
+        {
+            return Err(ReciprocalModelError::InvalidParameter);
+        }
+        let side_damping = |distance: usize| {
+            if distance >= layer_width {
+                0.0
+            } else {
+                let depth = (layer_width - distance) as f64 / layer_width as f64;
+                maximum_damping * depth * depth
+            }
+        };
+        let mut damping = vec![0.0; self.current_field.len()];
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let value = side_damping(x)
+                    + side_damping(self.width - 1 - x)
+                    + side_damping(y)
+                    + side_damping(self.height - 1 - y);
+                if !value.is_finite() {
+                    return Err(ReciprocalModelError::InvalidParameter);
+                }
+                damping[self.index(x, y)] = value;
+            }
+        }
+        self.boundary_damping = damping;
+        self.boundary_absorbed_energy = 0.0;
+        Ok(())
     }
 
     pub(crate) fn steps_elapsed(&self) -> u64 {
@@ -266,8 +323,11 @@ impl ReciprocalSourceField {
                     * self.profile[index];
                 let acceleration =
                     self.propagation_speed.powi(2) * laplacian + coupling_acceleration;
-                next_field[index] = 2.0 * self.current_field[index] - self.previous_field[index]
-                    + self.time_step.powi(2) * acceleration;
+                let damping_step = 0.5 * self.boundary_damping[index] * self.time_step;
+                next_field[index] = (2.0 * self.current_field[index]
+                    - (1.0 - damping_step) * self.previous_field[index]
+                    + self.time_step.powi(2) * acceleration)
+                    / (1.0 + damping_step);
             }
         }
 
@@ -282,13 +342,46 @@ impl ReciprocalSourceField {
             .ok_or(ReciprocalModelError::CounterOverflow)?;
 
         let discrete_external_work = 0.5 * external_force * (next_source - old_previous_source);
-        if !discrete_external_work.is_finite() {
+        let mut absorbed_this_step = 0.0;
+        for index in 0..next_field.len() {
+            let damping = self.boundary_damping[index];
+            if damping > 0.0 {
+                let midpoint_velocity =
+                    (next_field[index] - self.previous_field[index]) / (2.0 * self.time_step);
+                absorbed_this_step +=
+                    damping * self.time_step * midpoint_velocity * midpoint_velocity;
+            }
+        }
+        absorbed_this_step *= self.field_normalization * self.spacing.powi(2);
+        let next_absorbed_energy = self.boundary_absorbed_energy + absorbed_this_step;
+        let old_energy = self.total_energy();
+        let next_field_energy = self.discrete_field_energy(&self.current_field, &next_field);
+        let next_source_velocity = (next_source - self.current_source) / self.time_step;
+        let next_source_energy = 0.5
+            * self.source_mass
+            * (next_source_velocity.powi(2)
+                + self.source_frequency.powi(2) * next_source * self.current_source);
+        let next_gap = next_source - self.source_average(&next_field);
+        let current_gap = self.current_source - self.source_average(&self.current_field);
+        let next_coupling_energy = 0.5 * self.coupling_strength * next_gap * current_gap;
+        let next_energy = next_field_energy + next_source_energy + next_coupling_energy;
+        let measured_balance = old_energy + discrete_external_work - next_energy;
+        let tolerance = 1.0e-10
+            * old_energy.abs().max(next_energy.abs()).max(absorbed_this_step.abs()).max(1.0);
+        if !discrete_external_work.is_finite()
+            || !absorbed_this_step.is_finite()
+            || absorbed_this_step < 0.0
+            || !next_absorbed_energy.is_finite()
+            || !next_energy.is_finite()
+            || (measured_balance - absorbed_this_step).abs() > tolerance
+        {
             return Err(ReciprocalModelError::InvalidState);
         }
 
         self.previous_field = std::mem::replace(&mut self.current_field, next_field);
         self.previous_source = self.current_source;
         self.current_source = next_source;
+        self.boundary_absorbed_energy = next_absorbed_energy;
         self.steps_elapsed = next_step;
         Ok(discrete_external_work)
     }
@@ -324,36 +417,7 @@ impl ReciprocalSourceField {
     }
 
     fn field_energy_components(&self) -> (f64, f64, f64) {
-        let area = self.spacing.powi(2);
-        let mut field_kinetic = 0.0;
-        for index in 0..self.current_field.len() {
-            let velocity =
-                (self.current_field[index] - self.previous_field[index]) / self.time_step;
-            field_kinetic += velocity.powi(2);
-        }
-
-        let mut gradient_cross = 0.0;
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let index = self.index(x, y);
-                if x + 1 < self.width {
-                    let current = self.current_field[index] - self.current_field[index + 1];
-                    let previous = self.previous_field[index] - self.previous_field[index + 1];
-                    gradient_cross += current * previous;
-                }
-                if y + 1 < self.height {
-                    let current =
-                        self.current_field[index] - self.current_field[index + self.width];
-                    let previous =
-                        self.previous_field[index] - self.previous_field[index + self.width];
-                    gradient_cross += current * previous;
-                }
-            }
-        }
-
-        let field = 0.5
-            * self.field_normalization
-            * (area * field_kinetic + self.propagation_speed.powi(2) * gradient_cross);
+        let field = self.discrete_field_energy(&self.previous_field, &self.current_field);
         let source_velocity = (self.current_source - self.previous_source) / self.time_step;
         let source = 0.5
             * self.source_mass
@@ -363,6 +427,31 @@ impl ReciprocalSourceField {
         let previous_gap = self.previous_source - self.source_average(&self.previous_field);
         let coupling = 0.5 * self.coupling_strength * current_gap * previous_gap;
         (field, source, coupling)
+    }
+
+    fn discrete_field_energy(&self, previous: &[f64], current: &[f64]) -> f64 {
+        let area = self.spacing.powi(2);
+        let mut field_kinetic = 0.0;
+        for index in 0..current.len() {
+            let velocity = (current[index] - previous[index]) / self.time_step;
+            field_kinetic += velocity.powi(2);
+        }
+        let mut gradient_cross = 0.0;
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let index = self.index(x, y);
+                if x + 1 < self.width {
+                    gradient_cross += (current[index] - current[index + 1])
+                        * (previous[index] - previous[index + 1]);
+                }
+                if y + 1 < self.height {
+                    gradient_cross += (current[index] - current[index + self.width])
+                        * (previous[index] - previous[index + self.width]);
+                }
+            }
+        }
+        0.5 * self.field_normalization
+            * (area * field_kinetic + self.propagation_speed.powi(2) * gradient_cross)
     }
 
     fn source_average(&self, field: &[f64]) -> f64 {
