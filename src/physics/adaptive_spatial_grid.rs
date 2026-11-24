@@ -431,11 +431,18 @@ mod tests {
     #[test]
     fn coarsening_rejects_a_parent_that_would_break_two_to_one_balance() {
         let mut grid = AdaptiveSpatialGrid::new(2, 1, 1.0, 3).unwrap();
-        let coarse_key = CellKey { level: 0, x: 0, y: 0 };
-        grid.refine(coarse_key).unwrap();
-        // A level-2 neighbor is legal beside level-1 leaves, but not beside
-        // the level-0 parent that would result from coarsening.
-        let child = CellKey { level: 1, x: 1, y: 0 };
-        assert_eq!(grid.refine(child), Err(AdaptiveGridError::UnbalancedRefinement));
+        let left_parent = CellKey { level: 0, x: 0, y: 0 };
+        let right_parent = CellKey { level: 0, x: 1, y: 0 };
+        grid.refine(left_parent).unwrap();
+        grid.refine(right_parent).unwrap();
+        // The right parent's leftmost child may refine to level 2 beside
+        // level-1 leaves. Coarsening the left parent would then put a level-0
+        // cell beside a level-2 leaf, violating 2:1 balance.
+        let interface_child = CellKey { level: 1, x: 2, y: 0 };
+        grid.refine(interface_child).unwrap();
+        assert_eq!(
+            grid.coarsen(left_parent),
+            Err(AdaptiveGridError::UnbalancedRefinement)
+        );
     }
 }
