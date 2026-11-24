@@ -503,7 +503,10 @@ mod tests {
         }
         assert!((refined.iter().sum::<f64>() * refined_spacing.powi(2) - 1.0).abs() <= 1.0e-14);
         assert_eq!(coarse[4 * 20 + 3], translated[2 * 20 + 6]);
-        assert!((coarse[4 * 20 + 3] / refined[8 * 40 + 6] - 4.0).abs() < 1.0e-14);
+        assert!(
+            (coarse[4 * 20 + 3] - refined[8 * 40 + 6]).abs() < 1.0e-14,
+            "equal physical footprints must have equal normalized density"
+        );
     }
 
     #[test]
