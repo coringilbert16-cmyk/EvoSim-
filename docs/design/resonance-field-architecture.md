@@ -104,3 +104,10 @@ The existing ledger is reusable implementation infrastructure—not binding phys
 Material resonance is a response/coupling property unless a powered source or conservative coupled degree of freedom is explicitly defined. Activation influence is not spendable energy. Organism-specific reception and energy budgets remain deferred until an organism exists; environmental physics must not be shaped around biological budgeting.
 
 This clarification supersedes any earlier statement that the existing energy ledger's semantics or current reservoir model are inherently authoritative. The controlling reuse map and phase gates are maintained in the implementation roadmap.
+
+
+## Current ambient-field decision
+
+The active energy model is a persistent, spatially uniform ambient background held by the resonance field. Its 24,000-tick daily schedule, 440-cycle carrier, 10 → 1 → 10 cycle-averaged energy-density envelope, and signed generation/withdrawal accounting are implemented in the live simulation (PR #439). The environment area is inventory bookkeeping only, not a propagation boundary. There is no Sun object, external injector, hotspot injector, powered material oscillator, or additional buffer/reservoir in the active model.
+
+The validated finite-speed spatial wave solver remains the propagation foundation. The immediate implementation task is to integrate that solver with the live ambient background and one accounting authority (Phase 3C), then implement passive material interaction through actual exposed physical geometry (Phase 3D). The earlier three-source coupling derivation is historical and superseded. See the [controlling implementation roadmap](resonance-field-implementation-roadmap.md).

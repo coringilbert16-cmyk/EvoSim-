@@ -1,10 +1,12 @@
 # Phase 3B.3 — Physical Source-to-Field Coupling Derivation
 
-**Status:** Active analytical design stage. This document records the state after the isolated Candidate A/B comparison work in PR #433. It is a derivation and decision-gate document, not implementation authorization.
+**Status:** SUPERSEDED — historical research record only. This document records the earlier three-source derivation direction after the isolated Candidate A/B comparison in PR #433. It is retained for provenance and reusable mathematics; it is not an active plan or implementation gate.
 
 **Controlling roadmap:** [Resonance Field — Formal Implementation Roadmap](../design/resonance-field-implementation-roadmap.md)  
 **Phase 1 authority:** [Unified Energy and Continuous Wave-Field Specification](../design/unified-energy-physics-specification.md)  
 **Candidate comparison:** [Phase 3B.2c Continuous Forcing Derivation](PHASE3B2C_CONTINUOUS_FORCING_DERIVATION.md)
+
+> **Current decision:** The user-approved model is a persistent, spatially uniform ambient energy background held by the resonance field, with the 24,000-tick day, 440-cycle carrier, 10 → 1 → 10 envelope, and signed generation/withdrawal accounting implemented in the live simulation (PR #439, merged). No Sun object, external injector, hotspot injector, powered material oscillator, or extra buffer/reservoir is part of the active model. The three-source derivation below is superseded. Do not continue its open questions or repeat its calculations. The controlling next steps are Phase 3C and 3D in [the resonance-field implementation roadmap](../design/resonance-field-implementation-roadmap.md): integrate the already validated spatial solver with the ambient background, then implement passive material interaction.
 
 ## 1. Where the project stands
 

@@ -4,6 +4,12 @@
 #[path = "physics/world_generated_ambient_mode.rs"]
 mod world_generated_ambient_mode;
 
+// Combined ambient-carrier / propagating-disturbance energy and flux identities.
+// Connected to the live field adapter in the next Phase 3C implementation slice.
+#[path = "physics/ambient_spatial_composition.rs"]
+#[allow(dead_code)]
+mod ambient_spatial_composition;
+
 // Isolated Phase 3B hotspot profile mathematics; not connected to live sources.
 #[path = "physics/hotspot_profile.rs"]
 #[allow(dead_code)]
