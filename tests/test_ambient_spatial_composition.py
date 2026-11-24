@@ -124,7 +124,13 @@ def test_additive_field_energy_requires_the_cross_energy_term():
         "normalization": 2.3,
     }
     total = combined_energy_density(**values)
-    disturbance = disturbance_energy_density(**values)
+    disturbance = disturbance_energy_density(
+        field_velocity=values["field_velocity"],
+        field_gradient_x=values["field_gradient_x"],
+        field_gradient_y=values["field_gradient_y"],
+        wave_speed=values["wave_speed"],
+        normalization=values["normalization"],
+    )
     ambient_kinetic = 0.5 * values["normalization"] * values["ambient_velocity"] ** 2
     cross = (
         values["normalization"]
@@ -149,7 +155,13 @@ def test_additive_field_flux_requires_the_cross_flux_term():
         "normalization": 2.3,
     }
     total = combined_flux(**values)
-    disturbance = disturbance_flux(**values)
+    disturbance = disturbance_flux(
+        field_velocity=values["field_velocity"],
+        field_gradient_x=values["field_gradient_x"],
+        field_gradient_y=values["field_gradient_y"],
+        wave_speed=values["wave_speed"],
+        normalization=values["normalization"],
+    )
     expected_cross = tuple(
         -values["normalization"]
         * values["wave_speed"] ** 2
