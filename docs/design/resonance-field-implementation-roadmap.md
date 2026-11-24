@@ -233,22 +233,23 @@ These results remain available as research and reusable code where appropriate. 
 
 #### Phase 3C — Ambient background and spatial field integration: NEXT
 
-**Goal:** Bring the already validated spatial wave field into the live simulation with the approved ambient background as its energy-bearing background state. Preserve the validated propagation behavior and the existing ambient generation/withdrawal contract. Do not add a source injector or a second reservoir.
+**Goal:** Integrate the approved ambient background and the validated finite-speed disturbance physics into the live simulation as one persistent resonance field, using the approved adaptive spatial-grid architecture.
 
 **Implementation order:**
-1. **Integrate the reference field core into the live simulation.** Reuse the validated PR #410 propagation implementation and its numerical choices. Do not rebuild the solver or repeat propagation/convergence experiments. Keep a narrow adapter between the live simulation tick and the field update.
-2. **Represent the approved ambient background in the spatial field.** Use the existing 24,000-tick/440-cycle schedule and 10 → 1 → 10 envelope. The background must remain spatially uniform; the 250 × 250 environment area remains inventory bookkeeping only. Preserve the live ledger's opening/current/generated/withdrawn accounting. Do not model this as a Sun, injector, oscillator, or extra buffer.
-3. **Keep background energy and propagating disturbances in one field/accounting model.** Define the implementation boundary so spatial wave evolution can coexist with the uniform background without double counting, artificial energy creation, or a second energy authority. Reuse the already validated wave equation and discrete work/accounting results; do not reopen settled derivations.
-4. **Make the field persistent and deterministic in production.** Advance it from simulation ticks, independent of runtime pacing; preserve phase, frequency, and state across ticks and save/load boundaries where the simulation already persists state.
-5. **Expose field queries at physical positions and boundaries.** Use the existing geometry foundation. Keep unsupported geometry fail-closed; do not substitute centroid or nearest-point approximations.
-6. **Add only focused integration checks.** Verify ambient schedule/accounting survives integration, the production field advances deterministically, and the reference solver's established propagation behavior is preserved through the adapter. Do not rerun the broad Phase 2 validation suite or launch exploratory parameter sweeps.
+1. **Reuse the validated numerical core.** The reusable leapfrog reference copy is `src/physics/reference_wave_solver.rs` (extracted from PR #410 and retained on main through the Phase 3B work). Preserve its discrete energy invariant, CFL condition, and accounted computational outflow. Do not rebuild it or repeat propagation/convergence experiments.
+2. **Preserve the approved ambient background.** Use the existing 24,000-tick/440-cycle schedule and 10 → 1 → 10 cycle-averaged energy envelope. The background remains spatially uniform; the 250 × 250 area is inventory bookkeeping only. Preserve opening/current/generated/withdrawn accounting. No Sun object, external injector, hotspot injector, powered material oscillator, or extra buffer is introduced.
+3. **Compose ambient and disturbance state correctly.** The total displacement is the ambient carrier plus the spatial disturbance. Retain the validated cross-energy, cross-flux, and signed world-drive terms; never add the two energy inventories naïvely. The periodic amplitude correction now makes the carrier-averaged total oscillator energy match the declared envelope exactly.
+4. **Implement the production adaptive spatial grid.** Keep persistent multi-frequency field state in physical coordinates, refine/coarsen resolution according to field variation, and interpolate queries at arbitrary positions. Use the uniform-grid leapfrog solver as the numerical reference; do not turn its fixed dense computational window into the production world or a physical boundary. Preserve conservative energy/flux transfer across refinement interfaces.
+5. **Integrate with the live simulation clock.** Advance field phase and propagation from logical ticks, independent of runtime pacing. Persist field state wherever the simulation persists its world state.
+6. **Expose physical field queries.** Sample at actual positions and supported material boundaries using the existing geometry foundation. Unsupported geometry remains fail-closed; no centroid or nearest-point shortcuts.
+7. **Run only focused integration checks.** Verify deterministic tick advancement, ambient schedule/accounting, adaptive-grid conservation at refinement interfaces, and agreement with the established uniform-grid reference over the existing validated envelope. Do not rerun the broad Phase 2 validation suite or launch exploratory parameter sweeps.
 
 **Phase 3C exit criteria:**
-- The live simulation owns and advances the validated spatial field.
-- The approved ambient background is represented without an injector, duplicate reservoir, or duplicate ledger.
-- Ambient inventory and field energy reconcile under one accounting authority.
-- The field remains deterministic and independent of wall-clock pacing.
-- No previously validated propagation behavior regresses.
+- The live simulation owns and advances a persistent adaptive spatial resonance field.
+- The approved ambient background and propagating disturbance are composed with the full energy/flux terms.
+- Ambient inventory, field energy, world work, and computational outflow reconcile under one accounting authority.
+- The field is deterministic and independent of wall-clock pacing.
+- The adaptive implementation preserves the validated propagation behavior without introducing a physical boundary.
 
 **Not included in Phase 3C:** material absorption/chemistry settlement, organism behavior, GUI redesign, performance optimization, or new source classes.
 
@@ -387,9 +388,11 @@ Do not use a longer observation window as a substitute for identifying a broken 
 - Phase 3B isolated source-accounting and Candidate A/B mathematical work, retained as historical reusable research only.
 - Live ambient-energy implementation: 24,000-tick day, 440-cycle carrier, 10 → 1 → 10 energy-density envelope, and signed generation/withdrawal accounting. Implemented and full exact-head CI passed in PR #439, merged as `e11ec244d9542b86bb00a3c834f300174b5489e6`.
 
-**Current production gap:** The live simulation has the approved ambient energy schedule and ledger accounting, while the validated spatial wave solver remains a separate reference implementation. The missing work is integration—not another derivation of propagation or another source model.
+**Phase 3C implementation started:** PR #440 adds the periodic envelope-kinetic amplitude correction and the combined ambient/disturbance displacement, energy, cross-flux, and world-drive composition API in production Rust. These use the already completed Phase 3B.3 calculations; no propagation experiment was repeated.
 
-**Next action — Phase 3C:** Integrate the validated spatial wave solver into the live simulation and represent the approved ambient background within that field/accounting model. Follow the ordered implementation steps above. Do not run another broad propagation study, repeat Phase 2 tests, revive Sun/hotspot/material-oscillator injection, add a buffer, or introduce a second energy ledger.
+**Current production gap:** The validated leapfrog solver is still isolated from the live simulation, and the production adaptive spatial-grid adapter has not yet been implemented. The ambient schedule and composition contract are now in code. The remaining work is the adaptive field data structure, conservative refinement-interface transfer, and live tick/query integration—not more propagation derivation or source-model research.
+
+**Next action — Phase 3C:** Build the adaptive spatial-grid adapter around the validated leapfrog update and connect it to the live simulation tick. Use the uniform reference solver as the comparison authority. Do not rebuild the propagation solver, rerun Phase 2 tests, revive Sun/hotspot/material-oscillator injection, add a buffer, or introduce a second energy ledger.
 
 **After Phase 3C:** Complete passive material coupling through supported physical geometry (Phase 3D); integrate field effects with movement and chemistry under one energy authority (Phase 4); optimize measured bottlenecks without physics shortcuts (Phase 5); then retire the legacy resonance path (Phase 6).
 
