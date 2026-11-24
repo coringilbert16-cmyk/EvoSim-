@@ -39,6 +39,55 @@ pub(crate) struct ReciprocalSourceField {
 }
 
 impl ReciprocalSourceField {
+    /// Builds a normalized, spatially uniform coupling profile over a finite
+    /// rectangular accounting footprint embedded inside the numerical grid.
+    ///
+    /// Bounds are cell-index ranges [start, end), and must exclude the outer
+    /// numerical boundary ring. The footprint is an accounting/coupling domain,
+    /// not a physical wave boundary. Its area is the number of covered cells
+    /// multiplied by spacing squared.
+    pub(crate) fn uniform_profile(
+        width: usize,
+        height: usize,
+        spacing: f64,
+        x_start: usize,
+        x_end: usize,
+        y_start: usize,
+        y_end: usize,
+    ) -> Result<Vec<f64>, ReciprocalModelError> {
+        if width < 3
+            || height < 3
+            || !spacing.is_finite()
+            || spacing <= 0.0
+            || x_start == 0
+            || y_start == 0
+            || x_start >= x_end
+            || y_start >= y_end
+            || x_end >= width - 1
+            || y_end >= height - 1
+        {
+            return Err(ReciprocalModelError::InvalidProfile);
+        }
+
+        let covered_cells = (x_end - x_start)
+            .checked_mul(y_end - y_start)
+            .ok_or(ReciprocalModelError::InvalidProfile)?;
+        let cell_area = spacing.powi(2);
+        let footprint_area = covered_cells as f64 * cell_area;
+        let value = 1.0 / footprint_area;
+        if !value.is_finite() || value <= 0.0 {
+            return Err(ReciprocalModelError::InvalidProfile);
+        }
+
+        let mut profile = vec![0.0; width * height];
+        for y in y_start..y_end {
+            for x in x_start..x_end {
+                profile[y * width + x] = value;
+            }
+        }
+        Ok(profile)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         width: usize,
@@ -410,6 +459,87 @@ mod tests {
             1.0,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn uniform_profile_is_constant_only_inside_accounting_footprint() {
+        let width = 16;
+        let height = 14;
+        let spacing = 0.5;
+        let profile =
+            ReciprocalSourceField::uniform_profile(width, height, spacing, 3, 11, 2, 10)
+                .unwrap();
+        let expected = 1.0 / (8.0 * 8.0 * spacing.powi(2));
+
+        for y in 0..height {
+            for x in 0..width {
+                let value = profile[y * width + x];
+                if (3..11).contains(&x) && (2..10).contains(&y) {
+                    assert_eq!(value, expected);
+                } else {
+                    assert_eq!(value, 0.0);
+                }
+            }
+        }
+        let integral = profile.iter().sum::<f64>() * spacing.powi(2);
+        assert!((integral - 1.0).abs() <= 1.0e-14);
+    }
+
+    #[test]
+    fn uniform_profile_integral_is_invariant_under_translation_and_refinement() {
+        let coarse_spacing = 0.5;
+        let coarse = ReciprocalSourceField::uniform_profile(
+            20,
+            18,
+            coarse_spacing,
+            3,
+            11,
+            4,
+            12,
+        )
+        .unwrap();
+        let translated = ReciprocalSourceField::uniform_profile(
+            20,
+            18,
+            coarse_spacing,
+            6,
+            14,
+            2,
+            10,
+        )
+        .unwrap();
+        let refined_spacing = 0.25;
+        let refined = ReciprocalSourceField::uniform_profile(
+            40,
+            36,
+            refined_spacing,
+            6,
+            22,
+            8,
+            24,
+        )
+        .unwrap();
+
+        for profile in [&coarse, &translated] {
+            assert!((profile.iter().sum::<f64>() * coarse_spacing.powi(2) - 1.0).abs()
+                <= 1.0e-14);
+        }
+        assert!((refined.iter().sum::<f64>() * refined_spacing.powi(2) - 1.0).abs()
+            <= 1.0e-14);
+        assert_eq!(coarse[4 * 20 + 3], translated[2 * 20 + 6]);
+        assert!((coarse[4 * 20 + 3] / refined[8 * 40 + 6] - 4.0).abs() < 1.0e-14);
+    }
+
+    #[test]
+    fn uniform_profile_rejects_footprints_touching_numerical_boundary() {
+        assert_eq!(
+            ReciprocalSourceField::uniform_profile(12, 12, 0.5, 0, 8, 2, 10),
+            Err(ReciprocalModelError::InvalidProfile)
+        );
+        assert_eq!(
+            ReciprocalSourceField::uniform_profile(12, 12, 0.5, 2, 11, 2, 10),
+            Err(ReciprocalModelError::InvalidProfile)
+        );
     }
 
     #[test]
