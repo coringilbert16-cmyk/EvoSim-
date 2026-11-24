@@ -109,6 +109,54 @@ def _energy(
     return spacing * total
 
 
+def _patch_energy(
+    state,
+    *,
+    start,
+    end,
+    size,
+    spacing,
+    speed,
+    field_mass,
+    oscillator_mass,
+    omega,
+):
+    """Patch inventory with half of each adjacent field-gradient edge."""
+    w = state[:size]
+    velocity = state[size : 2 * size]
+    q = state[2 * size : 3 * size]
+    q_velocity = state[3 * size :]
+    total = 0.0
+    for index in range(start, end + 1):
+        right_gradient = (w[(index + 1) % size] - w[index]) / spacing
+        left_gradient = (w[index] - w[(index - 1) % size]) / spacing
+        total += 0.5 * field_mass * velocity[index] ** 2
+        total += 0.25 * field_mass * speed**2 * (
+            right_gradient**2 + left_gradient**2
+        )
+        total += 0.5 * oscillator_mass * (
+            q_velocity[index] ** 2 + omega**2 * q[index] ** 2
+        )
+    return spacing * total
+
+
+def _face_flux(
+    state,
+    *,
+    face,
+    size,
+    spacing,
+    speed,
+    field_mass,
+):
+    """Centered-in-time discrete field-energy flux through one grid face."""
+    w = state[:size]
+    velocity = state[size : 2 * size]
+    gradient = (w[(face + 1) % size] - w[face]) / spacing
+    average_velocity = 0.5 * (velocity[face] + velocity[(face + 1) % size])
+    return -field_mass * speed**2 * gradient * average_velocity
+
+
 def _amplitude(time):
     return 1.0 + 0.15 * math.cos(0.4 * time)
 
@@ -267,6 +315,110 @@ class MaterialLocalAmbientCouplingTests(unittest.TestCase):
             self.assertEqual(source_work, 0.0)
         relative_residual = abs(self._energy(state) - initial_energy) / initial_energy
         self.assertLess(relative_residual, 1.0e-12)
+
+    def test_nested_accounting_patches_reconcile_flux_and_world_work(self):
+        operator, factorization = self._system()
+        state = [0.0] * (4 * self.size)
+        for index in range(self.size):
+            position = index - 3.0
+            state[index] = math.exp(-0.5 * (position / 1.4) ** 2)
+            state[self.size + index] = 0.04 * math.sin(0.7 * index)
+            state[2 * self.size + index] = _target_q(0.0, self.omega)
+            state[3 * self.size + index] = _target_q_velocity(0.0, self.omega)
+
+        patches = ((2, 9), (1, 10), (0, self.size - 1))
+        initial = [
+            _patch_energy(
+                state,
+                start=start,
+                end=end,
+                size=self.size,
+                spacing=self.spacing,
+                speed=self.speed,
+                field_mass=self.field_mass,
+                oscillator_mass=self.oscillator_mass,
+                omega=self.omega,
+            )
+            for start, end in patches
+        ]
+        cumulative_flux = [0.0] * len(patches)
+        cumulative_work = [0.0] * len(patches)
+
+        for step_index in range(80):
+            time = step_index * self.step
+            drive = _world_drive(
+                time + 0.5 * self.step,
+                oscillator_mass=self.oscillator_mass,
+                omega=self.omega,
+            )
+            derivative = _matvec(operator, state)
+            rhs = [
+                value + 0.5 * self.step * rate
+                for value, rate in zip(state, derivative)
+            ]
+            for index in range(self.size):
+                rhs[3 * self.size + index] += (
+                    self.step * drive / self.oscillator_mass
+                )
+            next_state = _solve(factorization, rhs)
+            midpoint = [
+                0.5 * (before + after)
+                for before, after in zip(state, next_state)
+            ]
+
+            for patch_index, (start, end) in enumerate(patches):
+                cumulative_work[patch_index] += (
+                    self.step
+                    * self.spacing
+                    * drive
+                    * sum(midpoint[3 * self.size + start : 3 * self.size + end + 1])
+                )
+                right_flux = _face_flux(
+                    midpoint,
+                    face=end,
+                    size=self.size,
+                    spacing=self.spacing,
+                    speed=self.speed,
+                    field_mass=self.field_mass,
+                )
+                left_flux = _face_flux(
+                    midpoint,
+                    face=start - 1,
+                    size=self.size,
+                    spacing=self.spacing,
+                    speed=self.speed,
+                    field_mass=self.field_mass,
+                )
+                cumulative_flux[patch_index] += self.step * (
+                    right_flux - left_flux
+                )
+            state = next_state
+
+        for patch_index, (start, end) in enumerate(patches):
+            final = _patch_energy(
+                state,
+                start=start,
+                end=end,
+                size=self.size,
+                spacing=self.spacing,
+                speed=self.speed,
+                field_mass=self.field_mass,
+                oscillator_mass=self.oscillator_mass,
+                omega=self.omega,
+            )
+            residual = (
+                final
+                - initial[patch_index]
+                + cumulative_flux[patch_index]
+                - cumulative_work[patch_index]
+            )
+            scale = max(
+                abs(final - initial[patch_index]),
+                abs(cumulative_flux[patch_index]),
+                abs(cumulative_work[patch_index]),
+                1.0e-12,
+            )
+            self.assertLess(abs(residual) / scale, 1.0e-10)
 
     def test_driven_coupled_system_reconciles_world_work_without_double_counting(self):
         operator, factorization = self._system()
