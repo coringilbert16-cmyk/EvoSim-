@@ -702,10 +702,13 @@ impl AdaptiveWaveField {
 
 fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
     let bounds = grid.bounds_for_key(key);
-    bounds.min_x == 0.0
-        || bounds.min_y == 0.0
-        || bounds.max_x == grid.width as f64 * grid.base_spacing
-        || bounds.max_y == grid.height as f64 * grid.base_spacing
+    let world_width = grid.width as f64 * grid.base_spacing;
+    let world_height = grid.height as f64 * grid.base_spacing;
+    let tolerance = 1.0e-12 * world_width.max(world_height).max(1.0);
+    bounds.min_x <= tolerance
+        || bounds.min_y <= tolerance
+        || (bounds.max_x - world_width).abs() <= tolerance
+        || (bounds.max_y - world_height).abs() <= tolerance
 }
 
 fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid) -> f64 {
@@ -977,4 +980,106 @@ mod tests {
             Err(AdaptiveGridError::UnbalancedRefinement)
         );
     }
+    fn wave_field(refine_center: bool) -> AdaptiveWaveField {
+        let mut grid = AdaptiveSpatialGrid::new(7, 7, 1.0, 2).unwrap();
+        for y in 1..6 {
+            for x in 1..6 {
+                let dx = x as f64 - 3.0;
+                let dy = y as f64 - 3.0;
+                let profile = (-(dx * dx + dy * dy) / 3.0).exp();
+                grid.set_state(
+                    CellKey { level: 0, x, y },
+                    AdaptiveCell {
+                        previous: 0.03 * profile,
+                        current: 0.1 * profile,
+                    },
+                )
+                .unwrap();
+            }
+        }
+        if refine_center {
+            grid.refine(CellKey {
+                level: 0,
+                x: 3,
+                y: 3,
+            })
+            .unwrap();
+        }
+        AdaptiveWaveField::new(grid, 0.2, 1.3).unwrap()
+    }
+
+    #[test]
+    fn adaptive_leapfrog_preserves_its_discrete_energy_across_coarse_fine_faces() {
+        let mut field = wave_field(true);
+        let initial_energy = field.energy();
+        assert!(initial_energy > 0.0);
+        field.advance_ticks(40).unwrap();
+        let final_energy = field.energy();
+        close(final_energy, initial_energy);
+        assert_eq!(field.logical_time_ticks(), 40.0);
+    }
+
+    #[test]
+    fn adaptive_leapfrog_replay_is_deterministic() {
+        let mut first = wave_field(true);
+        let mut second = first.clone();
+        first.advance_ticks(25).unwrap();
+        second.advance_ticks(25).unwrap();
+        close(first.energy(), second.energy());
+        for y in [1.25, 3.25, 5.25] {
+            for x in [1.25, 3.25, 5.25] {
+                assert_eq!(first.sample(x, y), second.sample(x, y));
+            }
+        }
+    }
+
+    #[test]
+    fn adaptive_sponge_loss_is_reconciled_as_computational_outflow() {
+        let mut grid = AdaptiveSpatialGrid::new(7, 7, 1.0, 1).unwrap();
+        grid.set_state(
+            CellKey {
+                level: 0,
+                x: 1,
+                y: 3,
+            },
+            AdaptiveCell {
+                previous: 0.0,
+                current: 1.0,
+            },
+        )
+        .unwrap();
+        let mut field = AdaptiveWaveField::new(grid, 0.2, 1.0).unwrap();
+        field.configure_absorbing_boundary(2.0, 1.0).unwrap();
+        let initial_energy = field.energy();
+        field.advance_ticks(1).unwrap();
+        let final_energy = field.energy();
+        assert!(field.absorbed_energy() > 0.0);
+        close(initial_energy - final_energy, field.absorbed_energy());
+        assert_eq!(
+            field.configure_absorbing_boundary(1.0, 1.0),
+            Err(AdaptiveGridError::AlreadyStarted)
+        );
+    }
+
+    #[test]
+    fn adaptive_wave_field_rejects_nonzero_computational_boundary_state() {
+        let mut grid = AdaptiveSpatialGrid::new(3, 3, 1.0, 1).unwrap();
+        grid.set_state(
+            CellKey {
+                level: 0,
+                x: 0,
+                y: 1,
+            },
+            AdaptiveCell {
+                previous: 0.0,
+                current: 1.0,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            AdaptiveWaveField::new(grid, 1.0, 1.0).err(),
+            Some(AdaptiveGridError::InvalidState)
+        );
+    }
+
 }
