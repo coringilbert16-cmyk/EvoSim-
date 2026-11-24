@@ -187,11 +187,15 @@ impl WorldGeneratedAmbientMode {
         self.current
     }
 
-    /// Total world generation since this mode's opening inventory.\n    pub(crate) fn cumulative_generated_energy(&self) -> f64 {
+    /// Total world generation since this mode's opening inventory.
+    #[cfg(test)]
+    pub(crate) fn cumulative_generated_energy(&self) -> f64 {
         self.cumulative_generated_energy
     }
 
-    /// Total world withdrawal since this mode's opening inventory.\n    pub(crate) fn cumulative_withdrawn_energy(&self) -> f64 {
+    /// Total world withdrawal since this mode's opening inventory.
+    #[cfg(test)]
+    pub(crate) fn cumulative_withdrawn_energy(&self) -> f64 {
         self.cumulative_withdrawn_energy
     }
 
