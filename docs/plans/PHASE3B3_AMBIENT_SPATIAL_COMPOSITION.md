@@ -182,3 +182,19 @@ This gate passes only when:
 The outcome may be that the selected ambient mode must remain a separate environmental degree of freedom rather than a component of the scalar displacement. That is an acceptable result if it is the only construction consistent with the approved nondispersive disturbance law and auditable energy ownership.
 
 **Production integration remains blocked** until the exit criteria pass and a composition/coupling model is explicitly approved.
+
+
+## 10. Localized packet and patch-balance reference (implementation added; CI pending)
+
+The next reference increment adds `tests/test_ambient_packet_patch_balance.py` with:
+
+- A localized Gaussian traveling packet, an exact right-moving solution of the one-dimensional massless wave equation. Its PDE residual is checked independently with centered finite differences.
+- An explicit uniform harmonic carrier added to that packet only as a forced degree of freedom, with the forcing `b''(t)` retained.
+- A pointwise combined-energy check that includes the ambient/disturbance cross term.
+- A discrete balance over three nested accounting patches. The test evaluates combined field energy, outward boundary flux, and signed ambient forcing work using centered differences and trapezoidal quadrature at two spatial/time resolutions. It requires the normalized residual to remain below 2% at both resolutions. Monotonic residual reduction is deliberately not required because the independently discretized endpoint, boundary, and volume terms can exhibit different cancellation errors.
+- A patch-invariance control showing that changing the integration patch does not alter analytic packet samples.
+- An independent-mode control: oscillator inventory is additive with disturbance inventory, and changing ambient phase does not change the disturbance state.
+
+The reference remains one-dimensional and is not a production solver. Its role is to establish the accounting identity and nested-patch behavior before extending to higher-dimensional packet geometry or proposing a reciprocal coupling law.
+
+**Validation status:** The tests have been committed to this PR branch, but they are not considered validated until the complete exact-head CI run passes. The envelope correction interpretation and a reciprocal coupled-Hamiltonian model remain open decisions. No production integration is authorized.
