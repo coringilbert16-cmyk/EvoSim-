@@ -225,8 +225,7 @@ impl ReciprocalSourceField {
             .checked_add(1)
             .ok_or(ReciprocalModelError::CounterOverflow)?;
 
-        let discrete_external_work =
-            0.5 * external_force * (next_source - old_previous_source);
+        let discrete_external_work = 0.5 * external_force * (next_source - old_previous_source);
         if !discrete_external_work.is_finite() {
             return Err(ReciprocalModelError::InvalidState);
         }
@@ -461,8 +460,14 @@ mod tests {
         assert_eq!(system.steps_elapsed, before.steps_elapsed);
         assert_eq!(system.previous_field, before.previous_field);
         assert_eq!(system.current_field, before.current_field);
-        assert_eq!(system.previous_source.to_bits(), before.previous_source.to_bits());
-        assert_eq!(system.current_source.to_bits(), before.current_source.to_bits());
+        assert_eq!(
+            system.previous_source.to_bits(),
+            before.previous_source.to_bits()
+        );
+        assert_eq!(
+            system.current_source.to_bits(),
+            before.current_source.to_bits()
+        );
     }
 
     #[test]
