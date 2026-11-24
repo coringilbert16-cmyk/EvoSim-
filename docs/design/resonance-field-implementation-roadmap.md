@@ -104,9 +104,8 @@ These invariants are non-negotiable throughout all phases:
 - Only physically exposed, visible receiver boundary portions participate where occlusion applies.
 - Receiver interaction integrates the local field over the exposed receiver boundary, with appropriate material coupling and orientation.
 - Sampling must converge as boundary resolution is refined; the final method must not depend on an arbitrary centroid sample.
-- A true line/boundary emitter uses its complete physical boundary length as its integration measure. This rule does not apply to the external sun.
-- The sun's external radiation is integrated over physical plane area using its source-to-plane geometry, finite travel time, radiation pattern, and incidence projection. Its total intercepted power cannot exceed its emitted power.
-- In-plane distributed sources integrate over their physical support area.
+- Receiver interaction integrates over the actual exposed physical boundary using the supported geometry and material response.
+- Source-footprint integration rules from the earlier Sun/hotspot/line-emitter proposal are historical only; no such source class is active or required by the approved ambient model.
 - No source is renormalized independently for each receiver or according to the visible camera/solver window.
 - Geometry queries must remain deterministic and fail closed for unsupported/ambiguous geometry rather than inventing a substitute shape.
 
@@ -162,9 +161,9 @@ Exit criteria:
 Completed in PR #409:
 - Unified energy ontology and one conservation authority, including source ownership, local availability, material/internal/thermal/structural/work holders, and atomic debit/credit/rollback rules.
 - Continuous scalar wave equation, field energy density and flux, zero empty-space damping, and explicit project-native dimensions.
-- Logical clock: 24,000 ticks per simulated day and per solar orbit; 440 sun-carrier cycles and 880 hotspot-carrier cycles per day. Runtime pacing is execution speed only.
+- Logical clock: 24,000 ticks per simulated day; the approved ambient carrier completes 440 cycles per day. Runtime pacing is execution speed only.
 - Infinite flat-plane geometry, nonphysical viewer/window, temporary laboratory walls as ordinary material objects, and finite computational-window requirements.
-- External isotropic 3D sun geometry, retarded source-to-plane time, exact half-power plane interception, normalized in-plane hotspot source, powered material oscillators, and passive material response.
+- The Phase 1 specification also recorded candidate Sun, hotspot, and powered-material-oscillator source models. Those candidates are historical and are superseded by the later approved ambient-field model; they are not active implementation requirements. Passive material response remains the next material-interaction requirement.
 - Conservative source-work identity, receiver energy partition, deterministic ordering, and transaction/rollback contracts.
 - Uniform Cartesian second-order reference numerics, five-point/leapfrog stability bound, second-order refinement protocol, and numerical-tolerance reporting policy.
 
@@ -288,7 +287,7 @@ Exit criteria:
 **Goal:** Bring the correct implementation to at least break-even performance against the current baseline.
 
 Order of work:
-1. Profile the correct reference/integrated implementation by field propagation, source injection, boundary sampling, coupling integration, ledger settlement, and synchronization.
+1. Profile the correct reference/integrated implementation by ambient-background update, field propagation, boundary sampling, coupling integration, ledger settlement, and synchronization.
 2. Optimize the measured dominant costs only.
 3. Add spatial acceleration for source influence and boundary queries where it preserves the reference solution.
 4. Add incremental updates and revision-based invalidation.
@@ -443,7 +442,7 @@ There must be one conservation/accounting authority for the complete system. The
 - **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
 - The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
 
-**Phase 1 disposition:** COMPLETE. The approved logical clock is 24,000 ticks per simulated day and per solar orbit; 440 and 880 are carrier cycles per day, not additional time scales. Project-native L/tick/E units are authoritative; there is no wall-clock or SI-time calibration. The sun, hotspot, powered material oscillator, passive material response, source ownership, and atomic energy-transfer contracts are specified in the Phase 1 specification. The legacy 2,400-tick orbit and 86,400-second conversion are implementation discrepancies, not model choices. **Phase 2 disposition:** COMPLETE and formally closed as an isolated reference solver; no production integration is implied. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
+**Phase 1 disposition:** COMPLETE as a historical specification milestone, with its candidate Sun/hotspot/powered-oscillator source ontology superseded by the later explicit ambient-field decision. The active logical clock is 24,000 ticks per simulated day; the ambient carrier completes 440 cycles per day. Project-native L/tick/E units are authoritative; no wall-clock or SI-time calibration is required. **Phase 2 disposition:** COMPLETE and formally closed as an isolated reference solver. Its propagation, stability, interference, replay, and convergence work is accepted; do not repeat it. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
 
 ## 11. Active approved model and superseded Phase 1 candidates
 
