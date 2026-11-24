@@ -231,7 +231,7 @@ impl AdaptiveSpatialGrid {
         let parent_bounds = self
             .cell_bounds(key)
             .ok_or(AdaptiveGridError::MissingCell)?;
-        for (neighbor_key, _) in self.leaves.iter() {
+        for neighbor_key in self.leaves.keys() {
             if *neighbor_key != key
                 && cells_share_face(parent_bounds, self.cell_bounds(*neighbor_key).unwrap())
                 && neighbor_key.level + 1 < child_level
@@ -690,7 +690,7 @@ impl AdaptiveWaveField {
         current: &BTreeMap<CellKey, f64>,
     ) -> f64 {
         let mut kinetic_sum = 0.0;
-        for (key, state) in self.grid.leaves.iter() {
+        for key in self.grid.leaves.keys() {
             let velocity = (current[key] - previous[key]) / self.time_step;
             kinetic_sum += self.grid.cell_area(*key) * velocity.powi(2);
         }
@@ -792,21 +792,23 @@ fn shared_face_geometry(a: CellBounds, b: CellBounds) -> Option<(f64, f64)> {
             .max(1.0);
     let vertical_overlap = a.max_y.min(b.max_y) - a.min_y.max(b.min_y);
     let horizontal_overlap = a.max_x.min(b.max_x) - a.min_x.max(b.min_x);
-    if (a.max_x - b.min_x).abs() <= tolerance || (b.max_x - a.min_x).abs() <= tolerance {
-        if vertical_overlap > tolerance {
-            return Some((
-                vertical_overlap,
-                0.5 * (a.max_x - a.min_x + b.max_x - b.min_x),
-            ));
-        }
+    if ((a.max_x - b.min_x).abs() <= tolerance
+        || (b.max_x - a.min_x).abs() <= tolerance)
+        && vertical_overlap > tolerance
+    {
+        return Some((
+            vertical_overlap,
+            0.5 * (a.max_x - a.min_x + b.max_x - b.min_x),
+        ));
     }
-    if (a.max_y - b.min_y).abs() <= tolerance || (b.max_y - a.min_y).abs() <= tolerance {
-        if horizontal_overlap > tolerance {
-            return Some((
-                horizontal_overlap,
-                0.5 * (a.max_y - a.min_y + b.max_y - b.min_y),
-            ));
-        }
+    if ((a.max_y - b.min_y).abs() <= tolerance
+        || (b.max_y - a.min_y).abs() <= tolerance)
+        && horizontal_overlap > tolerance
+    {
+        return Some((
+            horizontal_overlap,
+            0.5 * (a.max_y - a.min_y + b.max_y - b.min_y),
+        ));
     }
     None
 }
