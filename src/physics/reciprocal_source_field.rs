@@ -1082,6 +1082,89 @@ mod tests {
     }
 
     #[test]
+    fn absorbing_boundary_reduces_reflection_and_reconciles_absorbed_energy() {
+        let spacing = 0.2;
+        let time_step = 0.01;
+        let profile = |width, height, x_start, x_end, y_start, y_end| {
+            ReciprocalSourceField::uniform_profile(
+                width, height, spacing, x_start, x_end, y_start, y_end,
+            )
+            .unwrap()
+        };
+        let mut damped = ReciprocalSourceField::new(
+            41, 41, spacing, 1.0, time_step, 1.0, 2.0, 1.5, 0.8,
+            profile(41, 41, 18, 23, 18, 23), 1.0,
+        )
+        .unwrap();
+        damped.configure_absorbing_boundary(8, 5.0).unwrap();
+        let mut undamped = ReciprocalSourceField::new(
+            41, 41, spacing, 1.0, time_step, 1.0, 2.0, 1.5, 0.8,
+            profile(41, 41, 18, 23, 18, 23), 1.0,
+        )
+        .unwrap();
+        let mut expanded = ReciprocalSourceField::new(
+            121, 121, spacing, 1.0, time_step, 1.0, 2.0, 1.5, 0.8,
+            profile(121, 121, 58, 63, 58, 63), 1.0,
+        )
+        .unwrap();
+
+        // The absorber is outside the environmental accounting footprint.
+        for y in 18..23 {
+            for x in 18..23 {
+                assert_eq!(damped.boundary_damping[damped.index(x, y)], 0.0);
+            }
+        }
+
+        let initial_energy = damped.total_energy();
+        let mut early_error: f64 = 0.0;
+        let mut damped_late_error: f64 = 0.0;
+        let mut undamped_late_error: f64 = 0.0;
+        for step in 0..1_000 {
+            damped.step().unwrap();
+            undamped.step().unwrap();
+            expanded.step().unwrap();
+
+            let mut damped_error: f64 = 0.0;
+            let mut undamped_error: f64 = 0.0;
+            for y in 16..25 {
+                for x in 16..25 {
+                    let reference = expanded.field_sample(x + 40, y + 40).unwrap();
+                    damped_error = damped_error.max(
+                        (damped.field_sample(x, y).unwrap() - reference).abs(),
+                    );
+                    undamped_error = undamped_error.max(
+                        (undamped.field_sample(x, y).unwrap() - reference).abs(),
+                    );
+                }
+            }
+            if step == 399 {
+                early_error = damped_error;
+            }
+            if step == 999 {
+                damped_late_error = damped_error;
+                undamped_late_error = undamped_error;
+            }
+
+            let balance = initial_energy - damped.total_energy()
+                - damped.boundary_absorbed_energy();
+            assert!(
+                balance.abs() <= 2.0e-9 * initial_energy.abs().max(1.0),
+                "absorbing-boundary energy residual at step {step}: {balance}"
+            );
+        }
+
+        assert!(
+            early_error <= 1.0e-10,
+            "absorber altered the source region before boundary interaction: {early_error}"
+        );
+        assert!(damped.boundary_absorbed_energy() > 0.0);
+        assert!(
+            damped_late_error < undamped_late_error,
+            "absorber did not reduce reflection: damped={damped_late_error}, undamped={undamped_late_error}"
+        );
+    }
+
+    #[test]
     fn zero_boundary_reflection_is_detected_against_expanded_reference_domain() {
         use super::super::reference_wave_solver::WaveField;
 
