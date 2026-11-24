@@ -462,7 +462,7 @@ The next analytical gate is recorded in [Phase 3B.3 ambient/disturbance spatial 
 - A nonzero-frequency spatially uniform displacement is not a free solution of the massless scalar wave equation; adding it to the disturbance displacement requires an explicit uniform forcing term.
 - The energy and flux of an additive displacement contain cross-energy and cross-flux terms. Ambient and disturbance inventories cannot simply be added while ignoring those terms.
 - The harmonic-oscillator energy used by the ambient-mode state is not the massless wave-field energy; the degree of freedom and its coupling/ownership must be explicit.
-- The slowly varying daily envelope contributes a small but nonzero oscillator-energy correction omitted by the carrier-only amplitude mapping.
+- The slowly varying daily envelope contributes a small but nonzero oscillator-energy correction omitted by the carrier-only amplitude mapping. An isolated periodic fixed-point inversion now removes this approximation while preserving the declared 1–10 carrier-averaged total-energy schedule; see the Phase 3B.3 plan.
 - The finite world area is an accounting patch, not the physical support boundary of a uniform mode on the infinite plane.
 
 These are analytical constraints, not a selected composition law. The required isolated numerical checks are listed in the plan. No global Klein–Gordon term, production solver change, material coupling, chemistry integration, or organism behavior is authorized. Keep the ambient-mode and disturbance systems isolated until a candidate Hamiltonian and its discrete energy balance pass the stated tests.
