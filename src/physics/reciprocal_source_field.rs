@@ -527,6 +527,74 @@ mod tests {
     }
 
     #[test]
+    fn environmental_source_negative_work_returns_energy_atomically() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let mut source = mathematical_source(73, 10.0);
+        let initial_total = system.total_energy();
+
+        let initial_work = system
+            .step_with_environmental_source(&mut source, 5.0)
+            .unwrap();
+        assert!(initial_work > 0.0);
+        let balance_after_debit = source.account().remaining_energy();
+
+        let returned_work = system
+            .step_with_environmental_source(&mut source, -0.1)
+            .unwrap();
+
+        assert!(returned_work < 0.0, "expected returned work, got {returned_work}");
+        assert!(source.account().remaining_energy() > balance_after_debit);
+        assert!(
+            (source.account().remaining_energy() - (10.0 - initial_work - returned_work)).abs()
+                < 1.0e-12
+        );
+        assert!(
+            (source.account().cumulative_field_transfer() - (initial_work + returned_work)).abs()
+                < 1.0e-12
+        );
+        assert!(
+            (system.total_energy() - initial_total - initial_work - returned_work).abs() < 1.0e-10
+        );
+        assert_eq!(system.steps_elapsed(), 2);
+    }
+
+    #[test]
+    fn environmental_source_zero_work_advances_without_changing_account() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let mut source = mathematical_source(74, 10.0);
+        let initial_balance = source.account().remaining_energy();
+        let initial_steps = system.steps_elapsed();
+
+        let work = system
+            .step_with_environmental_source(&mut source, 0.0)
+            .unwrap();
+
+        assert_eq!(work, 0.0);
+        assert_eq!(source.account().remaining_energy(), initial_balance);
+        assert_eq!(source.account().cumulative_field_transfer(), 0.0);
+        assert_eq!(system.steps_elapsed(), initial_steps + 1);
+    }
+
+    #[test]
+    fn environmental_source_invalid_drive_rolls_back_model_and_account() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let before = system.clone();
+        let mut source = mathematical_source(75, 10.0);
+
+        assert_eq!(
+            system.step_with_environmental_source(&mut source, f64::NAN),
+            Err(ReciprocalModelError::InvalidParameter)
+        );
+        assert_eq!(system.steps_elapsed(), before.steps_elapsed());
+        assert_eq!(system.previous_field, before.previous_field);
+        assert_eq!(system.current_field, before.current_field);
+        assert_eq!(system.previous_source.to_bits(), before.previous_source.to_bits());
+        assert_eq!(system.current_source.to_bits(), before.current_source.to_bits());
+        assert_eq!(source.account().remaining_energy(), 10.0);
+        assert_eq!(source.account().cumulative_field_transfer(), 0.0);
+    }
+
+    #[test]
     fn environmental_source_overdraw_rolls_back_model_and_account() {
         let mut system = model(1.5, 0.2, 0.005);
         let before = system.clone();
