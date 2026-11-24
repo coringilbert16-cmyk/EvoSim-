@@ -70,6 +70,8 @@ impl AmbientSpatialComposition {
             ambient.carrier_value,
             ambient.carrier_velocity,
             ambient.carrier_acceleration,
+            ambient.field_normalization,
+            ambient.instantaneous_oscillator_energy_density,
             ambient.angular_frequency,
             disturbance.displacement,
             disturbance.velocity,
@@ -78,6 +80,9 @@ impl AmbientSpatialComposition {
         ];
         if inputs.iter().any(|value| !value.is_finite()) || ambient.angular_frequency <= 0.0 {
             return Err(CompositionError::InvalidState);
+        }
+        if ambient.field_normalization.to_bits() != self.field_normalization.to_bits() {
+            return Err(CompositionError::InvalidParameter);
         }
 
         let velocity = ambient.carrier_velocity + disturbance.velocity;
@@ -88,10 +93,7 @@ impl AmbientSpatialComposition {
 
         let disturbance_energy_density =
             0.5 * normalization * (disturbance.velocity.powi(2) + speed_squared * gradient_squared);
-        let ambient_oscillator_energy_density = 0.5
-            * normalization
-            * (ambient.carrier_velocity.powi(2)
-                + ambient.angular_frequency.powi(2) * ambient.carrier_value.powi(2));
+        let ambient_oscillator_energy_density = ambient.instantaneous_oscillator_energy_density;
         let cross_energy_density = normalization * ambient.carrier_velocity * disturbance.velocity;
         let energy_density =
             disturbance_energy_density + ambient_oscillator_energy_density + cross_energy_density;
@@ -143,8 +145,8 @@ mod tests {
     use super::*;
     use crate::world_generated_ambient_mode::{AmbientModeConfig, WorldGeneratedAmbientMode};
 
-    fn ambient_sample() -> AmbientModeSample {
-        let config = AmbientModeConfig::new(1.0, 1.0, 0.0, 0.0).unwrap();
+    fn ambient_sample(field_normalization: f64) -> AmbientModeSample {
+        let config = AmbientModeConfig::new(1.0, field_normalization, 0.0, 0.0).unwrap();
         WorldGeneratedAmbientMode::new(config, 317)
             .unwrap()
             .sample()
@@ -152,14 +154,15 @@ mod tests {
 
     #[test]
     fn combined_energy_retains_the_cross_term() {
-        let ambient = ambient_sample();
+        let normalization = 1.7;
+        let ambient = ambient_sample(normalization);
         let disturbance = DisturbanceSample {
             displacement: 0.25,
             velocity: -0.37,
             gradient_x: 0.21,
             gradient_y: -0.13,
         };
-        let composition = AmbientSpatialComposition::new(1.7, 1.2).unwrap();
+        let composition = AmbientSpatialComposition::new(normalization, 1.2).unwrap();
         let sample = composition.compose(ambient, disturbance).unwrap();
 
         let expected_cross = 1.7 * ambient.carrier_velocity * disturbance.velocity;
@@ -176,14 +179,14 @@ mod tests {
 
     #[test]
     fn combined_flux_retains_the_ambient_cross_flux() {
-        let ambient = ambient_sample();
+        let normalization = 2.0;
+        let ambient = ambient_sample(normalization);
         let disturbance = DisturbanceSample {
             displacement: 0.0,
             velocity: 0.42,
             gradient_x: -0.18,
             gradient_y: 0.31,
         };
-        let normalization = 2.0;
         let speed = 1.3;
         let sample = AmbientSpatialComposition::new(normalization, speed)
             .unwrap()
@@ -204,14 +207,14 @@ mod tests {
 
     #[test]
     fn world_drive_power_includes_disturbance_work() {
-        let ambient = ambient_sample();
+        let normalization = 1.4;
+        let ambient = ambient_sample(normalization);
         let disturbance = DisturbanceSample {
             displacement: 0.0,
             velocity: 0.6,
             gradient_x: 0.0,
             gradient_y: 0.0,
         };
-        let normalization = 1.4;
         let sample = AmbientSpatialComposition::new(normalization, 1.0)
             .unwrap()
             .compose(ambient, disturbance)
