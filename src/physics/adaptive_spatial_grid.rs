@@ -476,8 +476,7 @@ impl AdaptiveWaveField {
         let required_substeps = if maximum_row_sum == 0.0 {
             1.0
         } else {
-            let maximum_time_step =
-                (2.0 / maximum_row_sum).sqrt() / propagation_speed;
+            let maximum_time_step = (2.0 / maximum_row_sum).sqrt() / propagation_speed;
             (1.0 / maximum_time_step).ceil().max(1.0)
         };
         if !required_substeps.is_finite() || required_substeps > usize::MAX as f64 {
@@ -616,8 +615,7 @@ impl AdaptiveWaveField {
             let damping = self.damping_at(center_x, center_y);
             let damping_step = 0.5 * damping * dt;
             let area = self.grid.cell_area(*key);
-            let next = (2.0 * state.current
-                - (1.0 - damping_step) * state.previous
+            let next = (2.0 * state.current - (1.0 - damping_step) * state.previous
                 + dt.powi(2) * speed_squared * face_sums[key] / area)
                 / (1.0 + damping_step);
             if !next.is_finite() {
@@ -678,10 +676,7 @@ impl AdaptiveWaveField {
         };
         let world_width = self.grid.width as f64 * self.grid.base_spacing;
         let world_height = self.grid.height as f64 * self.grid.base_spacing;
-        let distance = x
-            .min(world_width - x)
-            .min(y)
-            .min(world_height - y);
+        let distance = x.min(world_width - x).min(y).min(world_height - y);
         if distance >= layer_width {
             0.0
         } else {
@@ -724,8 +719,7 @@ fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
 }
 
 fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid) -> f64 {
-    let mut row_sums: BTreeMap<CellKey, f64> =
-        grid.leaves.keys().map(|key| (*key, 0.0)).collect();
+    let mut row_sums: BTreeMap<CellKey, f64> = grid.leaves.keys().map(|key| (*key, 0.0)).collect();
     for face in grid.shared_faces() {
         let conductance = face.length / face.center_distance;
         if !is_computational_boundary(grid, face.first) {
@@ -1107,5 +1101,4 @@ mod tests {
             Some(AdaptiveGridError::InvalidState)
         );
     }
-
 }
