@@ -240,3 +240,44 @@ This candidate is not selected. It identifies a constraint for subsequent work:
 - The oscillator field's energy density can be finite locally while its integral over an infinite uniform plane is infinite. Whole-plane inventory therefore needs a density-based or finite-excess formulation; the finite accounting patch remains a reporting window only.
 
 The next viable question is therefore not “how do we couple the ambient mode everywhere without changing dispersion?” The bulk candidate shows that this cannot be done with this minimal local Hamiltonian. The next candidate to analyze is a conservative, material-local interaction, with the ambient field treated as an independently owned local degree of freedom and with exact equal-and-opposite work at the interface. This remains analytical work only; no material coupling is implemented or authorized.
+
+
+## 12. Stable derivative-coupling comparison (analysis only)
+
+A second reciprocal interaction couples the ambient coordinate to the disturbance velocity:
+
+\[
+\mathcal L =
+\frac K2(w_t^2-c^2|\nabla w|^2)
++\frac M2(q_t^2-\Omega^2q^2)
++gq w_t.
+\]
+
+Its canonical Hamiltonian density is
+
+\[
+\mathcal H =
+\frac{(\pi_w-gq)^2}{2K}
++\frac{\pi_q^2}{2M}
++\frac{Kc^2}{2}|\nabla w|^2
++\frac{M\Omega^2}{2}q^2.
+\]
+
+For positive (K,M), this expression is bounded below. The coupled equations are
+
+\[
+w_{tt}=c^2\nabla^2w-\frac gKq_t,
+\qquad
+q_{tt}+\Omega^2q=\frac gM w_t,
+\]
+
+and the plane-wave dispersion relation becomes
+
+\[
+(c^2k^2-\omega^2)(\Omega^2-\omega^2)
+-\frac{g^2\omega^2}{KM}=0.
+\]
+
+This avoids the instability of the bilinear displacement coupling, but nonzero bulk coupling still changes the disturbance dispersion. It therefore also fails the requirement of exact nondispersive propagation throughout empty space.
+
+A potentially admissible *material-local* version would set the coupling to zero in empty space and activate it only through a separately defined physical material interface. Then the empty-space equation remains massless and nondispersive, while energy can exchange reciprocally at the interface. That construction still requires a spatially varying Hamiltonian, interface matching conditions, a proof of equal-and-opposite work, and discrete conservation/convergence tests. It is a candidate for further derivation, not an approved model or implementation.
