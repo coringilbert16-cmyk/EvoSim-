@@ -1234,6 +1234,52 @@ mod tests {
             farther_boundary_late_error < damped_late_error,
             "moving the boundary farther away did not reduce residual reflection: near={damped_late_error}, far={farther_boundary_late_error}"
         );
+        // Resolve the residual comparison by propagation direction. The
+        // eight probes sit four cells from the source center: four cardinal
+        // directions and four diagonals. Each bounded-domain sample is
+        // compared with the same physical point in the expanded reference.
+        let probes = [
+            (4_isize, 0_isize),
+            (-4, 0),
+            (0, 4),
+            (0, -4),
+            (3, 3),
+            (-3, 3),
+            (3, -3),
+            (-3, -3),
+        ];
+        let mut near_cardinal_error: f64 = 0.0;
+        let mut far_cardinal_error: f64 = 0.0;
+        let mut near_diagonal_error: f64 = 0.0;
+        let mut far_diagonal_error: f64 = 0.0;
+        for (dx, dy) in probes {
+            let near_x = (20_isize + dx) as usize;
+            let near_y = (20_isize + dy) as usize;
+            let far_x = (30_isize + dx) as usize;
+            let far_y = (30_isize + dy) as usize;
+            let reference_x = (60_isize + dx) as usize;
+            let reference_y = (60_isize + dy) as usize;
+            let reference = expanded.field_sample(reference_x, reference_y).unwrap();
+            let near_error =
+                (damped.field_sample(near_x, near_y).unwrap() - reference).abs();
+            let far_error =
+                (farther_boundary.field_sample(far_x, far_y).unwrap() - reference).abs();
+            if dx == 0 || dy == 0 {
+                near_cardinal_error = near_cardinal_error.max(near_error);
+                far_cardinal_error = far_cardinal_error.max(far_error);
+            } else {
+                near_diagonal_error = near_diagonal_error.max(near_error);
+                far_diagonal_error = far_diagonal_error.max(far_error);
+            }
+        }
+        assert!(
+            far_cardinal_error < near_cardinal_error,
+            "farther boundary did not reduce cardinal residuals: near={near_cardinal_error}, far={far_cardinal_error}"
+        );
+        assert!(
+            far_diagonal_error < near_diagonal_error,
+            "farther boundary did not reduce diagonal residuals: near={near_diagonal_error}, far={far_diagonal_error}"
+        );
     }
 
     #[test]
