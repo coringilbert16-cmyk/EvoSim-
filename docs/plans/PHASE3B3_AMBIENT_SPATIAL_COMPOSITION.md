@@ -230,6 +230,8 @@ For a plane-wave mode, the coupled dispersion relation is
 
 For any nonzero (g), the disturbance branch is no longer exactly \(\omega^2=c^2k^2\). This is a direct demonstration that a bulk, pointwise reciprocal coupling between a local ambient oscillator field and the disturbance field changes the dispersion relation. It is not an acceptable coupling if exact nondispersive propagation must hold everywhere.
 
+There is a second, stronger defect in this minimal bilinear model: its quadratic Hamiltonian is not bounded below for any nonzero \\(g\\). At zero spatial wave number, the dispersion polynomial has one negative \\(\\omega^2\\) root, corresponding to an exponentially growing mode. Thus this is a diagnostic no-go example, not a stable coupling candidate. Stabilizing it would require changing the interaction or adding further physical terms; those changes must be derived and re-tested rather than inserted as numerical fixes.
+
 This candidate is not selected. It identifies a constraint for subsequent work:
 
 - If the coupling exists throughout empty space, exact massless nondispersive propagation is lost for nonzero reciprocal coupling.
