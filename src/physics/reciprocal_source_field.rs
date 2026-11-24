@@ -1009,8 +1009,7 @@ mod tests {
             2.0,
             1.5,
             0.8,
-            ReciprocalSourceField::uniform_profile(41, 41, spacing, 18, 23, 18, 23)
-                .unwrap(),
+            ReciprocalSourceField::uniform_profile(41, 41, spacing, 18, 23, 18, 23).unwrap(),
             1.0,
         )
         .unwrap();
@@ -1027,8 +1026,7 @@ mod tests {
             2.0,
             1.5,
             0.8,
-            ReciprocalSourceField::uniform_profile(121, 121, spacing, 58, 63, 58, 63)
-                .unwrap(),
+            ReciprocalSourceField::uniform_profile(121, 121, spacing, 58, 63, 58, 63).unwrap(),
             1.0,
         )
         .unwrap();
@@ -1102,5 +1100,4 @@ mod tests {
             "expected measurable zero-boundary contamination, got {late_maximum_difference}"
         );
     }
-
 }
