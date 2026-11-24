@@ -54,6 +54,9 @@ pub(crate) struct SharedFace {
     pub(crate) length: f64,
     /// Physical distance between the two cell centers, normal to the face.
     pub(crate) center_distance: f64,
+    /// Endpoints of this shared face segment in finest-grid integer coordinates.
+    pub(crate) start_vertex: (u32, u32),
+    pub(crate) end_vertex: (u32, u32),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -388,6 +391,7 @@ impl AdaptiveSpatialGrid {
             &vertical_left,
             finest_spacing,
             self.max_refinement_level,
+            true,
             &mut faces,
         );
         append_shared_faces(
@@ -395,6 +399,7 @@ impl AdaptiveSpatialGrid {
             &horizontal_bottom,
             finest_spacing,
             self.max_refinement_level,
+            false,
             &mut faces,
         );
         faces.sort_by_key(|face| (face.first, face.second));
@@ -431,13 +436,15 @@ impl AdaptiveSpatialGrid {
     }
 }
 
-/// Conservative finite-volume leapfrog evolution on a fixed adaptive mesh.
+/// Conservative leapfrog evolution on a fixed adaptive mesh.
 ///
-/// Each leaf cell contributes its physical area as mass. Shared faces use the
-/// symmetric conductance length / center_distance, making the stiffness
-/// operator symmetric across coarse/fine interfaces. The corresponding
-/// discrete invariant is the mass-weighted kinetic term plus the
-/// cross-time-level face-gradient term.
+/// Cell areas form the diagonal mass matrix. Uniform meshes retain the
+/// validated two-point finite-volume stencil. Nonuniform meshes use a
+/// symmetric variational multipoint stiffness operator: face-endpoint
+/// subtriangles are assembled as linear finite elements and their massless
+/// vertex degrees of freedom are statically condensed. This accounts for
+/// tangential center offsets while retaining a symmetric positive
+/// semidefinite stiffness matrix and a matching discrete energy invariant.
 #[derive(Clone, Debug)]
 pub(crate) struct AdaptiveWaveField {
     grid: AdaptiveSpatialGrid,
@@ -477,7 +484,7 @@ impl AdaptiveWaveField {
         let required_substeps = if maximum_row_sum == 0.0 {
             1.0
         } else {
-            let maximum_time_step = (2.0 / maximum_row_sum).sqrt() / propagation_speed;
+            let maximum_time_step = (4.0 / maximum_row_sum).sqrt() / propagation_speed;
             (1.0 / maximum_time_step).ceil().max(1.0)
         };
         if !required_substeps.is_finite() || required_substeps > usize::MAX as f64 {
@@ -486,7 +493,7 @@ impl AdaptiveWaveField {
         let substeps_per_tick = required_substeps as usize;
         let time_step = 1.0 / substeps_per_tick as f64;
         if !time_step.is_finite()
-            || propagation_speed * time_step * (2.0 * maximum_row_sum).sqrt() > 2.0 + 1.0e-12
+            || propagation_speed * time_step * maximum_row_sum.sqrt() > 2.0 + 1.0e-12
         {
             return Err(AdaptiveGridError::UnstableTimeStep);
         }
@@ -548,7 +555,7 @@ impl AdaptiveWaveField {
         // original solver's stability envelope.
         let maximum_row_sum = maximum_stiffness_row_sum(&candidate);
         let stability_measure =
-            self.propagation_speed * self.time_step * (2.0 * maximum_row_sum).sqrt();
+            self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
         if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
             return Err(AdaptiveGridError::UnstableTimeStep);
         }
@@ -664,15 +671,15 @@ impl AdaptiveWaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), AdaptiveGridError> {
-        let faces = self.grid.shared_faces();
+        let stiffness = stiffness_matrix(&self.grid);
         let mut face_sums: BTreeMap<CellKey, f64> =
             self.grid.leaves.keys().map(|key| (*key, 0.0)).collect();
-        for face in &faces {
-            let first = self.grid.leaves[&face.first].current;
-            let second = self.grid.leaves[&face.second].current;
-            let conductance = face.length / face.center_distance;
-            *face_sums.get_mut(&face.first).unwrap() += conductance * (second - first);
-            *face_sums.get_mut(&face.second).unwrap() += conductance * (first - second);
+        for (row, columns) in &stiffness {
+            let applied = columns
+                .iter()
+                .map(|(column, coefficient)| coefficient * self.grid.leaves[column].current)
+                .sum::<f64>();
+            face_sums.insert(*row, -applied);
         }
 
         let dt = self.time_step;
