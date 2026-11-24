@@ -78,10 +78,7 @@ impl AdaptiveSpatialGrid {
         if width == 0 || height == 0 {
             return Err(AdaptiveGridError::InvalidDimensions);
         }
-        if !base_spacing.is_finite()
-            || base_spacing <= 0.0
-            || max_refinement_level > 20
-        {
+        if !base_spacing.is_finite() || base_spacing <= 0.0 || max_refinement_level > 20 {
             return Err(AdaptiveGridError::InvalidParameter);
         }
         let finest_scale = 1_u32
@@ -185,16 +182,40 @@ impl AdaptiveSpatialGrid {
             return Err(AdaptiveGridError::MaximumRefinementReached);
         }
         let child_level = key.level + 1;
-        let child_x = key.x.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?;
-        let child_y = key.y.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?;
+        let child_x = key
+            .x
+            .checked_mul(2)
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
+        let child_y = key
+            .y
+            .checked_mul(2)
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
         let children = [
-            CellKey { level: child_level, x: child_x, y: child_y },
-            CellKey { level: child_level, x: child_x + 1, y: child_y },
-            CellKey { level: child_level, x: child_x, y: child_y + 1 },
-            CellKey { level: child_level, x: child_x + 1, y: child_y + 1 },
+            CellKey {
+                level: child_level,
+                x: child_x,
+                y: child_y,
+            },
+            CellKey {
+                level: child_level,
+                x: child_x + 1,
+                y: child_y,
+            },
+            CellKey {
+                level: child_level,
+                x: child_x,
+                y: child_y + 1,
+            },
+            CellKey {
+                level: child_level,
+                x: child_x + 1,
+                y: child_y + 1,
+            },
         ];
 
-        let parent_bounds = self.cell_bounds(key).ok_or(AdaptiveGridError::MissingCell)?;
+        let parent_bounds = self
+            .cell_bounds(key)
+            .ok_or(AdaptiveGridError::MissingCell)?;
         for (neighbor_key, _) in self.leaves.iter() {
             if *neighbor_key != key
                 && cells_share_face(parent_bounds, self.cell_bounds(*neighbor_key).unwrap())
@@ -213,21 +234,40 @@ impl AdaptiveSpatialGrid {
 
     /// Coarsens four sibling leaves into their parent using area-weighted
     /// restriction. The parent is not created if it would violate 2:1 balance.
-    pub(crate) fn coarsen(
-        &mut self,
-        parent: CellKey,
-    ) -> Result<AdaptiveCell, AdaptiveGridError> {
+    pub(crate) fn coarsen(&mut self, parent: CellKey) -> Result<AdaptiveCell, AdaptiveGridError> {
         let child_level = parent
             .level
             .checked_add(1)
             .ok_or(AdaptiveGridError::IncompleteChildren)?;
-        let child_x = parent.x.checked_mul(2).ok_or(AdaptiveGridError::IncompleteChildren)?;
-        let child_y = parent.y.checked_mul(2).ok_or(AdaptiveGridError::IncompleteChildren)?;
+        let child_x = parent
+            .x
+            .checked_mul(2)
+            .ok_or(AdaptiveGridError::IncompleteChildren)?;
+        let child_y = parent
+            .y
+            .checked_mul(2)
+            .ok_or(AdaptiveGridError::IncompleteChildren)?;
         let children = [
-            CellKey { level: child_level, x: child_x, y: child_y },
-            CellKey { level: child_level, x: child_x + 1, y: child_y },
-            CellKey { level: child_level, x: child_x, y: child_y + 1 },
-            CellKey { level: child_level, x: child_x + 1, y: child_y + 1 },
+            CellKey {
+                level: child_level,
+                x: child_x,
+                y: child_y,
+            },
+            CellKey {
+                level: child_level,
+                x: child_x + 1,
+                y: child_y,
+            },
+            CellKey {
+                level: child_level,
+                x: child_x,
+                y: child_y + 1,
+            },
+            CellKey {
+                level: child_level,
+                x: child_x + 1,
+                y: child_y + 1,
+            },
         ];
         let states = children.map(|key| {
             self.leaves
@@ -395,12 +435,9 @@ fn append_shared_faces(
             let overlap_start = first_start.max(second_start);
             let overlap_end = first_end.min(second_end);
             if overlap_end > overlap_start {
-                let first_width =
-                    1_u32 << (max_refinement_level - first_key.level);
-                let second_width =
-                    1_u32 << (max_refinement_level - second_key.level);
-                let center_distance =
-                    0.5 * (first_width + second_width) as f64 * finest_spacing;
+                let first_width = 1_u32 << (max_refinement_level - first_key.level);
+                let second_width = 1_u32 << (max_refinement_level - second_key.level);
+                let center_distance = 0.5 * (first_width + second_width) as f64 * finest_spacing;
                 let (first_key, second_key) = if first_key < second_key {
                     (first_key, second_key)
                 } else {
@@ -428,17 +465,29 @@ fn cells_share_face(a: CellBounds, b: CellBounds) -> bool {
 }
 
 fn shared_face_geometry(a: CellBounds, b: CellBounds) -> Option<(f64, f64)> {
-    let tolerance = 1.0e-12 * a.max_x.abs().max(a.max_y.abs()).max(b.max_x.abs()).max(b.max_y.abs()).max(1.0);
+    let tolerance = 1.0e-12
+        * a.max_x
+            .abs()
+            .max(a.max_y.abs())
+            .max(b.max_x.abs())
+            .max(b.max_y.abs())
+            .max(1.0);
     let vertical_overlap = a.max_y.min(b.max_y) - a.min_y.max(b.min_y);
     let horizontal_overlap = a.max_x.min(b.max_x) - a.min_x.max(b.min_x);
     if (a.max_x - b.min_x).abs() <= tolerance || (b.max_x - a.min_x).abs() <= tolerance {
         if vertical_overlap > tolerance {
-            return Some((vertical_overlap, 0.5 * (a.max_x - a.min_x + b.max_x - b.min_x)));
+            return Some((
+                vertical_overlap,
+                0.5 * (a.max_x - a.min_x + b.max_x - b.min_x),
+            ));
         }
     }
     if (a.max_y - b.min_y).abs() <= tolerance || (b.max_y - a.min_y).abs() <= tolerance {
         if horizontal_overlap > tolerance {
-            return Some((horizontal_overlap, 0.5 * (a.max_y - a.min_y + b.max_y - b.min_y)));
+            return Some((
+                horizontal_overlap,
+                0.5 * (a.max_y - a.min_y + b.max_y - b.min_y),
+            ));
         }
     }
     None
@@ -449,7 +498,10 @@ mod tests {
     use super::*;
 
     fn close(a: f64, b: f64) {
-        assert!((a - b).abs() <= 1.0e-12 * a.abs().max(b.abs()).max(1.0), "{a} != {b}");
+        assert!(
+            (a - b).abs() <= 1.0e-12 * a.abs().max(b.abs()).max(1.0),
+            "{a} != {b}"
+        );
     }
 
     #[test]
