@@ -775,17 +775,14 @@ fn preserve_regridded_energy(
     target_energy: f64,
 ) -> Result<(), AdaptiveGridError> {
     let integrated = grid.integrated_state();
-    let total_area = grid.width as f64
-        * grid.height as f64
-        * grid.base_spacing.powi(2);
+    let total_area = grid.width as f64 * grid.height as f64 * grid.base_spacing.powi(2);
     if !total_area.is_finite() || total_area <= 0.0 {
         return Err(AdaptiveGridError::InvalidState);
     }
     let mean_previous = integrated.previous_displacement / total_area;
     let mean_current = integrated.current_displacement / total_area;
     let mean_velocity = (mean_current - mean_previous) / time_step;
-    let mean_energy =
-        0.5 * normalization * total_area * mean_velocity.powi(2);
+    let mean_energy = 0.5 * normalization * total_area * mean_velocity.powi(2);
     let mut previous = BTreeMap::new();
     let mut current = BTreeMap::new();
     for (key, state) in grid.leaves() {
@@ -871,8 +868,7 @@ fn discrete_energy_for_grid(
             * (current[&face.first] - current[&face.second])
             * (previous[&face.first] - previous[&face.second]);
     }
-    0.5 * normalization
-        * (kinetic_sum + propagation_speed.powi(2) * gradient_cross_sum)
+    0.5 * normalization * (kinetic_sum + propagation_speed.powi(2) * gradient_cross_sum)
 }
 
 fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
@@ -1266,7 +1262,10 @@ mod tests {
         );
         close(field.energy(), energy_before);
         assert_eq!(field.grid().leaf_count(), grid_before.leaf_count());
-        assert_eq!(field.grid().integrated_state(), grid_before.integrated_state());
+        assert_eq!(
+            field.grid().integrated_state(),
+            grid_before.integrated_state()
+        );
     }
 
     #[test]
