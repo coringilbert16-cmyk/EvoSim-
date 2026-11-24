@@ -84,6 +84,13 @@ impl AdaptiveSpatialGrid {
         {
             return Err(AdaptiveGridError::InvalidParameter);
         }
+        let finest_scale = 1_u32
+            .checked_shl(max_refinement_level as u32)
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
+        width
+            .checked_mul(finest_scale)
+            .and_then(|_| height.checked_mul(finest_scale))
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
         let capacity = (width as usize)
             .checked_mul(height as usize)
             .ok_or(AdaptiveGridError::InvalidDimensions)?;
@@ -286,24 +293,52 @@ impl AdaptiveSpatialGrid {
     /// Enumerates each face-connected leaf pair once in deterministic key order.
     /// Face conductance for the finite-volume operator is length / center distance.
     pub(crate) fn shared_faces(&self) -> Vec<SharedFace> {
-        let entries: Vec<_> = self.leaves.iter().map(|(key, _)| *key).collect();
-        let mut faces = Vec::new();
-        for first_index in 0..entries.len() {
-            for second_index in first_index + 1..entries.len() {
-                let first = entries[first_index];
-                let second = entries[second_index];
-                let a = self.bounds_for_key(first);
-                let b = self.bounds_for_key(second);
-                if let Some((length, center_distance)) = shared_face_geometry(a, b) {
-                    faces.push(SharedFace {
-                        first,
-                        second,
-                        length,
-                        center_distance,
-                    });
-                }
-            }
+        type Segment = (u32, u32, CellKey);
+        let finest_scale = 1_u32 << self.max_refinement_level;
+        let finest_spacing = self.base_spacing / finest_scale as f64;
+        let mut vertical_left: BTreeMap<u32, Vec<Segment>> = BTreeMap::new();
+        let mut vertical_right: BTreeMap<u32, Vec<Segment>> = BTreeMap::new();
+        let mut horizontal_bottom: BTreeMap<u32, Vec<Segment>> = BTreeMap::new();
+        let mut horizontal_top: BTreeMap<u32, Vec<Segment>> = BTreeMap::new();
+
+        for key in self.leaves.keys().copied() {
+            let scale = 1_u32 << (self.max_refinement_level - key.level);
+            let min_x = key.x * scale;
+            let min_y = key.y * scale;
+            let max_x = min_x + scale;
+            let max_y = min_y + scale;
+            vertical_left
+                .entry(min_x)
+                .or_default()
+                .push((min_y, max_y, key));
+            vertical_right
+                .entry(max_x)
+                .or_default()
+                .push((min_y, max_y, key));
+            horizontal_bottom
+                .entry(min_y)
+                .or_default()
+                .push((min_x, max_x, key));
+            horizontal_top
+                .entry(max_y)
+                .or_default()
+                .push((min_x, max_x, key));
         }
+
+        let mut faces = Vec::new();
+        append_shared_faces(
+            &vertical_right,
+            &vertical_left,
+            finest_spacing,
+            &mut faces,
+        );
+        append_shared_faces(
+            &horizontal_top,
+            &horizontal_bottom,
+            finest_spacing,
+            &mut faces,
+        );
+        faces.sort_by_key(|face| (face.first, face.second));
         faces
     }
 
@@ -334,6 +369,55 @@ impl AdaptiveSpatialGrid {
     fn cell_area(&self, key: CellKey) -> f64 {
         let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
         spacing * spacing
+    }
+}
+
+fn append_shared_faces(
+    first_sides: &BTreeMap<u32, Vec<(u32, u32, CellKey)>>,
+    second_sides: &BTreeMap<u32, Vec<(u32, u32, CellKey)>>,
+    finest_spacing: f64,
+    output: &mut Vec<SharedFace>,
+) {
+    for (coordinate, first_segments) in first_sides {
+        let Some(second_segments) = second_sides.get(coordinate) else {
+            continue;
+        };
+        let mut first = first_segments.clone();
+        let mut second = second_segments.clone();
+        first.sort_by_key(|segment| (segment.0, segment.1, segment.2));
+        second.sort_by_key(|segment| (segment.0, segment.1, segment.2));
+        let (mut first_index, mut second_index) = (0, 0);
+        while first_index < first.len() && second_index < second.len() {
+            let (first_start, first_end, first_key) = first[first_index];
+            let (second_start, second_end, second_key) = second[second_index];
+            let overlap_start = first_start.max(second_start);
+            let overlap_end = first_end.min(second_end);
+            if overlap_end > overlap_start {
+                let first_size = 1_u32 << (first_key.level.max(0) as u32);
+                let second_size = 1_u32 << (second_key.level.max(0) as u32);
+                let first_scale = 1.0 / first_size as f64;
+                let second_scale = 1.0 / second_size as f64;
+                let (first_key, second_key) = if first_key < second_key {
+                    (first_key, second_key)
+                } else {
+                    (second_key, first_key)
+                };
+                output.push(SharedFace {
+                    first: first_key,
+                    second: second_key,
+                    length: (overlap_end - overlap_start) as f64 * finest_spacing,
+                    center_distance: 0.5 * (first_scale + second_scale)
+                        * finest_spacing
+                        * (1_u32 << (first_key.level.max(second_key.level) as u32)) as f64,
+                });
+            }
+            if first_end <= second_end {
+                first_index += 1;
+            }
+            if second_end <= first_end {
+                second_index += 1;
+            }
+        }
     }
 }
 
