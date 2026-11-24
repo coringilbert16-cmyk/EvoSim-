@@ -34,7 +34,15 @@ The environmental schedule specifies energy made available by the external envir
 
 For Model A, calculate the actual signed discrete field work using the validated Candidate A midpoint-work identity. Debit the environmental/source account for positive work and credit it for negative work. Reject any step that would overdraw the finite account; rejection must leave field and account unchanged.
 
-For Model B, include the oscillator energy and coupling-potential energy in the discrete total-energy invariant. The experiment must explicitly derive and account for the mechanism by which the environmental supply replenishes or drives the oscillator. Do not silently add energy to oscillator displacement, velocity, or energy after a step. Any external drive must expose its own signed work and debit/credit the same environmental account. If a conservative, dimensionally consistent replenishment/drive law cannot be derived, Model B is not yet comparable and the experiment must stop at that unresolved result rather than inventing one.
+For Model B, include the oscillator energy and coupling-potential energy in the discrete total-energy invariant. The first drive candidate is an explicit generalized force (F_{env,n}) applied to the source oscillator, not an after-the-fact energy increment. For the centered oscillator recurrence, the discrete external work over step (n) is
+
+[
+W_{env,n}=F_{env,n}\frac{x_{n+1}-x_{n-1}}{2},
+]
+
+where (x) is oscillator displacement. This follows from multiplying the forced centered-difference equation by the centered displacement increment; it must be verified against the actual coupled recurrence and its cross-time invariant before use. Positive work debits the external account; negative work credits it. The environmental schedule replenishes the available external account, while the deterministic drive waveform determines when/how the oscillator can accept work. Do not silently add energy to oscillator displacement, velocity, or energy after a step. If the derived discrete work identity does not close with the coupled field-plus-oscillator invariant, stop and repair the derivation before implementing the drive.
+
+For Model A, retain Candidate A's independently prescribed field-acceleration waveform and exact discrete signed field-work settlement. Do not derive its forcing by dividing the requested positive power by instantaneous field velocity. The exact discrete work formula must be read from the validated implementation and carried into the comparison unchanged.
 
 **Do not force either model to absorb exactly (P_{env}(t)) every tick.** Phase-dependent coupling can return energy or temporarily accept less than the available supply. Unused energy remains in the environmental account. A model that clamps negative work, divides by field velocity at nodes, or adds an unaccounted positive correction fails the experiment.
 
