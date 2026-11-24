@@ -775,54 +775,133 @@ fn preserve_regridded_energy(
     target_energy: f64,
 ) -> Result<(), AdaptiveGridError> {
     let integrated = grid.integrated_state();
-    let total_area = grid.width as f64 * grid.height as f64 * grid.base_spacing.powi(2);
-    if !total_area.is_finite() || total_area <= 0.0 {
-        return Err(AdaptiveGridError::InvalidState);
+    let mut interior_area = 0.0;
+    for (key, _) in grid.leaves() {
+        if !is_computational_boundary(grid, key) {
+            interior_area += grid.cell_area(key);
+        }
     }
-    let mean_previous = integrated.previous_displacement / total_area;
-    let mean_current = integrated.current_displacement / total_area;
-    let mean_velocity = (mean_current - mean_previous) / time_step;
-    let mean_energy = 0.5 * normalization * total_area * mean_velocity.powi(2);
-    let mut previous = BTreeMap::new();
-    let mut current = BTreeMap::new();
+    if !interior_area.is_finite() || interior_area <= 0.0 {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+
+    // Fixed-zero computational boundary cells are not free degrees of
+    // freedom. Build the minimum-complexity reference state on interior
+    // leaves only, so the transfer preserves the two integrals without
+    // introducing nonzero boundary values.
+    let mean_previous = integrated.previous_displacement / interior_area;
+    let mean_current = integrated.current_displacement / interior_area;
+    let mut baseline_previous = BTreeMap::new();
+    let mut baseline_current = BTreeMap::new();
+    let mut projected_previous = BTreeMap::new();
+    let mut projected_current = BTreeMap::new();
     for (key, state) in grid.leaves() {
-        previous.insert(key, state.previous);
-        current.insert(key, state.current);
+        let (baseline_previous_value, baseline_current_value) =
+            if is_computational_boundary(grid, key) {
+                (0.0, 0.0)
+            } else {
+                (mean_previous, mean_current)
+            };
+        baseline_previous.insert(key, baseline_previous_value);
+        baseline_current.insert(key, baseline_current_value);
+        projected_previous.insert(key, state.previous);
+        projected_current.insert(key, state.current);
     }
-    let projected_energy = discrete_energy_for_grid(
+
+    // Along baseline + scale * (projection - baseline), both area integrals
+    // remain fixed and boundary values remain zero. The discrete energy is a
+    // quadratic in scale; solve it directly rather than assuming the
+    // baseline is an energy-orthogonal projection.
+    let mut opposite_previous = BTreeMap::new();
+    let mut opposite_current = BTreeMap::new();
+    for key in grid.leaves.keys() {
+        opposite_previous.insert(
+            *key,
+            2.0 * baseline_previous[key] - projected_previous[key],
+        );
+        opposite_current.insert(
+            *key,
+            2.0 * baseline_current[key] - projected_current[key],
+        );
+    }
+
+    let baseline_energy = discrete_energy_for_grid(
         grid,
-        &previous,
-        &current,
+        &baseline_previous,
+        &baseline_current,
         time_step,
         propagation_speed,
         normalization,
     );
-    let scale = target_energy.abs().max(projected_energy.abs()).max(1.0);
-    let tolerance = 1.0e-11 * scale;
-    let target_fluctuation_energy = target_energy - mean_energy;
-    let projected_fluctuation_energy = projected_energy - mean_energy;
-    if target_fluctuation_energy < -tolerance
-        || projected_fluctuation_energy < -tolerance
-        || !target_fluctuation_energy.is_finite()
-        || !projected_fluctuation_energy.is_finite()
+    let projected_energy = discrete_energy_for_grid(
+        grid,
+        &projected_previous,
+        &projected_current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
+    let opposite_energy = discrete_energy_for_grid(
+        grid,
+        &opposite_previous,
+        &opposite_current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
+    let quadratic = 0.5 * (projected_energy + opposite_energy - 2.0 * baseline_energy);
+    let linear_half = 0.25 * (projected_energy - opposite_energy);
+    let constant = baseline_energy - target_energy;
+    let energy_scale = target_energy
+        .abs()
+        .max(baseline_energy.abs())
+        .max(projected_energy.abs())
+        .max(opposite_energy.abs())
+        .max(1.0);
+    let tolerance = 1.0e-11 * energy_scale;
+    if !quadratic.is_finite()
+        || !linear_half.is_finite()
+        || !constant.is_finite()
+        || quadratic < -tolerance
     {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
 
-    let factor = if target_fluctuation_energy <= tolerance {
-        0.0
-    } else if projected_fluctuation_energy <= tolerance {
-        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    let transfer_scale = if quadratic.abs() <= tolerance {
+        if linear_half.abs() <= tolerance {
+            if constant.abs() <= tolerance {
+                1.0
+            } else {
+                return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+            }
+        } else {
+            -constant / (2.0 * linear_half)
+        }
     } else {
-        (target_fluctuation_energy / projected_fluctuation_energy).sqrt()
+        let discriminant = linear_half.powi(2) - quadratic * constant;
+        let discriminant_tolerance =
+            1.0e-12 * linear_half.powi(2).abs().max((quadratic * constant).abs()).max(1.0);
+        if !discriminant.is_finite() || discriminant < -discriminant_tolerance {
+            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+        }
+        let root = discriminant.max(0.0).sqrt();
+        let first = (-linear_half + root) / quadratic;
+        let second = (-linear_half - root) / quadratic;
+        if (first - 1.0).abs() <= (second - 1.0).abs() {
+            first
+        } else {
+            second
+        }
     };
-    if !factor.is_finite() {
+    if !transfer_scale.is_finite() {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
 
-    for state in grid.leaves.values_mut() {
-        state.previous = mean_previous + factor * (state.previous - mean_previous);
-        state.current = mean_current + factor * (state.current - mean_current);
+    for (key, state) in grid.leaves.iter_mut() {
+        state.previous = baseline_previous[key]
+            + transfer_scale * (projected_previous[key] - baseline_previous[key]);
+        state.current = baseline_current[key]
+            + transfer_scale * (projected_current[key] - baseline_current[key]);
         if !state.previous.is_finite() || !state.current.is_finite() {
             return Err(AdaptiveGridError::InvalidState);
         }
