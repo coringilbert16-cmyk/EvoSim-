@@ -330,6 +330,7 @@ impl AdaptiveSpatialGrid {
             &vertical_right,
             &vertical_left,
             finest_spacing,
+            self.max_refinement_level,
             &mut faces,
         );
         append_shared_faces(
@@ -376,6 +377,7 @@ fn append_shared_faces(
     first_sides: &BTreeMap<u32, Vec<(u32, u32, CellKey)>>,
     second_sides: &BTreeMap<u32, Vec<(u32, u32, CellKey)>>,
     finest_spacing: f64,
+    max_refinement_level: u8,
     output: &mut Vec<SharedFace>,
 ) {
     for (coordinate, first_segments) in first_sides {
@@ -393,10 +395,12 @@ fn append_shared_faces(
             let overlap_start = first_start.max(second_start);
             let overlap_end = first_end.min(second_end);
             if overlap_end > overlap_start {
-                let first_size = 1_u32 << (first_key.level.max(0) as u32);
-                let second_size = 1_u32 << (second_key.level.max(0) as u32);
-                let first_scale = 1.0 / first_size as f64;
-                let second_scale = 1.0 / second_size as f64;
+                let first_width =
+                    1_u32 << (max_refinement_level - first_key.level);
+                let second_width =
+                    1_u32 << (max_refinement_level - second_key.level);
+                let center_distance =
+                    0.5 * (first_width + second_width) as f64 * finest_spacing;
                 let (first_key, second_key) = if first_key < second_key {
                     (first_key, second_key)
                 } else {
@@ -406,9 +410,7 @@ fn append_shared_faces(
                     first: first_key,
                     second: second_key,
                     length: (overlap_end - overlap_start) as f64 * finest_spacing,
-                    center_distance: 0.5 * (first_scale + second_scale)
-                        * finest_spacing
-                        * (1_u32 << (first_key.level.max(second_key.level) as u32)) as f64,
+                    center_distance,
                 });
             }
             if first_end <= second_end {
