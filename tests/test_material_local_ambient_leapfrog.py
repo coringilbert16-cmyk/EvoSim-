@@ -226,7 +226,230 @@ def _face_flux(w, vw_before, vw_after, face, *, spacing, speed, field_mass):
         velocity_here + velocity_next
     )
 
+
+
+def _laplacian_2d(values, x, y, spacing):
+    size = len(values)
+    return (
+        values[(x + 1) % size][y] - 2.0 * values[x][y]
+        + values[(x - 1) % size][y]
+        + values[x][(y + 1) % size] - 2.0 * values[x][y]
+        + values[x][(y - 1) % size]
+    ) / spacing**2
+
+
+def _velocity_step_2d(vw, vq, w, q, coupling, *, step, spacing, speed,
+                      field_mass, oscillator_mass, omega, source):
+    size = len(w)
+    next_vw = [[0.0] * size for _ in range(size)]
+    next_vq = [[0.0] * size for _ in range(size)]
+    for x in range(size):
+        for y in range(size):
+            strength = coupling[x][y]
+            a = step * strength / (2.0 * field_mass)
+            b = step * strength / (2.0 * oscillator_mass)
+            rhs_w = (
+                vw[x][y] - a * vq[x][y]
+                + step * speed**2 * _laplacian_2d(w, x, y, spacing)
+            )
+            rhs_q = (
+                vq[x][y] + b * vw[x][y] - step * omega**2 * q[x][y]
+                + step * source / oscillator_mass
+            )
+            determinant = 1.0 + a * b
+            next_vw[x][y] = (rhs_w - a * rhs_q) / determinant
+            next_vq[x][y] = (b * rhs_w + rhs_q) / determinant
+    return next_vw, next_vq
+
+
+def _patch_energy_2d(w_previous, q_previous, vw, vq, w, q, patch,
+                     *, spacing, speed, field_mass, oscillator_mass, omega):
+    x0, y0, x1, y1 = patch
+    size = len(w)
+    total = 0.0
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            xp, xm = (x + 1) % size, (x - 1) % size
+            yp, ym = (y + 1) % size, (y - 1) % size
+            gradients = (
+                (w_previous[xp][y] - w_previous[x][y]) / spacing,
+                (w[xp][y] - w[x][y]) / spacing,
+                (w_previous[x][y] - w_previous[xm][y]) / spacing,
+                (w[x][y] - w[xm][y]) / spacing,
+                (w_previous[x][yp] - w_previous[x][y]) / spacing,
+                (w[x][yp] - w[x][y]) / spacing,
+                (w_previous[x][y] - w_previous[x][ym]) / spacing,
+                (w[x][y] - w[x][ym]) / spacing,
+            )
+            total += 0.5 * field_mass * vw[x][y] ** 2
+            total += 0.25 * field_mass * speed**2 * sum(
+                gradients[index] * gradients[index + 1]
+                for index in (0, 2, 4, 6)
+            )
+            total += 0.5 * oscillator_mass * (
+                vq[x][y] ** 2
+                + omega**2 * q_previous[x][y] * q[x][y]
+            )
+    return spacing**2 * total
+
+
+def _face_flux_x_2d(w, vw_before, vw_after, face, y, *, spacing,
+                    speed, field_mass):
+    size = len(w)
+    following = (face + 1) % size
+    gradient = (w[following][y] - w[face][y]) / spacing
+    velocity_here = 0.5 * (
+        vw_before[face][y] + vw_after[face][y]
+    )
+    velocity_next = 0.5 * (
+        vw_before[following][y] + vw_after[following][y]
+    )
+    return -field_mass * speed**2 * gradient * 0.5 * (
+        velocity_here + velocity_next
+    ) * spacing
+
+
+def _face_flux_y_2d(w, vw_before, vw_after, x, face, *, spacing,
+                    speed, field_mass):
+    size = len(w)
+    following = (face + 1) % size
+    gradient = (w[x][following] - w[x][face]) / spacing
+    velocity_here = 0.5 * (
+        vw_before[x][face] + vw_after[x][face]
+    )
+    velocity_next = 0.5 * (
+        vw_before[x][following] + vw_after[x][following]
+    )
+    return -field_mass * speed**2 * gradient * 0.5 * (
+        velocity_here + velocity_next
+    ) * spacing
+
+
+def _run_2d_patch_balance():
+    size, spacing, step, steps = 24, 1.0, 0.1, 60
+    speed, field_mass, oscillator_mass, omega = 1.0, 1.3, 0.8, 1.7
+    coupling = [
+        [
+            0.35 if 8 <= x < 13 and 8 <= y < 13 else 0.0
+            for y in range(size)
+        ]
+        for x in range(size)
+    ]
+    w = [
+        [
+            math.exp(
+                -0.5 * (((x - 8.0) / 2.0) ** 2 + ((y - 8.0) / 2.0) ** 2)
+            )
+            for y in range(size)
+        ]
+        for x in range(size)
+    ]
+    q = [[0.0] * size for _ in range(size)]
+    vw = [[0.0] * size for _ in range(size)]
+    vq = [[0.0] * size for _ in range(size)]
+
+    def drive(time):
+        return _world_drive(time, oscillator_mass, omega)
+
+    vw_half, vq_half = _velocity_step_2d(
+        vw, vq, w, q, coupling, step=-0.5 * step, spacing=spacing,
+        speed=speed, field_mass=field_mass, oscillator_mass=oscillator_mass,
+        omega=omega, source=drive(-0.25 * step),
+    )
+    w_previous = [
+        [w[x][y] - step * vw_half[x][y] for y in range(size)]
+        for x in range(size)
+    ]
+    q_previous = [
+        [q[x][y] - step * vq_half[x][y] for y in range(size)]
+        for x in range(size)
+    ]
+    patches = ((3, 3, 12, 12), (5, 5, 18, 18), (0, 0, 23, 23))
+    initial = [
+        _patch_energy_2d(
+            w_previous, q_previous, vw_half, vq_half, w, q, patch,
+            spacing=spacing, speed=speed, field_mass=field_mass,
+            oscillator_mass=oscillator_mass, omega=omega,
+        )
+        for patch in patches
+    ]
+    flux = [0.0] * len(patches)
+    work = [0.0] * len(patches)
+
+    for step_index in range(steps):
+        source = drive(step_index * step)
+        next_vw, next_vq = _velocity_step_2d(
+            vw_half, vq_half, w, q, coupling, step=step, spacing=spacing,
+            speed=speed, field_mass=field_mass, oscillator_mass=oscillator_mass,
+            omega=omega, source=source,
+        )
+        next_w = [
+            [w[x][y] + step * next_vw[x][y] for y in range(size)]
+            for x in range(size)
+        ]
+        next_q = [
+            [q[x][y] + step * next_vq[x][y] for y in range(size)]
+            for x in range(size)
+        ]
+
+        for patch_index, (x0, y0, x1, y1) in enumerate(patches):
+            centered_q_velocity = sum(
+                0.5 * (vq_half[x][y] + next_vq[x][y])
+                for x in range(x0, x1 + 1)
+                for y in range(y0, y1 + 1)
+            )
+            work[patch_index] += (
+                step * spacing**2 * source * centered_q_velocity
+            )
+            outward = 0.0
+            for y in range(y0, y1 + 1):
+                outward += (
+                    _face_flux_x_2d(
+                        w, vw_half, next_vw, x1, y, spacing=spacing,
+                        speed=speed, field_mass=field_mass,
+                    )
+                    - _face_flux_x_2d(
+                        w, vw_half, next_vw, x0 - 1, y, spacing=spacing,
+                        speed=speed, field_mass=field_mass,
+                    )
+                )
+            for x in range(x0, x1 + 1):
+                outward += (
+                    _face_flux_y_2d(
+                        w, vw_half, next_vw, x, y1, spacing=spacing,
+                        speed=speed, field_mass=field_mass,
+                    )
+                    - _face_flux_y_2d(
+                        w, vw_half, next_vw, x, y0 - 1, spacing=spacing,
+                        speed=speed, field_mass=field_mass,
+                    )
+                )
+            flux[patch_index] += step * outward
+
+        w_previous, w = w, next_w
+        q_previous, q = q, next_q
+        vw_half, vq_half = next_vw, next_vq
+
+    residuals = []
+    for patch_index, patch in enumerate(patches):
+        final = _patch_energy_2d(
+            w_previous, q_previous, vw_half, vq_half, w, q, patch,
+            spacing=spacing, speed=speed, field_mass=field_mass,
+            oscillator_mass=oscillator_mass, omega=omega,
+        )
+        residuals.append(
+            final - initial[patch_index] + flux[patch_index] - work[patch_index]
+        )
+    return residuals
+
+
 class MaterialLocalAmbientLeapfrogTests(unittest.TestCase):
+    def test_two_dimensional_five_point_update_closes_nested_patch_balances(self):
+        cfl_number = math.sqrt(2.0) * 0.1
+        self.assertLess(cfl_number, 1.0)
+        for residual in _run_2d_patch_balance():
+            self.assertLess(abs(residual), 1.0e-10)
+
     def test_nested_patches_reconcile_staggered_flux_and_world_work(self):
         size = 80
         step = 0.02
