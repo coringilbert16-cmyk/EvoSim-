@@ -1988,4 +1988,189 @@ mod tests {
             "relative energy drift after crossing coarse/fine interfaces: {relative_drift}"
         );
     }
+
+
+    fn adaptive_layout(outer: (u32, u32, u32, u32), inner: (u32, u32, u32, u32)) -> AdaptiveSpatialGrid {
+        let mut grid = AdaptiveSpatialGrid::new(24, 24, 1.0, 2).unwrap();
+        let (outer_x0, outer_x1, outer_y0, outer_y1) = outer;
+        for y in outer_y0..outer_y1 {
+            for x in outer_x0..outer_x1 {
+                grid.refine(CellKey { level: 0, x, y }).unwrap();
+            }
+        }
+        let (inner_x0, inner_x1, inner_y0, inner_y1) = inner;
+        for y in inner_y0..inner_y1 {
+            for x in inner_x0..inner_x1 {
+                for child in [
+                    CellKey { level: 1, x: 2 * x, y: 2 * y },
+                    CellKey { level: 1, x: 2 * x + 1, y: 2 * y },
+                    CellKey { level: 1, x: 2 * x, y: 2 * y + 1 },
+                    CellKey { level: 1, x: 2 * x + 1, y: 2 * y + 1 },
+                ] {
+                    grid.refine(child).unwrap();
+                }
+            }
+        }
+        grid
+    }
+
+    #[test]
+    fn multipoint_stiffness_is_symmetric_and_positive_semidefinite_on_adaptive_layouts() {
+        let layouts = [
+            adaptive_layout((6, 18, 3, 21), (9, 15, 8, 16)),
+            adaptive_layout((3, 21, 6, 18), (8, 16, 9, 15)),
+            adaptive_layout((4, 19, 4, 19), (5, 11, 11, 17)),
+            adaptive_layout((2, 13, 8, 22), (4, 10, 12, 19)),
+        ];
+
+        for (layout_index, grid) in layouts.iter().enumerate() {
+            let stiffness = stiffness_matrix(grid);
+            for (row, columns) in &stiffness {
+                for (column, value) in columns {
+                    let transpose = stiffness
+                        .get(column)
+                        .and_then(|entries| entries.get(row))
+                        .copied()
+                        .unwrap_or(0.0);
+                    assert!(
+                        (value - transpose).abs() <= 1.0e-11 * value.abs().max(transpose.abs()).max(1.0),
+                        "layout {layout_index}: K[{row:?},{column:?}]={value}, transpose={transpose}"
+                    );
+                }
+            }
+
+            let keys: Vec<_> = grid.leaves.keys().copied().collect();
+            for vector_kind in 0..8 {
+                let values: BTreeMap<_, _> = keys
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| {
+                        let i = index as f64 + 1.0;
+                        let value = match vector_kind {
+                            0 => 1.0,
+                            1 => i,
+                            2 => (0.37 * i).sin(),
+                            3 => (0.19 * i).cos(),
+                            4 => ((index * 17 % 31) as f64 - 15.0) / 15.0,
+                            5 => (0.11 * i).sin() + (0.23 * i).cos(),
+                            6 => (i / 7.0).sin() * (i / 13.0).cos(),
+                            _ => if index % 2 == 0 { 1.0 } else { -1.0 },
+                        };
+                        (*key, value)
+                    })
+                    .collect();
+                let mut quadratic = 0.0;
+                let mut scale = 0.0;
+                for (row, columns) in &stiffness {
+                    let row_value = values[row];
+                    let applied = columns
+                        .iter()
+                        .map(|(column, coefficient)| coefficient * values[column])
+                        .sum::<f64>();
+                    quadratic += row_value * applied;
+                    scale += row_value.abs() * applied.abs();
+                }
+                assert!(
+                    quadratic >= -1.0e-10 * scale.max(1.0),
+                    "layout {layout_index}, vector {vector_kind}: negative stiffness quadratic form {quadratic}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn affine_patch_is_preserved_across_varied_interface_orientations_and_locations() {
+        let cases = [
+            ((6, 18, 3, 21), (9, 15, 8, 16), (1.0, 2.0, 0.3)),
+            ((3, 21, 6, 18), (8, 16, 9, 15), (-0.7, 1.4, 2.0)),
+            ((4, 19, 4, 19), (5, 11, 11, 17), (0.35, -1.1, 4.0)),
+            ((2, 13, 8, 22), (4, 10, 12, 19), (1.7, 0.25, -2.0)),
+        ];
+
+        for (case_index, (outer, inner, (slope_x, slope_y, offset))) in
+            cases.into_iter().enumerate()
+        {
+            let mut grid = adaptive_layout(outer, inner);
+            for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = grid.cell_bounds(key).unwrap();
+                let x = 0.5 * (bounds.min_x + bounds.max_x);
+                let y = 0.5 * (bounds.min_y + bounds.max_y);
+                let value = if is_computational_boundary(&grid, key) {
+                    0.0
+                } else {
+                    slope_x * x + slope_y * y + offset
+                };
+                grid.set_state(key, AdaptiveCell { previous: value, current: value }).unwrap();
+            }
+
+            let mut field = AdaptiveWaveField::new(grid, 0.02, 1.0).unwrap();
+            let initial: Vec<_> = field
+                .grid()
+                .leaves()
+                .filter_map(|(key, state)| {
+                    let bounds = field.grid().cell_bounds(key)?;
+                    let x = 0.5 * (bounds.min_x + bounds.max_x);
+                    let y = 0.5 * (bounds.min_y + bounds.max_y);
+                    (x > 2.0 && x < 22.0 && y > 2.0 && y < 22.0)
+                        .then_some((*key, state.current))
+                })
+                .collect();
+            field.advance_substeps(1).unwrap();
+            for (key, expected) in initial {
+                let actual = field.grid().leaves.get(&key).unwrap().current;
+                let tolerance = 2.0e-10 * expected.abs().max(1.0);
+                assert!(
+                    (actual - expected).abs() <= tolerance,
+                    "case {case_index}, cell {key:?}: affine patch changed from {expected} to {actual}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn adaptive_cfl_bound_is_stable_across_distinct_refinement_patterns() {
+        let layouts = [
+            adaptive_layout((6, 18, 3, 21), (9, 15, 8, 16)),
+            adaptive_layout((3, 21, 6, 18), (8, 16, 9, 15)),
+            adaptive_layout((4, 19, 4, 19), (5, 11, 11, 17)),
+            adaptive_layout((2, 13, 8, 22), (4, 10, 12, 19)),
+        ];
+
+        for (layout_index, grid) in layouts.into_iter().enumerate() {
+            let mut initialized = grid;
+            for key in initialized.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = initialized.cell_bounds(key).unwrap();
+                let x = 0.5 * (bounds.min_x + bounds.max_x);
+                let y = 0.5 * (bounds.min_y + bounds.max_y);
+                let boundary = is_computational_boundary(&initialized, key);
+                let envelope = (-((x - 11.0).powi(2) + (y - 12.0).powi(2)) / 30.0).exp();
+                let phase = 0.41 * x + 0.17 * y;
+                let current = if boundary { 0.0 } else { envelope * phase.cos() };
+                let previous = if boundary { 0.0 } else { envelope * (phase + 0.08).cos() };
+                initialized.set_state(key, AdaptiveCell { previous, current }).unwrap();
+            }
+
+            let mut field = AdaptiveWaveField::new(initialized, 0.35, 1.0).unwrap();
+            let row_bound = maximum_stiffness_row_sum(field.grid(), &field.stiffness);
+            let stability_measure = field.propagation_speed * field.time_step * row_bound.sqrt();
+            assert!(
+                stability_measure <= 2.0 + 1.0e-12,
+                "layout {layout_index}: CFL measure {stability_measure} exceeds 2"
+            );
+            let initial_energy = field.energy();
+            assert!(initial_energy.is_finite() && initial_energy > 0.0);
+            field.advance_ticks(300).unwrap();
+            let final_energy = field.energy();
+            let relative_drift =
+                (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+            assert!(
+                relative_drift < 2.0e-9,
+                "layout {layout_index}: relative energy drift after 300 ticks is {relative_drift}"
+            );
+            assert!(field.grid().leaves().all(|(_, state)| {
+                state.current.is_finite() && state.previous.is_finite()
+            }));
+        }
+    }
+
 }
