@@ -1,5 +1,9 @@
 #![allow(clippy::too_many_arguments)]
 
+// Live world-generated ambient energy mode; advanced by the production simulation tick.
+#[path = "physics/world_generated_ambient_mode.rs"]
+mod world_generated_ambient_mode;
+
 // Isolated Phase 3B hotspot profile mathematics; not connected to live sources.
 #[path = "physics/hotspot_profile.rs"]
 #[allow(dead_code)]
