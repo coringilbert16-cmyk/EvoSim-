@@ -164,6 +164,21 @@ impl Laboratory {
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
         };
+        let ambient_config = crate::world_generated_ambient_mode::AmbientModeConfig::new(
+            config.width * config.height,
+            1.0,
+            0.0,
+            0.0,
+        )
+        .expect("laboratory ambient energy configuration must be valid");
+        let ambient_energy = crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(
+            ambient_config,
+            0,
+        )
+        .expect("laboratory ambient energy must initialize at tick zero");
+        let mut energy_ledger = EnergyLedger::default();
+        energy_ledger.total_ambient_energy_held = ambient_energy.sample().total_energy;
+        energy_ledger.initial_ambient_energy_held = ambient_energy.sample().total_energy;
         let simulation = Simulation {
             tick: 0,
             ticks_per_second: config.ticks_per_second,
@@ -175,7 +190,7 @@ impl Laboratory {
             chemistry_library: crate::chemistry_library::open_default_library()
                 .expect("chemistry library must open"),
             decomposing_bodies: Vec::new(),
-            energy_ledger: EnergyLedger::default(),
+            energy_ledger,
             next_organism_id: 1,
             next_transformation_id: 1,
             rng: ChaCha8Rng::seed_from_u64(config.seed),
@@ -215,6 +230,7 @@ impl Laboratory {
             record_local_resonance_diagnostics: false,
             record_environmental_molecular_history: true,
             flow_field: config.flow.engine_config(),
+            ambient_energy,
         };
         Ok(Self {
             config,
