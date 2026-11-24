@@ -1517,7 +1517,11 @@ mod tests {
     fn uniformly_refined_adaptive_wave_converges_to_continuum_mode() {
         fn relative_error(refinement_level: u8) -> f64 {
             let cells = 17_u32;
-            let length = 16.0_f64;
+            let spacing = 1.0 / 2_u32.pow(refinement_level as u32) as f64;
+            // The solver fixes the outermost cell centers to zero. Their
+            // physical locations move with refinement, so the analytical
+            // standing-wave domain must move with them as well.
+            let length = cells as f64 - spacing;
             let speed = 0.2_f64;
             let mut grid = AdaptiveSpatialGrid::new(cells, cells, 1.0, 2).unwrap();
 
@@ -1535,7 +1539,6 @@ mod tests {
                 }
             }
 
-            let spacing = 1.0 / 2_u32.pow(refinement_level as u32) as f64;
             let substeps = (0.4 / spacing).ceil() as usize;
             let dt = 1.0 / substeps as f64;
             let omega = speed * std::f64::consts::PI * std::f64::consts::SQRT_2 / length;
@@ -1544,8 +1547,8 @@ mod tests {
                 let bounds = grid.cell_bounds(key).unwrap();
                 let center_x = 0.5 * (bounds.min_x + bounds.max_x);
                 let center_y = 0.5 * (bounds.min_y + bounds.max_y);
-                let mode = (std::f64::consts::PI * (center_x - 0.5) / length).sin()
-                    * (std::f64::consts::PI * (center_y - 0.5) / length).sin();
+                let mode = (std::f64::consts::PI * (center_x - 0.5 * spacing) / length).sin()
+                    * (std::f64::consts::PI * (center_y - 0.5 * spacing) / length).sin();
                 let boundary = is_computational_boundary(&grid, key);
                 let value = if boundary { 0.0 } else { mode };
                 initial_norm += grid.cell_area(key) * value.powi(2);
@@ -1568,8 +1571,8 @@ mod tests {
                 let bounds = field.grid().cell_bounds(key).unwrap();
                 let center_x = 0.5 * (bounds.min_x + bounds.max_x);
                 let center_y = 0.5 * (bounds.min_y + bounds.max_y);
-                let mode = (std::f64::consts::PI * (center_x - 0.5) / length).sin()
-                    * (std::f64::consts::PI * (center_y - 0.5) / length).sin();
+                let mode = (std::f64::consts::PI * (center_x - 0.5 * spacing) / length).sin()
+                    * (std::f64::consts::PI * (center_y - 0.5 * spacing) / length).sin();
                 let exact = mode * (omega * time).cos();
                 error_squared += field.grid().cell_area(key) * (state.current - exact).powi(2);
             }
