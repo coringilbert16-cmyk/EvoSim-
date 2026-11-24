@@ -1989,7 +1989,6 @@ mod tests {
         );
     }
 
-
     fn adaptive_layout(
         outer: (u32, u32, u32, u32),
         inner: (u32, u32, u32, u32),
@@ -2214,5 +2213,4 @@ mod tests {
                 .all(|(_, state)| { state.current.is_finite() && state.previous.is_finite() }));
         }
     }
-
 }
