@@ -1990,7 +1990,10 @@ mod tests {
     }
 
 
-    fn adaptive_layout(outer: (u32, u32, u32, u32), inner: (u32, u32, u32, u32)) -> AdaptiveSpatialGrid {
+    fn adaptive_layout(
+        outer: (u32, u32, u32, u32),
+        inner: (u32, u32, u32, u32),
+    ) -> AdaptiveSpatialGrid {
         let mut grid = AdaptiveSpatialGrid::new(24, 24, 1.0, 2).unwrap();
         let (outer_x0, outer_x1, outer_y0, outer_y1) = outer;
         for y in outer_y0..outer_y1 {
@@ -2002,10 +2005,26 @@ mod tests {
         for y in inner_y0..inner_y1 {
             for x in inner_x0..inner_x1 {
                 for child in [
-                    CellKey { level: 1, x: 2 * x, y: 2 * y },
-                    CellKey { level: 1, x: 2 * x + 1, y: 2 * y },
-                    CellKey { level: 1, x: 2 * x, y: 2 * y + 1 },
-                    CellKey { level: 1, x: 2 * x + 1, y: 2 * y + 1 },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x,
+                        y: 2 * y,
+                    },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x + 1,
+                        y: 2 * y,
+                    },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x,
+                        y: 2 * y + 1,
+                    },
+                    CellKey {
+                        level: 1,
+                        x: 2 * x + 1,
+                        y: 2 * y + 1,
+                    },
                 ] {
                     grid.refine(child).unwrap();
                 }
@@ -2054,7 +2073,13 @@ mod tests {
                             4 => ((index * 17 % 31) as f64 - 15.0) / 15.0,
                             5 => (0.11 * i).sin() + (0.23 * i).cos(),
                             6 => (i / 7.0).sin() * (i / 13.0).cos(),
-                            _ => if index % 2 == 0 { 1.0 } else { -1.0 },
+                            _ => {
+                                if index % 2 == 0 {
+                                    1.0
+                                } else {
+                                    -1.0
+                                }
+                            }
                         };
                         (*key, value)
                     })
@@ -2100,7 +2125,14 @@ mod tests {
                 } else {
                     slope_x * x + slope_y * y + offset
                 };
-                grid.set_state(key, AdaptiveCell { previous: value, current: value }).unwrap();
+                grid.set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: value,
+                        current: value,
+                    },
+                )
+                .unwrap();
             }
 
             let mut field = AdaptiveWaveField::new(grid, 0.02, 1.0).unwrap();
@@ -2111,8 +2143,7 @@ mod tests {
                     let bounds = field.grid().cell_bounds(key)?;
                     let x = 0.5 * (bounds.min_x + bounds.max_x);
                     let y = 0.5 * (bounds.min_y + bounds.max_y);
-                    (x > 2.0 && x < 22.0 && y > 2.0 && y < 22.0)
-                        .then_some((*key, state.current))
+                    (x > 2.0 && x < 22.0 && y > 2.0 && y < 22.0).then_some((*key, state.current))
                 })
                 .collect();
             field.advance_substeps(1).unwrap();
@@ -2145,9 +2176,19 @@ mod tests {
                 let boundary = is_computational_boundary(&initialized, key);
                 let envelope = (-((x - 11.0).powi(2) + (y - 12.0).powi(2)) / 30.0).exp();
                 let phase = 0.41 * x + 0.17 * y;
-                let current = if boundary { 0.0 } else { envelope * phase.cos() };
-                let previous = if boundary { 0.0 } else { envelope * (phase + 0.08).cos() };
-                initialized.set_state(key, AdaptiveCell { previous, current }).unwrap();
+                let current = if boundary {
+                    0.0
+                } else {
+                    envelope * phase.cos()
+                };
+                let previous = if boundary {
+                    0.0
+                } else {
+                    envelope * (phase + 0.08).cos()
+                };
+                initialized
+                    .set_state(key, AdaptiveCell { previous, current })
+                    .unwrap();
             }
 
             let mut field = AdaptiveWaveField::new(initialized, 0.35, 1.0).unwrap();
@@ -2167,9 +2208,10 @@ mod tests {
                 relative_drift < 2.0e-9,
                 "layout {layout_index}: relative energy drift after 300 ticks is {relative_drift}"
             );
-            assert!(field.grid().leaves().all(|(_, state)| {
-                state.current.is_finite() && state.previous.is_finite()
-            }));
+            assert!(field
+                .grid()
+                .leaves()
+                .all(|(_, state)| { state.current.is_finite() && state.previous.is_finite() }));
         }
     }
 
