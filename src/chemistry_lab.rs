@@ -174,9 +174,12 @@ impl Laboratory {
         let ambient_energy =
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(ambient_config, 0)
                 .expect("laboratory ambient energy must initialize at tick zero");
-        let mut energy_ledger = EnergyLedger::default();
-        energy_ledger.total_ambient_energy_held = ambient_energy.sample().total_energy;
-        energy_ledger.initial_ambient_energy_held = ambient_energy.sample().total_energy;
+        let opening_ambient_energy = ambient_energy.sample().total_energy;
+        let energy_ledger = EnergyLedger {
+            total_ambient_energy_held: opening_ambient_energy,
+            initial_ambient_energy_held: opening_ambient_energy,
+            ..EnergyLedger::default()
+        };
         let simulation = Simulation {
             tick: 0,
             ticks_per_second: config.ticks_per_second,
