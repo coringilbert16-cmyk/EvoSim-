@@ -452,7 +452,7 @@ Exploratory reference measurements (same final time 5.5; spatial reference 256 c
 
 These values are exploratory outputs from the reference algorithm and are not production measurements. The committed CI assertions require spatial reductions greater than 3× and temporal reductions greater than 12×.
 
-The workflow on the parent branch now conditionally runs this test module when the file is present, so the stacked PR #438 executes it without making the parent PR #437 depend on a file that exists only in the child PR. The test result is pending exact-head CI. This is a finite-dimensional reference only: it does not establish the continuum interface limit, a production integrator, a physical coupling coefficient, or a selected world-generation law. Production integration remains blocked.
+An additional periodic amplitude-inversion test now verifies that the declared 1–10 schedule can be matched as exact carrier-averaged total oscillator energy, including envelope-kinetic energy, to below a 1e-12 energy residual. The workflow on the parent branch now conditionally runs this test module when the file is present, so the stacked PR #438 executes it without making the parent PR #437 depend on a file that exists only in the child PR. The test result is pending exact-head CI. This is a finite-dimensional reference only: it does not establish the continuum interface limit, a production integrator, a physical coupling coefficient, or a selected world-generation law. Production integration remains blocked.
 
 
 ## 16. Exact average-energy envelope inversion (reference only)
