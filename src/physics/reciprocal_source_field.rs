@@ -515,7 +515,7 @@ mod tests {
         let mut source = mathematical_source(71, 10.0);
         let initial_total = system.total_energy();
         let work = system
-            .step_with_environmental_source(&mut source, 0.08)
+            .step_with_environmental_source(&mut source, 5.0)
             .unwrap();
 
         assert!(work > 0.0);
