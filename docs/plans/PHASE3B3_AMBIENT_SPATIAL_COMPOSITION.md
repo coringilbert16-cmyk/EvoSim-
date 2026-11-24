@@ -1,6 +1,6 @@
 # Phase 3B.3 — Ambient/Disturbance Spatial Composition
 
-**Status:** Analytical gate opened; no composition law selected and no production coupling authorized.
+**Status:** Initial algebraic/numerical identities implemented in an isolated Python test module; full patch-flux validation remains open. No composition law selected and no production coupling authorized.
 
 **Authority:** The [unified energy and continuous wave-field specification](../design/unified-energy-physics-specification.md), the [controlling resonance-field roadmap](../design/resonance-field-implementation-roadmap.md), and the user-approved intrinsic ambient-mode decision recorded in [the isolated ambient-mode plan](PHASE3B3_WORLD_GENERATED_AMBIENT_MODE.md).
 
@@ -157,7 +157,19 @@ The next reference harness must be deterministic and independent of production s
 
 The harness must include at least one analytic localized wave packet and one discrete reference case. Spatial/time refinement is required for any finite-difference result. No physical parameter is to be selected by tuning the test to pass.
 
-## 8. Exit criteria and next decision
+## 8. Numerical-check progress
+
+Implemented in `tests/test_ambient_spatial_composition.py`:
+- Nonzero residual for a spatially uniform 440-cycle carrier under the massless wave equation.
+- Pointwise additive energy identity, including the cross-energy term.
+- Pointwise additive flux identity, including the cross-flux term.
+- Full-day scan of the envelope correction; the maximum relative correction is required to fall between 1 and 2 parts per million for the selected 1:440 envelope/carrier ratio.
+- Accounting-patch area scaling of integrated inventory while holding local density fixed.
+- Deterministic replay of the analytical diagnostics.
+
+These tests are algebraic/reference checks, not a coupled field simulation. Still outstanding are the analytic localized wave-packet case, a discrete patch-boundary flux/work balance over nested patches, an independent-mode noninteraction control, and any reciprocal coupled-Hamiltonian candidate. The existing tests must pass the exact-head CI run before being treated as validated.
+
+## 9. Exit criteria and next decision
 
 This gate passes only when:
 - the additive cross-energy and cross-flux identities are numerically verified;
