@@ -426,3 +426,18 @@ and the averaged drive power is the time derivative of this full expression. The
 This construction is a candidate, not a validated implementation. Required follow-up checks are: (1) verify that \(q_0\) is recovered when \(g=0\); (2) verify that integrated \(s_0q_t\) equals the uncoupled oscillator-energy change; (3) enable localized \(g\) and verify the material exchange cancels while world work remains the only external term; (4) verify that coupling-induced deviations in \(q\) are not overwritten; and (5) reconcile generation, withdrawal, material exchange, outgoing disturbance flux, and numerical residual over nested accounting patches.
 
 **No production source, solver, material, chemistry, or organism integration is authorized.**
+
+
+## 15. Isolated finite-dimensional material-local coupling harness (implementation added; CI pending)
+
+Added `tests/test_material_local_ambient_coupling.py`, a standard-library-only reference harness that does not import or modify the production solver. It discretizes the source-free material-local derivative-coupling equations on a small periodic one-dimensional grid, using a centered Laplacian and an implicit-midpoint integrator. The discrete energy uses the matching forward-difference gradient, so summation by parts makes the semi-discrete field operator energy-skew and the coupling work cancels exactly between field and oscillator.
+
+The harness checks:
+
+1. Nonnegative Hamiltonian energy for randomized finite states with positive field/oscillator parameters.
+2. Coupling-operator support is exactly the specified compact physical-material cells; every coupling entry is zero outside that support.
+3. Source-free total energy conservation over 500 implicit-midpoint steps.
+4. Driven, coupled total-energy reconciliation: the only net external work is the signed world-drive integral `sum(dt * s_world * q_t_midpoint)`. Internal material exchange is not added to world generation, and the coupled oscillator is not clamped back to its uncoupled target trajectory.
+5. The intrinsic drive recovers the prescribed uncoupled reference trajectory with second-order convergence under time-step halving, while its signed work closes the oscillator energy balance.
+
+The workflow on the parent branch now conditionally runs this test module when the file is present, so the stacked PR #438 executes it without making the parent PR #437 depend on a file that exists only in the child PR. The test result is pending exact-head CI. This is a finite-dimensional reference only: it does not establish the continuum interface limit, a production integrator, a physical coupling coefficient, or a selected world-generation law. Production integration remains blocked.
