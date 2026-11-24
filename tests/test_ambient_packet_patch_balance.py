@@ -171,8 +171,10 @@ def test_nested_accounting_patches_close_discrete_packet_flux_and_forcing_work()
         for patch in patches
     ]
     assert all(math.isfinite(value) for value in coarse + fine)
-    assert all(value < 0.08 for value in fine)
-    assert all(fine_value < coarse_value for coarse_value, fine_value in zip(coarse, fine))
+    # Both resolutions must close the same balance. The normalized residual
+    # is not required to decrease monotonically: endpoint-energy, boundary-
+    # flux, and volume-work quadratures have different cancellation errors.
+    assert all(value < 0.02 for value in coarse + fine)
 
 
 def test_accounting_patch_does_not_change_local_analytic_packet_state():
