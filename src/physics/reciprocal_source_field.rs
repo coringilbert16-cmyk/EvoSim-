@@ -1111,8 +1111,17 @@ mod tests {
         .unwrap();
         damped.configure_absorbing_boundary(8, 5.0).unwrap();
         let mut undamped = ReciprocalSourceField::new(
-            41, 41, spacing, 1.0, time_step, 1.0, 2.0, 1.5, 0.8,
-            profile(41, 41, 18, 23, 18, 23), 1.0,
+            41,
+            41,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.8,
+            profile(41, 41, 18, 23, 18, 23),
+            1.0,
         )
         .unwrap();
         let mut expanded = ReciprocalSourceField::new(
