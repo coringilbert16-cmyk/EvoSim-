@@ -511,10 +511,7 @@ impl AdaptiveWaveField {
     /// The time step is held fixed. A topology change that would violate the
     /// existing CFL bound is rejected rather than silently changing the
     /// temporal energy metric.
-    pub(crate) fn refine_grid(
-        &mut self,
-        key: CellKey,
-    ) -> Result<[CellKey; 4], AdaptiveGridError> {
+    pub(crate) fn refine_grid(&mut self, key: CellKey) -> Result<[CellKey; 4], AdaptiveGridError> {
         self.regrid_preserving_energy(|grid| grid.refine(key))
     }
 
@@ -570,8 +567,7 @@ impl AdaptiveWaveField {
             .max(target_integrals.previous_displacement.abs())
             .max(1.0);
         let integral_tolerance = 1.0e-11 * integral_scale;
-        if (transferred_integrals.current_displacement
-            - target_integrals.current_displacement)
+        if (transferred_integrals.current_displacement - target_integrals.current_displacement)
             .abs()
             > integral_tolerance
             || (transferred_integrals.previous_displacement
