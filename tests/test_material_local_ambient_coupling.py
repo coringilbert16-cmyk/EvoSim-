@@ -265,7 +265,7 @@ def _rk4_spatial_step(state, *, step, **parameters):
     ]
 
 
-def _spatial_refinement_solution(size, profile, *, final_time):
+def _spatial_refinement_solution(size, profile, *, final_time, time_step_ratio=0.1):
     """Evolve a right-moving packet through sharp or smooth compact material."""
     domain_length = 16.0
     spacing = domain_length / size
@@ -306,7 +306,7 @@ def _spatial_refinement_solution(size, profile, *, final_time):
         "oscillator_mass": 0.8,
         "omega": 1.7,
     }
-    step = 0.1 * spacing
+    step = time_step_ratio * spacing
     count = round(final_time / step)
     step = final_time / count
     for _ in range(count):
@@ -396,6 +396,34 @@ class MaterialLocalAmbientCouplingTests(unittest.TestCase):
 
             self.assertGreater(errors[0] / errors[1], 3.0, profile)
             self.assertGreater(errors[1] / errors[2], 3.0, profile)
+
+    def test_time_refinement_is_independently_fourth_order_at_fixed_grid(self):
+        size = 64
+        ratios = (0.4, 0.2, 0.1, 0.05, 0.025)
+        solutions = {
+            ratio: _spatial_refinement_solution(
+                size,
+                "sharp",
+                final_time=5.5,
+                time_step_ratio=ratio,
+            )
+            for ratio in ratios
+        }
+        reference = solutions[ratios[-1]]
+        errors = []
+        for ratio in ratios[:-1]:
+            candidate = solutions[ratio]
+            squared_error = sum(
+                (candidate[index] - reference[index]) ** 2
+                + (
+                    candidate[2 * size + index]
+                    - reference[2 * size + index]
+                ) ** 2
+                for index in range(size)
+            )
+            errors.append(math.sqrt(squared_error / size))
+        self.assertGreater(errors[0] / errors[1], 12.0)
+        self.assertGreater(errors[1] / errors[2], 12.0)
 
     def test_hamiltonian_is_nonnegative_for_random_finite_states(self):
         generator = random.Random(314159)
