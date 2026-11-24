@@ -12,6 +12,8 @@ pub(crate) enum ReciprocalModelError {
     InvalidProfile,
     UnstableTimeStep,
     InvalidState,
+    InsufficientSourceEnergy,
+    SourceAccountRejected,
     CounterOverflow,
 }
 
@@ -237,6 +239,36 @@ impl ReciprocalSourceField {
         Ok(discrete_external_work)
     }
 
+    /// Atomically settles externally driven oscillator work against one finite
+    /// environmental source account. The trial state is computed separately;
+    /// an invalid or underfunded transfer leaves both the model and account
+    /// unchanged. This clone-based staging is intentionally isolated and is
+    /// not a production performance implementation.
+    pub(crate) fn step_with_environmental_source(
+        &mut self,
+        source: &mut SourceInstance,
+        external_force: f64,
+    ) -> Result<f64, ReciprocalModelError> {
+        let mut trial = self.clone();
+        let signed_work = trial.step_with_external_force(external_force)?;
+        let settlement = source
+            .account()
+            .prepare_field_transfer(signed_work)
+            .map_err(|error| match error {
+                SourceAccountError::InsufficientEnergy => {
+                    ReciprocalModelError::InsufficientSourceEnergy
+                }
+                _ => ReciprocalModelError::SourceAccountRejected,
+            })?;
+
+        source
+            .account_mut()
+            .commit_field_transfer(settlement)
+            .map_err(|_| ReciprocalModelError::SourceAccountRejected)?;
+        *self = trial;
+        Ok(signed_work)
+    }
+
     fn field_energy_components(&self) -> (f64, f64, f64) {
         let area = self.spacing.powi(2);
         let mut field_kinetic = 0.0;
@@ -447,6 +479,70 @@ mod tests {
         }
         assert!(cumulative_work.is_finite());
         assert!(system.field_energy() > 0.0);
+    }
+
+    fn mathematical_source(id: u64, initial_energy: f64) -> SourceInstance {
+        use super::super::source::{
+            SourceClass, SourceDescriptor, SourceEnergyAccount, SourceGeometry, SourceId,
+            SourcePowerLaw, SourceProvenance, SourceWaveform, TickSchedule,
+        };
+
+        let source_id = SourceId::new(id).unwrap();
+        let descriptor = SourceDescriptor::new(
+            source_id,
+            SourceProvenance::MathematicalTest { holder_id: id },
+            SourceClass::MathematicalTest,
+            SourceGeometry::Disk {
+                center_x: 1.0,
+                center_y: 1.0,
+                radius: 0.5,
+            },
+            TickSchedule::new(0, None).unwrap(),
+            SourceWaveform::SinglePulse,
+            SourcePowerLaw::MathematicalTestOnly,
+        )
+        .unwrap();
+        SourceInstance::new(
+            descriptor,
+            SourceEnergyAccount::new(source_id, initial_energy).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn environmental_source_settlement_reconciles_and_debits_once() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let mut source = mathematical_source(71, 10.0);
+        let initial_total = system.total_energy();
+        let work = system
+            .step_with_environmental_source(&mut source, 0.08)
+            .unwrap();
+
+        assert!(work > 0.0);
+        assert!((system.total_energy() - initial_total - work).abs() < 1.0e-10);
+        assert!((source.account().remaining_energy() - (10.0 - work)).abs() < 1.0e-12);
+        assert!((source.account().cumulative_field_transfer() - work).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn environmental_source_overdraw_rolls_back_model_and_account() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let before = system.clone();
+        let mut source = mathematical_source(72, 0.0);
+        let account_before = source.account().remaining_energy();
+        let result = system.step_with_environmental_source(&mut source, 0.08);
+
+        assert_eq!(
+            result,
+            Err(ReciprocalModelError::InsufficientSourceEnergy)
+        );
+        assert_eq!(system.steps_elapsed, before.steps_elapsed);
+        assert_eq!(system.previous_field, before.previous_field);
+        assert_eq!(system.current_field, before.current_field);
+        assert_eq!(system.previous_source.to_bits(), before.previous_source.to_bits());
+        assert_eq!(system.current_source.to_bits(), before.current_source.to_bits());
+        assert_eq!(source.account().remaining_energy(), account_before);
+        assert_eq!(source.account().cumulative_field_transfer(), 0.0);
     }
 
     #[test]
