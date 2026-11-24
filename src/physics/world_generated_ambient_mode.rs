@@ -120,6 +120,8 @@ impl AmbientModeConfig {
             || energy_density < AMBIENT_MIN_ENERGY_DENSITY
             || energy_density > AMBIENT_MAX_ENERGY_DENSITY
             || total_energy <= 0.0
+            || !amplitude_velocity.is_finite()
+            || !amplitude_acceleration.is_finite()
             || !carrier_velocity.is_finite()
             || !carrier_acceleration.is_finite()
             || !instantaneous_oscillator_energy_density.is_finite()
@@ -133,6 +135,8 @@ impl AmbientModeConfig {
             energy_density,
             total_energy,
             amplitude,
+            amplitude_velocity,
+            amplitude_acceleration,
             angular_frequency,
             carrier_phase_radians,
             carrier_value,
@@ -236,6 +240,8 @@ pub(crate) struct AmbientModeSample {
     pub(crate) energy_density: f64,
     pub(crate) total_energy: f64,
     pub(crate) amplitude: f64,
+    pub(crate) amplitude_velocity: f64,
+    pub(crate) amplitude_acceleration: f64,
     pub(crate) angular_frequency: f64,
     pub(crate) carrier_phase_radians: f64,
     pub(crate) carrier_value: f64,
@@ -405,12 +411,20 @@ mod tests {
 
     #[test]
     fn oscillator_amplitude_matches_the_declared_energy_density() {
-        let mode = mode_at(0, 3.0);
-        let sample = mode.sample();
-        let reconstructed = 0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
-            + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
-        assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
-        assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
+        let mut mode = mode_at(0, 3.0);
+        for tick in 0..AMBIENT_DAY_TICKS {
+            let sample = mode.sample();
+            let reconstructed = 0.5
+                * 2.5
+                * sample.angular_frequency.powi(2)
+                * sample.amplitude.powi(2)
+                + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
+            assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
+            assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
+            if tick + 1 < AMBIENT_DAY_TICKS {
+                mode.advance_one_tick().unwrap();
+            }
+        }
     }
 
     #[test]
