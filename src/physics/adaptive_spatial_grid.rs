@@ -1442,4 +1442,73 @@ mod tests {
             Some(AdaptiveGridError::InvalidState)
         );
     }
+
+    #[test]
+    fn repeated_regridding_preserves_energy_and_integrals_across_wave_profiles() {
+        for profile_kind in 0..4 {
+            let mut grid = AdaptiveSpatialGrid::new(9, 9, 1.0, 2).unwrap();
+            for y in 1..8 {
+                for x in 1..8 {
+                    let dx = x as f64 - 4.0;
+                    let dy = y as f64 - 4.0;
+                    let radius_squared = dx * dx + dy * dy;
+                    let envelope = (-radius_squared / 18.0).exp();
+                    let profile = match profile_kind {
+                        0 => envelope,
+                        1 => (-(dx * dx / 8.0 + dy * dy / 2.0)).exp(),
+                        2 => (-((radius_squared.sqrt() - 2.5).powi(2)) / 1.5).exp(),
+                        _ => (0.7 * dx + 0.35 * dy).sin() * envelope,
+                    };
+                    let previous = 0.37 * profile + 0.015 * envelope;
+                    let current = profile - 0.02 * envelope;
+                    grid.set_state(
+                        CellKey { level: 0, x, y },
+                        AdaptiveCell { previous, current },
+                    )
+                    .unwrap();
+                }
+            }
+
+            let mut field = AdaptiveWaveField::new(grid, 0.15, 1.2).unwrap();
+            let parent = CellKey {
+                level: 0,
+                x: 4,
+                y: 4,
+            };
+
+            for _ in 0..6 {
+                field.advance_ticks(2).unwrap();
+                let before_refine_energy = field.energy();
+                let before_refine_integrals = field.grid().integrated_state();
+
+                field.refine_grid(parent).unwrap();
+                close(field.energy(), before_refine_energy);
+                let after_refine_integrals = field.grid().integrated_state();
+                close(
+                    after_refine_integrals.current_displacement,
+                    before_refine_integrals.current_displacement,
+                );
+                close(
+                    after_refine_integrals.previous_displacement,
+                    before_refine_integrals.previous_displacement,
+                );
+
+                field.advance_ticks(2).unwrap();
+                let before_coarsen_energy = field.energy();
+                let before_coarsen_integrals = field.grid().integrated_state();
+
+                field.coarsen_grid(parent).unwrap();
+                close(field.energy(), before_coarsen_energy);
+                let after_coarsen_integrals = field.grid().integrated_state();
+                close(
+                    after_coarsen_integrals.current_displacement,
+                    before_coarsen_integrals.current_displacement,
+                );
+                close(
+                    after_coarsen_integrals.previous_displacement,
+                    before_coarsen_integrals.previous_displacement,
+                );
+            }
+        }
+    }
 }
