@@ -368,3 +368,17 @@ adds signed source work \(s_{world}q_t\) to the ambient energy balance. The exis
 8. **Driven accounting:** Only after source-free exchange passes, add the world-generation drive and demonstrate that generation, withdrawal, material exchange, outgoing flux, and numerical residual reconcile without double counting.
 
 **Decision:** This derivation identifies a viable next candidate for isolated testing, not an approved physical law. The ambient source-work issue and all discrete tests remain open. No production solver, material, chemistry, organism, or GUI integration is authorized.
+
+
+### Exploratory finite-dimensional conservation spot-check (not repository CI)
+
+A standalone one-dimensional periodic finite-difference system was formed from the source-free equations, with a compact coupling profile nonzero only on ten adjacent cells. The semi-discrete linear system was advanced for 500 steps using implicit midpoint, which preserves quadratic Hamiltonians for this linear conservative system.
+
+- Grid: 80 cells, spacing 1; propagation speed 1.
+- Oscillator frequency: 1.7; time step: 0.02.
+- Coupling: 0.35 on cells 30–39, zero elsewhere.
+- Initial state: a localized disturbance packet and a separate localized oscillator perturbation.
+- Total energy: 0.19689581638926476 initially and 0.19689581638926898 after 500 steps.
+- Relative energy residual: 2.14e-14 (absolute residual 4.22e-15).
+
+This confirms that the proposed source-free semi-discrete equations admit a compact-support, positive-energy, conservative finite-dimensional reference under an energy-preserving integrator. It does not validate the continuum interface limit, the existing ambient world-generation drive, the production leapfrog scheme, or any repository test. The result is exploratory and must be reproduced in the isolated repository harness with spatial/time refinement before it can count toward the gate.
