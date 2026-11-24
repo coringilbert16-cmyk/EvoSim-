@@ -530,7 +530,132 @@ def _discrete_scattering(*, spacing, step, length, omega=1.0,
     return reflection, transmission
 
 
+
+
+def _run_2d_reference(size, *, dt_factor, final_time):
+    """Source-free 2-D compact-support run for independent refinement tests."""
+    length = 16.0
+    spacing = length / size
+    speed, field_mass, oscillator_mass, omega = 1.0, 1.3, 0.8, 1.7
+    step = dt_factor * spacing
+    count = round(final_time / step)
+    step = final_time / count
+    coordinates = [index * spacing for index in range(size)]
+    coupling = [
+        [
+            0.35 if 4.0 <= coordinates[x] < 8.0
+            and 6.0 <= coordinates[y] < 10.0 else 0.0
+            for y in range(size)
+        ]
+        for x in range(size)
+    ]
+    width = 0.8
+    displacement = [
+        [
+            math.exp(
+                -0.5 * (
+                    ((coordinates[x] - 2.0) / width) ** 2
+                    + ((coordinates[y] - 8.0) / width) ** 2
+                )
+            )
+            for y in range(size)
+        ]
+        for x in range(size)
+    ]
+    field_velocity = [
+        [
+            (coordinates[x] - 2.0) * displacement[x][y] / width**2
+            for y in range(size)
+        ]
+        for x in range(size)
+    ]
+    oscillator = [[0.0] * size for _ in range(size)]
+    oscillator_velocity = [[0.0] * size for _ in range(size)]
+    field_half, oscillator_half = _velocity_step_2d(
+        field_velocity, oscillator_velocity, displacement, oscillator,
+        coupling, step=-0.5 * step, spacing=spacing, speed=speed,
+        field_mass=field_mass, oscillator_mass=oscillator_mass,
+        omega=omega, source=0.0,
+    )
+    for _ in range(count):
+        next_field, next_oscillator = _velocity_step_2d(
+            field_half, oscillator_half, displacement, oscillator, coupling,
+            step=step, spacing=spacing, speed=speed, field_mass=field_mass,
+            oscillator_mass=oscillator_mass, omega=omega, source=0.0,
+        )
+        displacement = [
+            [
+                displacement[x][y] + step * next_field[x][y]
+                for y in range(size)
+            ]
+            for x in range(size)
+        ]
+        oscillator = [
+            [
+                oscillator[x][y] + step * next_oscillator[x][y]
+                for y in range(size)
+            ]
+            for x in range(size)
+        ]
+        field_half, oscillator_half = next_field, next_oscillator
+    return displacement, oscillator
+
+
 class MaterialLocalAmbientLeapfrogTests(unittest.TestCase):
+    def test_two_dimensional_spatial_refinement_is_second_order(self):
+        solutions = {
+            size: _run_2d_reference(
+                size, dt_factor=0.2, final_time=3.5,
+            )
+            for size in (16, 32, 64, 128)
+        }
+        reference = solutions[128]
+        errors = []
+        for size in (16, 32, 64):
+            stride = 128 // size
+            displacement, oscillator = solutions[size]
+            squared_error = sum(
+                (
+                    displacement[x][y]
+                    - reference[0][x * stride][y * stride]
+                ) ** 2
+                + (
+                    oscillator[x][y]
+                    - reference[1][x * stride][y * stride]
+                ) ** 2
+                for x in range(size)
+                for y in range(size)
+            )
+            errors.append(math.sqrt(squared_error / (size * size)))
+        self.assertGreater(errors[0] / errors[1], 3.0)
+        self.assertGreater(errors[1] / errors[2], 3.0)
+
+    def test_two_dimensional_temporal_refinement_is_second_order(self):
+        factors = (0.2, 0.1, 0.05, 0.025, 0.0125)
+        solutions = {
+            factor: _run_2d_reference(
+                32, dt_factor=factor, final_time=3.5,
+            )
+            for factor in factors
+        }
+        reference = solutions[factors[-1]]
+        errors = []
+        for factor in factors[:-1]:
+            displacement, oscillator = solutions[factor]
+            squared_error = sum(
+                (
+                    displacement[x][y] - reference[0][x][y]
+                ) ** 2
+                + (
+                    oscillator[x][y] - reference[1][x][y]
+                ) ** 2
+                for x in range(32)
+                for y in range(32)
+            )
+            errors.append(math.sqrt(squared_error / (32 * 32)))
+        self.assertGreater(errors[0] / errors[1], 3.0)
+        self.assertGreater(errors[1] / errors[2], 3.0)
+
     def test_sharp_interface_scattering_converges_to_continuum(self):
         reference = _continuum_scattering(length=4.0)
         errors = []
