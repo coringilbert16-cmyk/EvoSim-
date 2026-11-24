@@ -425,6 +425,63 @@ class MaterialLocalAmbientCouplingTests(unittest.TestCase):
         self.assertGreater(errors[0] / errors[1], 12.0)
         self.assertGreater(errors[1] / errors[2], 12.0)
 
+    def test_periodic_amplitude_inversion_matches_exact_average_energy_schedule(self):
+        # The 1..10 schedule is interpreted as total carrier-averaged
+        # oscillator energy, including the slow-envelope kinetic term.
+        samples = 24000
+        period = float(samples)
+        spacing = period / samples
+        omega = 2.0 * math.pi * 440.0 / period
+        mass = 1.0
+        schedule = [
+            5.5 - 4.5 * math.cos(2.0 * math.pi * index / samples)
+            for index in range(samples)
+        ]
+        carrier_only = [
+            math.sqrt(2.0 * energy / (mass * omega**2))
+            for energy in schedule
+        ]
+        amplitude = carrier_only[:]
+
+        def periodic_derivative(values):
+            return [
+                (
+                    values[(index - 2) % samples]
+                    - 8.0 * values[(index - 1) % samples]
+                    + 8.0 * values[(index + 1) % samples]
+                    - values[(index + 2) % samples]
+                ) / (12.0 * spacing)
+                for index in range(samples)
+            ]
+
+        # Fixed-point correction of the envelope-kinetic contribution.
+        for _ in range(4):
+            derivative = periodic_derivative(amplitude)
+            amplitude = [
+                math.sqrt(
+                    2.0
+                    / (mass * omega**2)
+                    * (energy - mass * rate**2 / 4.0)
+                )
+                for energy, rate in zip(schedule, derivative)
+            ]
+
+        derivative = periodic_derivative(amplitude)
+        maximum_energy_residual = max(
+            abs(
+                mass * omega**2 * value**2 / 2.0
+                + mass * rate**2 / 4.0
+                - energy
+            )
+            for value, rate, energy in zip(amplitude, derivative, schedule)
+        )
+        maximum_relative_amplitude_correction = max(
+            abs(value / initial - 1.0)
+            for value, initial in zip(amplitude, carrier_only)
+        )
+        self.assertLess(maximum_energy_residual, 1.0e-12)
+        self.assertLess(maximum_relative_amplitude_correction, 1.0e-6)
+
     def test_hamiltonian_is_nonnegative_for_random_finite_states(self):
         generator = random.Random(314159)
         for _ in range(100):
