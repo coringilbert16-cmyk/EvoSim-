@@ -467,8 +467,7 @@ mod tests {
         let height = 14;
         let spacing = 0.5;
         let profile =
-            ReciprocalSourceField::uniform_profile(width, height, spacing, 3, 11, 2, 10)
-                .unwrap();
+            ReciprocalSourceField::uniform_profile(width, height, spacing, 3, 11, 2, 10).unwrap();
         let expected = 1.0 / (8.0 * 8.0 * spacing.powi(2));
 
         for y in 0..height {
@@ -488,44 +487,18 @@ mod tests {
     #[test]
     fn uniform_profile_integral_is_invariant_under_translation_and_refinement() {
         let coarse_spacing = 0.5;
-        let coarse = ReciprocalSourceField::uniform_profile(
-            20,
-            18,
-            coarse_spacing,
-            3,
-            11,
-            4,
-            12,
-        )
-        .unwrap();
-        let translated = ReciprocalSourceField::uniform_profile(
-            20,
-            18,
-            coarse_spacing,
-            6,
-            14,
-            2,
-            10,
-        )
-        .unwrap();
+        let coarse =
+            ReciprocalSourceField::uniform_profile(20, 18, coarse_spacing, 3, 11, 4, 12).unwrap();
+        let translated =
+            ReciprocalSourceField::uniform_profile(20, 18, coarse_spacing, 6, 14, 2, 10).unwrap();
         let refined_spacing = 0.25;
-        let refined = ReciprocalSourceField::uniform_profile(
-            40,
-            36,
-            refined_spacing,
-            6,
-            22,
-            8,
-            24,
-        )
-        .unwrap();
+        let refined =
+            ReciprocalSourceField::uniform_profile(40, 36, refined_spacing, 6, 22, 8, 24).unwrap();
 
         for profile in [&coarse, &translated] {
-            assert!((profile.iter().sum::<f64>() * coarse_spacing.powi(2) - 1.0).abs()
-                <= 1.0e-14);
+            assert!((profile.iter().sum::<f64>() * coarse_spacing.powi(2) - 1.0).abs() <= 1.0e-14);
         }
-        assert!((refined.iter().sum::<f64>() * refined_spacing.powi(2) - 1.0).abs()
-            <= 1.0e-14);
+        assert!((refined.iter().sum::<f64>() * refined_spacing.powi(2) - 1.0).abs() <= 1.0e-14);
         assert_eq!(coarse[4 * 20 + 3], translated[2 * 20 + 6]);
         assert!((coarse[4 * 20 + 3] / refined[8 * 40 + 6] - 4.0).abs() < 1.0e-14);
     }
