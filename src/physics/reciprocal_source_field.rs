@@ -1316,6 +1316,8 @@ mod tests {
             let mut near = make_system(41, 20, true);
             let mut farther = make_system(61, 30, true);
             let mut expanded = make_system(121, 60, false);
+            let initial_near_energy = near.total_energy();
+            let initial_farther_energy = farther.total_energy();
             let mut near_max = [0.0_f64; 8];
             let mut farther_max = [0.0_f64; 8];
 
@@ -1340,13 +1342,21 @@ mod tests {
                         farther_max[probe_index].max((farther_value - reference).abs());
                 }
 
-                let near_balance =
-                    near.total_energy() + near.boundary_absorbed_energy();
-                let farther_balance =
-                    farther.total_energy() + farther.boundary_absorbed_energy();
-                let initial_near = 0.0_f64;
-                let initial_farther = 0.0_f64;
-                let _ = (near_balance, farther_balance, initial_near, initial_farther);
+                let near_residual = initial_near_energy
+                    - near.total_energy()
+                    - near.boundary_absorbed_energy();
+                let farther_residual = initial_farther_energy
+                    - farther.total_energy()
+                    - farther.boundary_absorbed_energy();
+                assert!(
+                    near_residual.abs() <= 2.0e-9 * initial_near_energy.abs().max(1.0),
+                    "frequency={frequency}, step={step}: near-domain energy residual={near_residual}"
+                );
+                assert!(
+                    farther_residual.abs()
+                        <= 2.0e-9 * initial_farther_energy.abs().max(1.0),
+                    "frequency={frequency}, step={step}: farther-domain energy residual={farther_residual}"
+                );
             }
 
             for (probe_index, (_, _, direction)) in probes.iter().enumerate() {
