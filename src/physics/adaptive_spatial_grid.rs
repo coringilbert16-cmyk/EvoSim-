@@ -91,6 +91,18 @@ impl AdaptiveSpatialGrid {
             .checked_mul(finest_scale)
             .and_then(|_| height.checked_mul(finest_scale))
             .ok_or(AdaptiveGridError::InvalidDimensions)?;
+        let finest_spacing = base_spacing / finest_scale as f64;
+        let world_width = width as f64 * base_spacing;
+        let world_height = height as f64 * base_spacing;
+        if !finest_spacing.is_finite()
+            || finest_spacing <= 0.0
+            || !(finest_spacing * finest_spacing).is_finite()
+            || finest_spacing * finest_spacing <= 0.0
+            || !world_width.is_finite()
+            || !world_height.is_finite()
+        {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
         let capacity = (width as usize)
             .checked_mul(height as usize)
             .ok_or(AdaptiveGridError::InvalidDimensions)?;
@@ -884,6 +896,12 @@ mod tests {
             .map(|face| face.length)
             .sum();
         close(coarse_side, 1.0);
+        for face in faces
+            .iter()
+            .filter(|face| face.first == coarse || face.second == coarse)
+        {
+            close(face.center_distance, 0.75);
+        }
         assert!(faces
             .iter()
             .all(|face| face.length > 0.0 && face.center_distance > 0.0));
@@ -1058,6 +1076,14 @@ mod tests {
         assert_eq!(
             field.configure_absorbing_boundary(1.0, 1.0),
             Err(AdaptiveGridError::AlreadyStarted)
+        );
+    }
+
+    #[test]
+    fn grid_rejects_underflowing_finest_cell_area() {
+        assert_eq!(
+            AdaptiveSpatialGrid::new(1, 1, 1.0e-200, 20).err(),
+            Some(AdaptiveGridError::InvalidParameter)
         );
     }
 
