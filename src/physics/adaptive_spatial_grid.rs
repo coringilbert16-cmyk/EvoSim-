@@ -1513,7 +1513,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn uniformly_refined_adaptive_wave_converges_to_continuum_mode() {
         fn relative_error(refinement_level: u8) -> f64 {
@@ -1608,10 +1607,26 @@ mod tests {
             .collect();
         for parent in inner_parents {
             let children = [
-                CellKey { level: 1, x: parent.x * 2, y: parent.y * 2 },
-                CellKey { level: 1, x: parent.x * 2 + 1, y: parent.y * 2 },
-                CellKey { level: 1, x: parent.x * 2, y: parent.y * 2 + 1 },
-                CellKey { level: 1, x: parent.x * 2 + 1, y: parent.y * 2 + 1 },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2,
+                    y: parent.y * 2,
+                },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2 + 1,
+                    y: parent.y * 2,
+                },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2,
+                    y: parent.y * 2 + 1,
+                },
+                CellKey {
+                    level: 1,
+                    x: parent.x * 2 + 1,
+                    y: parent.y * 2 + 1,
+                },
             ];
             for child in children {
                 grid.refine(child).unwrap();
@@ -1683,17 +1698,21 @@ mod tests {
             let center_x = 0.5 * (bounds.min_x + bounds.max_x);
             let center_y = 0.5 * (bounds.min_y + bounds.max_y);
             let boundary = is_computational_boundary(&grid, key);
-            let envelope = (-((center_x - 11.0).powi(2) / 24.0
-                + (center_y - 12.0).powi(2) / 18.0))
-                .exp();
+            let envelope =
+                (-((center_x - 11.0).powi(2) / 24.0 + (center_y - 12.0).powi(2) / 18.0)).exp();
             let phase = 0.55 * (center_x - 11.0);
-            let current = if boundary { 0.0 } else { envelope * phase.cos() };
+            let current = if boundary {
+                0.0
+            } else {
+                envelope * phase.cos()
+            };
             let previous = if boundary {
                 0.0
             } else {
                 envelope * (phase + 0.55 * 0.15).cos()
             };
-            grid.set_state(key, AdaptiveCell { previous, current }).unwrap();
+            grid.set_state(key, AdaptiveCell { previous, current })
+                .unwrap();
         }
 
         let mut field = AdaptiveWaveField::new(grid, 0.15, 1.0).unwrap();
@@ -1707,5 +1726,4 @@ mod tests {
             "relative energy drift after crossing coarse/fine interfaces: {relative_drift}"
         );
     }
-
 }
