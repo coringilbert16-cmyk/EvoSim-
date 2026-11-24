@@ -2,7 +2,11 @@
 
 **Status:** Approved architectural direction; implementation roadmap. The continuous, time-propagating wave field is the target architecture. This document is the required reference for every future resonance-field investigation, issue, branch, pull request, implementation, and validation run.
 
-**Architecture decision:** The resonance field is a continuous-in-physical-space, persistent, independently updated, multi-frequency wave field. It propagates through the environment with finite travel time and phase. Matter couples to it through its actual exposed physical geometry. The field is not a molecule-to-molecule interaction cache, an instantaneous redistribution model, or a diffusion approximation.
+**Architecture decision:** The resonance field is a persistent spatial wave field with phase-resolved, finite-speed propagation. Its ambient energy is held by the field as a spatially uniform background state with the approved daily envelope and explicit generation/withdrawal accounting. Spatial wave behavior is built on the already validated propagation model. Matter interacts through its actual exposed physical geometry. The field is not a molecule-to-molecule interaction cache, instantaneous redistribution, or diffusion approximation.
+
+**Current approved ambient model:** one simulated day is 24,000 ticks; the ambient carrier completes 440 cycles per day; cycle-averaged ambient energy density follows the approved cosine envelope 10 → 1 at tick 12,000 → 10 at tick 24,000. Opening inventory is not generation. Positive stored-energy change is world generation; negative change is world withdrawal. The environment area is used only to calculate total ambient inventory, never as a propagation boundary. This is implemented in the live simulation and documented in [the Phase 3 ambient-energy report](../results/phase-3-live-ambient-energy.md).
+
+**Explicitly not part of the active model:** no Sun object, external radiative injector, localized hotspot injector, powered material oscillator, or additional buffer/reservoir. The earlier three-source Phase 3B.3 program is superseded. Do not revive it or repeat its source-model derivations.
 
 **Performance decision:** Correct wave physics and auditable energy accounting take precedence over an artificial benchmark win. The initial correct implementation may be slower. The engineering target is to optimize until performance at least breaks even with the existing resonance implementation on the standard workload. A temporary prototype regression is acceptable; silently weakening the physics to hide the cost is not.
 
@@ -40,13 +44,12 @@ The field may read versioned snapshots/events describing these facts. It must no
 ### 2.2 Resonance field is independent and exists throughout space
 
 The resonance layer owns:
-- A persistent spatial wave state, including phase and frequency-resolved state.
-- Source registration and emission schedules, with provenance tied to real energy holders.
-- Finite-speed propagation, attenuation, interference, reflection/scattering where physically defined, and boundary behavior.
-- Field queries at arbitrary positions and along physical boundaries.
-- Energy held in the field, energy flux, transfers to matter, and energy dissipated as heat.
+- The persistent, spatially uniform ambient background energy state and its approved phase/envelope schedule.
+- The spatially varying, phase-resolved wave state and its finite-speed evolution.
+- Field energy, energy flux, and the single accounting path for ambient generation/withdrawal and any later field-to-matter transfer.
+- Field queries at arbitrary positions and along physical material boundaries.
 
-The field exists in empty regions. Molecules do not create its underlying spatial representation merely by existing. Sources inject waves into it; receivers sample/couple to it. Propagation is environmental and must not be implemented as all-pairs molecule-to-molecule propagation.
+The ambient background exists throughout empty space; it is not created by molecules and is not injected by a Sun object, hotspot, material oscillator, or extra reservoir. Propagating spatial disturbances remain environmental field behavior, not all-pairs molecule-to-molecule interactions.
 
 ### 2.3 Continuous physics, finite numerical representation
 
@@ -69,9 +72,9 @@ Phase 1 resolves the design decisions below. They govern Phase 2 and every later
 1. **Field quantity and units:** Define what the field state represents (for example, a signed oscillatory field amplitude or a set of coupled components), its units, and how physical energy density and flux are derived. Use the project-native L/tick/E basis for world length, logical simulation time, energy, power, area, boundary length, frequency, energy density, and flux. Document conversions between derived project-native quantities and keep numerical normalization separate. No SI or wall-clock time conversion is required or intended. Amplitude or spectral magnitude is not itself energy.
 2. **Propagation law:** Select the governing wave equation and its dimensionality/components. State assumptions and physical interpretation. The implementation must represent finite propagation speed, not instantaneous influence.
 3. **Propagation speed:** Define propagation speed in project-native world-distance units per logical simulation tick. Keep this distinct from wall-clock execution pacing.
-4. **Frequency and phase:** Use the fixed logical clock: 24,000 ticks per simulated day and 24,000 ticks per complete solar orbit; they are the same interval. The sun carrier completes 440 cycles and the hotspot carrier 880 cycles during that interval. Runtime pacing is not simulated time and has no influence on physics.
-5. **Source ontology and energy provenance:** Define the physical source classes (external radiative world-tone sun, localized in-plane hotspot, true boundary/line emitters if any, and material-origin oscillators). Every source needs a named authoritative energy holder or explicitly accounted external supply, a finite budget or replenishment law, deterministic schedule, and atomic source/field work transfer. Distinct source geometries retain their correct physical dimensions while sharing one source-to-field accounting contract. The sun is outside the infinite flat plane and follows a circular orbit in a plane perpendicular to it; orbital position determines illumination direction. Its orbit is defined in project-native world coordinates, independent of camera, viewport, solver window, and laboratory walls. The legacy orbit derived from finite rectangular environment dimensions must be retired; orbital radius/distance, height, orientation, and phase origin remain to be specified. The sun is an external radiative source, not a boundary emitter: define its radiation pattern, finite source-to-plane propagation delay using the same empty-space propagation speed as the field, incidence geometry, finite emitted power, and conservative coupling into the 2D field. Material-origin emitters are approved powered oscillators with explicit owned internal energy and atomic debit against emitted field work. An equivalent conservative coupled-degree-of-freedom formulation is acceptable only if it preserves that ownership and the same energy balance. Passive material response does not emit. Existing material aura amplitudes are not source energy.
-6. **Source footprint and injection:** Define how each source couples energy through its actual physical geometry. For the sun, use a finite-power external radiation pattern and source-to-plane geometry/retarded time; derive incident power density over physical plane area, including incidence projection, and ensure total intercepted power never exceeds emitted power. For an in-plane distributed source, integrate power density over its physical support area. For a true line/boundary emitter, integrate flux over its complete physical boundary length. Do not use projected screen width or renormalize visible source energy independently for each receiver. Verify that total source power is invariant under grid refinement and is not scaled by material-recipient count.
+4. **Ambient phase and logical time:** Use the fixed logical clock: 24,000 ticks per simulated day. The approved ambient carrier completes 440 cycles per day. Its cycle-averaged energy density follows the validated 10 → 1 → 10 daily envelope. Runtime pacing is execution speed only and has no influence on physics.
+5. **Ambient energy ownership:** Ambient energy is held by the resonance field itself. The opening ambient inventory is initial held energy, not generated energy. Each tick's signed change in held ambient energy is booked once: positive change as world generation, negative change as world withdrawal. The live ledger records opening held energy, cumulative generation, cumulative withdrawal, and current held energy. The environment area is used only to calculate total ambient inventory; it is not a physical boundary or propagation domain. No Sun object, external injector, hotspot injector, powered material oscillator, or additional buffer/reservoir is part of the approved active model. The old source classes remain historical research artifacts only.
+6. **Spatial field and matter interaction:** The ambient background and spatial wave field must coexist without duplicating energy or creating a second accounting authority. The already validated finite-speed propagation model remains the spatial transport foundation. Material interaction is passive unless a separately approved physical mechanism is introduced; absorption/reflection/transmission/scattering must transfer energy through the unified accounting path and actual supported physical geometry. Do not turn resonance response into an energy source.
 7. **Material coupling:** Define frequency-dependent absorption, reflection, transmission, scattering, and response rules. Reuse established material/resonance semantics where valid; do not create molecule-specific propagation exceptions.
 8. **Attenuation and dissipation:** Derive how amplitude, energy density, and flux change during propagation. Distinguish geometric spreading from true dissipative loss. The existing distance law A(d)=A0/(1+d), E(d)=E0/(1+d)^2 is legacy/reference behavior, not automatically the governing law for a finite-speed wave solver. Any change must be derived, documented, and validated rather than silently copied or discarded.
 9. **Infinite-plane geometry and laboratory containment:** The physical world is an infinite flat two-dimensional plane. The rectangular display is only an observation window. There are no global environmental edges or edge boundary conditions. Define world-distance units, planar numerical representation, and continuity across storage/viewer windows. Chemistry-lab walls are ordinary physical objects with material-specific interactions, not special environment boundaries; they must be removable without changing the physics.
@@ -173,7 +176,7 @@ The legacy 2,400-tick orbit and 86,400-second conversion are recorded as impleme
 
 **Status: COMPLETE — formally closed 2026-11-22.**
 
-Completed and validated as an isolated reference solver under PR #410. Its tested numerical envelope, energy-accounted computational-boundary treatment, and limitations are recorded in that PR. The solver remains separate from production and intentionally unmerged; Phase 2 closure does not authorize production integration or a rebuild of the solver.
+Completed and validated as an isolated reference solver under PR #410. Its tested numerical envelope, energy-accounted computational-boundary treatment, and limitations are recorded in that PR. The solver remains a validated reference implementation; do not rebuild it or repeat its propagation, interference, stability, replay, or convergence work. Production integration is the next use of this foundation. Mathematical test forcing used by the isolated solver is not an approved production source model.
 
 **Goal:** Prove real finite-speed wave propagation in empty space before adding molecular complexity.
 
@@ -181,7 +184,7 @@ Work:
 - Implement a standalone field state and deterministic update loop.
 - Start with the simplest stable spatial discretization that meets the physics specification; do not start with an adaptive solver.
 - Support multiple frequencies and phase-resolved evolution.
-- Support source injection with finite propagation delay.
+- Support the controlled mathematical test forcing needed to validate finite-speed propagation; this is solver verification, not approval for a production source/injector architecture.
 - Implement the infinite-plane reference domain without physical environmental edges. Any finite computational window must use a validated truncation treatment and preserve continuity and auditable energy flux; it must not act as a laboratory wall or camera boundary.
 - Keep field state persistent between simulation ticks.
 
@@ -220,44 +223,46 @@ Exit criteria:
 
 **Not marked complete:** PR #411's standalone Phase 3A.1 planning artifact was closed without merge. The merged work above does not establish that every geometry arrangement or continuous perimeter-coupling requirement is solved. Preserve fail-closed behavior for unsupported arrangements and retain the remaining geometry/visibility gaps below as open work.
 
-#### Phase 3B — Source-to-field coupling
+#### Phase 3B — Source-to-field coupling research: CLOSED / SUPERSEDED
 
-**3B.1 — Source/interface audit: COMPLETE.** The audit is recorded in [resonance-field-phase-3b1-source-interface-audit.md](../audits/resonance-field-phase-3b1-source-interface-audit.md).
+The historical Phase 3B work established reusable mathematics and accounting infrastructure:
+- PRs #426–#427: normalized hotspot-profile mathematics and source-account/provenance transaction infrastructure.
+- PRs #429–#432: prescribed-forcing work identity, deterministic replay, convergence/reference comparisons, and repeated multi-source reconciliation.
+- PR #433: reciprocal oscillator comparator and controlled field-response comparison.
 
-**3B.2 — Source interface, accounting, and hotspot profile: PARTIALLY COMPLETE.**
-- **3B.2 design contract: COMPLETE.** The source descriptor/account/coupling boundary and discrete settlement contract are recorded in [PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md](../plans/PHASE3B2_SOURCE_INTERFACE_AND_INJECTION_PROPOSAL.md).
-- **3B.2a source identity and finite accounting: IMPLEMENTED, MERGED.** PR #427 adds stable source identity/provenance, immutable descriptors, finite non-clonable source accounts, signed staged transfers, atomic settlement, and an isolated copy of the validated reference solver. It does not connect a real source or implement continuous forcing.
-- **3B.2b normalized hotspot profile: IMPLEMENTED, MERGED.** PR #426 adds the compact-support radial-cosine profile, analytic cumulative radial power, physical-area integration, and normalization/refinement/translation/grid-alignment tests. It does not inject that profile into the field or calibrate physical hotspot power.
-- **3B.2c work-conjugate continuous forcing: ISOLATED CANDIDATE A IMPLEMENTED (PR #429 MERGED); VALIDATION CONTINUES.** The extracted reference solver supports one or multiple additive prescribed-acceleration sources. Signed midpoint work is settled against finite source accounts, and the exact combined field-work/sponge-loss identity is checked before state commit. Full CI passed, including positive/negative work, zero work at a velocity node, force sign reversal, multi-source attribution, duplicate-source rejection, simultaneous sponge absorption, overdraw rollback, and fixed-boundary rejection. Deterministic replay passed across 160 multi-source substeps in PR #430. The first sustained continuum-convergence experiment exposed that its paired-refinement comparison mixed spatial and temporal error and did not establish the required order. PR #431 now adds an independent scalar discrete-modal reference, then tests spatial refinement at fixed timestep and temporal refinement at fixed grid. This remains mathematical forcing, not a physical incident-power law. Repeated multi-source attribution remains open. Details: [PHASE3B2C_CONTINUOUS_FORCING_DERIVATION.md](../plans/PHASE3B2C_CONTINUOUS_FORCING_DERIVATION.md).
+These results remain available as research and reusable code where appropriate. They do **not** authorize or require production Sun, hotspot, or powered-material-oscillator sources. The approved ambient-energy model supersedes the old three-source plan. Do not continue Phase 3B.3, derive its source classes, or repeat its completed numerical work.
 
-**Phase 3B is IN PROGRESS.** Source identity/accounting and hotspot profile mathematics are complete. The isolated mathematical forcing prototype has passed its discrete energy/work identity and deterministic replay checks; sustained continuum convergence is still under validation and must distinguish discrete-solver agreement from spatial and temporal continuum error. No real hotspot or sun field injection, source registration in the live simulation, receiver/material settlement, or production behavior has been implemented. A physically defensible mapping from source power/profile to wave-equation forcing remains unresolved. Sun integration (3B.3), receiver/material coupling, and production migration remain separately gated.
+#### Phase 3C — Ambient background and spatial field integration: NEXT
 
-**Goal:** Connect the independent wave field to real energy sources and physical boundaries, only after the source-to-field work law is derived and validated.
+**Goal:** Bring the already validated spatial wave field into the live simulation with the approved ambient background as its energy-bearing background state. Preserve the validated propagation behavior and the existing ambient generation/withdrawal contract. Do not add a source injector or a second reservoir.
 
-Work:
-- Register existing sources with identity, position, shape, frequency spectrum, phase, schedule, and authoritative available-energy budget.
-- Couple the external sun into the plane through the approved finite-power radiation pattern, retarded source-to-plane travel time, incidence projection, and physical-area integration.
-- Inject in-plane distributed sources over their complete physical support area using power density.
-- Use complete boundary-length integration only for sources that are physically line/boundary emitters.
-- Model propagation flux, geometric spreading, attenuation, and dissipative heat according to Phase 1 physics.
-- Query field state along complete receiver boundaries.
-- Integrate receiver coupling over exposed receiver perimeter with occlusion and material response.
-- Support multiple simultaneous sources and receivers without all-pairs propagation.
-- Make field-to-material energy transfer atomic with the existing ledger.
+**Implementation order:**
+1. **Integrate the reference field core into the live simulation.** Reuse the validated PR #410 propagation implementation and its numerical choices. Do not rebuild the solver or repeat propagation/convergence experiments. Keep a narrow adapter between the live simulation tick and the field update.
+2. **Represent the approved ambient background in the spatial field.** Use the existing 24,000-tick/440-cycle schedule and 10 → 1 → 10 envelope. The background must remain spatially uniform; the 250 × 250 environment area remains inventory bookkeeping only. Preserve the live ledger's opening/current/generated/withdrawn accounting. Do not model this as a Sun, injector, oscillator, or extra buffer.
+3. **Keep background energy and propagating disturbances in one field/accounting model.** Define the implementation boundary so spatial wave evolution can coexist with the uniform background without double counting, artificial energy creation, or a second energy authority. Reuse the already validated wave equation and discrete work/accounting results; do not reopen settled derivations.
+4. **Make the field persistent and deterministic in production.** Advance it from simulation ticks, independent of runtime pacing; preserve phase, frequency, and state across ticks and save/load boundaries where the simulation already persists state.
+5. **Expose field queries at physical positions and boundaries.** Use the existing geometry foundation. Keep unsupported geometry fail-closed; do not substitute centroid or nearest-point approximations.
+6. **Add only focused integration checks.** Verify ambient schedule/accounting survives integration, the production field advances deterministically, and the reference solver's established propagation behavior is preserved through the adapter. Do not rerun the broad Phase 2 validation suite or launch exploratory parameter sweeps.
 
-Required tests:
-- Source energy is distributed once across its complete perimeter.
-- Receiver results respond to orientation, shape, exposed perimeter, distance, phase, frequency, and occlusion as specified.
-- Two receivers cannot each claim the same finite field energy.
-- Multiple receivers and overlapping visibility do not duplicate propagation-loss heat.
-- Absorbed, reflected, transmitted, dissipated, escaped, and remaining field energy reconcile.
-- Failed receiver settlement rolls back all affected transfers.
-- Geometry changes invalidate only affected field/coupling data and cannot leave stale occlusion.
+**Phase 3C exit criteria:**
+- The live simulation owns and advances the validated spatial field.
+- The approved ambient background is represented without an injector, duplicate reservoir, or duplicate ledger.
+- Ambient inventory and field energy reconcile under one accounting authority.
+- The field remains deterministic and independent of wall-clock pacing.
+- No previously validated propagation behavior regresses.
 
-Exit criteria:
-- Source, field, receiver, and heat accounting reconcile end-to-end.
-- Perimeter coupling uses complete exposed geometry, not centroid or nearest-point shortcuts.
-- No molecule-specific field propagation exceptions exist.
+**Not included in Phase 3C:** material absorption/chemistry settlement, organism behavior, GUI redesign, performance optimization, or new source classes.
+
+**Phase 3D — Passive material interaction: AFTER 3C**
+
+Once Phase 3C is complete, implement the approved passive material response through actual exposed physical geometry:
+1. Complete only the documented geometry/visibility gaps required by the supported material shapes.
+2. Integrate local field interaction over exposed receiver boundaries with the validated field state; no centroid shortcuts.
+3. Implement absorption/reflection/transmission/scattering as passive energy transfers under the unified ledger. Resonance response is not an energy grant.
+4. Make each transfer atomic with material state and energy-ledger updates; rejected interactions roll back fully.
+5. Validate conservation and deterministic material interaction with focused tests.
+
+**Phase 3D exit criteria:** supported material interactions are geometry-correct, atomic, deterministic, and energy-conserving. Unsupported geometry remains fail-closed.
 
 ### Phase 4 — Controlled integration with movement and chemistry
 
@@ -375,12 +380,19 @@ Do not use a longer observation window as a substitute for identifying a broken 
 
 ## 9. Current status and next action
 
-**Current status (Phase 3B.2 mathematical comparison complete):** Phase 0 baseline/audit is complete; Phase 1 specification is complete; Phase 2 independent reference solver is formally closed; and the listed Phase 3A geometry slices are complete, with documented unsupported geometry/visibility gaps still open. Phase 3B.1 is complete. Phase 3B.2a source identity/accounting and 3B.2b hotspot normalization/integration are merged. Candidate A's isolated prescribed-forcing path passed exact signed-work accounting, rollback, multi-source attribution, deterministic replay, sustained-forcing agreement with an independent discrete-modal reference, and separate spatial/temporal refinement (PRs #429–#431). PR #432's repeated mixed-sign multi-source reconciliation is merged at `c52e606d2f4c320f0176c4fb72b64b1f1916eded`. Candidate B's isolated reciprocal oscillator/field comparator has passed conservation, decoupling, energy exchange, stability rejection, deterministic replay, the 3×3×3 parameter sweep, and separate spatial/temporal refinement. The controlled Candidate A/B replay comparison also passed full CI: both field solvers match when given the same prescribed coupling-force history. This verifies field-response consistency only; it does **not** establish equivalent source dynamics or select a physical source model. PR #433 contains this Candidate B work. The next analytical stage is Phase 3B.3, documented in [the physical source-to-field coupling derivation](../plans/PHASE3B3_PHYSICAL_SOURCE_COUPLING.md). No real sun/hotspot injection, receiver/material settlement, chemistry coupling, or production migration is validated or authorized. Legacy production resonance paths remain authoritative.
+**Completed foundations:**
+- Phase 0 audit and baseline.
+- Phase 1 wave/energy contracts and project-native numerical specification, subject to the later ambient-model supersession stated above.
+- Phase 2 independent finite-speed spatial wave solver, formally closed and validated. Do not rebuild or repeat its propagation calculations.
+- Phase 3A listed geometry/measurement slices.
+- Phase 3B isolated source-accounting and Candidate A/B mathematical work, retained as historical reusable research only.
+- Live ambient-energy implementation: 24,000-tick day, 440-cycle carrier, 10 → 1 → 10 energy-density envelope, and signed generation/withdrawal accounting. Implemented and full exact-head CI passed in PR #439, merged as `e11ec244d9542b86bb00a3c834f300174b5489e6`.
 
-**Next action — Phase 3B.3:** Derive and review physical source-to-field coupling separately for (1) the external radiative sun, (2) the localized in-plane hotspot, and (3) powered material oscillators. Begin with the sun's retarded radiative transfer and emission/arrival-time accounting. Distinguish incident power density from wave-equation forcing and signed field work. Resolve source ownership, finite budgets/replenishment, returned-work behavior, coupling energy, and whole-system conservation before choosing implementation mechanisms. Use [the Phase 3B.3 derivation record](../plans/PHASE3B3_PHYSICAL_SOURCE_COUPLING.md). No production source registration, receiver/material settlement, chemistry coupling, or ledger migration until the derivation and isolated reference tests pass review. Do not repeat completed Phase 0, Phase 2, 3B.1, 3B.2a/b, or Candidate A/B validation.
+**Current production gap:** The live simulation has the approved ambient energy schedule and ledger accounting, while the validated spatial wave solver remains a separate reference implementation. The missing work is integration—not another derivation of propagation or another source model.
 
-**Required reference for all future resonance-field work:** docs/design/resonance-field-implementation-roadmap.md
+**Next action — Phase 3C:** Integrate the validated spatial wave solver into the live simulation and represent the approved ambient background within that field/accounting model. Follow the ordered implementation steps above. Do not run another broad propagation study, repeat Phase 2 tests, revive Sun/hotspot/material-oscillator injection, add a buffer, or introduce a second energy ledger.
 
+**After Phase 3C:** Complete passive material coupling through supported physical geometry (Phase 3D); integrate field effects with movement and chemistry under one energy authority (Phase 4); optimize measured bottlenecks without physics shortcuts (Phase 5); then retire the legacy resonance path (Phase 6).
 
 ## 10. Unified energy-system design and code reuse policy
 
@@ -412,7 +424,7 @@ Every transfer identifies a source, destination, and signed amount. Internal tra
 
 **Reuse after adapting and validating:**
 - Energy-ledger structures and settlement helpers: retain finite-value validation, staged allocation, provenance, residual reporting, and rollback. Redesign categories, holder ownership, and balance equations for field, material-internal, thermal, validated structural, work, and boundary energy.
-- World-tone and hotspot definitions: retain source identity/configuration, location, frequency, phase schedule, and intended source characteristics where valid. Replace independent receiver-settlement paths with one field-source interface and finite emission/debit contract.
+- Ambient-energy schedule and inventory: reuse the merged live implementation and its signed generation/withdrawal accounting. Do not convert it into a Sun/hotspot source account or add a second reservoir. Historical world-tone/hotspot descriptors are not active source requirements.
 - Harmonic/material-response calculations: reuse as candidate constitutive response data, but derive absorption, reflection, transmission, and energy transfer from the new field/material coupling law.
 - Reaction trial builders and atomic commits: retain topology validation and rollback, but replace global-pool/reservoir funding assumptions with Phase 1's local energy-transfer rules.
 
@@ -426,28 +438,24 @@ There must be one conservation/accounting authority for the complete system. The
 
 - **Phase 0 is complete:** the code/ledger/geometry audit and reproducible baseline data are recorded. Do not reopen it as routine next work.
 - **Phase 1 is complete:** the unified specification covers energy forms, units, source ownership, local availability, transfer equations, heat/thermal semantics, structural-energy limits, infinite-plane geometry, laboratory-wall/material-interface behavior, nonphysical observation-window behavior, finite computational-window treatment, numerics, determinism, and the reuse/retirement map.
-- **Phase 3–4** must transfer energy through the single redesigned conservation authority. Do not presume the existing usable-energy pool or resonant reservoir remains the funding mechanism.
+- **Phase 3–4** must transfer energy through the single conservation authority, with the approved ambient inventory and spatial field reconciled rather than duplicated. Do not presume the existing usable-energy pool or resonant reservoir remains the funding mechanism.
 - **Chemistry activation is not energy.** Field influence may affect activation, but reaction energy must come from physically available local transfers or validated structural-energy changes.
 - **Organism-specific reception and energy budgets remain dormant** until an organism has actually been built and its physical interfaces are defined. Environmental physics must not be designed around biological budgeting.
 - The old implementation may remain as a comparison/reference path during migration, but no duplicate energy authority may be active once the new path is authoritative.
 
 **Phase 1 disposition:** COMPLETE. The approved logical clock is 24,000 ticks per simulated day and per solar orbit; 440 and 880 are carrier cycles per day, not additional time scales. Project-native L/tick/E units are authoritative; there is no wall-clock or SI-time calibration. The sun, hotspot, powered material oscillator, passive material response, source ownership, and atomic energy-transfer contracts are specified in the Phase 1 specification. The legacy 2,400-tick orbit and 86,400-second conversion are implementation discrepancies, not model choices. **Phase 2 disposition:** COMPLETE and formally closed as an isolated reference solver; no production integration is implied. EXP-2026-008 remains a comparison point, not a requirement to preserve legacy physics.
 
-## 11. User-approved Phase 1 modeling defaults
+## 11. Active approved model and superseded Phase 1 candidates
 
-The user has explicitly approved the concrete defaults below. This section supersedes earlier roadmap wording that left these architectural choices undecided. The detailed physical contracts and dimensional requirements remain in the Phase 1 specification.
+The Phase 1 specification and the earlier source-coupling plans contain candidate source models that were later superseded by the user's explicit ambient-field decision. Preserve those documents as historical records, but apply the following current decisions wherever they conflict:
 
-- **Field:** one persistent continuous scalar field carrying simultaneous frequencies and phases; linear, isotropic, nondispersive finite-speed propagation in homogeneous empty space; superposition and interference; geometric spreading without automatic energy loss. Field amplitude is not energy.
-- **Sun:** external isotropic 3D radiative source illuminating the infinite 2D plane. Its orbit is a vertical circle in a plane perpendicular to the plane, anchored by coordinate convention at world origin and offset above the plane by more than its radius. Use 24,000 ticks per orbit, exactly one simulated day; keep the 440-cycle-per-simulated-day carrier setting separate. Use finite travel time and retarded emission time at the same empty-space propagation speed as the in-plane field. An infinite plane intercepts half of isotropically emitted power; the remainder stays in the external accounting domain. Transfer into the planar field must be conservative and must not double-count energy.
-- **Material response/emission:** powered material oscillators may emit only from owned internal energy, with an equal source debit. Passive absorption, reflection, transmission, and scattering redistribute energy under conservative constitutive rules. Resonance is response, not an energy source. Material emitters remain disabled in the empty-space reference solver.
-- **Hotspot:** localized in-plane distributed source, retaining radial cosine profile as the initial candidate. Integrate over a defined physical support area; total power is independent of molecule count and grid refinement. Require a finite budget or explicit replenishment. Do not copy the legacy rate without calibration.
-- **Units/time:** project-native L, tick, E. One simulated day and one solar orbit are both exactly 24,000 ticks. The sun carrier completes 440 cycles per day; the hotspot carrier completes 880. No wall-clock or SI-time calibration is required or intended. Runtime pacing affects execution speed only.
-- **Reference numerics:** uniform Cartesian grid and conservative second-order wave solver; leapfrog or an equivalent conservative second-order integrator; initially target about 16 samples per shortest modeled wavelength and verify convergence. Derive the actual stability bound for the chosen discrete operator and time integrator.
-- **Domain/damping/heat:** the physical plane remains infinite. Initial reference domain must be large enough that waves do not reach its edges during measurement; later absorbing or tiled treatment must be validated against the reference. Empty-space damping is zero. Material dissipation credits explicit local thermal storage; heat transport waits for a defined mechanism.
-- **Structural energy/performance:** existing bond-graph structural energy remains provisional and separately reported. Optimize only after correctness, convergence, and conservation, with no arbitrary propagation cutoff or unaccounted energy truncation.
+- **Ambient field:** persistent, spatially uniform background energy held by the resonance field. One simulated day is 24,000 ticks. The ambient carrier completes 440 cycles per day. The cycle-averaged energy density follows the approved cosine envelope: 10 at tick 0, 1 at tick 12,000, and 10 at tick 24,000.
+- **Accounting:** opening ambient energy is initial inventory, not generation. Positive per-tick change in held ambient energy is world generation; negative change is world withdrawal. Track opening held, cumulative generated, cumulative withdrawn, and current held energy. The 250 × 250 environment area is used only to calculate total ambient inventory; it is not a physical boundary.
+- **No source objects:** no Sun object, external radiative injector, hotspot injector, powered material oscillator, or additional buffer/reservoir. Do not implement or investigate these as prerequisites.
+- **Spatial propagation:** retain the validated continuous scalar wave model, finite-speed propagation, phase/frequency state, superposition, interference, and its validated numerical reference implementation. Do not repeat its derivations or broad validation suite.
+- **Matter interaction:** passive material response is the next physical interaction layer. It must use actual exposed material geometry and transfer energy through the unified accounting authority. Resonance response is not an energy source.
+- **Biology:** no organism-specific energy budget, source, or reception behavior until an organism has actually been built and its physical interfaces are established.
 
-The world-origin anchor is a coordinate convention, not a physical center of the infinite plane. The half-power sun interception is a geometric consequence of an isotropic source and an infinite plane, not a free efficiency parameter.
+**Current phase order:** Phase 3C integrates the validated spatial field with the live ambient background and accounting. Phase 3D implements passive material interaction. Phase 4 connects field effects to movement and chemistry. Phase 5 optimizes measured costs. Phase 6 retires the legacy resonance path. Each phase uses focused checks for its new integration boundary; completed propagation mathematics and validation are not repeated.
 
-**Project-native parameter values remain open:** orbit radius/height, finite source budgets and power, propagation speed in L/tick, hotspot power/support radius, material response coefficients, field normalization, grid spacing, and solver time step. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required.
-
-**Phase status:** Phase 0, Phase 1, and Phase 2 are complete. Phase 3A.2.1, 3A.3, and 3A.4a–d are complete as individually listed above. Phase 3B isolated source accounting and Candidate A mathematical forcing are underway; initial discrete-work and continuum-refinement validation passed. Physical source-to-field coupling, project-native parameter calibration, and production integration remain open and gated; no physical-time/SI conversion is required.
+**Project-native units:** L, tick, E remain authoritative. Runtime pacing is execution speed only. No SI or wall-clock time calibration is required.
