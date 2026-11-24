@@ -558,8 +558,7 @@ impl AdaptiveWaveField {
         // original solver's stability envelope.
         let candidate_stiffness = stiffness_matrix(&candidate);
         let maximum_row_sum = maximum_stiffness_row_sum(&candidate, &candidate_stiffness);
-        let stability_measure =
-            self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
+        let stability_measure = self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
         if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
             return Err(AdaptiveGridError::UnstableTimeStep);
         }
@@ -954,7 +953,6 @@ fn preserve_regridded_energy(
     Ok(())
 }
 
-
 type StiffnessMatrix = BTreeMap<CellKey, BTreeMap<CellKey, f64>>;
 
 #[derive(Default)]
@@ -964,20 +962,11 @@ struct VertexStiffness {
     vertex_diagonal: f64,
 }
 
-fn add_stiffness_entry(
-    matrix: &mut StiffnessMatrix,
-    row: CellKey,
-    column: CellKey,
-    value: f64,
-) {
+fn add_stiffness_entry(matrix: &mut StiffnessMatrix, row: CellKey, column: CellKey, value: f64) {
     *matrix.entry(row).or_default().entry(column).or_default() += value;
 }
 
-fn triangle_stiffness(
-    first: (f64, f64),
-    second: (f64, f64),
-    vertex: (f64, f64),
-) -> [[f64; 3]; 3] {
+fn triangle_stiffness(first: (f64, f64), second: (f64, f64), vertex: (f64, f64)) -> [[f64; 3]; 3] {
     let points = [first, second, vertex];
     let cross = (points[1].0 - points[0].0) * (points[2].1 - points[0].1)
         - (points[2].0 - points[0].0) * (points[1].1 - points[0].1);
@@ -1063,13 +1052,10 @@ fn stiffness_matrix(grid: &AdaptiveSpatialGrid) -> StiffnessMatrix {
             let star = vertices.entry(vertex_key).or_default();
 
             for (local_row, row_key) in [face.first, face.second].into_iter().enumerate() {
-                for (local_column, column_key) in
-                    [face.first, face.second].into_iter().enumerate()
+                for (local_column, column_key) in [face.first, face.second].into_iter().enumerate()
                 {
-                    *star
-                        .cell_block
-                        .entry((row_key, column_key))
-                        .or_default() += local[local_row][local_column];
+                    *star.cell_block.entry((row_key, column_key)).or_default() +=
+                        local[local_row][local_column];
                 }
                 *star.cell_vertex.entry(row_key).or_default() += local[local_row][2];
             }
@@ -1158,10 +1144,7 @@ fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
         || (bounds.max_y - world_height).abs() <= tolerance
 }
 
-fn maximum_stiffness_row_sum(
-    grid: &AdaptiveSpatialGrid,
-    stiffness: &StiffnessMatrix,
-) -> f64 {
+fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid, stiffness: &StiffnessMatrix) -> f64 {
     stiffness
         .iter()
         .filter(|(key, _)| !is_computational_boundary(grid, **key))
