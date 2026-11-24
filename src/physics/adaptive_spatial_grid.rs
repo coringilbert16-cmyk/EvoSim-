@@ -934,11 +934,7 @@ fn constrained_quadratic_minimizer(
     target_integral: f64,
 ) -> Result<BTreeMap<CellKey, f64>, AdaptiveGridError> {
     let count = keys.len();
-    let indices: BTreeMap<_, _> = keys
-        .iter()
-        .enumerate()
-        .map(|(i, key)| (*key, i))
-        .collect();
+    let indices: BTreeMap<_, _> = keys.iter().enumerate().map(|(i, key)| (*key, i)).collect();
     let mut diagonal = vec![0.0; count];
     let rhs = areas.to_vec();
     for (index, key) in keys.iter().enumerate() {
