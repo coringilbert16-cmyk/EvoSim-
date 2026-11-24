@@ -382,3 +382,47 @@ A standalone one-dimensional periodic finite-difference system was formed from t
 - Relative energy residual: 2.14e-14 (absolute residual 4.22e-15).
 
 This confirms that the proposed source-free semi-discrete equations admit a compact-support, positive-energy, conservative finite-dimensional reference under an energy-preserving integrator. It does not validate the continuum interface limit, the existing ambient world-generation drive, the production leapfrog scheme, or any repository test. The result is exploratory and must be reproduced in the isolated repository harness with spatial/time refinement before it can count toward the gate.
+
+
+## 14. Candidate world-generation drive with reciprocal exchange (analysis only)
+
+The source-work issue admits a concrete candidate that does not clamp the coupled oscillator back to its target amplitude. Let the selected, uncoupled ambient reference trajectory be
+
+\[
+q_0(t)=a(t)\cos(\Omega t+\phi).
+\]
+
+Define a predetermined world-drive term from that reference trajectory:
+
+\[
+s_0(t)=M\left(q_0''(t)+\Omega^2q_0(t)\right)
+=M\left[a''(t)\cos(\Omega t+\phi)-2\Omega a'(t)\sin(\Omega t+\phi)\right].
+\]
+
+Then use the driven, material-local oscillator equation
+
+\[
+M(q_{tt}+\Omega^2q)=g(\mathbf{x})w_t+s_0(t).
+\]
+
+The drive is derived once from the approved ambient reference envelope and is not adjusted to cancel material exchange. In empty space/material-free locations, where \(g=0\), the reference trajectory \(q=q_0\) is an exact solution. Where material coupling is active, the actual \(q\) state may depart from \(q_0\); that departure is the reciprocal response and must not be erased by amplitude clamping.
+
+The local energy identity becomes
+
+\[
+\partial_t(e_w+e_q)+\nabla\cdot\mathbf J=s_0(t)q_t.
+\]
+
+The equal-and-opposite material exchange terms still cancel. The remaining signed term is the work performed by the intrinsic world drive on the actual ambient oscillator state. Therefore the world-generation/withdrawal ledger must accumulate \(s_0q_t\), while material exchange is reported separately as equal-and-opposite internal transfer. This avoids counting material exchange as world generation.
+
+For the uncoupled reference trajectory, the fast-carrier-averaged oscillator energy is
+
+\[
+\langle e_q\rangle=\frac{M\Omega^2a^2}{2}+\frac{M(a')^2}{4},
+\]
+
+and the averaged drive power is the time derivative of this full expression. The second term is the previously measured envelope-kinetic correction. If the declared 1–10 energy-density schedule is intended to be exact total oscillator energy, the amplitude envelope must be solved against this corrected expression; if the existing carrier-only amplitude mapping is retained, the 1.31-ppm maximum correction remains an explicit approximation. This decision must be made before calibrating the drive.
+
+This construction is a candidate, not a validated implementation. Required follow-up checks are: (1) verify that \(q_0\) is recovered when \(g=0\); (2) verify that integrated \(s_0q_t\) equals the uncoupled oscillator-energy change; (3) enable localized \(g\) and verify the material exchange cancels while world work remains the only external term; (4) verify that coupling-induced deviations in \(q\) are not overwritten; and (5) reconcile generation, withdrawal, material exchange, outgoing disturbance flux, and numerical residual over nested accounting patches.
+
+**No production source, solver, material, chemistry, or organism integration is authorized.**
