@@ -533,8 +533,17 @@ impl AdaptiveWaveField {
         transfer: impl FnOnce(&mut AdaptiveSpatialGrid) -> Result<T, AdaptiveGridError>,
     ) -> Result<T, AdaptiveGridError> {
         let target_energy = self.energy();
+        let target_integrals = self.grid.integrated_state();
         let mut candidate = self.grid.clone();
         let result = transfer(&mut candidate)?;
+
+        for (key, state) in candidate.leaves() {
+            if is_computational_boundary(&candidate, key)
+                && (state.previous != 0.0 || state.current != 0.0)
+            {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+        }
 
         // Keep the time step invariant so a topology change cannot alter the
         // kinetic term's temporal metric. Reject refinements that exceed the
@@ -554,12 +563,23 @@ impl AdaptiveWaveField {
             target_energy,
         )?;
 
-        for (key, state) in candidate.leaves() {
-            if is_computational_boundary(&candidate, key)
-                && (state.previous != 0.0 || state.current != 0.0)
-            {
-                return Err(AdaptiveGridError::InvalidState);
-            }
+        let transferred_integrals = candidate.integrated_state();
+        let integral_scale = target_integrals
+            .current_displacement
+            .abs()
+            .max(target_integrals.previous_displacement.abs())
+            .max(1.0);
+        let integral_tolerance = 1.0e-11 * integral_scale;
+        if (transferred_integrals.current_displacement
+            - target_integrals.current_displacement)
+            .abs()
+            > integral_tolerance
+            || (transferred_integrals.previous_displacement
+                - target_integrals.previous_displacement)
+                .abs()
+                > integral_tolerance
+        {
+            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
         }
 
         self.grid = candidate;
@@ -815,14 +835,8 @@ fn preserve_regridded_energy(
     let mut opposite_previous = BTreeMap::new();
     let mut opposite_current = BTreeMap::new();
     for key in grid.leaves.keys() {
-        opposite_previous.insert(
-            *key,
-            2.0 * baseline_previous[key] - projected_previous[key],
-        );
-        opposite_current.insert(
-            *key,
-            2.0 * baseline_current[key] - projected_current[key],
-        );
+        opposite_previous.insert(*key, 2.0 * baseline_previous[key] - projected_previous[key]);
+        opposite_current.insert(*key, 2.0 * baseline_current[key] - projected_current[key]);
     }
 
     let baseline_energy = discrete_energy_for_grid(
