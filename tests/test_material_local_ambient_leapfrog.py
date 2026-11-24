@@ -188,7 +188,161 @@ def _run(size, step, *, final_time, profile="sharp", driven=False,
     }
 
 
+
+
+def _patch_energy(w_previous, q_previous, vw, vq, w, q, start, end,
+                  *, spacing, speed, field_mass, oscillator_mass, omega):
+    """Patch inventory with half of each adjacent cross-time gradient edge."""
+    total = 0.0
+    size = len(w)
+    for index in range(start, end + 1):
+        following = (index + 1) % size
+        previous = (index - 1) % size
+        right_old = (w_previous[following] - w_previous[index]) / spacing
+        right_new = (w[following] - w[index]) / spacing
+        left_old = (w_previous[index] - w_previous[previous]) / spacing
+        left_new = (w[index] - w[previous]) / spacing
+        total += 0.5 * field_mass * vw[index] ** 2
+        total += 0.25 * field_mass * speed**2 * (
+            right_old * right_new + left_old * left_new
+        )
+        total += 0.5 * oscillator_mass * (
+            vq[index] ** 2
+            + omega**2 * q_previous[index] * q[index]
+        )
+    return spacing * total
+
+
+def _face_flux(w, vw_before, vw_after, face, *, spacing, speed, field_mass):
+    """Centered staggered-energy flux through one periodic grid face."""
+    size = len(w)
+    following = (face + 1) % size
+    gradient = (w[following] - w[face]) / spacing
+    velocity_here = 0.5 * (vw_before[face] + vw_after[face])
+    velocity_next = 0.5 * (
+        vw_before[following] + vw_after[following]
+    )
+    return -field_mass * speed**2 * gradient * 0.5 * (
+        velocity_here + velocity_next
+    )
+
 class MaterialLocalAmbientLeapfrogTests(unittest.TestCase):
+    def test_nested_patches_reconcile_staggered_flux_and_world_work(self):
+        size = 80
+        step = 0.02
+        spacing = 1.0
+        speed, field_mass, oscillator_mass, omega = 1.0, 1.3, 0.8, 1.7
+        coordinates = [index * spacing for index in range(size)]
+        coupling = [
+            0.35 if 30.0 <= coordinate < 40.0 else 0.0
+            for coordinate in coordinates
+        ]
+        displacement = [
+            math.exp(-0.5 * ((coordinate - 18.0) / 3.0) ** 2)
+            for coordinate in coordinates
+        ]
+        oscillator = [0.0] * size
+        field_velocity = [0.0] * size
+        oscillator_velocity = [0.0] * size
+
+        def drive(time):
+            return _world_drive(time, oscillator_mass, omega)
+
+        field_half, oscillator_half = _velocity_step(
+            field_velocity, oscillator_velocity, displacement, oscillator,
+            coupling, step=-0.5 * step, spacing=spacing, speed=speed,
+            field_mass=field_mass, oscillator_mass=oscillator_mass,
+            omega=omega, source=drive(-0.25 * step),
+        )
+        previous_displacement = [
+            value - step * velocity
+            for value, velocity in zip(displacement, field_half)
+        ]
+        previous_oscillator = [
+            value - step * velocity
+            for value, velocity in zip(oscillator, oscillator_half)
+        ]
+        patches = ((5, 35), (10, 50), (0, size - 1))
+        initial = [
+            _patch_energy(
+                previous_displacement, previous_oscillator,
+                field_half, oscillator_half, displacement, oscillator,
+                start, end, spacing=spacing, speed=speed,
+                field_mass=field_mass, oscillator_mass=oscillator_mass,
+                omega=omega,
+            )
+            for start, end in patches
+        ]
+        cumulative_flux = [0.0] * len(patches)
+        cumulative_work = [0.0] * len(patches)
+
+        for step_index in range(80):
+            source = drive(step_index * step)
+            next_field_half, next_oscillator_half = _velocity_step(
+                field_half, oscillator_half, displacement, oscillator,
+                coupling, step=step, spacing=spacing, speed=speed,
+                field_mass=field_mass, oscillator_mass=oscillator_mass,
+                omega=omega, source=source,
+            )
+            next_displacement = [
+                value + step * velocity
+                for value, velocity in zip(displacement, next_field_half)
+            ]
+            next_oscillator = [
+                value + step * velocity
+                for value, velocity in zip(oscillator, next_oscillator_half)
+            ]
+
+            for patch_index, (start, end) in enumerate(patches):
+                centered_oscillator_velocity = sum(
+                    0.5 * (before + after)
+                    for before, after in zip(
+                        oscillator_half[start : end + 1],
+                        next_oscillator_half[start : end + 1],
+                    )
+                )
+                cumulative_work[patch_index] += (
+                    step * spacing * source * centered_oscillator_velocity
+                )
+                right_flux = _face_flux(
+                    displacement, field_half, next_field_half, end,
+                    spacing=spacing, speed=speed, field_mass=field_mass,
+                )
+                left_flux = _face_flux(
+                    displacement, field_half, next_field_half, start - 1,
+                    spacing=spacing, speed=speed, field_mass=field_mass,
+                )
+                cumulative_flux[patch_index] += step * (
+                    right_flux - left_flux
+                )
+
+            previous_displacement, displacement = (
+                displacement, next_displacement
+            )
+            previous_oscillator, oscillator = oscillator, next_oscillator
+            field_half, oscillator_half = next_field_half, next_oscillator_half
+
+        for patch_index, (start, end) in enumerate(patches):
+            final = _patch_energy(
+                previous_displacement, previous_oscillator,
+                field_half, oscillator_half, displacement, oscillator,
+                start, end, spacing=spacing, speed=speed,
+                field_mass=field_mass, oscillator_mass=oscillator_mass,
+                omega=omega,
+            )
+            residual = (
+                final - initial[patch_index]
+                + cumulative_flux[patch_index]
+                - cumulative_work[patch_index]
+            )
+            scale = max(
+                abs(final - initial[patch_index]),
+                abs(cumulative_flux[patch_index]),
+                abs(cumulative_work[patch_index]),
+                1.0e-12,
+            )
+            self.assertLess(abs(residual) / scale, 1.0e-11)
+
     def test_source_free_coupled_leapfrog_conserves_discrete_energy(self):
         result = _run(
             80, 0.02, final_time=10.0,
