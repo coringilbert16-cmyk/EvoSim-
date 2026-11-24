@@ -539,7 +539,7 @@ mod tests {
         let balance_after_debit = source.account().remaining_energy();
 
         let returned_work = system
-            .step_with_environmental_source(&mut source, -0.1)
+            .step_with_environmental_source(&mut source, 0.1)
             .unwrap();
 
         assert!(returned_work < 0.0, "expected returned work, got {returned_work}");
