@@ -553,7 +553,7 @@ impl AdaptiveWaveField {
         }
 
         preserve_regridded_energy(
-            &candidate,
+            &mut candidate,
             self.time_step,
             self.propagation_speed,
             self.energy_normalization,
@@ -784,7 +784,7 @@ impl AdaptiveWaveField {
 /// The remaining zero-mean field is scaled in the positive leapfrog energy
 /// norm, preserving both means while matching the pre-transfer invariant.
 fn preserve_regridded_energy(
-    grid: &AdaptiveSpatialGrid,
+    grid: &mut AdaptiveSpatialGrid,
     time_step: f64,
     propagation_speed: f64,
     normalization: f64,
