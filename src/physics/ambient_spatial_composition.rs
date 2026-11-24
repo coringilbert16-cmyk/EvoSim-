@@ -96,11 +96,9 @@ impl AmbientSpatialComposition {
             * normalization
             * (ambient.carrier_velocity.powi(2)
                 + ambient.angular_frequency.powi(2) * ambient.carrier_value.powi(2));
-        let cross_energy_density =
-            normalization * ambient.carrier_velocity * disturbance.velocity;
-        let energy_density = disturbance_energy_density
-            + ambient_oscillator_energy_density
-            + cross_energy_density;
+        let cross_energy_density = normalization * ambient.carrier_velocity * disturbance.velocity;
+        let energy_density =
+            disturbance_energy_density + ambient_oscillator_energy_density + cross_energy_density;
 
         let flux_scale = -normalization * speed_squared * velocity;
         let flux_x = flux_scale * disturbance.gradient_x;
@@ -151,7 +149,9 @@ mod tests {
 
     fn ambient_sample() -> AmbientModeSample {
         let config = AmbientModeConfig::new(1.0, 1.0, 0.0, 0.0).unwrap();
-        WorldGeneratedAmbientMode::new(config, 317).unwrap().sample()
+        WorldGeneratedAmbientMode::new(config, 317)
+            .unwrap()
+            .sample()
     }
 
     #[test]
@@ -222,8 +222,7 @@ mod tests {
             .unwrap();
 
         let expected = normalization
-            * (ambient.carrier_acceleration
-                * (ambient.carrier_velocity + disturbance.velocity)
+            * (ambient.carrier_acceleration * (ambient.carrier_velocity + disturbance.velocity)
                 + ambient.angular_frequency.powi(2)
                     * ambient.carrier_value
                     * ambient.carrier_velocity);
