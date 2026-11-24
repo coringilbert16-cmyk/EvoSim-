@@ -1186,7 +1186,7 @@ fn append_shared_faces(
                     (second_key, first_key)
                 };
                 let (start_vertex, end_vertex) = if vertical {
-                    (( *coordinate, overlap_start), (*coordinate, overlap_end))
+                    ((*coordinate, overlap_start), (*coordinate, overlap_end))
                 } else {
                     ((overlap_start, *coordinate), (overlap_end, *coordinate))
                 };
