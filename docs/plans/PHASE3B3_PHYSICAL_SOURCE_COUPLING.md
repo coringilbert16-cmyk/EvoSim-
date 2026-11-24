@@ -2,6 +2,20 @@
 
 **Status:** Active analytical design stage. This document records the state after the isolated Candidate A/B comparison work in PR #433. It is a derivation and decision-gate document, not implementation authorization.
 
+## 0.1 User-approved solar-input model (supersedes the earlier sun model)
+
+The initial environmental solar input is not a physical sun or radiative source. The simulation does not represent a solar object, orbit, position, rays, distance, incidence angle, or retarded emission time. Instead, a prescribed environmental input supplies energy uniformly across the finite simulated world's area according to a deterministic virtual day/night cycle.
+
+- The virtual solar cycle is a time schedule only. Its apparent arc is not represented in world geometry.
+- Define a spatially uniform input rate per area, q_solar(t), with units E/(L²·tick). Its time dependence follows the virtual solar day; the exact curve, minimum/maximum rate, and calibration remain open.
+- The total prescribed energy supplied per tick is the rate per area multiplied by the finite simulated-world area used as the source-accounting domain. The actual configured world extent and area must come from authoritative simulation configuration, not be guessed or hard-coded in this design.
+- This finite source-accounting footprint is not a physical wall or wave boundary. Once energy enters the field, propagation continues under the infinite-plane reference model; crossing the finite world/viewer boundary does not absorb, reflect, delete, or duplicate energy.
+- The environmental input is an explicit external energy origin and must be debited/credited exactly once in the unified inventory. Its finite accounting footprint does not imply that the infinite mathematical plane receives infinite energy.
+- The prescribed rate is not itself the wave-equation forcing f or signed field work K u_t f. Derive the constitutive input-to-field mechanism and any intermediate physical state or destination needed to reconcile supplied energy with field work. Do not equate positive prescribed power with field work at every field phase.
+- Do not assume the former 440-cycle carrier, orbital phase, radiative geometry, or half-plane interception survives this decision. Any oscillatory carrier used to couple the input into the field is a separate, still-open physical design decision.
+
+The earlier Section 3.1 external-radiative-sun derivation is retained as historical analysis only and is not the selected initial solar-input model. It must not drive implementation or the next derivation. The localized hotspot and powered material oscillator remain distinct physical-source classes and retain their own source contracts.
+
 **Controlling roadmap:** [Resonance Field — Formal Implementation Roadmap](../design/resonance-field-implementation-roadmap.md)  
 **Phase 1 authority:** [Unified Energy and Continuous Wave-Field Specification](../design/unified-energy-physics-specification.md)  
 **Candidate comparison:** [Phase 3B.2c Continuous Forcing Derivation](PHASE3B2C_CONTINUOUS_FORCING_DERIVATION.md)
@@ -206,4 +220,4 @@ Phase 3B.3 is complete only when:
 - Independent analytic/reference tests validate conservation, deterministic behavior, rollback, and convergence.
 - The design is reviewed before any implementation is authorized.
 
-**Current next action:** Derive and review the three source-to-field coupling mechanisms separately, beginning with the sun's retarded radiative transfer because it has the most distinct geometry and time-of-flight accounting. Do not begin with production injection or a parameter sweep of uncalibrated physical quantities.
+**Current next action:** Derive the prescribed uniform environmental-input-to-field transfer over the finite simulated-world accounting area, including the virtual solar-day rate schedule, physical transfer mechanism, and complete energy inventory. Keep the infinite plane as the propagation reference and do not treat the finite source footprint as a physical boundary. Separately derive the localized hotspot and powered material-oscillator coupling laws. The former radiative-sun/orbit/retarded-time derivation is superseded for the initial solar input. Do not begin production injection or parameter sweeps of uncalibrated physical quantities.
