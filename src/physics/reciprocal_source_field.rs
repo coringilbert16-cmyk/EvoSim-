@@ -1267,6 +1267,100 @@ mod tests {
     }
 
     #[test]
+    fn absorbing_boundary_directional_reflection_is_tracked_over_time_and_frequency() {
+        let spacing = 0.2;
+        let time_step = 0.01;
+        let frequencies = [0.75_f64, 1.5, 3.0];
+        let probes = [
+            (6_isize, 0_isize, "east"),
+            (-6, 0, "west"),
+            (0, 6, "south"),
+            (0, -6, "north"),
+            (4, 4, "southeast"),
+            (-4, 4, "southwest"),
+            (4, -4, "northeast"),
+            (-4, -4, "northwest"),
+        ];
+
+        for frequency in frequencies {
+            let make_system = |cells: usize, center: usize, damped: bool| {
+                let mut system = ReciprocalSourceField::new(
+                    cells,
+                    cells,
+                    spacing,
+                    1.0,
+                    time_step,
+                    1.0,
+                    2.0,
+                    frequency,
+                    0.8,
+                    ReciprocalSourceField::uniform_profile(
+                        cells,
+                        cells,
+                        spacing,
+                        center - 2,
+                        center + 3,
+                        center - 2,
+                        center + 3,
+                    )
+                    .unwrap(),
+                    1.0,
+                )
+                .unwrap();
+                if damped {
+                    system.configure_absorbing_boundary(8, 5.0).unwrap();
+                }
+                system
+            };
+
+            let mut near = make_system(41, 20, true);
+            let mut farther = make_system(61, 30, true);
+            let mut expanded = make_system(121, 60, false);
+            let mut near_max = [0.0_f64; 8];
+            let mut farther_max = [0.0_f64; 8];
+
+            for step in 0..1_000 {
+                near.step().unwrap();
+                farther.step().unwrap();
+                expanded.step().unwrap();
+
+                for (probe_index, (dx, dy, _)) in probes.iter().enumerate() {
+                    let reference = expanded
+                        .field_sample((60_isize + dx) as usize, (60_isize + dy) as usize)
+                        .unwrap();
+                    let near_value = near
+                        .field_sample((20_isize + dx) as usize, (20_isize + dy) as usize)
+                        .unwrap();
+                    let farther_value = farther
+                        .field_sample((30_isize + dx) as usize, (30_isize + dy) as usize)
+                        .unwrap();
+                    near_max[probe_index] =
+                        near_max[probe_index].max((near_value - reference).abs());
+                    farther_max[probe_index] =
+                        farther_max[probe_index].max((farther_value - reference).abs());
+                }
+
+                let near_balance =
+                    near.total_energy() + near.boundary_absorbed_energy();
+                let farther_balance =
+                    farther.total_energy() + farther.boundary_absorbed_energy();
+                let initial_near = 0.0_f64;
+                let initial_farther = 0.0_f64;
+                let _ = (near_balance, farther_balance, initial_near, initial_farther);
+            }
+
+            for (probe_index, (_, _, direction)) in probes.iter().enumerate() {
+                assert!(
+                    farther_max[probe_index] < near_max[probe_index],
+                    "frequency={frequency}, direction={direction}: moving boundary farther away did not reduce maximum-in-time error; near={}, far={}",
+                    near_max[probe_index],
+                    farther_max[probe_index]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn zero_boundary_reflection_is_detected_against_expanded_reference_domain() {
         use super::super::reference_wave_solver::WaveField;
 
