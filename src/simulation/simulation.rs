@@ -370,6 +370,19 @@ impl Simulation {
             environment.width,
             environment.height,
         );
+        let ambient_config = crate::world_generated_ambient_mode::AmbientModeConfig::new(
+            environment.width * environment.height,
+            1.0,
+            0.0,
+            0.0,
+        )
+        .expect("approved ambient energy configuration must be valid");
+        let ambient_energy =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(ambient_config, 0)
+                .expect("ambient energy must initialize at tick zero");
+        let opening_ambient_energy = ambient_energy.sample().total_energy;
+        energy_ledger.total_ambient_energy_held = opening_ambient_energy;
+        energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
         Self {
             tick: 0,
             ticks_per_second,
@@ -396,6 +409,7 @@ impl Simulation {
             record_local_resonance_diagnostics: false,
             record_environmental_molecular_history: false,
             flow_field: crate::environment_flow::FlowFieldConfig::default(),
+            ambient_energy,
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -917,6 +931,18 @@ impl Simulation {
             .count()
     }
 
+    /// Advances the approved ambient energy envelope as part of the live simulation clock.
+    /// Signed changes are booked separately from receiver/chemistry transactions.
+    fn advance_ambient_energy(&mut self) {
+        let transfer = self
+            .ambient_energy
+            .advance_one_tick()
+            .expect("ambient energy must advance deterministically by one tick");
+        self.energy_ledger.total_ambient_energy_generated += transfer.generated_energy;
+        self.energy_ledger.total_ambient_energy_withdrawn += transfer.withdrawn_energy;
+        self.energy_ledger.total_ambient_energy_held = transfer.energy_after;
+    }
+
     pub(crate) fn step(&mut self) {
         self.step_with_transport_reuse::<true>();
     }
@@ -957,6 +983,7 @@ impl Simulation {
         self.environmental_chemistry_events.clear();
         self.environmental_local_resonance_samples.clear();
         self.tick += 1;
+        self.advance_ambient_energy();
         self.environmental_chemistry_diagnostics.tick = self.tick;
 
         // Whole-tick profiling is opt-in and samples one tick in ten. The
@@ -3307,6 +3334,54 @@ mod decomposition_finalization_tests {
         assert_eq!(
             Simulation::structural_energy_held(&simulation.organisms, &[]),
             expected_structural_energy
+        );
+    }
+}
+
+#[cfg(test)]
+mod live_ambient_energy_contract_tests {
+    use super::Simulation;
+
+    #[test]
+    fn production_ambient_schedule_and_world_exchange_close_over_one_day() {
+        let mut simulation = Simulation::new(42, 10.0);
+        let opening = simulation.energy_ledger.total_ambient_energy_held;
+        let area = simulation.environment.width * simulation.environment.height;
+        assert!((simulation.ambient_energy.sample().energy_density - 10.0).abs() < 1.0e-12);
+
+        for expected in [5.5, 1.0, 5.5, 10.0] {
+            for _ in 0..6_000 {
+                simulation.advance_ambient_energy();
+            }
+            assert!((simulation.ambient_energy.sample().energy_density - expected).abs() < 1.0e-10);
+        }
+
+        let ledger = &simulation.energy_ledger;
+        assert!((ledger.total_ambient_energy_generated - 9.0 * area).abs() < 1.0e-7);
+        assert!((ledger.total_ambient_energy_withdrawn - 9.0 * area).abs() < 1.0e-7);
+        assert!((ledger.total_ambient_energy_held - opening).abs() < 1.0e-7);
+        let accounting_residual = opening + ledger.total_ambient_energy_generated
+            - ledger.total_ambient_energy_withdrawn
+            - ledger.total_ambient_energy_held;
+        assert!(accounting_residual.abs() < 1.0e-7);
+    }
+
+    #[test]
+    fn ambient_phase_uses_simulation_ticks_not_runtime_pacing() {
+        let mut slow = Simulation::new(42, 1.0);
+        let mut fast = Simulation::new(42, 900.0);
+        for _ in 0..3_000 {
+            slow.advance_ambient_energy();
+            fast.advance_ambient_energy();
+        }
+        assert_eq!(slow.ambient_energy.sample(), fast.ambient_energy.sample());
+        assert_eq!(
+            slow.energy_ledger.total_ambient_energy_generated,
+            fast.energy_ledger.total_ambient_energy_generated
+        );
+        assert_eq!(
+            slow.energy_ledger.total_ambient_energy_withdrawn,
+            fast.energy_ledger.total_ambient_energy_withdrawn
         );
     }
 }

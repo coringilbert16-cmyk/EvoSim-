@@ -894,6 +894,10 @@ impl Simulation {
                 initial_pair_interaction_potential_held: 0.0,
                 // This is a transaction delta; the source-once guard is unchanged.
                 initial_condition_energy_settled: original_ledger.initial_condition_energy_settled,
+                total_ambient_energy_generated: 0.0,
+                total_ambient_energy_withdrawn: 0.0,
+                total_ambient_energy_held: 0.0,
+                initial_ambient_energy_held: 0.0,
             };
             if let Some((cell_index, source)) = _attempt.environmental_source.as_ref() {
                 let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
@@ -1470,6 +1474,10 @@ mod tests {
             total_structural_energy_delta: 2.5,
             total_external_energy_input: 3.75,
             initial_condition_energy_settled: true,
+            total_ambient_energy_generated: 0.0,
+            total_ambient_energy_withdrawn: 0.0,
+            total_ambient_energy_held: 0.0,
+            initial_ambient_energy_held: 0.0,
             total_world_tone_energy_unabsorbed: 4.125,
             total_world_tone_energy_escaped: 5.25,
             total_usable_energy_gained: 6.5,
@@ -1490,6 +1498,10 @@ mod tests {
             total_structural_energy_delta: before_ledger.total_structural_energy_delta - 0.3,
             total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
             initial_condition_energy_settled: false,
+            total_ambient_energy_generated: 0.0,
+            total_ambient_energy_withdrawn: 0.0,
+            total_ambient_energy_held: 0.0,
+            initial_ambient_energy_held: 0.0,
             total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed
                 + 0.5,
             total_world_tone_energy_escaped: before_ledger.total_world_tone_energy_escaped + 0.6,
