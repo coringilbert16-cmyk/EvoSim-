@@ -377,6 +377,7 @@ impl AdaptiveSpatialGrid {
             &horizontal_top,
             &horizontal_bottom,
             finest_spacing,
+            self.max_refinement_level,
             &mut faces,
         );
         faces.sort_by_key(|face| (face.first, face.second));
