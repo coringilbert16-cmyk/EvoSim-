@@ -281,3 +281,90 @@ and the plane-wave dispersion relation becomes
 This avoids the instability of the bilinear displacement coupling, but nonzero bulk coupling still changes the disturbance dispersion. It therefore also fails the requirement of exact nondispersive propagation throughout empty space.
 
 A potentially admissible *material-local* version would set the coupling to zero in empty space and activate it only through a separately defined physical material interface. Then the empty-space equation remains massless and nondispersive, while energy can exchange reciprocally at the interface. That construction still requires a spatially varying Hamiltonian, interface matching conditions, a proof of equal-and-opposite work, and discrete conservation/convergence tests. It is a candidate for further derivation, not an approved model or implementation.
+
+
+## 13. Material-local derivative coupling — conservative reference derivation (analysis only)
+
+The stable derivative interaction from Section 12 can be localized by a physical material-support function \(g(\mathbf{x})\), with \(g=0\) everywhere in empty space. Let \(q(\mathbf{x},t)\) be an independently owned local ambient oscillator coordinate with positive inertia density \(M\) and restoring frequency \(\Omega\). Consider
+
+\[
+\mathcal L=\int \left[
+\frac K2(w_t^2-c^2|\nabla w|^2)
++\frac M2(q_t^2-\Omega^2q^2)
++g(\mathbf{x})q w_t
+\right]dA.
+\]
+
+The coupling profile is tied to physical material occupancy/geometry only. It must never be derived from the finite accounting patch. For a static support profile, the Euler–Lagrange equations are
+
+\[
+w_{tt}=c^2\nabla^2w-\frac{g(\mathbf{x})}{K}q_t,
+\qquad
+q_{tt}+\Omega^2q=\frac{g(\mathbf{x})}{M}w_t.
+\]
+
+Consequences:
+
+- In empty space, \(g=0\), so disturbance propagation remains exactly the approved massless equation \(w_{tt}=c^2\nabla^2w\).
+- The local oscillator and disturbance exchange energy only where the physical support function is nonzero.
+- A static, discontinuous support profile introduces no derivative of \(g\) into either equation. With constant \(K,c\), the field displacement and normal derivative retain the ordinary continuity conditions across a finite material interface; there is no artificial wave boundary at the edge of the accounting patch.
+- The local coupled response is not claimed to be dispersion-free inside material. The requirement is unchanged propagation in empty space, with material-local response treated as physical behavior to validate separately.
+
+The canonical Hamiltonian density is
+
+\[
+\mathcal H=
+\frac{(\pi_w-gq)^2}{2K}
++\frac{\pi_q^2}{2M}
++\frac{Kc^2}{2}|\nabla w|^2
++\frac{M\Omega^2}{2}q^2.
+\]
+
+For \(K,M>0\), it is bounded below. The corresponding uncoupled field-plus-oscillator energy density
+
+\[
+e=\frac K2(w_t^2+c^2|\nabla w|^2)
++\frac M2(q_t^2+\Omega^2q^2)
+\]
+
+obeys
+
+\[
+\partial_t e+\nabla\cdot\mathbf J=0,
+\qquad
+\mathbf J=-Kc^2w_t\nabla w,
+\]
+
+for a time-independent \(g(\mathbf{x})\) and no world-generation source. The exchange terms cancel pointwise:
+
+\[
+\partial_t e_w+\nabla\cdot\mathbf J
+=-g(\mathbf{x})q_tw_t,
+\qquad
+\partial_t e_q=+g(\mathbf{x})q_tw_t.
+\]
+
+This is the desired equal-and-opposite local work identity. It is a stronger candidate than bulk coupling because it is stable, conservative, and identically absent from empty space. It is still only an analytical candidate.
+
+### Mandatory unresolved source-accounting issue
+
+The selected ambient mode is intrinsically world-generated and has a time-varying target energy-density envelope. The derivation above is source-free. Adding a world-generation drive \(s_{world}(\mathbf{x},t)\) to the oscillator equation,
+
+\[
+M(q_{tt}+\Omega^2q)=g(\mathbf{x})w_t+s_{world},
+\]
+
+adds signed source work \(s_{world}q_t\) to the ambient energy balance. The existing ambient-mode schedule currently accounts signed changes in stored mode energy; it does not yet establish a force law whose work remains correct while local material coupling is exchanging energy. Therefore the source drive, generation/withdrawal ledger, and coupling exchange must be derived together before this candidate can be considered complete. Do not simply prescribe the old amplitude envelope on top of a coupled oscillator, because that can silently inject or remove the material-exchanged energy twice.
+
+### Required discrete reference tests before selection
+
+1. **Empty-space invariance:** Set \(g=0\) outside material support and show the disturbance solver's empty-space update is exactly the uncoupled massless update.
+2. **Localized support:** Use a compact, physically defined support profile; move or resize that profile and show only the corresponding material response changes. The accounting patch must not affect \(g\).
+3. **Interface behavior:** Test smooth and sharp support profiles. Verify displacement/normal-flux matching and absence of spurious reflection attributable solely to the accounting-window edge.
+4. **Equal-and-opposite work:** Measure field exchange \(-\int gq_tw_t\,dA\) and oscillator exchange \(+\int gq_tw_t\,dA\) using identical spatial quadrature; require cancellation to the reference integrator's stated tolerance.
+5. **Positive energy:** Verify the canonical Hamiltonian is nonnegative for randomized finite states and positive \(K,M\).
+6. **Discrete conservation:** Start with no world drive and verify total field-plus-oscillator energy conservation on a periodic numerical reference domain before a packet reaches the wrap boundary. Use an energy-consistent integrator or derive the exact discrete work pairing; do not hide integration error in a fitted correction.
+7. **Convergence and controls:** Refine space and time independently; compare \(g=0\), localized \(g\ne0\), and a deliberately bulk-coupled negative control. Confirm empty-space propagation converges to the massless reference while localized exchange converges to the analytical work identity.
+8. **Driven accounting:** Only after source-free exchange passes, add the world-generation drive and demonstrate that generation, withdrawal, material exchange, outgoing flux, and numerical residual reconcile without double counting.
+
+**Decision:** This derivation identifies a viable next candidate for isolated testing, not an approved physical law. The ambient source-work issue and all discrete tests remain open. No production solver, material, chemistry, organism, or GUI integration is authorized.
