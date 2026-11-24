@@ -3,6 +3,9 @@
 **Status:** Phase 1 specification complete. This document defines the approved reference physics and implementation-independent contracts. It does not authorize production implementation; Phase 2 begins with an independent reference solver.
 
 **Controlling roadmap:** [Resonance Field — Formal Implementation Roadmap](resonance-field-implementation-roadmap.md)  
+
+> **Current-decision notice (supersedes conflicting source assumptions below):** This Phase 1 document remains the reference for the validated wave equation, field energy/flux, project-native units, numerical method, and conservation principles. Its proposed Sun/orbit, hotspot-injector, and powered-material-oscillator source models are historical candidates and are not part of the active model. The later approved model is a persistent, spatially uniform ambient energy background held by the resonance field: 24,000 ticks per day, 440 ambient-carrier cycles per day, and a cycle-averaged energy-density envelope of 10 → 1 → 10. Opening energy is initial inventory; positive change is world generation and negative change is world withdrawal. No Sun object, external injector, hotspot injector, powered material oscillator, or additional buffer/reservoir is active. See the controlling roadmap for the current implementation sequence.
+
 **Baseline:** [EXP-2026-008 pre-wave reference](../../experiments/records/results/EXP-2026-008-pre-wave-reference/consolidated-report.json)  
 **Architecture target:** One unified energy model with a persistent, continuous-in-space, finite-speed, multi-frequency wave field as its spatial transport layer.
 
