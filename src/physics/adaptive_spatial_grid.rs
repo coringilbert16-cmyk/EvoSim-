@@ -448,6 +448,7 @@ impl AdaptiveSpatialGrid {
 #[derive(Clone, Debug)]
 pub(crate) struct AdaptiveWaveField {
     grid: AdaptiveSpatialGrid,
+    stiffness: StiffnessMatrix,
     propagation_speed: f64,
     energy_normalization: f64,
     time_step: f64,
@@ -480,7 +481,8 @@ impl AdaptiveWaveField {
             }
         }
 
-        let maximum_row_sum = maximum_stiffness_row_sum(&grid);
+        let stiffness = stiffness_matrix(&grid);
+        let maximum_row_sum = maximum_stiffness_row_sum(&grid, &stiffness);
         let required_substeps = if maximum_row_sum == 0.0 {
             1.0
         } else {
@@ -500,6 +502,7 @@ impl AdaptiveWaveField {
 
         Ok(Self {
             grid,
+            stiffness,
             propagation_speed,
             energy_normalization,
             time_step,
@@ -553,7 +556,8 @@ impl AdaptiveWaveField {
         // Keep the time step invariant so a topology change cannot alter the
         // kinetic term's temporal metric. Reject refinements that exceed the
         // original solver's stability envelope.
-        let maximum_row_sum = maximum_stiffness_row_sum(&candidate);
+        let candidate_stiffness = stiffness_matrix(&candidate);
+        let maximum_row_sum = maximum_stiffness_row_sum(&candidate, &candidate_stiffness);
         let stability_measure =
             self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
         if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
@@ -587,6 +591,7 @@ impl AdaptiveWaveField {
         }
 
         self.grid = candidate;
+        self.stiffness = candidate_stiffness;
         Ok(result)
     }
 
@@ -671,10 +676,9 @@ impl AdaptiveWaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), AdaptiveGridError> {
-        let stiffness = stiffness_matrix(&self.grid);
         let mut face_sums: BTreeMap<CellKey, f64> =
             self.grid.leaves.keys().map(|key| (*key, 0.0)).collect();
-        for (row, columns) in &stiffness {
+        for (row, columns) in &self.stiffness {
             let applied = columns
                 .iter()
                 .map(|(column, coefficient)| coefficient * self.grid.leaves[column].current)
@@ -774,8 +778,9 @@ impl AdaptiveWaveField {
         previous: &BTreeMap<CellKey, f64>,
         current: &BTreeMap<CellKey, f64>,
     ) -> f64 {
-        discrete_energy_for_grid(
+        discrete_energy_with_stiffness(
             &self.grid,
+            &self.stiffness,
             previous,
             current,
             self.time_step,
@@ -1107,14 +1112,34 @@ fn discrete_energy_for_grid(
     propagation_speed: f64,
     normalization: f64,
 ) -> f64 {
+    let stiffness = stiffness_matrix(grid);
+    discrete_energy_with_stiffness(
+        grid,
+        &stiffness,
+        previous,
+        current,
+        time_step,
+        propagation_speed,
+        normalization,
+    )
+}
+
+fn discrete_energy_with_stiffness(
+    grid: &AdaptiveSpatialGrid,
+    stiffness: &StiffnessMatrix,
+    previous: &BTreeMap<CellKey, f64>,
+    current: &BTreeMap<CellKey, f64>,
+    time_step: f64,
+    propagation_speed: f64,
+    normalization: f64,
+) -> f64 {
     let mut kinetic_sum = 0.0;
     for key in grid.leaves.keys() {
         let velocity = (current[key] - previous[key]) / time_step;
         kinetic_sum += grid.cell_area(*key) * velocity.powi(2);
     }
-    let stiffness = stiffness_matrix(grid);
     let mut gradient_cross_sum = 0.0;
-    for (row, columns) in &stiffness {
+    for (row, columns) in stiffness {
         for (column, coefficient) in columns {
             gradient_cross_sum += current[row] * coefficient * previous[column];
         }
@@ -1133,8 +1158,10 @@ fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
         || (bounds.max_y - world_height).abs() <= tolerance
 }
 
-fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid) -> f64 {
-    let stiffness = stiffness_matrix(grid);
+fn maximum_stiffness_row_sum(
+    grid: &AdaptiveSpatialGrid,
+    stiffness: &StiffnessMatrix,
+) -> f64 {
     stiffness
         .iter()
         .filter(|(key, _)| !is_computational_boundary(grid, **key))
