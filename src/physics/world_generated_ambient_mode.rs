@@ -11,7 +11,7 @@
 //! scalar wave equation. This module does not modify or replace that solver and
 //! is not yet connected to production materials or chemistry.
 
-use std::f64::consts::TAU;
+use std::{f64::consts::TAU, sync::Arc};
 
 pub(crate) const AMBIENT_DAY_TICKS: u64 = 24_000;
 pub(crate) const AMBIENT_CARRIER_CYCLES_PER_DAY: u64 = 440;
@@ -82,15 +82,31 @@ impl AmbientModeConfig {
         TAU * carrier_cycles.rem_euclid(1.0)
     }
 
-    fn sample_at(self, tick: u64) -> Result<AmbientModeSample, AmbientModeError> {
+    fn sample_at(
+        self,
+        tick: u64,
+        trajectory: &AmbientModeTrajectory,
+    ) -> Result<AmbientModeSample, AmbientModeError> {
         let energy_density = self.energy_density_at(tick);
         let total_energy = energy_density * self.world_area;
         let angular_frequency =
             TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
-        let amplitude =
-            (2.0 * energy_density / (self.field_normalization * angular_frequency.powi(2))).sqrt();
+        let day_tick = (tick % AMBIENT_DAY_TICKS) as usize;
+        let amplitude = trajectory.amplitude[day_tick];
+        let amplitude_velocity = trajectory.amplitude_velocity[day_tick];
+        let amplitude_acceleration = trajectory.amplitude_acceleration[day_tick];
         let carrier_phase_radians = self.carrier_phase_at(tick);
-        let carrier_value = amplitude * carrier_phase_radians.cos();
+        let cosine = carrier_phase_radians.cos();
+        let sine = carrier_phase_radians.sin();
+        let carrier_value = amplitude * cosine;
+        let carrier_velocity = amplitude_velocity * cosine - amplitude * angular_frequency * sine;
+        let carrier_acceleration = (amplitude_acceleration
+            - amplitude * angular_frequency.powi(2))
+            * cosine
+            - 2.0 * amplitude_velocity * angular_frequency * sine;
+        let instantaneous_oscillator_energy_density = 0.5
+            * self.field_normalization
+            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
 
         if [
             energy_density,
@@ -105,6 +121,9 @@ impl AmbientModeConfig {
             || energy_density < AMBIENT_MIN_ENERGY_DENSITY
             || energy_density > AMBIENT_MAX_ENERGY_DENSITY
             || total_energy <= 0.0
+            || !carrier_velocity.is_finite()
+            || !carrier_acceleration.is_finite()
+            || !instantaneous_oscillator_energy_density.is_finite()
             || amplitude <= 0.0
         {
             return Err(AmbientModeError::InvalidState);
@@ -118,7 +137,93 @@ impl AmbientModeConfig {
             angular_frequency,
             carrier_phase_radians,
             carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_oscillator_energy_density,
         })
+    }
+}
+
+
+/// Periodic amplitude trajectory whose carrier-averaged total oscillator energy
+/// (including the slow-envelope kinetic term) matches the approved 1–10 schedule.
+#[derive(Clone, Debug)]
+struct AmbientModeTrajectory {
+    amplitude: Vec<f64>,
+    amplitude_velocity: Vec<f64>,
+    amplitude_acceleration: Vec<f64>,
+}
+
+impl AmbientModeTrajectory {
+    fn build(config: AmbientModeConfig) -> Result<Self, AmbientModeError> {
+        let count = AMBIENT_DAY_TICKS as usize;
+        let angular_frequency =
+            TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
+        let denominator = config.field_normalization * angular_frequency.powi(2);
+        let mut amplitude: Vec<f64> = (0..count)
+            .map(|tick| {
+                (2.0 * config.energy_density_at(tick as u64) / denominator).sqrt()
+            })
+            .collect();
+
+        // Four periodic fixed-point corrections reproduce the reference
+        // calculation: E = K*Omega^2*a^2/2 + K*(a')^2/4.
+        for _ in 0..4 {
+            let mut corrected = Vec::with_capacity(count);
+            for tick in 0..count {
+                let amplitude_velocity = Self::first_derivative(&amplitude, tick);
+                let target = config.energy_density_at(tick as u64);
+                let remaining = target
+                    - 0.25 * config.field_normalization * amplitude_velocity.powi(2);
+                if !remaining.is_finite() || remaining <= 0.0 {
+                    return Err(AmbientModeError::InvalidState);
+                }
+                corrected.push((2.0 * remaining / denominator).sqrt());
+            }
+            amplitude = corrected;
+        }
+
+        let amplitude_velocity: Vec<f64> = (0..count)
+            .map(|tick| Self::first_derivative(&amplitude, tick))
+            .collect();
+        let amplitude_acceleration: Vec<f64> = (0..count)
+            .map(|tick| Self::second_derivative(&amplitude, tick))
+            .collect();
+
+        if amplitude
+            .iter()
+            .chain(amplitude_velocity.iter())
+            .chain(amplitude_acceleration.iter())
+            .any(|value| !value.is_finite())
+            || amplitude.iter().any(|value| *value <= 0.0)
+        {
+            return Err(AmbientModeError::InvalidState);
+        }
+
+        Ok(Self {
+            amplitude,
+            amplitude_velocity,
+            amplitude_acceleration,
+        })
+    }
+
+    fn first_derivative(values: &[f64], index: usize) -> f64 {
+        let count = values.len();
+        let previous_two = values[(index + count - 2) % count];
+        let previous = values[(index + count - 1) % count];
+        let next = values[(index + 1) % count];
+        let next_two = values[(index + 2) % count];
+        (previous_two - 8.0 * previous + 8.0 * next - next_two) / 12.0
+    }
+
+    fn second_derivative(values: &[f64], index: usize) -> f64 {
+        let count = values.len();
+        let previous_two = values[(index + count - 2) % count];
+        let previous = values[(index + count - 1) % count];
+        let current = values[index];
+        let next = values[(index + 1) % count];
+        let next_two = values[(index + 2) % count];
+        (-next_two + 16.0 * next - 30.0 * current + 16.0 * previous - previous_two) / 12.0
     }
 }
 
@@ -137,6 +242,13 @@ pub(crate) struct AmbientModeSample {
     pub(crate) angular_frequency: f64,
     pub(crate) carrier_phase_radians: f64,
     pub(crate) carrier_value: f64,
+    /// Exact time derivative of the ambient carrier displacement.
+    pub(crate) carrier_velocity: f64,
+    /// Exact second time derivative of the ambient carrier displacement.
+    pub(crate) carrier_acceleration: f64,
+    /// Instantaneous oscillator energy density; energy_density remains the
+    /// carrier-averaged target schedule used by the world inventory ledger.
+    pub(crate) instantaneous_oscillator_energy_density: f64,
 }
 
 /// One exact change in the ambient mode's stored energy.
@@ -156,6 +268,7 @@ pub(crate) struct AmbientModeTransfer {
 #[derive(Clone, Debug)]
 pub(crate) struct WorldGeneratedAmbientMode {
     config: AmbientModeConfig,
+    trajectory: Arc<AmbientModeTrajectory>,
     tick: u64,
     current: AmbientModeSample,
     cumulative_generated_energy: f64,
@@ -173,9 +286,11 @@ impl WorldGeneratedAmbientMode {
         if !config.is_valid() {
             return Err(AmbientModeError::InvalidParameter);
         }
-        let current = config.sample_at(initial_tick)?;
+        let trajectory = Arc::new(AmbientModeTrajectory::build(config)?);
+        let current = config.sample_at(initial_tick, &trajectory)?;
         Ok(Self {
             config,
+            trajectory,
             tick: initial_tick,
             current,
             cumulative_generated_energy: 0.0,
@@ -206,7 +321,7 @@ impl WorldGeneratedAmbientMode {
             .tick
             .checked_add(1)
             .ok_or(AmbientModeError::CounterOverflow)?;
-        let next = self.config.sample_at(next_tick)?;
+        let next = self.config.sample_at(next_tick, &self.trajectory)?;
         let signed_world_exchange = next.total_energy - self.current.total_energy;
         let generated_energy = signed_world_exchange.max(0.0);
         let withdrawn_energy = (-signed_world_exchange).max(0.0);
@@ -295,7 +410,8 @@ mod tests {
     fn oscillator_amplitude_matches_the_declared_energy_density() {
         let mode = mode_at(0, 3.0);
         let sample = mode.sample();
-        let reconstructed = 0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2);
+        let reconstructed = 0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
+            + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
         assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
         assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
     }
