@@ -949,6 +949,156 @@ fn preserve_regridded_energy(
     Ok(())
 }
 
+
+type StiffnessMatrix = BTreeMap<CellKey, BTreeMap<CellKey, f64>>;
+
+#[derive(Default)]
+struct VertexStiffness {
+    cell_block: BTreeMap<(CellKey, CellKey), f64>,
+    cell_vertex: BTreeMap<CellKey, f64>,
+    vertex_diagonal: f64,
+}
+
+fn add_stiffness_entry(
+    matrix: &mut StiffnessMatrix,
+    row: CellKey,
+    column: CellKey,
+    value: f64,
+) {
+    *matrix.entry(row).or_default().entry(column).or_default() += value;
+}
+
+fn triangle_stiffness(
+    first: (f64, f64),
+    second: (f64, f64),
+    vertex: (f64, f64),
+) -> [[f64; 3]; 3] {
+    let points = [first, second, vertex];
+    let cross = (points[1].0 - points[0].0) * (points[2].1 - points[0].1)
+        - (points[2].0 - points[0].0) * (points[1].1 - points[0].1);
+    let area = 0.5 * cross.abs();
+    let gradients = [
+        [
+            (points[1].1 - points[2].1) / cross,
+            (points[2].0 - points[1].0) / cross,
+        ],
+        [
+            (points[2].1 - points[0].1) / cross,
+            (points[0].0 - points[2].0) / cross,
+        ],
+        [
+            (points[0].1 - points[1].1) / cross,
+            (points[1].0 - points[0].0) / cross,
+        ],
+    ];
+    let mut result = [[0.0; 3]; 3];
+    for row in 0..3 {
+        for column in 0..3 {
+            result[row][column] = area
+                * (gradients[row][0] * gradients[column][0]
+                    + gradients[row][1] * gradients[column][1]);
+        }
+    }
+    result
+}
+
+/// Builds the symmetric stiffness matrix for the adaptive finite-volume state.
+///
+/// On a uniform mesh, the orthogonal two-point operator is retained exactly.
+/// On a nonuniform mesh, each shared-face endpoint defines a triangle between
+/// the two adjacent cell centers and that geometric vertex. Linear finite
+/// elements are assembled around each vertex, then the massless vertex
+/// degree of freedom is statically condensed. The resulting cell-centered
+/// multipoint operator is symmetric and variational, and reproduces affine
+/// fields across hanging-node interfaces.
+fn stiffness_matrix(grid: &AdaptiveSpatialGrid) -> StiffnessMatrix {
+    let mut matrix: StiffnessMatrix = grid
+        .leaves
+        .keys()
+        .map(|key| (*key, BTreeMap::new()))
+        .collect();
+    let Some(first_key) = grid.leaves.keys().next().copied() else {
+        return matrix;
+    };
+    let uniform_level = grid.leaves.keys().all(|key| key.level == first_key.level);
+
+    if uniform_level {
+        for face in grid.shared_faces() {
+            let conductance = face.length / face.center_distance;
+            add_stiffness_entry(&mut matrix, face.first, face.first, conductance);
+            add_stiffness_entry(&mut matrix, face.second, face.second, conductance);
+            add_stiffness_entry(&mut matrix, face.first, face.second, -conductance);
+            add_stiffness_entry(&mut matrix, face.second, face.first, -conductance);
+        }
+        return matrix;
+    }
+
+    let finest_scale = 1_u32 << grid.max_refinement_level;
+    let finest_spacing = grid.base_spacing / finest_scale as f64;
+    let mut vertices: BTreeMap<(u32, u32), VertexStiffness> = BTreeMap::new();
+
+    for face in grid.shared_faces() {
+        let first_bounds = grid.bounds_for_key(face.first);
+        let second_bounds = grid.bounds_for_key(face.second);
+        let first_center = (
+            0.5 * (first_bounds.min_x + first_bounds.max_x),
+            0.5 * (first_bounds.min_y + first_bounds.max_y),
+        );
+        let second_center = (
+            0.5 * (second_bounds.min_x + second_bounds.max_x),
+            0.5 * (second_bounds.min_y + second_bounds.max_y),
+        );
+
+        for vertex_key in [face.start_vertex, face.end_vertex] {
+            let vertex_position = (
+                vertex_key.0 as f64 * finest_spacing,
+                vertex_key.1 as f64 * finest_spacing,
+            );
+            let local = triangle_stiffness(first_center, second_center, vertex_position);
+            let star = vertices.entry(vertex_key).or_default();
+
+            for (local_row, row_key) in [face.first, face.second].into_iter().enumerate() {
+                for (local_column, column_key) in
+                    [face.first, face.second].into_iter().enumerate()
+                {
+                    *star
+                        .cell_block
+                        .entry((row_key, column_key))
+                        .or_default() += local[local_row][local_column];
+                }
+                *star.cell_vertex.entry(row_key).or_default() += local[local_row][2];
+            }
+            star.vertex_diagonal += local[2][2];
+        }
+    }
+
+    let world_width = grid.width * finest_scale;
+    let world_height = grid.height * finest_scale;
+    for (vertex_key, star) in vertices {
+        for ((row, column), value) in &star.cell_block {
+            add_stiffness_entry(&mut matrix, *row, *column, *value);
+        }
+
+        let on_boundary = vertex_key.0 == 0
+            || vertex_key.1 == 0
+            || vertex_key.0 == world_width
+            || vertex_key.1 == world_height;
+        if !on_boundary && star.vertex_diagonal > 0.0 {
+            for (row, row_coupling) in &star.cell_vertex {
+                for (column, column_coupling) in &star.cell_vertex {
+                    add_stiffness_entry(
+                        &mut matrix,
+                        *row,
+                        *column,
+                        -row_coupling * column_coupling / star.vertex_diagonal,
+                    );
+                }
+            }
+        }
+    }
+    matrix
+}
+
 fn discrete_energy_for_grid(
     grid: &AdaptiveSpatialGrid,
     previous: &BTreeMap<CellKey, f64>,
@@ -962,12 +1112,12 @@ fn discrete_energy_for_grid(
         let velocity = (current[key] - previous[key]) / time_step;
         kinetic_sum += grid.cell_area(*key) * velocity.powi(2);
     }
+    let stiffness = stiffness_matrix(grid);
     let mut gradient_cross_sum = 0.0;
-    for face in grid.shared_faces() {
-        let conductance = face.length / face.center_distance;
-        gradient_cross_sum += conductance
-            * (current[&face.first] - current[&face.second])
-            * (previous[&face.first] - previous[&face.second]);
+    for (row, columns) in &stiffness {
+        for (column, coefficient) in columns {
+            gradient_cross_sum += current[row] * coefficient * previous[column];
+        }
     }
     0.5 * normalization * (kinetic_sum + propagation_speed.powi(2) * gradient_cross_sum)
 }
@@ -984,17 +1134,14 @@ fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
 }
 
 fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid) -> f64 {
-    let mut row_sums: BTreeMap<CellKey, f64> = grid.leaves.keys().map(|key| (*key, 0.0)).collect();
-    for face in grid.shared_faces() {
-        let conductance = face.length / face.center_distance;
-        if !is_computational_boundary(grid, face.first) {
-            *row_sums.get_mut(&face.first).unwrap() += conductance / grid.cell_area(face.first);
-        }
-        if !is_computational_boundary(grid, face.second) {
-            *row_sums.get_mut(&face.second).unwrap() += conductance / grid.cell_area(face.second);
-        }
-    }
-    row_sums.values().copied().fold(0.0, f64::max)
+    let stiffness = stiffness_matrix(grid);
+    stiffness
+        .iter()
+        .filter(|(key, _)| !is_computational_boundary(grid, **key))
+        .map(|(key, columns)| {
+            columns.values().map(|value| value.abs()).sum::<f64>() / grid.cell_area(*key)
+        })
+        .fold(0.0, f64::max)
 }
 
 fn append_shared_faces(
@@ -1002,6 +1149,7 @@ fn append_shared_faces(
     second_sides: &BTreeMap<u32, Vec<(u32, u32, CellKey)>>,
     finest_spacing: f64,
     max_refinement_level: u8,
+    vertical: bool,
     output: &mut Vec<SharedFace>,
 ) {
     for (coordinate, first_segments) in first_sides {
@@ -1027,11 +1175,18 @@ fn append_shared_faces(
                 } else {
                     (second_key, first_key)
                 };
+                let (start_vertex, end_vertex) = if vertical {
+                    (( *coordinate, overlap_start), (*coordinate, overlap_end))
+                } else {
+                    ((overlap_start, *coordinate), (overlap_end, *coordinate))
+                };
                 output.push(SharedFace {
                     first: first_key,
                     second: second_key,
                     length: (overlap_end - overlap_start) as f64 * finest_spacing,
                     center_distance,
+                    start_vertex,
+                    end_vertex,
                 });
             }
             if first_end <= second_end {
