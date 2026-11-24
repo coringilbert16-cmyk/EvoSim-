@@ -4,6 +4,11 @@
 #[path = "physics/world_generated_ambient_mode.rs"]
 mod world_generated_ambient_mode;
 
+// Sparse balanced adaptive spatial grid and conservative leapfrog-state transfer.
+#[path = "physics/adaptive_spatial_grid.rs"]
+#[allow(dead_code)]
+mod adaptive_spatial_grid;
+
 // Combined ambient-carrier / propagating-disturbance energy and flux identities.
 // Connected to the live field adapter in the next Phase 3C implementation slice.
 #[path = "physics/ambient_spatial_composition.rs"]
