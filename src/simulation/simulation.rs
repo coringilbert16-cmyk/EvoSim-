@@ -3375,9 +3375,13 @@ mod live_ambient_energy_contract_tests {
             fast.advance_ambient_energy();
         }
         assert_eq!(slow.ambient_energy.sample(), fast.ambient_energy.sample());
-        assert_eq!(slow.energy_ledger.total_ambient_energy_generated,
-            fast.energy_ledger.total_ambient_energy_generated);
-        assert_eq!(slow.energy_ledger.total_ambient_energy_withdrawn,
-            fast.energy_ledger.total_ambient_energy_withdrawn);
+        assert_eq!(
+            slow.energy_ledger.total_ambient_energy_generated,
+            fast.energy_ledger.total_ambient_energy_generated
+        );
+        assert_eq!(
+            slow.energy_ledger.total_ambient_energy_withdrawn,
+            fast.energy_ledger.total_ambient_energy_withdrawn
+        );
     }
 }
