@@ -76,22 +76,18 @@ impl AmbientSpatialComposition {
             disturbance.gradient_x,
             disturbance.gradient_y,
         ];
-        if inputs.iter().any(|value| !value.is_finite())
-            || ambient.angular_frequency <= 0.0
-        {
+        if inputs.iter().any(|value| !value.is_finite()) || ambient.angular_frequency <= 0.0 {
             return Err(CompositionError::InvalidState);
         }
 
         let velocity = ambient.carrier_velocity + disturbance.velocity;
         let displacement = ambient.carrier_value + disturbance.displacement;
-        let gradient_squared =
-            disturbance.gradient_x.powi(2) + disturbance.gradient_y.powi(2);
+        let gradient_squared = disturbance.gradient_x.powi(2) + disturbance.gradient_y.powi(2);
         let speed_squared = self.propagation_speed.powi(2);
         let normalization = self.field_normalization;
 
-        let disturbance_energy_density = 0.5
-            * normalization
-            * (disturbance.velocity.powi(2) + speed_squared * gradient_squared);
+        let disturbance_energy_density =
+            0.5 * normalization * (disturbance.velocity.powi(2) + speed_squared * gradient_squared);
         let ambient_oscillator_energy_density = 0.5
             * normalization
             * (ambient.carrier_velocity.powi(2)
