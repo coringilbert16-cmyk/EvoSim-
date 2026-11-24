@@ -98,11 +98,38 @@ The diagnostic uses \(\Delta x=0.2\), \(\Delta t=0.01\), propagation speed 1, an
 
 Acceptance assertions: pre-reflection regional field difference at t=4 is at most 1e-10; by t=10 the bounded-domain difference must exceed 1e-4. This is a boundary-contamination diagnostic, not evidence that the bounded solver is acceptable through t=10. It establishes that the current zero-boundary model is only usable for an observation interval shorter than its measured reflection-return horizon.
 
-### 4.2 Numerical-domain limitation remains open
+### 4.2 Zero-boundary reflection diagnostic
 
-The reciprocal solver currently fixes the outer grid ring to zero. That is a finite-box Dirichlet boundary and can reflect outgoing waves. A uniform source profile does not remove this artifact and does not make the solver an infinite-plane model.
+The isolated Candidate B solver's fixed-zero outer ring is a reflecting Dirichlet boundary. A domain-expansion test compares it against a larger Candidate B domain, with the independent Candidate A leapfrog solver separately verifying the expanded field under the same exact coupling-force history.
 
-Before any source-model comparison, validate a numerical treatment against an independent unbounded-plane reference. Candidate approaches may include a sufficiently validated absorbing layer or another transparent-boundary approximation, but no method is selected by this note. Tests must quantify reflected energy, phase/amplitude error, and convergence as the boundary is moved farther from the source footprint. The finite source-accounting footprint and the numerical observation/truncation domain must remain separately named and measured.
+The diagnostic uses a 41×41 domain against a 121×121 expanded reference, with Δx=0.2, Δt=0.01, propagation speed 1, and the same 1.0-by-1.0 uniform source footprint. The source-neighborhood comparison is effectively exact at t=4 and detects measurable contamination by t=10. This establishes the numerical boundary as a real confounder; it does not validate the smaller domain.
+
+### 4.3 Candidate B graded absorbing layer — first implementation
+
+Candidate B now supports an optional graded sponge layer inside its numerical edge. The damping coefficient rises quadratically toward the fixed-zero outer ring and is additive at corners. It is configured before stepping and remains outside the uniform environmental source footprint in the test geometry.
+
+The field recurrence uses centered damping:
+
+[
+u_{n+1}=
+\frac{2u_n-(1-\sigma\Delta t/2)u_{n-1}+\Delta t^2 a_n}
+{1+\sigma\Delta t/2}.
+]
+
+For each damped field cell, the exact discrete energy sink is
+
+[
+\Delta E_{abs}=
+K\Delta x^2\sum_i
+\sigma_i\Delta t
+\left(\frac{u_{n+1,i}-u_{n-1,i}}{2\Delta t}\right)^2.
+]
+
+The sink is accumulated in a separate numerical-boundary ledger; it is not silently discarded or counted as environmental solar work. Candidate B validates each step against the full field + oscillator + coupling invariant and rejects a step if the measured energy loss does not match the calculated sink within tolerance.
+
+The new comparison test runs damped and undamped 41×41 domains against a 121×121 reference. It requires the absorber to leave the source region unchanged before boundary interaction, reduce the late source-region error relative to the undamped domain, and reconcile total-energy loss with the accumulated absorbed-energy ledger. This is an initial absorber validation, not proof of a perfectly matched or reflection-free boundary. Residual reflection magnitude, phase/amplitude error, incidence-angle dependence, and boundary-distance convergence remain open; do not begin the solar A/B sweep yet.
+
+The finite source-accounting footprint and numerical observation/truncation domain remain distinct. The sponge layer is a computational treatment only and must never be described as a physical wave boundary.
 
 ## 5. Experiment stages
 
@@ -176,4 +203,4 @@ Candidate B now has an isolated normalized rectangular uniform-profile helper, w
 
 The external generalized-force port and signed-work settlement have isolated transaction tests, including positive work, returned work, zero work, invalid input, and insufficient-budget rollback. The environmental replenishment method is accounting-only; the authoritative area and schedule integration remain to be wired into a controlled experiment harness.
 
-**Remaining gates before the head-to-head sweep:** (1) validate the uniform profile against a physically defined accounting footprint and shared area budget; (2) resolve and independently validate the finite-grid boundary treatment against an unbounded-plane reference; (3) freeze the deterministic schedule, drive waveform, account replenishment order, and matched initial conditions; (4) verify the complete energy identity under those conditions. Do not begin the A/B sweep or production integration until all gates pass.
+**Remaining gates before the head-to-head sweep:** (1) validate the uniform profile against a physically defined accounting footprint and shared area budget; (2) quantify residual absorber reflection, phase/amplitude error, incidence-angle sensitivity, and convergence as the numerical boundary is moved; (3) freeze the deterministic schedule, drive waveform, account replenishment order, and matched initial conditions; (4) verify the complete energy identity under those conditions. Do not begin the A/B sweep or production integration until all gates pass.
