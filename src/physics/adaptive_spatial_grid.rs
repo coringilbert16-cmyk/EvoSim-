@@ -2142,7 +2142,7 @@ mod tests {
                     let bounds = field.grid().cell_bounds(key)?;
                     let x = 0.5 * (bounds.min_x + bounds.max_x);
                     let y = 0.5 * (bounds.min_y + bounds.max_y);
-                    (x > 2.0 && x < 22.0 && y > 2.0 && y < 22.0).then_some((*key, state.current))
+                    (x > 2.0 && x < 22.0 && y > 2.0 && y < 22.0).then_some((key, state.current))
                 })
                 .collect();
             field.advance_substeps(1).unwrap();
