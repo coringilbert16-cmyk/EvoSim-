@@ -821,9 +821,9 @@ fn preserve_regridded_energy(
         (integrals.current_displacement - integrals.previous_displacement) / time_step;
 
     let mean_minimum =
-        constrained_quadratic_minimizer(&keys, &areas, &stiffness, 0.0, mean_target)?;
+        constrained_quadratic_minimizer(&keys, &areas, &stiffness, 0.0, 1.0, mean_target)?;
     let velocity_minimum =
-        constrained_quadratic_minimizer(&keys, &areas, &stiffness, alpha, velocity_target)?;
+        constrained_quadratic_minimizer(&keys, &areas, &stiffness, 1.0, -alpha, velocity_target)?;
 
     let mut baseline_previous = BTreeMap::new();
     let mut baseline_current = BTreeMap::new();
@@ -923,14 +923,15 @@ fn preserve_regridded_energy(
     Ok(())
 }
 
-/// Finds the minimum of xᵀ(M - alpha K)x subject to the area-integral
-/// constraint. Alpha zero gives the displacement minimum; positive alpha
-/// gives the leapfrog velocity minimum. Boundary cells remain fixed at zero.
+/// Finds the minimum of xᵀ(beta M + gamma K)x subject to the area-integral
+/// constraint. The midpoint displacement uses (beta, gamma) = (0, 1);
+/// leapfrog velocity uses (1, -c²dt²/4). Boundary cells remain fixed at zero.
 fn constrained_quadratic_minimizer(
     keys: &[CellKey],
     areas: &[f64],
     stiffness: &StiffnessMatrix,
-    alpha: f64,
+    mass_coefficient: f64,
+    stiffness_coefficient: f64,
     target_integral: f64,
 ) -> Result<BTreeMap<CellKey, f64>, AdaptiveGridError> {
     let count = keys.len();
@@ -943,7 +944,7 @@ fn constrained_quadratic_minimizer(
             .and_then(|row| row.get(key))
             .copied()
             .unwrap_or(0.0);
-        diagonal[index] = areas[index] - alpha * kii;
+        diagonal[index] = mass_coefficient * areas[index] + stiffness_coefficient * kii;
         if !diagonal[index].is_finite() || diagonal[index] <= 0.0 {
             return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
         }
@@ -959,7 +960,8 @@ fn constrained_quadratic_minimizer(
                     }
                 }
             }
-            output[row_index] = areas[row_index] * input[row_index] - alpha * kx;
+            output[row_index] = mass_coefficient * areas[row_index] * input[row_index]
+                + stiffness_coefficient * kx;
         }
         output
     };
