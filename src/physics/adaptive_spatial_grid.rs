@@ -960,8 +960,8 @@ fn constrained_quadratic_minimizer(
                     }
                 }
             }
-            output[row_index] = mass_coefficient * areas[row_index] * input[row_index]
-                + stiffness_coefficient * kx;
+            output[row_index] =
+                mass_coefficient * areas[row_index] * input[row_index] + stiffness_coefficient * kx;
         }
         output
     };
