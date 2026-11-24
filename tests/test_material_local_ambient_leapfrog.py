@@ -4,6 +4,9 @@ The discrete energy is the staggered-time invariant, not an instantaneous
 continuum-energy approximation. The local velocity solve preserves reciprocal
 exchange while the field retains the Phase 2 leapfrog spatial update.
 
+World-drive work is paired with the same integer-time force and centered
+oscillator velocity used by the staggered update.
+
 This module mirrors the second-order staggered wave update used by the isolated
 Phase 2 solver. It remains independent of production code and uses only the
 Python standard library.
