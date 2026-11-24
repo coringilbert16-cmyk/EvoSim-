@@ -1512,4 +1512,200 @@ mod tests {
             }
         }
     }
+
+
+    #[test]
+    fn uniformly_refined_adaptive_wave_converges_to_continuum_mode() {
+        fn relative_error(refinement_level: u8) -> f64 {
+            let cells = 17_u32;
+            let length = 16.0_f64;
+            let speed = 0.2_f64;
+            let mut grid = AdaptiveSpatialGrid::new(cells, cells, 1.0, 2).unwrap();
+
+            if refinement_level >= 1 {
+                for y in 0..cells {
+                    for x in 0..cells {
+                        grid.refine(CellKey { level: 0, x, y }).unwrap();
+                    }
+                }
+            }
+            if refinement_level >= 2 {
+                let level_one: Vec<_> = grid.leaves.keys().copied().collect();
+                for key in level_one {
+                    grid.refine(key).unwrap();
+                }
+            }
+
+            let spacing = 1.0 / 2_u32.pow(refinement_level as u32) as f64;
+            let substeps = (0.4 / spacing).ceil() as usize;
+            let dt = 1.0 / substeps as f64;
+            let omega = speed * std::f64::consts::PI * std::f64::consts::SQRT_2 / length;
+            let mut initial_norm = 0.0;
+            for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = grid.cell_bounds(key).unwrap();
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+                let mode = (std::f64::consts::PI * (center_x - 0.5) / length).sin()
+                    * (std::f64::consts::PI * (center_y - 0.5) / length).sin();
+                let boundary = is_computational_boundary(&grid, key);
+                let value = if boundary { 0.0 } else { mode };
+                initial_norm += grid.cell_area(key) * value.powi(2);
+                grid.set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: value * (omega * dt).cos(),
+                        current: value,
+                    },
+                )
+                .unwrap();
+            }
+
+            let mut field = AdaptiveWaveField::new(grid, speed, 1.0).unwrap();
+            assert_eq!(field.substeps_per_tick(), substeps);
+            field.advance_ticks(4).unwrap();
+            let time = field.logical_time_ticks();
+            let mut error_squared = 0.0;
+            for (key, state) in field.grid().leaves() {
+                let bounds = field.grid().cell_bounds(key).unwrap();
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+                let mode = (std::f64::consts::PI * (center_x - 0.5) / length).sin()
+                    * (std::f64::consts::PI * (center_y - 0.5) / length).sin();
+                let exact = mode * (omega * time).cos();
+                error_squared += field.grid().cell_area(key) * (state.current - exact).powi(2);
+            }
+            error_squared.sqrt() / initial_norm.sqrt()
+        }
+
+        let coarse = relative_error(0);
+        let medium = relative_error(1);
+        let fine = relative_error(2);
+        assert!(
+            medium < coarse,
+            "first spatial refinement did not reduce continuum error: coarse={coarse}, medium={medium}"
+        );
+        assert!(
+            fine < medium,
+            "second spatial refinement did not reduce continuum error: medium={medium}, fine={fine}"
+        );
+    }
+
+    #[test]
+    fn coarse_fine_interfaces_preserve_a_linear_field_patch() {
+        let width = 20_u32;
+        let height = 20_u32;
+        let mut grid = AdaptiveSpatialGrid::new(width, height, 1.0, 2).unwrap();
+
+        // A level-one patch surrounded by coarse cells, with a level-two
+        // interior. This exercises both coarse/fine and fine/finer interfaces.
+        for y in 6..14 {
+            for x in 6..14 {
+                grid.refine(CellKey { level: 0, x, y }).unwrap();
+            }
+        }
+        let inner_parents: Vec<_> = (8..12)
+            .flat_map(|y| (8..12).map(move |x| CellKey { level: 0, x, y }))
+            .collect();
+        for parent in inner_parents {
+            let children = [
+                CellKey { level: 1, x: parent.x * 2, y: parent.y * 2 },
+                CellKey { level: 1, x: parent.x * 2 + 1, y: parent.y * 2 },
+                CellKey { level: 1, x: parent.x * 2, y: parent.y * 2 + 1 },
+                CellKey { level: 1, x: parent.x * 2 + 1, y: parent.y * 2 + 1 },
+            ];
+            for child in children {
+                grid.refine(child).unwrap();
+            }
+        }
+
+        for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let value = if is_computational_boundary(&grid, key) {
+                0.0
+            } else {
+                center_x + 2.0 * center_y
+            };
+            grid.set_state(
+                key,
+                AdaptiveCell {
+                    previous: value,
+                    current: value,
+                },
+            )
+            .unwrap();
+        }
+
+        let mut field = AdaptiveWaveField::new(grid, 0.05, 1.0).unwrap();
+        let initial: Vec<_> = field
+            .grid()
+            .leaves()
+            .filter_map(|(key, state)| {
+                let bounds = field.grid().cell_bounds(key)?;
+                let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+                let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+                (center_x > 2.0
+                    && center_x < width as f64 - 2.0
+                    && center_y > 2.0
+                    && center_y < height as f64 - 2.0)
+                    .then_some((key, state.current))
+            })
+            .collect();
+
+        field.advance_substeps(1).unwrap();
+        for (key, expected) in initial {
+            let actual = field.grid().leaves.get(&key).unwrap().current;
+            let scale = expected.abs().max(1.0);
+            assert!(
+                (actual - expected).abs() <= 1.0e-11 * scale,
+                "linear patch changed at {key:?}: expected={expected}, actual={actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn wave_energy_remains_conserved_during_propagation_across_refined_interfaces() {
+        let width = 40_u32;
+        let height = 24_u32;
+        let mut grid = AdaptiveSpatialGrid::new(width, height, 1.0, 1).unwrap();
+
+        // A full-height refined strip creates two vertical coarse/fine
+        // interfaces. The packet starts on the coarse side and crosses them.
+        for y in 0..height {
+            for x in 16..24 {
+                grid.refine(CellKey { level: 0, x, y }).unwrap();
+            }
+        }
+
+        for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let boundary = is_computational_boundary(&grid, key);
+            let envelope = (-((center_x - 11.0).powi(2) / 24.0
+                + (center_y - 12.0).powi(2) / 18.0))
+                .exp();
+            let phase = 0.55 * (center_x - 11.0);
+            let current = if boundary { 0.0 } else { envelope * phase.cos() };
+            let previous = if boundary {
+                0.0
+            } else {
+                envelope * (phase + 0.55 * 0.15).cos()
+            };
+            grid.set_state(key, AdaptiveCell { previous, current }).unwrap();
+        }
+
+        let mut field = AdaptiveWaveField::new(grid, 0.15, 1.0).unwrap();
+        let initial_energy = field.energy();
+        field.advance_ticks(200).unwrap();
+        let final_energy = field.energy();
+        let relative_drift =
+            (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+        assert!(
+            relative_drift < 1.0e-9,
+            "relative energy drift after crossing coarse/fine interfaces: {relative_drift}"
+        );
+    }
+
 }
