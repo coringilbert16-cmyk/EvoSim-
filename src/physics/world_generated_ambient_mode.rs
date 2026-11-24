@@ -147,7 +147,6 @@ impl AmbientModeConfig {
     }
 }
 
-
 /// Periodic amplitude trajectory whose carrier-averaged total oscillator energy
 /// (including the slow-envelope kinetic term) matches the approved 1–10 schedule.
 #[derive(Clone, Debug)]
@@ -414,11 +413,9 @@ mod tests {
         let mut mode = mode_at(0, 3.0);
         for tick in 0..AMBIENT_DAY_TICKS {
             let sample = mode.sample();
-            let reconstructed = 0.5
-                * 2.5
-                * sample.angular_frequency.powi(2)
-                * sample.amplitude.powi(2)
-                + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
+            let reconstructed =
+                0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
+                    + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
             assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
             assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
             if tick + 1 < AMBIENT_DAY_TICKS {
