@@ -68,8 +68,7 @@ impl AmbientModeConfig {
 
     fn energy_density_at(self, tick: u64) -> f64 {
         let day_tick = tick % AMBIENT_DAY_TICKS;
-        let day_cycles = day_tick as f64 / AMBIENT_DAY_TICKS as f64
-            + self.day_phase_offset_cycles;
+        let day_cycles = day_tick as f64 / AMBIENT_DAY_TICKS as f64 + self.day_phase_offset_cycles;
         let envelope = 0.5 * (1.0 + (TAU * day_cycles).cos());
         AMBIENT_MIN_ENERGY_DENSITY
             + (AMBIENT_MAX_ENERGY_DENSITY - AMBIENT_MIN_ENERGY_DENSITY) * envelope
@@ -77,8 +76,7 @@ impl AmbientModeConfig {
 
     fn carrier_phase_at(self, tick: u64) -> f64 {
         let day_tick = tick % AMBIENT_DAY_TICKS;
-        let carrier_cycles = day_tick as f64
-            * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
+        let carrier_cycles = day_tick as f64 * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
             / AMBIENT_DAY_TICKS as f64
             + self.carrier_phase_offset_cycles;
         TAU * carrier_cycles.rem_euclid(1.0)
@@ -89,9 +87,8 @@ impl AmbientModeConfig {
         let total_energy = energy_density * self.world_area;
         let angular_frequency =
             TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
-        let amplitude = (2.0 * energy_density
-            / (self.field_normalization * angular_frequency.powi(2)))
-            .sqrt();
+        let amplitude =
+            (2.0 * energy_density / (self.field_normalization * angular_frequency.powi(2))).sqrt();
         let carrier_phase_radians = self.carrier_phase_at(tick);
         let carrier_value = amplitude * carrier_phase_radians.cos();
 
@@ -200,9 +197,7 @@ impl WorldGeneratedAmbientMode {
 
     /// Advances exactly one logical tick and accounts for the complete change
     /// in the mode's stored energy. State and counters are committed together.
-    pub(crate) fn advance_one_tick(
-        &mut self,
-    ) -> Result<AmbientModeTransfer, AmbientModeError> {
+    pub(crate) fn advance_one_tick(&mut self) -> Result<AmbientModeTransfer, AmbientModeError> {
         let next_tick = self
             .tick
             .checked_add(1)
@@ -296,10 +291,7 @@ mod tests {
     fn oscillator_amplitude_matches_the_declared_energy_density() {
         let mode = mode_at(0, 3.0);
         let sample = mode.sample();
-        let reconstructed = 0.5
-            * 2.5
-            * sample.angular_frequency.powi(2)
-            * sample.amplitude.powi(2);
+        let reconstructed = 0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2);
         assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
         assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
     }
@@ -317,8 +309,7 @@ mod tests {
             total_generated += transfer.generated_energy;
             total_withdrawn += transfer.withdrawn_energy;
             assert!(
-                (transfer.energy_before + transfer.signed_world_exchange
-                    - transfer.energy_after)
+                (transfer.energy_before + transfer.signed_world_exchange - transfer.energy_after)
                     .abs()
                     <= 1.0e-12
             );
