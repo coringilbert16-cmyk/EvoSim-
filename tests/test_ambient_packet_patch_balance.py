@@ -34,7 +34,7 @@ def _combined_state(x, t, *, packet_amplitude, width, speed, ambient_amplitude, 
 
 def test_gaussian_packet_is_an_exact_localized_massless_wave_solution():
     amplitude, width, speed = 0.8, 0.55, 1.3
-    h = 1.0e-3
+    h = 5.0e-4
     for x in (-1.7, -0.2, 0.0, 0.9, 2.1):
         for t in (-0.4, 0.0, 0.35):
             sample = lambda xx, tt: _packet(
