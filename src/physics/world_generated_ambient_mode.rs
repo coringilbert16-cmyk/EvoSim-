@@ -103,6 +103,9 @@ impl AmbientModeConfig {
         let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
+        let instantaneous_oscillator_energy_density = 0.5
+            * self.field_normalization
+            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
         if [
             energy_density,
             total_energy,
@@ -120,6 +123,7 @@ impl AmbientModeConfig {
             || !amplitude_acceleration.is_finite()
             || !carrier_velocity.is_finite()
             || !carrier_acceleration.is_finite()
+            || !instantaneous_oscillator_energy_density.is_finite()
             || amplitude <= 0.0
         {
             return Err(AmbientModeError::InvalidState);
@@ -131,11 +135,13 @@ impl AmbientModeConfig {
             total_energy,
             amplitude,
             amplitude_velocity,
+            field_normalization: self.field_normalization,
             angular_frequency,
             carrier_phase_radians,
             carrier_value,
             carrier_velocity,
             carrier_acceleration,
+            instantaneous_oscillator_energy_density,
         })
     }
 }
@@ -233,6 +239,7 @@ pub(crate) struct AmbientModeSample {
     pub(crate) total_energy: f64,
     pub(crate) amplitude: f64,
     pub(crate) amplitude_velocity: f64,
+    pub(crate) field_normalization: f64,
     pub(crate) angular_frequency: f64,
     pub(crate) carrier_phase_radians: f64,
     pub(crate) carrier_value: f64,
@@ -240,6 +247,9 @@ pub(crate) struct AmbientModeSample {
     pub(crate) carrier_velocity: f64,
     /// Exact second time derivative of the ambient carrier displacement.
     pub(crate) carrier_acceleration: f64,
+    /// Instantaneous oscillator energy density; energy_density remains the
+    /// carrier-averaged target schedule used by the world inventory ledger.
+    pub(crate) instantaneous_oscillator_energy_density: f64,
 }
 
 /// One exact change in the ambient mode's stored energy.
