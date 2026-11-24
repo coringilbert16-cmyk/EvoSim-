@@ -6,6 +6,8 @@
 **Baseline:** [EXP-2026-008 pre-wave reference](../../experiments/records/results/EXP-2026-008-pre-wave-reference/consolidated-report.json)  
 **Architecture target:** One unified energy model with a persistent, continuous-in-space, finite-speed, multi-frequency wave field as its spatial transport layer.
 
+**Later user-approved solar-input amendment:** For the initial environmental model, the former physical 3D orbiting-sun description in this specification is superseded. Solar energy is a prescribed, spatially uniform environmental input over the finite simulated-world area, with a deterministic virtual day/night rate schedule. No sun object, orbit, rays, source distance, radiative incidence, or retarded-time mapping is represented. The finite world extent is the input's accounting footprint, not a physical boundary; wave propagation remains defined on the infinite flat plane. The rate curve and calibration remain open, as does the conservative mechanism that transfers this prescribed input into the wave field. A prescribed power density must not be equated directly with forcing or signed field work. Earlier literal-sun sections below are retained as historical design material only where they conflict with this amendment; they are not current requirements for the initial solar input. Hotspot and powered material oscillators remain separate source classes.
+
 ## 1. Purpose and design constraints
 
 Phase 1 converts the approved architecture into explicit physical and numerical contracts. It must be completed before production solver or energy migration work begins.
