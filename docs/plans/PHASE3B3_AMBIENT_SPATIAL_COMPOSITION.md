@@ -163,7 +163,7 @@ Implemented in `tests/test_ambient_spatial_composition.py`:
 - Nonzero residual for a spatially uniform 440-cycle carrier under the massless wave equation.
 - Pointwise additive energy identity, including the cross-energy term.
 - Pointwise additive flux identity, including the cross-flux term.
-- Full-day scan of the envelope correction; the maximum relative correction is required to fall between 1 and 2 parts per million for the selected 1:440 envelope/carrier ratio.
+- Full-day scan of the envelope correction; the maximum relative correction is approximately `1.30746e-6` (1.31 ppm) at tick 14,340 for the selected 1:440 envelope/carrier ratio.
 - Accounting-patch area scaling of integrated inventory while holding local density fixed.
 - Deterministic replay of the analytical diagnostics.
 
