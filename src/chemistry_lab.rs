@@ -171,11 +171,9 @@ impl Laboratory {
             0.0,
         )
         .expect("laboratory ambient energy configuration must be valid");
-        let ambient_energy = crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(
-            ambient_config,
-            0,
-        )
-        .expect("laboratory ambient energy must initialize at tick zero");
+        let ambient_energy =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(ambient_config, 0)
+                .expect("laboratory ambient energy must initialize at tick zero");
         let mut energy_ledger = EnergyLedger::default();
         energy_ledger.total_ambient_energy_held = ambient_energy.sample().total_energy;
         energy_ledger.initial_ambient_energy_held = ambient_energy.sample().total_energy;
