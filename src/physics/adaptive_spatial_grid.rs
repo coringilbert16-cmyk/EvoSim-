@@ -429,7 +429,6 @@ impl AdaptiveSpatialGrid {
     }
 }
 
-
 /// Conservative finite-volume leapfrog evolution on a fixed adaptive mesh.
 ///
 /// Each leaf cell contributes its physical area as mass. Shared faces use the
