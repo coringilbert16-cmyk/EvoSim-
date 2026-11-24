@@ -204,7 +204,7 @@ Exit criteria:
 
 ### Phase 3 — Sources, propagation energy, and material coupling
 
-**Current status:** Phase 3A geometry/measurement slices listed below are complete where explicitly marked. Phase 3B has begun with isolated source-accounting and mathematical forcing work, but physical source-to-field coupling has not been established. Do not treat geometry completion or the isolated forcing prototype as live source registration, physical field injection, or production energy settlement.
+**Current status:** Phase 3A geometry/measurement slices listed below are complete where explicitly marked. The approved world-generated ambient energy envelope is now implemented in the production simulation tick and its signed generation/withdrawal inventory is recorded in the live energy ledger. This delivers the ambient-energy milestone; it does not claim material absorption or spatial coupling. Further source/material coupling research is deferred and is not a prerequisite for this ambient implementation.
 
 #### Phase 3A — Geometry and measurement foundation: completed slices
 
