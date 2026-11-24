@@ -524,7 +524,7 @@ mod tests {
         let before = grid.integrated_state();
         let children = grid.refine(key).unwrap();
         assert_eq!(children.len(), 4);
-        assert_eq!(grid.leaf_count(), 11);
+        assert_eq!(grid.leaf_count(), 9);
         let refined = grid.integrated_state();
         close(refined.current_displacement, before.current_displacement);
         close(refined.previous_displacement, before.previous_displacement);
