@@ -1,9 +1,10 @@
 //! Sparse, balanced quadtree storage for the production spatial resonance field.
 //!
-//! This first adaptive-grid slice owns physical cell coordinates and persistent
-//! leapfrog state, and provides conservative refine/coarsen transfers. It does
-//! not yet advance the wave equation: the coarse/fine finite-volume operator
-//! must be integrated and validated before this storage is connected to ticks.
+//! The adaptive grid owns physical cell coordinates, persistent leapfrog
+//! state, conservative refine/coarsen transfers, and a finite-volume wave
+//! operator over coarse/fine shared faces. It remains isolated from live
+//! simulation ticks and production energy accounting pending reference parity
+//! and whole-system integration validation.
 
 use std::collections::BTreeMap;
 
