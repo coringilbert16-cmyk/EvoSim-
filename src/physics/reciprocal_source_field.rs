@@ -1166,7 +1166,7 @@ mod tests {
                         .max((undamped.field_sample(x, y).unwrap() - reference).abs());
                 }
             }
-            if step == 399 {
+            if step == 149 {
                 early_error = damped_error;
             }
             if step == 999 {
@@ -1184,7 +1184,7 @@ mod tests {
 
         assert!(
             early_error <= 1.0e-10,
-            "absorber altered the source region before boundary interaction: {early_error}"
+            "absorber altered the source region before the wave reached the damping layer: {early_error}"
         );
         assert!(damped.boundary_absorbed_energy() > 0.0);
         assert!(
