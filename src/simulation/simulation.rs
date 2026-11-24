@@ -377,11 +377,9 @@ impl Simulation {
             0.0,
         )
         .expect("approved ambient energy configuration must be valid");
-        let ambient_energy = crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(
-            ambient_config,
-            0,
-        )
-        .expect("ambient energy must initialize at tick zero");
+        let ambient_energy =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(ambient_config, 0)
+                .expect("ambient energy must initialize at tick zero");
         let opening_ambient_energy = ambient_energy.sample().total_energy;
         energy_ledger.total_ambient_energy_held = opening_ambient_energy;
         energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
@@ -3362,8 +3360,10 @@ mod live_ambient_energy_contract_tests {
         assert!((ledger.total_ambient_energy_generated - 9.0 * area).abs() < 1.0e-7);
         assert!((ledger.total_ambient_energy_withdrawn - 9.0 * area).abs() < 1.0e-7);
         assert!((ledger.total_ambient_energy_held - opening).abs() < 1.0e-7);
-        assert!((opening + ledger.total_ambient_energy_generated
-            - ledger.total_ambient_energy_withdrawn - ledger.total_ambient_energy_held).abs() < 1.0e-7);
+        let accounting_residual = opening + ledger.total_ambient_energy_generated
+            - ledger.total_ambient_energy_withdrawn
+            - ledger.total_ambient_energy_held;
+        assert!(accounting_residual.abs() < 1.0e-7);
     }
 
     #[test]
