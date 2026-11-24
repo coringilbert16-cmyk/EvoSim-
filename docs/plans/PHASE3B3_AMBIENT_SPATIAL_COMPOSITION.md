@@ -442,4 +442,14 @@ The harness checks:
 6. Three nested accounting patches close their local energy balance using the discrete outward field flux and signed world-drive work. The patch energy assigns half of each adjacent field-gradient edge to each neighboring cell; material exchange cancels pointwise and is not counted as external work.
 7. Spatial refinement evolves a right-moving packet through both a grid-aligned sharp compact-support coupling region and a smooth compact-support profile. A 256-cell reference is compared at common physical coordinates against 32-, 64-, and 128-cell runs at the same final time. Both displacement and oscillator response are included in the error norm; each doubling must reduce error by more than a factor of three, consistent with second-order spatial convergence. The reference is numerical, not an exact continuum solution. A separate fixed-grid temporal refinement test compares RK4 steps with successive halvings against a finer time-step reference; the expected fourth-order reduction is tested independently of spatial refinement.
 
+Exploratory reference measurements (same final time 5.5; spatial reference 256 cells; temporal reference step ratio 0.025) were:
+
+| Profile / refinement | Coarse error | Next error | Fine error | Reduction ratios |
+|---|---:|---:|---:|---:|
+| Sharp spatial, 32/64/128 | 0.0431446 | 0.0117775 | 0.00352893 | 3.66×, 3.34× |
+| Smooth spatial, 32/64/128 | 0.0439967 | 0.0118004 | 0.00349133 | 3.73×, 3.38× |
+| Fixed-grid temporal, ratios 0.4/0.2/0.1 | 9.7869e-5 | 5.6756e-6 | 3.4463e-7 | 17.24×, 16.47× |
+
+These values are exploratory outputs from the reference algorithm and are not production measurements. The committed CI assertions require spatial reductions greater than 3× and temporal reductions greater than 12×.
+
 The workflow on the parent branch now conditionally runs this test module when the file is present, so the stacked PR #438 executes it without making the parent PR #437 depend on a file that exists only in the child PR. The test result is pending exact-head CI. This is a finite-dimensional reference only: it does not establish the continuum interface limit, a production integrator, a physical coupling coefficient, or a selected world-generation law. Production integration remains blocked.
