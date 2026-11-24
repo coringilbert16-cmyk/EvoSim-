@@ -1342,9 +1342,8 @@ mod tests {
                         farther_max[probe_index].max((farther_value - reference).abs());
                 }
 
-                let near_residual = initial_near_energy
-                    - near.total_energy()
-                    - near.boundary_absorbed_energy();
+                let near_residual =
+                    initial_near_energy - near.total_energy() - near.boundary_absorbed_energy();
                 let farther_residual = initial_farther_energy
                     - farther.total_energy()
                     - farther.boundary_absorbed_energy();
