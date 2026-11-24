@@ -152,7 +152,7 @@ pub(crate) struct AmbientModeTransfer {
     pub(crate) withdrawn_energy: f64,
 }
 
-/// Deterministic, isolated uniform ambient resonance mode.
+/// Deterministic uniform ambient resonance mode used by the live simulation.
 #[derive(Clone, Debug)]
 pub(crate) struct WorldGeneratedAmbientMode {
     config: AmbientModeConfig,
@@ -187,11 +187,11 @@ impl WorldGeneratedAmbientMode {
         self.current
     }
 
-    pub(crate) fn cumulative_generated_energy(&self) -> f64 {
+    /// Total world generation since this mode's opening inventory.\n    pub(crate) fn cumulative_generated_energy(&self) -> f64 {
         self.cumulative_generated_energy
     }
 
-    pub(crate) fn cumulative_withdrawn_energy(&self) -> f64 {
+    /// Total world withdrawal since this mode's opening inventory.\n    pub(crate) fn cumulative_withdrawn_energy(&self) -> f64 {
         self.cumulative_withdrawn_energy
     }
 
