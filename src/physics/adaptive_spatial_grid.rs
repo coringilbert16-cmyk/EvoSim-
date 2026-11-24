@@ -507,8 +507,19 @@ mod tests {
     #[test]
     fn refine_and_coarsen_preserve_area_integrals_of_both_time_levels() {
         let mut grid = AdaptiveSpatialGrid::new(3, 2, 2.0, 3).unwrap();
-        let key = CellKey { level: 0, x: 1, y: 0 };
-        grid.set_state(key, AdaptiveCell { previous: -0.75, current: 1.25 }).unwrap();
+        let key = CellKey {
+            level: 0,
+            x: 1,
+            y: 0,
+        };
+        grid.set_state(
+            key,
+            AdaptiveCell {
+                previous: -0.75,
+                current: 1.25,
+            },
+        )
+        .unwrap();
         let before = grid.integrated_state();
         let children = grid.refine(key).unwrap();
         assert_eq!(children.len(), 4);
@@ -518,7 +529,13 @@ mod tests {
         close(refined.previous_displacement, before.previous_displacement);
 
         let restored = grid.coarsen(key).unwrap();
-        assert_eq!(restored, AdaptiveCell { previous: -0.75, current: 1.25 });
+        assert_eq!(
+            restored,
+            AdaptiveCell {
+                previous: -0.75,
+                current: 1.25
+            }
+        );
         let after = grid.integrated_state();
         close(after.current_displacement, before.current_displacement);
         close(after.previous_displacement, before.previous_displacement);
@@ -528,39 +545,94 @@ mod tests {
     #[test]
     fn shared_faces_partition_a_coarse_face_without_gaps_or_double_counting() {
         let mut grid = AdaptiveSpatialGrid::new(2, 1, 1.0, 2).unwrap();
-        grid.refine(CellKey { level: 0, x: 0, y: 0 }).unwrap();
+        grid.refine(CellKey {
+            level: 0,
+            x: 0,
+            y: 0,
+        })
+        .unwrap();
         let faces = grid.shared_faces();
-        let coarse = CellKey { level: 0, x: 1, y: 0 };
+        let coarse = CellKey {
+            level: 0,
+            x: 1,
+            y: 0,
+        };
         let coarse_side: f64 = faces
             .iter()
             .filter(|face| face.first == coarse || face.second == coarse)
             .filter(|face| {
-                let other = if face.first == coarse { face.second } else { face.first };
+                let other = if face.first == coarse {
+                    face.second
+                } else {
+                    face.first
+                };
                 other.level == 1
             })
             .map(|face| face.length)
             .sum();
         close(coarse_side, 1.0);
-        assert!(faces.iter().all(|face| face.length > 0.0 && face.center_distance > 0.0));
+        assert!(faces
+            .iter()
+            .all(|face| face.length > 0.0 && face.center_distance > 0.0));
     }
 
     #[test]
     fn refinement_enforces_two_to_one_neighbor_balance() {
         let mut grid = AdaptiveSpatialGrid::new(2, 1, 1.0, 3).unwrap();
-        grid.refine(CellKey { level: 0, x: 0, y: 0 }).unwrap();
-        let child = CellKey { level: 1, x: 1, y: 0 };
-        assert_eq!(grid.refine(child), Err(AdaptiveGridError::UnbalancedRefinement));
+        grid.refine(CellKey {
+            level: 0,
+            x: 0,
+            y: 0,
+        })
+        .unwrap();
+        let child = CellKey {
+            level: 1,
+            x: 1,
+            y: 0,
+        };
+        assert_eq!(
+            grid.refine(child),
+            Err(AdaptiveGridError::UnbalancedRefinement)
+        );
     }
 
     #[test]
     fn physical_position_queries_resolve_the_finest_containing_leaf() {
         let mut grid = AdaptiveSpatialGrid::new(2, 2, 1.0, 2).unwrap();
-        let key = CellKey { level: 0, x: 0, y: 0 };
-        grid.set_state(key, AdaptiveCell { previous: 1.0, current: 2.0 }).unwrap();
+        let key = CellKey {
+            level: 0,
+            x: 0,
+            y: 0,
+        };
+        grid.set_state(
+            key,
+            AdaptiveCell {
+                previous: 1.0,
+                current: 2.0,
+            },
+        )
+        .unwrap();
         grid.refine(key).unwrap();
-        let child = CellKey { level: 1, x: 1, y: 0 };
-        grid.set_state(child, AdaptiveCell { previous: 3.0, current: 4.0 }).unwrap();
-        assert_eq!(grid.sample(0.75, 0.25), Some(AdaptiveCell { previous: 3.0, current: 4.0 }));
+        let child = CellKey {
+            level: 1,
+            x: 1,
+            y: 0,
+        };
+        grid.set_state(
+            child,
+            AdaptiveCell {
+                previous: 3.0,
+                current: 4.0,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            grid.sample(0.75, 0.25),
+            Some(AdaptiveCell {
+                previous: 3.0,
+                current: 4.0
+            })
+        );
         assert_eq!(grid.sample(-0.1, 0.25), None);
         assert_eq!(grid.sample(2.0, 0.25), None);
         assert_eq!(grid.sample(f64::NAN, 0.25), None);
@@ -569,14 +641,26 @@ mod tests {
     #[test]
     fn coarsening_rejects_a_parent_that_would_break_two_to_one_balance() {
         let mut grid = AdaptiveSpatialGrid::new(2, 1, 1.0, 3).unwrap();
-        let left_parent = CellKey { level: 0, x: 0, y: 0 };
-        let right_parent = CellKey { level: 0, x: 1, y: 0 };
+        let left_parent = CellKey {
+            level: 0,
+            x: 0,
+            y: 0,
+        };
+        let right_parent = CellKey {
+            level: 0,
+            x: 1,
+            y: 0,
+        };
         grid.refine(left_parent).unwrap();
         grid.refine(right_parent).unwrap();
         // The right parent's leftmost child may refine to level 2 beside
         // level-1 leaves. Coarsening the left parent would then put a level-0
         // cell beside a level-2 leaf, violating 2:1 balance.
-        let interface_child = CellKey { level: 1, x: 2, y: 0 };
+        let interface_child = CellKey {
+            level: 1,
+            x: 2,
+            y: 0,
+        };
         grid.refine(interface_child).unwrap();
         assert_eq!(
             grid.coarsen(left_parent),
