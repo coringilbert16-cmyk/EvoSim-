@@ -225,15 +225,16 @@ impl ReciprocalSourceField {
             .checked_add(1)
             .ok_or(ReciprocalModelError::CounterOverflow)?;
 
+        let discrete_external_work =
+            0.5 * external_force * (next_source - old_previous_source);
+        if !discrete_external_work.is_finite() {
+            return Err(ReciprocalModelError::InvalidState);
+        }
+
         self.previous_field = std::mem::replace(&mut self.current_field, next_field);
         self.previous_source = self.current_source;
         self.current_source = next_source;
         self.steps_elapsed = next_step;
-        let discrete_external_work =
-            0.5 * external_force * (self.current_source - old_previous_source);
-        if !discrete_external_work.is_finite() {
-            return Err(ReciprocalModelError::InvalidState);
-        }
         Ok(discrete_external_work)
     }
 
