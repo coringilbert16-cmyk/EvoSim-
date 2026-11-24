@@ -453,3 +453,28 @@ Exploratory reference measurements (same final time 5.5; spatial reference 256 c
 These values are exploratory outputs from the reference algorithm and are not production measurements. The committed CI assertions require spatial reductions greater than 3× and temporal reductions greater than 12×.
 
 The workflow on the parent branch now conditionally runs this test module when the file is present, so the stacked PR #438 executes it without making the parent PR #437 depend on a file that exists only in the child PR. The test result is pending exact-head CI. This is a finite-dimensional reference only: it does not establish the continuum interface limit, a production integrator, a physical coupling coefficient, or a selected world-generation law. Production integration remains blocked.
+
+
+## 16. Exact average-energy envelope inversion (reference only)
+
+The open schedule interpretation can be handled without accepting the 1.31-ppm carrier-only energy discrepancy. The recommended interpretation is that the declared 1–10 schedule is the exact *carrier-averaged total oscillator energy*, including slow-envelope kinetic energy:
+
+\[
+E_{target}(t)=\frac{M\Omega^2a(t)^2}{2}+\frac{M\dot a(t)^2}{4}.
+\]
+
+Starting from the carrier-only estimate \(a_0=\sqrt{2E_{target}/(M\Omega^2)}\), solve the small correction by periodic fixed-point iteration:
+
+\[
+a_{n+1}(t)=\sqrt{\frac{2}{M\Omega^2}\left(E_{target}(t)-\frac{M}{4}\dot a_n(t)^2\right)}.
+\]
+
+A periodic five-point derivative on 24,000 daily samples was used in the isolated reference. With \(M=1\), \(\Omega=2\pi\,440/24000\), and \(E_{target}=5.5-4.5\cos(2\pi t/24000)\), four fixed-point iterations produced:
+
+- Maximum energy-schedule residual: approximately \(3.55\times10^{-15}\) energy units.
+- Maximum relative amplitude correction from the carrier-only estimate: \(6.54\times10^{-7}\), or 0.654 ppm.
+- The correction remains positive across the full 1–10 schedule.
+
+The repository harness now includes this periodic inversion as a reference test, requiring energy residual below \(10^{-12}\) and amplitude correction below 1 ppm. This supports exact carrier-averaged schedule accounting without changing the selected ambient mode or adding a material-dependent source adjustment. The derived \(s_0(t)=M(q_0''+\Omega^2q_0)\) must still be integrated against the *actual* coupled \(q_t\) state, not a clamped reference amplitude. This remains isolated calibration mathematics, not production behavior.
+
+**Recommendation:** retain the 1–10 values as exact carrier-averaged total oscillator energy and use the corrected periodic amplitude. This removes the known envelope-energy approximation instead of preserving it as a permanent tolerance. The physical coupling candidate remains unselected until its complete interface and source-work validation passes.
