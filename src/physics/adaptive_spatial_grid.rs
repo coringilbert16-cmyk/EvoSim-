@@ -19,6 +19,7 @@ pub(crate) enum AdaptiveGridError {
     AlreadyStarted,
     CounterOverflow,
     InvalidState,
+    UnrepresentableEnergyTransfer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -505,6 +506,66 @@ impl AdaptiveWaveField {
         &self.grid
     }
 
+    /// Refines a leaf while preserving the field's discrete leapfrog energy.
+    ///
+    /// The time step is held fixed. A topology change that would violate the
+    /// existing CFL bound is rejected rather than silently changing the
+    /// temporal energy metric.
+    pub(crate) fn refine_grid(
+        &mut self,
+        key: CellKey,
+    ) -> Result<[CellKey; 4], AdaptiveGridError> {
+        self.regrid_preserving_energy(|grid| grid.refine(key))
+    }
+
+    /// Coarsens four siblings while preserving the field's discrete leapfrog
+    /// energy. If the coarsened mesh has no non-uniform degrees of freedom in
+    /// which to represent the removed energy, the operation is rejected.
+    pub(crate) fn coarsen_grid(
+        &mut self,
+        parent: CellKey,
+    ) -> Result<AdaptiveCell, AdaptiveGridError> {
+        self.regrid_preserving_energy(|grid| grid.coarsen(parent))
+    }
+
+    fn regrid_preserving_energy<T>(
+        &mut self,
+        transfer: impl FnOnce(&mut AdaptiveSpatialGrid) -> Result<T, AdaptiveGridError>,
+    ) -> Result<T, AdaptiveGridError> {
+        let target_energy = self.energy();
+        let mut candidate = self.grid.clone();
+        let result = transfer(&mut candidate)?;
+
+        // Keep the time step invariant so a topology change cannot alter the
+        // kinetic term's temporal metric. Reject refinements that exceed the
+        // original solver's stability envelope.
+        let maximum_row_sum = maximum_stiffness_row_sum(&candidate);
+        let stability_measure =
+            self.propagation_speed * self.time_step * (2.0 * maximum_row_sum).sqrt();
+        if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
+            return Err(AdaptiveGridError::UnstableTimeStep);
+        }
+
+        preserve_regridded_energy(
+            &candidate,
+            self.time_step,
+            self.propagation_speed,
+            self.energy_normalization,
+            target_energy,
+        )?;
+
+        for (key, state) in candidate.leaves() {
+            if is_computational_boundary(&candidate, key)
+                && (state.previous != 0.0 || state.current != 0.0)
+            {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+        }
+
+        self.grid = candidate;
+        Ok(result)
+    }
+
     pub(crate) fn time_step(&self) -> f64 {
         self.time_step
     }
@@ -689,21 +750,129 @@ impl AdaptiveWaveField {
         previous: &BTreeMap<CellKey, f64>,
         current: &BTreeMap<CellKey, f64>,
     ) -> f64 {
-        let mut kinetic_sum = 0.0;
-        for key in self.grid.leaves.keys() {
-            let velocity = (current[key] - previous[key]) / self.time_step;
-            kinetic_sum += self.grid.cell_area(*key) * velocity.powi(2);
-        }
-        let mut gradient_cross_sum = 0.0;
-        for face in self.grid.shared_faces() {
-            let conductance = face.length / face.center_distance;
-            gradient_cross_sum += conductance
-                * (current[&face.first] - current[&face.second])
-                * (previous[&face.first] - previous[&face.second]);
-        }
-        0.5 * self.energy_normalization
-            * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+        discrete_energy_for_grid(
+            &self.grid,
+            previous,
+            current,
+            self.time_step,
+            self.propagation_speed,
+            self.energy_normalization,
+        )
     }
+}
+
+/// Transfers the energy norm after conservative area projection.
+///
+/// The two area means are invariant under the grid operations. Their temporal
+/// difference contributes a fixed, spatially uniform kinetic-energy floor.
+/// The remaining zero-mean field is scaled in the positive leapfrog energy
+/// norm, preserving both means while matching the pre-transfer invariant.
+fn preserve_regridded_energy(
+    grid: &AdaptiveSpatialGrid,
+    time_step: f64,
+    propagation_speed: f64,
+    normalization: f64,
+    target_energy: f64,
+) -> Result<(), AdaptiveGridError> {
+    let integrated = grid.integrated_state();
+    let total_area = grid.width as f64
+        * grid.height as f64
+        * grid.base_spacing.powi(2);
+    if !total_area.is_finite() || total_area <= 0.0 {
+        return Err(AdaptiveGridError::InvalidState);
+    }
+    let mean_previous = integrated.previous_displacement / total_area;
+    let mean_current = integrated.current_displacement / total_area;
+    let mean_velocity = (mean_current - mean_previous) / time_step;
+    let mean_energy =
+        0.5 * normalization * total_area * mean_velocity.powi(2);
+    let mut previous = BTreeMap::new();
+    let mut current = BTreeMap::new();
+    for (key, state) in grid.leaves() {
+        previous.insert(key, state.previous);
+        current.insert(key, state.current);
+    }
+    let projected_energy = discrete_energy_for_grid(
+        grid,
+        &previous,
+        &current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
+    let scale = target_energy.abs().max(projected_energy.abs()).max(1.0);
+    let tolerance = 1.0e-11 * scale;
+    let target_fluctuation_energy = target_energy - mean_energy;
+    let projected_fluctuation_energy = projected_energy - mean_energy;
+    if target_fluctuation_energy < -tolerance
+        || projected_fluctuation_energy < -tolerance
+        || !target_fluctuation_energy.is_finite()
+        || !projected_fluctuation_energy.is_finite()
+    {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+
+    let factor = if target_fluctuation_energy <= tolerance {
+        0.0
+    } else if projected_fluctuation_energy <= tolerance {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    } else {
+        (target_fluctuation_energy / projected_fluctuation_energy).sqrt()
+    };
+    if !factor.is_finite() {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+
+    for state in grid.leaves.values_mut() {
+        state.previous = mean_previous + factor * (state.previous - mean_previous);
+        state.current = mean_current + factor * (state.current - mean_current);
+        if !state.previous.is_finite() || !state.current.is_finite() {
+            return Err(AdaptiveGridError::InvalidState);
+        }
+    }
+
+    let mut previous = BTreeMap::new();
+    let mut current = BTreeMap::new();
+    for (key, state) in grid.leaves() {
+        previous.insert(key, state.previous);
+        current.insert(key, state.current);
+    }
+    let final_energy = discrete_energy_for_grid(
+        grid,
+        &previous,
+        &current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
+    if !final_energy.is_finite() || (final_energy - target_energy).abs() > tolerance {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+    Ok(())
+}
+
+fn discrete_energy_for_grid(
+    grid: &AdaptiveSpatialGrid,
+    previous: &BTreeMap<CellKey, f64>,
+    current: &BTreeMap<CellKey, f64>,
+    time_step: f64,
+    propagation_speed: f64,
+    normalization: f64,
+) -> f64 {
+    let mut kinetic_sum = 0.0;
+    for key in grid.leaves.keys() {
+        let velocity = (current[key] - previous[key]) / time_step;
+        kinetic_sum += grid.cell_area(*key) * velocity.powi(2);
+    }
+    let mut gradient_cross_sum = 0.0;
+    for face in grid.shared_faces() {
+        let conductance = face.length / face.center_distance;
+        gradient_cross_sum += conductance
+            * (current[&face.first] - current[&face.second])
+            * (previous[&face.first] - previous[&face.second]);
+    }
+    0.5 * normalization
+        * (kinetic_sum + propagation_speed.powi(2) * gradient_cross_sum)
 }
 
 fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
@@ -1017,6 +1186,87 @@ mod tests {
             .unwrap();
         }
         AdaptiveWaveField::new(grid, 0.2, 1.3).unwrap()
+    }
+
+    #[test]
+    fn field_regridding_preserves_energy_and_both_area_integrals() {
+        let mut field = wave_field(false);
+        let initial_energy = field.energy();
+        let initial_integrals = field.grid().integrated_state();
+
+        field
+            .refine_grid(CellKey {
+                level: 0,
+                x: 3,
+                y: 3,
+            })
+            .unwrap();
+        close(field.energy(), initial_energy);
+        let refined_integrals = field.grid().integrated_state();
+        close(
+            refined_integrals.current_displacement,
+            initial_integrals.current_displacement,
+        );
+        close(
+            refined_integrals.previous_displacement,
+            initial_integrals.previous_displacement,
+        );
+
+        field.advance_ticks(12).unwrap();
+        let before_coarsen_energy = field.energy();
+        let before_coarsen_integrals = field.grid().integrated_state();
+        field
+            .coarsen_grid(CellKey {
+                level: 0,
+                x: 3,
+                y: 3,
+            })
+            .unwrap();
+        close(field.energy(), before_coarsen_energy);
+        let coarsened_integrals = field.grid().integrated_state();
+        close(
+            coarsened_integrals.current_displacement,
+            before_coarsen_integrals.current_displacement,
+        );
+        close(
+            coarsened_integrals.previous_displacement,
+            before_coarsen_integrals.previous_displacement,
+        );
+
+        field.advance_ticks(12).unwrap();
+        close(field.energy(), before_coarsen_energy);
+    }
+
+    #[test]
+    fn coarsening_rejects_energy_that_has_no_remaining_field_degrees_of_freedom() {
+        let mut grid = AdaptiveSpatialGrid::new(4, 4, 1.0, 2).unwrap();
+        let parent = CellKey {
+            level: 0,
+            x: 1,
+            y: 1,
+        };
+        let children = grid.refine(parent).unwrap();
+        for (index, child) in children.into_iter().enumerate() {
+            let sign = if index % 2 == 0 { 1.0 } else { -1.0 };
+            grid.set_state(
+                child,
+                AdaptiveCell {
+                    previous: -0.5 * sign,
+                    current: sign,
+                },
+            )
+            .unwrap();
+        }
+        let mut field = AdaptiveWaveField::new(grid, 0.2, 1.0).unwrap();
+        let energy_before = field.energy();
+        let grid_before = field.grid().clone();
+        assert_eq!(
+            field.coarsen_grid(parent),
+            Err(AdaptiveGridError::UnrepresentableEnergyTransfer)
+        );
+        close(field.energy(), energy_before);
+        assert_eq!(field.grid().leaf_count(), grid_before.leaf_count());
+        assert_eq!(field.grid().integrated_state(), grid_before.integrated_state());
     }
 
     #[test]
