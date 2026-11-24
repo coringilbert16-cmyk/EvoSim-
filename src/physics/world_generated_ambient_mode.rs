@@ -1,6 +1,6 @@
 //! Isolated reference model for the world-generated uniform ambient resonance mode.
 //!
-//! This module models only the spatially uniform (zero-wavenumber) mode. Its
+//! This module models only the spatially uniform ambient resonance component. Its
 //! cycle-averaged stored energy density follows the approved daily cosine
 //! envelope, while its carrier phase advances at 440 cycles per 24,000-tick
 //! day. Positive changes are explicit world generation; negative changes are
@@ -155,7 +155,7 @@ pub(crate) struct AmbientModeTransfer {
     pub(crate) withdrawn_energy: f64,
 }
 
-/// Deterministic, isolated zero-wavenumber ambient resonance mode.
+/// Deterministic, isolated uniform ambient resonance mode.
 #[derive(Clone, Debug)]
 pub(crate) struct WorldGeneratedAmbientMode {
     config: AmbientModeConfig,
