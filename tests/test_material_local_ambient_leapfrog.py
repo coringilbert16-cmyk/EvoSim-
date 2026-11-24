@@ -481,7 +481,11 @@ def _continuum_scattering(*, length, omega=1.0, ambient_omega=1.7,
 def _discrete_scattering(*, spacing, step, length, omega=1.0,
                          ambient_omega=1.7, coupling_strength=0.35,
                          field_mass=1.3, oscillator_mass=0.8, speed=1.0):
-    """Leapfrog/FDTD slab scattering from its exact spatial recurrence."""
+    """Leapfrog/FDTD slab scattering from its exact spatial recurrence.
+
+    Material nodes are centered between vacuum nodes, placing both interfaces
+    on half-grid faces and avoiding a first-order interface-position offset.
+    """
     temporal_phase = omega * step
     omega_tilde = 2.0 * math.sin(temporal_phase / 2.0) / step
     omega_centered = math.sin(temporal_phase) / step
