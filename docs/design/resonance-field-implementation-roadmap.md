@@ -453,3 +453,16 @@ The world-origin anchor is a coordinate convention, not a physical center of the
 **Project-native parameter values remain open:** orbit radius/height, finite source budgets and power, propagation speed in L/tick, hotspot power/support radius, material response coefficients, field normalization, grid spacing, and solver time step. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required.
 
 **Phase status:** Phase 0, Phase 1, and Phase 2 are complete. Phase 3A.2.1, 3A.3, and 3A.4a–d are complete as individually listed above. Phase 3B isolated source accounting and Candidate A mathematical forcing are underway; initial discrete-work and continuum-refinement validation passed. Physical source-to-field coupling, project-native parameter calibration, and production integration remain open and gated; no physical-time/SI conversion is required.
+
+## 12. Ambient/disturbance spatial-composition gate
+
+**Status (November 24, 2026):** PR #437's isolated ambient-mode implementation passed exact-head GitHub Actions on commit `7d397e8c62b3aeb5a673d83bbf2146b2c8813b16` (workflow run 45436842952, conclusion: success). This closes only the isolated mode-state implementation gate.
+
+The next analytical gate is recorded in [Phase 3B.3 ambient/disturbance spatial composition](../plans/PHASE3B3_AMBIENT_SPATIAL_COMPOSITION.md). Initial derivation establishes:
+- A nonzero-frequency spatially uniform displacement is not a free solution of the massless scalar wave equation; adding it to the disturbance displacement requires an explicit uniform forcing term.
+- The energy and flux of an additive displacement contain cross-energy and cross-flux terms. Ambient and disturbance inventories cannot simply be added while ignoring those terms.
+- The harmonic-oscillator energy used by the ambient-mode state is not the massless wave-field energy; the degree of freedom and its coupling/ownership must be explicit.
+- The slowly varying daily envelope contributes a small but nonzero oscillator-energy correction omitted by the carrier-only amplitude mapping.
+- The finite world area is an accounting patch, not the physical support boundary of a uniform mode on the infinite plane.
+
+These are analytical constraints, not a selected composition law. The required isolated numerical checks are listed in the plan. No global Klein–Gordon term, production solver change, material coupling, chemistry integration, or organism behavior is authorized. Keep the ambient-mode and disturbance systems isolated until a candidate Hamiltonian and its discrete energy balance pass the stated tests.
