@@ -542,7 +542,10 @@ mod tests {
             .step_with_environmental_source(&mut source, 0.1)
             .unwrap();
 
-        assert!(returned_work < 0.0, "expected returned work, got {returned_work}");
+        assert!(
+            returned_work < 0.0,
+            "expected returned work, got {returned_work}"
+        );
         assert!(source.account().remaining_energy() > balance_after_debit);
         assert!(
             (source.account().remaining_energy() - (10.0 - initial_work - returned_work)).abs()
@@ -588,8 +591,14 @@ mod tests {
         assert_eq!(system.steps_elapsed(), before.steps_elapsed());
         assert_eq!(system.previous_field, before.previous_field);
         assert_eq!(system.current_field, before.current_field);
-        assert_eq!(system.previous_source.to_bits(), before.previous_source.to_bits());
-        assert_eq!(system.current_source.to_bits(), before.current_source.to_bits());
+        assert_eq!(
+            system.previous_source.to_bits(),
+            before.previous_source.to_bits()
+        );
+        assert_eq!(
+            system.current_source.to_bits(),
+            before.current_source.to_bits()
+        );
         assert_eq!(source.account().remaining_energy(), 10.0);
         assert_eq!(source.account().cumulative_field_transfer(), 0.0);
     }
