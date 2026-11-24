@@ -879,8 +879,12 @@ fn preserve_regridded_energy(
         }
     } else {
         let discriminant = linear_half.powi(2) - quadratic * constant;
-        let discriminant_tolerance =
-            1.0e-12 * linear_half.powi(2).abs().max((quadratic * constant).abs()).max(1.0);
+        let discriminant_tolerance = 1.0e-12
+            * linear_half
+                .powi(2)
+                .abs()
+                .max((quadratic * constant).abs())
+                .max(1.0);
         if !discriminant.is_finite() || discriminant < -discriminant_tolerance {
             return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
         }
