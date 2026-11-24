@@ -205,7 +205,10 @@ def test_independent_ambient_mode_is_additive_and_does_not_drive_disturbance():
     for phase in ambient_phases:
         ambient_value = 0.4 * math.cos(phase)
         ambient_velocity = -0.4 * (2.0 * math.pi * 440.0 / 24_000.0) * math.sin(phase)
-        ambient_inventories.append(0.5 * (ambient_velocity**2 + ambient_value**2))
+        omega = 2.0 * math.pi * 440.0 / 24_000.0
+        ambient_inventories.append(
+            0.5 * (ambient_velocity**2 + omega**2 * ambient_value**2)
+        )
         packet_after = [
             _packet(x, 0.0, amplitude=0.8, width=0.55, speed=speed)
             for x in (-1.0, -0.2, 0.7, 1.4)
@@ -222,4 +225,4 @@ def test_independent_ambient_mode_is_additive_and_does_not_drive_disturbance():
         math.isclose(total, disturbance_inventory + ambient, rel_tol=1e-14)
         for total, ambient in zip(combined_inventories, ambient_inventories)
     )
-    assert len(set(ambient_inventories)) > 1
+    assert max(ambient_inventories) - min(ambient_inventories) < 1e-16
