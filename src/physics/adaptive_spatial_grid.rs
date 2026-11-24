@@ -804,17 +804,26 @@ fn preserve_regridded_energy(
     target_energy: f64,
 ) -> Result<(), AdaptiveGridError> {
     let stiffness = stiffness_matrix(grid);
-    let keys: Vec<_> = grid.leaves.keys().copied()
-        .filter(|key| !is_computational_boundary(grid, *key)).collect();
-    if keys.is_empty() { return Err(AdaptiveGridError::UnrepresentableEnergyTransfer); }
+    let keys: Vec<_> = grid
+        .leaves
+        .keys()
+        .copied()
+        .filter(|key| !is_computational_boundary(grid, *key))
+        .collect();
+    if keys.is_empty() {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
     let areas: Vec<_> = keys.iter().map(|key| grid.cell_area(*key)).collect();
     let alpha = propagation_speed.powi(2) * time_step.powi(2) * 0.25;
     let integrals = grid.integrated_state();
     let mean_target = 0.5 * (integrals.current_displacement + integrals.previous_displacement);
-    let velocity_target = (integrals.current_displacement - integrals.previous_displacement) / time_step;
+    let velocity_target =
+        (integrals.current_displacement - integrals.previous_displacement) / time_step;
 
-    let mean_minimum = constrained_quadratic_minimizer(&keys, &areas, &stiffness, 0.0, mean_target)?;
-    let velocity_minimum = constrained_quadratic_minimizer(&keys, &areas, &stiffness, alpha, velocity_target)?;
+    let mean_minimum =
+        constrained_quadratic_minimizer(&keys, &areas, &stiffness, 0.0, mean_target)?;
+    let velocity_minimum =
+        constrained_quadratic_minimizer(&keys, &areas, &stiffness, alpha, velocity_target)?;
 
     let mut baseline_previous = BTreeMap::new();
     let mut baseline_current = BTreeMap::new();
@@ -836,35 +845,78 @@ fn preserve_regridded_energy(
         }
     }
 
-    let minimum_energy = discrete_energy_with_stiffness(grid, &stiffness, &baseline_previous,
-        &baseline_current, time_step, propagation_speed, normalization);
-    let projected_energy = discrete_energy_with_stiffness(grid, &stiffness, &projected_previous,
-        &projected_current, time_step, propagation_speed, normalization);
-    let energy_scale = target_energy.abs().max(minimum_energy.abs())
-        .max(projected_energy.abs()).max(1.0);
+    let minimum_energy = discrete_energy_with_stiffness(
+        grid,
+        &stiffness,
+        &baseline_previous,
+        &baseline_current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
+    let projected_energy = discrete_energy_with_stiffness(
+        grid,
+        &stiffness,
+        &projected_previous,
+        &projected_current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
+    let energy_scale = target_energy
+        .abs()
+        .max(minimum_energy.abs())
+        .max(projected_energy.abs())
+        .max(1.0);
     let tolerance = 1.0e-10 * energy_scale;
     let available_energy = projected_energy - minimum_energy;
     let required_energy = target_energy - minimum_energy;
-    if !minimum_energy.is_finite() || !projected_energy.is_finite()
-        || available_energy < -tolerance || required_energy < -tolerance {
+    if !minimum_energy.is_finite()
+        || !projected_energy.is_finite()
+        || available_energy < -tolerance
+        || required_energy < -tolerance
+    {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
-    let transfer_scale = if required_energy <= tolerance { 0.0 }
-        else if available_energy <= tolerance { return Err(AdaptiveGridError::UnrepresentableEnergyTransfer); }
-        else { (required_energy / available_energy).sqrt() };
-    if !transfer_scale.is_finite() { return Err(AdaptiveGridError::UnrepresentableEnergyTransfer); }
+    let transfer_scale = if required_energy <= tolerance {
+        0.0
+    } else if available_energy <= tolerance {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    } else {
+        (required_energy / available_energy).sqrt()
+    };
+    if !transfer_scale.is_finite() {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
 
     for (key, state) in grid.leaves.iter_mut() {
-        state.previous = baseline_previous[key] + transfer_scale * (projected_previous[key] - baseline_previous[key]);
-        state.current = baseline_current[key] + transfer_scale * (projected_current[key] - baseline_current[key]);
+        state.previous = baseline_previous[key]
+            + transfer_scale * (projected_previous[key] - baseline_previous[key]);
+        state.current = baseline_current[key]
+            + transfer_scale * (projected_current[key] - baseline_current[key]);
         if !state.previous.is_finite() || !state.current.is_finite() {
             return Err(AdaptiveGridError::InvalidState);
         }
     }
-    let previous: BTreeMap<_, _> = grid.leaves.iter().map(|(key, state)| (*key, state.previous)).collect();
-    let current: BTreeMap<_, _> = grid.leaves.iter().map(|(key, state)| (*key, state.current)).collect();
-    let final_energy = discrete_energy_with_stiffness(grid, &stiffness, &previous, &current,
-        time_step, propagation_speed, normalization);
+    let previous: BTreeMap<_, _> = grid
+        .leaves
+        .iter()
+        .map(|(key, state)| (*key, state.previous))
+        .collect();
+    let current: BTreeMap<_, _> = grid
+        .leaves
+        .iter()
+        .map(|(key, state)| (*key, state.current))
+        .collect();
+    let final_energy = discrete_energy_with_stiffness(
+        grid,
+        &stiffness,
+        &previous,
+        &current,
+        time_step,
+        propagation_speed,
+        normalization,
+    );
     if !final_energy.is_finite() || (final_energy - target_energy).abs() > tolerance {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
@@ -882,11 +934,19 @@ fn constrained_quadratic_minimizer(
     target_integral: f64,
 ) -> Result<BTreeMap<CellKey, f64>, AdaptiveGridError> {
     let count = keys.len();
-    let indices: BTreeMap<_, _> = keys.iter().enumerate().map(|(i, key)| (*key, i)).collect();
+    let indices: BTreeMap<_, _> = keys
+        .iter()
+        .enumerate()
+        .map(|(i, key)| (*key, i))
+        .collect();
     let mut diagonal = vec![0.0; count];
     let rhs = areas.to_vec();
     for (index, key) in keys.iter().enumerate() {
-        let kii = stiffness.get(key).and_then(|row| row.get(key)).copied().unwrap_or(0.0);
+        let kii = stiffness
+            .get(key)
+            .and_then(|row| row.get(key))
+            .copied()
+            .unwrap_or(0.0);
         diagonal[index] = areas[index] - alpha * kii;
         if !diagonal[index].is_finite() || diagonal[index] <= 0.0 {
             return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
@@ -911,15 +971,20 @@ fn constrained_quadratic_minimizer(
     // Jacobi-preconditioned conjugate gradients retain sparse matrix storage.
     let mut solution = vec![0.0; count];
     let mut residual = rhs.clone();
-    let mut preconditioned: Vec<_> = residual.iter().zip(&diagonal)
-        .map(|(value, d)| value / d).collect();
+    let mut preconditioned: Vec<_> = residual
+        .iter()
+        .zip(&diagonal)
+        .map(|(value, d)| value / d)
+        .collect();
     let mut direction = preconditioned.clone();
     let mut residual_product = dot_product(&residual, &preconditioned);
     let tolerance = 1.0e-12 * dot_product(&rhs, &rhs).sqrt().max(1.0);
     let maximum_iterations = count.saturating_mul(20).max(100);
     let mut converged = dot_product(&residual, &residual).sqrt() <= tolerance;
     for _ in 0..maximum_iterations {
-        if converged { break; }
+        if converged {
+            break;
+        }
         let applied = apply(&direction);
         let denominator = dot_product(&direction, &applied);
         if !denominator.is_finite() || denominator <= 0.0 {
@@ -934,27 +999,47 @@ fn constrained_quadratic_minimizer(
             converged = true;
             break;
         }
-        for i in 0..count { preconditioned[i] = residual[i] / diagonal[i]; }
+        for i in 0..count {
+            preconditioned[i] = residual[i] / diagonal[i];
+        }
         let next_product = dot_product(&residual, &preconditioned);
         if !next_product.is_finite() || residual_product <= 0.0 {
             return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
         }
         let beta = next_product / residual_product;
-        for i in 0..count { direction[i] = preconditioned[i] + beta * direction[i]; }
+        for i in 0..count {
+            direction[i] = preconditioned[i] + beta * direction[i];
+        }
         residual_product = next_product;
     }
-    if !converged { return Err(AdaptiveGridError::UnrepresentableEnergyTransfer); }
-    let denominator = keys.iter().enumerate().map(|(i, _)| areas[i] * solution[i]).sum::<f64>();
+    if !converged {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+    let denominator = keys
+        .iter()
+        .enumerate()
+        .map(|(i, _)| areas[i] * solution[i])
+        .sum::<f64>();
     if !denominator.is_finite() || denominator <= 0.0 {
         return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
     }
     let scale = target_integral / denominator;
-    if !scale.is_finite() { return Err(AdaptiveGridError::UnrepresentableEnergyTransfer); }
-    Ok(keys.iter().enumerate().map(|(i, key)| (*key, scale * solution[i])).collect())
+    if !scale.is_finite() {
+        return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+    }
+    Ok(keys
+        .iter()
+        .enumerate()
+        .map(|(i, key)| (*key, scale * solution[i]))
+        .collect())
 }
 
 fn dot_product(first: &[f64], second: &[f64]) -> f64 {
-    first.iter().zip(second).map(|(left, right)| left * right).sum()
+    first
+        .iter()
+        .zip(second)
+        .map(|(left, right)| left * right)
+        .sum()
 }
 
 type StiffnessMatrix = BTreeMap<CellKey, BTreeMap<CellKey, f64>>;
