@@ -171,11 +171,29 @@ impl ReciprocalSourceField {
     }
 
     pub(crate) fn step(&mut self) -> Result<(), ReciprocalModelError> {
+        self.step_with_external_force(0.0).map(|_| ())
+    }
+
+    /// Advances the reciprocal source/field system with an explicit external
+    /// generalized force applied to the source oscillator. Returns the exact
+    /// discrete external work for this centered-difference step.
+    ///
+    /// The environmental account must settle this signed work atomically with
+    /// the state update. This method does not own or replenish that account.
+    pub(crate) fn step_with_external_force(
+        &mut self,
+        external_force: f64,
+    ) -> Result<f64, ReciprocalModelError> {
+        if !external_force.is_finite() {
+            return Err(ReciprocalModelError::InvalidParameter);
+        }
+        let old_previous_source = self.previous_source;
         let area = self.spacing.powi(2);
         let interaction_now = self.source_average(&self.current_field);
         let source_gap = self.current_source - interaction_now;
         let source_acceleration = -self.source_frequency.powi(2) * self.current_source
-            - self.coupling_strength / self.source_mass * source_gap;
+            - self.coupling_strength / self.source_mass * source_gap
+            + external_force / self.source_mass;
 
         let mut next_field = self.current_field.clone();
         for y in 1..self.height - 1 {
@@ -211,7 +229,12 @@ impl ReciprocalSourceField {
         self.previous_source = self.current_source;
         self.current_source = next_source;
         self.steps_elapsed = next_step;
-        Ok(())
+        let discrete_external_work =
+            0.5 * external_force * (self.current_source - old_previous_source);
+        if !discrete_external_work.is_finite() {
+            return Err(ReciprocalModelError::InvalidState);
+        }
+        Ok(discrete_external_work)
     }
 
     fn field_energy_components(&self) -> (f64, f64, f64) {
@@ -405,6 +428,40 @@ mod tests {
             1.0,
         );
         assert_eq!(result.err(), Some(ReciprocalModelError::UnstableTimeStep));
+    }
+
+    #[test]
+    fn externally_driven_reciprocal_model_reconciles_discrete_work() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let initial_total = system.total_energy();
+        let mut cumulative_work = 0.0;
+        for step in 0..4_000 {
+            let phase = step as f64 * 0.005 * 0.7;
+            let force = 0.08 * phase.sin();
+            cumulative_work += system.step_with_external_force(force).unwrap();
+            let residual = system.total_energy() - initial_total - cumulative_work;
+            assert!(
+                residual.abs() <= 2.0e-9 * initial_total.abs().max(1.0),
+                "external-drive energy residual at step {step}: {residual}"
+            );
+        }
+        assert!(cumulative_work.is_finite());
+        assert!(system.field_energy() > 0.0);
+    }
+
+    #[test]
+    fn reciprocal_model_rejects_non_finite_external_drive_without_mutation() {
+        let mut system = model(1.5, 0.2, 0.005);
+        let before = system.clone();
+        assert_eq!(
+            system.step_with_external_force(f64::NAN),
+            Err(ReciprocalModelError::InvalidParameter)
+        );
+        assert_eq!(system.steps_elapsed, before.steps_elapsed);
+        assert_eq!(system.previous_field, before.previous_field);
+        assert_eq!(system.current_field, before.current_field);
+        assert_eq!(system.previous_source.to_bits(), before.previous_source.to_bits());
+        assert_eq!(system.current_source.to_bits(), before.current_source.to_bits());
     }
 
     #[test]
