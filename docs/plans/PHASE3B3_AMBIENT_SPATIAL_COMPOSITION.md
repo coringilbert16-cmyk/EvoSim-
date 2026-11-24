@@ -198,3 +198,43 @@ The next reference increment adds `tests/test_ambient_packet_patch_balance.py` w
 The reference remains one-dimensional and is not a production solver. Its role is to establish the accounting identity and nested-patch behavior before extending to higher-dimensional packet geometry or proposing a reciprocal coupling law.
 
 **Validation status:** The tests have been committed to this PR branch, but they are not considered validated until the complete exact-head CI run passes. The envelope correction interpretation and a reciprocal coupled-Hamiltonian model remain open decisions. No production integration is authorized.
+
+
+## 11. First reciprocal-coupling candidate: bulk local oscillator field (analysis only)
+
+A minimal reciprocal Hamiltonian candidate can be written with a disturbance field (w(\mathbf{x},t)) and a local ambient oscillator coordinate (q(\mathbf{x},t)):
+
+\[
+\mathcal H =
+\frac{\pi_w^2}{2K}
++\frac{Kc^2}{2}|\nabla w|^2
++\frac{\pi_q^2}{2M}
++\frac{M\Omega^2}{2}q^2
++gqw.
+\]
+
+Here (K,M>0), and (g) is a reciprocal coupling coefficient. The Hamilton equations give
+
+\[
+w_{tt}=c^2\nabla^2w-\frac{g}{K}q,
+\qquad
+q_{tt}+\Omega^2q=-\frac{g}{M}w.
+\]
+
+For a plane-wave mode, the coupled dispersion relation is
+
+\[
+(c^2k^2-\omega^2)(\Omega^2-\omega^2)
+-\frac{g^2}{KM}=0.
+\]
+
+For any nonzero (g), the disturbance branch is no longer exactly \(\omega^2=c^2k^2\). This is a direct demonstration that a bulk, pointwise reciprocal coupling between a local ambient oscillator field and the disturbance field changes the dispersion relation. It is not an acceptable coupling if exact nondispersive propagation must hold everywhere.
+
+This candidate is not selected. It identifies a constraint for subsequent work:
+
+- If the coupling exists throughout empty space, exact massless nondispersive propagation is lost for nonzero reciprocal coupling.
+- If the coupling is restricted to physical material locations, empty-space propagation can remain the approved massless equation, but the material interface and local hybrid response require their own conservative derivation and tests.
+- A finite accounting patch must never be used as the coupling support. Any localized coupling profile must correspond to a separately defined physical material/support, not the bookkeeping region.
+- The oscillator field's energy density can be finite locally while its integral over an infinite uniform plane is infinite. Whole-plane inventory therefore needs a density-based or finite-excess formulation; the finite accounting patch remains a reporting window only.
+
+The next viable question is therefore not “how do we couple the ambient mode everywhere without changing dispersion?” The bulk candidate shows that this cannot be done with this minimal local Hamiltonian. The next candidate to analyze is a conservative, material-local interaction, with the ambient field treated as an independently owned local degree of freedom and with exact equal-and-opposite work at the interface. This remains analytical work only; no material coupling is implemented or authorized.
