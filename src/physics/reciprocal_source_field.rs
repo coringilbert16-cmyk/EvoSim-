@@ -5,6 +5,8 @@
 //! potential. It is intentionally disconnected from live sources, materials,
 //! chemistry, movement, and the production energy ledger.
 
+use crate::source::{SourceAccountError, SourceInstance};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReciprocalModelError {
     InvalidDimensions,
