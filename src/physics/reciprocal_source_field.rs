@@ -79,7 +79,10 @@ impl ReciprocalSourceField {
             return Err(ReciprocalModelError::InvalidProfile);
         }
 
-        let mut profile = vec![0.0; width * height];
+        let cell_count = width
+            .checked_mul(height)
+            .ok_or(ReciprocalModelError::InvalidDimensions)?;
+        let mut profile = vec![0.0; cell_count];
         for y in y_start..y_end {
             for x in x_start..x_end {
                 profile[y * width + x] = value;
