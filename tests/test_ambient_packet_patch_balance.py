@@ -1,4 +1,4 @@
-"""Analytic packet and discrete patch-balance references for Phase 3B.3.
+""""Analytic packet and discrete patch-balance references for Phase 3B.3.
 
 These tests are independent of the production solver. The packet is an exact
 right-moving solution of the one-dimensional massless wave equation. A uniform
@@ -34,15 +34,15 @@ def _combined_state(x, t, *, packet_amplitude, width, speed, ambient_amplitude, 
 
 def test_gaussian_packet_is_an_exact_localized_massless_wave_solution():
     amplitude, width, speed = 0.8, 0.55, 1.3
+    h = 1.0e-3
     for x in (-1.7, -0.2, 0.0, 0.9, 2.1):
         for t in (-0.4, 0.0, 0.35):
-            z = x - speed * t
-            w = amplitude * math.exp(-0.5 * (z / width) ** 2)
-            w_x = -(z / width**2) * w
-            w_xx = ((z**2 / width**4) - 1.0 / width**2) * w
-            w_tt = speed**2 * w_xx
-            assert math.isclose(w_tt, speed**2 * w_xx, rel_tol=1e-14, abs_tol=1e-14)
-            assert math.isfinite(w_x)
+            sample = lambda xx, tt: _packet(
+                xx, tt, amplitude=amplitude, width=width, speed=speed
+            )[0]
+            w_tt = (sample(x, t + h) - 2.0 * sample(x, t) + sample(x, t - h)) / h**2
+            w_xx = (sample(x + h, t) - 2.0 * sample(x, t) + sample(x - h, t)) / h**2
+            assert math.isclose(w_tt, speed**2 * w_xx, rel_tol=2e-6, abs_tol=2e-6)
 
 
 def test_combined_packet_and_uniform_carrier_have_explicit_forcing_and_cross_terms():
@@ -119,10 +119,8 @@ def _discrete_patch_residual(points, steps, *, patch, duration):
         )
 
     def energy_at(t):
-        samples = [state(x, t) for x in xs[i0:i1 + 1]]
-        # Centered time derivative and spatial derivative of the total field.
         density = []
-        for j, x in enumerate(xs[i0:i1 + 1], start=i0):
+        for x in xs[i0:i1 + 1]:
             u_plus = state(x, t + dt)[0]
             u_minus = state(x, t - dt)[0]
             ut = (u_plus - u_minus) / (2.0 * dt)
@@ -163,7 +161,7 @@ def _discrete_patch_residual(points, steps, *, patch, duration):
 
 
 def test_nested_accounting_patches_close_discrete_packet_flux_and_forcing_work():
-    patches = ((-1.5, 1.5), (-2.5, 2.5), (-3.5, 3.5))
+    patches = ((-1.6, 1.6), (-2.4, 2.4), (-3.2, 3.2))
     coarse = [
         _discrete_patch_residual(200, 80, patch=patch, duration=0.4)
         for patch in patches
@@ -185,7 +183,7 @@ def test_accounting_patch_does_not_change_local_analytic_packet_state():
         for x in probes
     ]
     # Different nested patches only change which samples are integrated.
-    for _patch in ((-1.5, 1.5), (-2.5, 2.5), (-3.5, 3.5)):
+    for _patch in ((-1.6, 1.6), (-2.4, 2.4), (-3.2, 3.2)):
         observed = [
             _packet(x, time, amplitude=0.8, width=0.55, speed=1.3)
             for x in probes
