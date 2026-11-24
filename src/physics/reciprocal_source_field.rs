@@ -1124,6 +1124,23 @@ mod tests {
             1.0,
         )
         .unwrap();
+        // A second bounded domain moves each physical boundary farther from
+        // the same-size source footprint without changing the sponge profile.
+        let mut farther_boundary = ReciprocalSourceField::new(
+            61,
+            61,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.8,
+            profile(61, 61, 28, 33, 28, 33),
+            1.0,
+        )
+        .unwrap();
+        farther_boundary.configure_absorbing_boundary(8, 5.0).unwrap();
         let mut expanded = ReciprocalSourceField::new(
             121,
             121,
@@ -1147,16 +1164,20 @@ mod tests {
         }
 
         let initial_energy = damped.total_energy();
+        let farther_initial_energy = farther_boundary.total_energy();
         let mut early_error: f64 = 0.0;
         let mut damped_late_error: f64 = 0.0;
         let mut undamped_late_error: f64 = 0.0;
+        let mut farther_boundary_late_error: f64 = 0.0;
         for step in 0..1_000 {
             damped.step().unwrap();
             undamped.step().unwrap();
+            farther_boundary.step().unwrap();
             expanded.step().unwrap();
 
             let mut damped_error: f64 = 0.0;
             let mut undamped_error: f64 = 0.0;
+            let mut farther_error: f64 = 0.0;
             for y in 16..25 {
                 for x in 16..25 {
                     let reference = expanded.field_sample(x + 40, y + 40).unwrap();
@@ -1164,6 +1185,14 @@ mod tests {
                         damped_error.max((damped.field_sample(x, y).unwrap() - reference).abs());
                     undamped_error = undamped_error
                         .max((undamped.field_sample(x, y).unwrap() - reference).abs());
+                    // The 61x61 domain's centered source is translated by 30
+                    // cells into the same expanded reference.
+                    let farther_reference = expanded.field_sample(x + 30, y + 30).unwrap();
+                    farther_error = farther_error.max(
+                        (farther_boundary.field_sample(x + 10, y + 10).unwrap()
+                            - farther_reference)
+                            .abs(),
+                    );
                 }
             }
             if step == 149 {
@@ -1172,6 +1201,7 @@ mod tests {
             if step == 999 {
                 damped_late_error = damped_error;
                 undamped_late_error = undamped_error;
+                farther_boundary_late_error = farther_error;
             }
 
             let balance =
@@ -1179,6 +1209,13 @@ mod tests {
             assert!(
                 balance.abs() <= 2.0e-9 * initial_energy.abs().max(1.0),
                 "absorbing-boundary energy residual at step {step}: {balance}"
+            );
+            let farther_balance = farther_initial_energy
+                - farther_boundary.total_energy()
+                - farther_boundary.boundary_absorbed_energy();
+            assert!(
+                farther_balance.abs() <= 2.0e-9 * farther_initial_energy.abs().max(1.0),
+                "expanded absorbing-boundary energy residual at step {step}: {farther_balance}"
             );
         }
 
@@ -1190,6 +1227,10 @@ mod tests {
         assert!(
             damped_late_error < undamped_late_error,
             "absorber did not reduce reflection: damped={damped_late_error}, undamped={undamped_late_error}"
+        );
+        assert!(
+            farther_boundary_late_error < damped_late_error,
+            "moving the boundary farther away did not reduce residual reflection: near={damped_late_error}, far={farther_boundary_late_error}"
         );
     }
 
