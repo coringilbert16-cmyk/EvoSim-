@@ -991,4 +991,116 @@ mod tests {
         assert!(candidate_b.source_energy().is_finite());
         assert!(candidate_b.coupling_energy().is_finite());
     }
+
+    #[test]
+    fn zero_boundary_reflection_is_detected_against_expanded_reference_domain() {
+        use super::super::reference_wave_solver::WaveField;
+
+        let spacing = 0.2;
+        let time_step = 0.01;
+        let substeps_per_tick = 100;
+        let mut bounded = ReciprocalSourceField::new(
+            41,
+            41,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.8,
+            ReciprocalSourceField::uniform_profile(41, 41, spacing, 18, 23, 18, 23)
+                .unwrap(),
+            1.0,
+        )
+        .unwrap();
+
+        // The reference source is translated by 40 cells so its physical
+        // footprint is centered in the expanded 121x121 domain.
+        let mut expanded = ReciprocalSourceField::new(
+            121,
+            121,
+            spacing,
+            1.0,
+            time_step,
+            1.0,
+            2.0,
+            1.5,
+            0.8,
+            ReciprocalSourceField::uniform_profile(121, 121, spacing, 58, 63, 58, 63)
+                .unwrap(),
+            1.0,
+        )
+        .unwrap();
+        let mut independent_reference =
+            WaveField::new(121, 121, spacing, 1.0, substeps_per_tick, 1.0).unwrap();
+        let mut reference_source = mathematical_source(9_010, 100.0);
+
+        let mut early_maximum_difference: f64 = 0.0;
+        let mut late_maximum_difference: f64 = 0.0;
+
+        for step in 0..1_000 {
+            let gap = expanded.current_source - expanded.source_average(&expanded.current_field);
+            let forcing: Vec<f64> = expanded
+                .profile
+                .iter()
+                .map(|weight| {
+                    expanded.coupling_strength / expanded.field_normalization * gap * weight
+                })
+                .collect();
+
+            independent_reference
+                .advance_forced_substep(&mut reference_source, &forcing)
+                .unwrap();
+            expanded.step().unwrap();
+            bounded.step().unwrap();
+
+            // Candidate A's independent leapfrog implementation must reproduce
+            // the expanded Candidate B field under the same force history.
+            for y in 56..65 {
+                for x in 56..65 {
+                    let reference_difference = (independent_reference.sample(x, y).unwrap()
+                        - expanded.field_sample(x, y).unwrap())
+                    .abs();
+                    assert!(
+                        reference_difference <= 1.0e-10,
+                        "independent reference mismatch at step {step}: {reference_difference}"
+                    );
+                }
+            }
+
+            let mut bounded_difference: f64 = 0.0;
+            for y in 16..25 {
+                for x in 16..25 {
+                    let difference = (bounded.field_sample(x, y).unwrap()
+                        - independent_reference.sample(x + 40, y + 40).unwrap())
+                    .abs();
+                    bounded_difference = bounded_difference.max(difference);
+                }
+            }
+
+            if step == 399 {
+                early_maximum_difference = bounded_difference;
+            }
+            if step == 999 {
+                late_maximum_difference = bounded_difference;
+            }
+        }
+
+        // At t=4, the small-domain boundary has not had time to return a
+        // reflected wave to the source neighborhood.
+        assert!(
+            early_maximum_difference <= 1.0e-10,
+            "pre-reflection mismatch: {early_maximum_difference}"
+        );
+
+        // At t=10, the small box has reflected outgoing energy back into the
+        // source neighborhood. The expanded reference's nearest boundary is
+        // 11.6 distance units away, beyond the full observation horizon.
+        assert!(
+            late_maximum_difference > 1.0e-4,
+            "expected measurable zero-boundary contamination, got {late_maximum_difference}"
+        );
+    }
+
 }

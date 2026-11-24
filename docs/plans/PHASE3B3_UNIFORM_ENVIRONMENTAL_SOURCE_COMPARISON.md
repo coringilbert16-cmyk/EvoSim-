@@ -86,6 +86,18 @@ This replenishes the finite account. It does not prescribe the oscillator force 
 
 The first profile helper and its unit tests are isolated mathematical groundwork only. It does not establish the environmental force law, select the schedule calibration, or resolve the numerical boundary.
 
+### 4.2 Zero-boundary reflection diagnostic
+
+The isolated Candidate B solver's fixed-zero outer ring is a reflecting Dirichlet boundary. A domain-expansion test now compares it against the independent Candidate A leapfrog reference solver, driven with the expanded Candidate B model's exact coupling-force history.
+
+The diagnostic uses \(\Delta x=0.2\), \(\Delta t=0.01\), propagation speed 1, and the same 1.0-by-1.0 uniform source footprint in both domains:
+
+- Bounded Candidate B: 41×41 nodes, footprint indices [18,23) in each axis. The nearest source-footprint edge is 3.6 distance units from the numerical boundary; a reflected signal can return to the source neighborhood during the 10-unit observation.
+- Expanded Candidate B / independent Candidate A reference: 121×121 nodes, footprint indices [58,63). The nearest boundary is 11.6 distance units from the footprint, so no outgoing wave can reach it during the 10-unit observation.
+- Compare a 9×9 region around the source at t=4 and t=10. The independent Candidate A solver must first reproduce the expanded Candidate B field under identical forcing.
+
+Acceptance assertions: pre-reflection regional field difference at t=4 is at most 1e-10; by t=10 the bounded-domain difference must exceed 1e-4. This is a boundary-contamination diagnostic, not evidence that the bounded solver is acceptable through t=10. It establishes that the current zero-boundary model is only usable for an observation interval shorter than its measured reflection-return horizon.
+
 ### 4.2 Numerical-domain limitation remains open
 
 The reciprocal solver currently fixes the outer grid ring to zero. That is a finite-box Dirichlet boundary and can reflect outgoing waves. A uniform source profile does not remove this artifact and does not make the solver an infinite-plane model.
