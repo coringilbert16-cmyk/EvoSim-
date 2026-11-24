@@ -15,6 +15,9 @@ pub(crate) enum AdaptiveGridError {
     MissingCell,
     IncompleteChildren,
     UnbalancedRefinement,
+    UnstableTimeStep,
+    AlreadyStarted,
+    CounterOverflow,
     InvalidState,
 }
 
@@ -412,6 +415,312 @@ impl AdaptiveSpatialGrid {
         let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
         spacing * spacing
     }
+}
+
+
+/// Conservative finite-volume leapfrog evolution on a fixed adaptive mesh.
+///
+/// Each leaf cell contributes its physical area as mass. Shared faces use the
+/// symmetric conductance length / center_distance, making the stiffness
+/// operator symmetric across coarse/fine interfaces. The corresponding
+/// discrete invariant is the mass-weighted kinetic term plus the
+/// cross-time-level face-gradient term.
+#[derive(Clone, Debug)]
+pub(crate) struct AdaptiveWaveField {
+    grid: AdaptiveSpatialGrid,
+    propagation_speed: f64,
+    energy_normalization: f64,
+    time_step: f64,
+    substeps_per_tick: usize,
+    absorbing_layer: Option<(f64, f64)>,
+    absorbed_energy: f64,
+    substeps_elapsed: u64,
+}
+
+impl AdaptiveWaveField {
+    /// Chooses the smallest integer substep count satisfying a conservative
+    /// Gershgorin CFL bound for the current adaptive mesh.
+    pub(crate) fn new(
+        grid: AdaptiveSpatialGrid,
+        propagation_speed: f64,
+        energy_normalization: f64,
+    ) -> Result<Self, AdaptiveGridError> {
+        if !propagation_speed.is_finite()
+            || propagation_speed <= 0.0
+            || !energy_normalization.is_finite()
+            || energy_normalization <= 0.0
+        {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
+        for (key, state) in grid.leaves() {
+            if is_computational_boundary(&grid, key)
+                && (state.previous != 0.0 || state.current != 0.0)
+            {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+        }
+
+        let maximum_row_sum = maximum_stiffness_row_sum(&grid);
+        let required_substeps = if maximum_row_sum == 0.0 {
+            1.0
+        } else {
+            let maximum_time_step =
+                (2.0 / maximum_row_sum).sqrt() / propagation_speed;
+            (1.0 / maximum_time_step).ceil().max(1.0)
+        };
+        if !required_substeps.is_finite() || required_substeps > usize::MAX as f64 {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
+        let substeps_per_tick = required_substeps as usize;
+        let time_step = 1.0 / substeps_per_tick as f64;
+        if !time_step.is_finite()
+            || propagation_speed * time_step * (2.0 * maximum_row_sum).sqrt() > 2.0 + 1.0e-12
+        {
+            return Err(AdaptiveGridError::UnstableTimeStep);
+        }
+
+        Ok(Self {
+            grid,
+            propagation_speed,
+            energy_normalization,
+            time_step,
+            substeps_per_tick,
+            absorbing_layer: None,
+            absorbed_energy: 0.0,
+            substeps_elapsed: 0,
+        })
+    }
+
+    pub(crate) fn grid(&self) -> &AdaptiveSpatialGrid {
+        &self.grid
+    }
+
+    pub(crate) fn time_step(&self) -> f64 {
+        self.time_step
+    }
+
+    pub(crate) fn substeps_per_tick(&self) -> usize {
+        self.substeps_per_tick
+    }
+
+    pub(crate) fn logical_time_ticks(&self) -> f64 {
+        self.substeps_elapsed as f64 / self.substeps_per_tick as f64
+    }
+
+    pub(crate) fn absorbed_energy(&self) -> f64 {
+        self.absorbed_energy
+    }
+
+    pub(crate) fn sample(&self, x: f64, y: f64) -> Option<f64> {
+        self.grid.sample(x, y).map(|state| state.current)
+    }
+
+    /// Configures an energy-accounted computational sponge. Outer leaf cells
+    /// remain fixed-zero numerical boundary nodes; damping acts only inside
+    /// the computational window and its exact discrete loss is accumulated as
+    /// computational outflow. This is not a physical world boundary.
+    pub(crate) fn configure_absorbing_boundary(
+        &mut self,
+        layer_width: f64,
+        maximum_damping: f64,
+    ) -> Result<(), AdaptiveGridError> {
+        if self.substeps_elapsed != 0 {
+            return Err(AdaptiveGridError::AlreadyStarted);
+        }
+        if !layer_width.is_finite()
+            || layer_width <= 0.0
+            || !maximum_damping.is_finite()
+            || maximum_damping <= 0.0
+            || !(maximum_damping * self.time_step).is_finite()
+        {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
+        self.absorbing_layer = Some((layer_width, maximum_damping));
+        self.absorbed_energy = 0.0;
+        Ok(())
+    }
+
+    /// Conserved discrete leapfrog energy on the current adaptive mesh.
+    pub(crate) fn energy(&self) -> f64 {
+        self.discrete_energy(
+            &self
+                .grid
+                .leaves
+                .iter()
+                .map(|(key, state)| (*key, state.previous))
+                .collect(),
+            &self
+                .grid
+                .leaves
+                .iter()
+                .map(|(key, state)| (*key, state.current))
+                .collect(),
+        )
+    }
+
+    pub(crate) fn advance_ticks(&mut self, ticks: u64) -> Result<(), AdaptiveGridError> {
+        let count = ticks
+            .checked_mul(self.substeps_per_tick as u64)
+            .ok_or(AdaptiveGridError::CounterOverflow)?;
+        self.advance_substeps(count)
+    }
+
+    pub(crate) fn advance_substeps(&mut self, count: u64) -> Result<(), AdaptiveGridError> {
+        self.substeps_elapsed
+            .checked_add(count)
+            .ok_or(AdaptiveGridError::CounterOverflow)?;
+        for _ in 0..count {
+            self.advance_one_substep()?;
+        }
+        Ok(())
+    }
+
+    fn advance_one_substep(&mut self) -> Result<(), AdaptiveGridError> {
+        let faces = self.grid.shared_faces();
+        let mut face_sums: BTreeMap<CellKey, f64> =
+            self.grid.leaves.keys().map(|key| (*key, 0.0)).collect();
+        for face in &faces {
+            let first = self.grid.leaves[&face.first].current;
+            let second = self.grid.leaves[&face.second].current;
+            let conductance = face.length / face.center_distance;
+            *face_sums.get_mut(&face.first).unwrap() += conductance * (second - first);
+            *face_sums.get_mut(&face.second).unwrap() += conductance * (first - second);
+        }
+
+        let dt = self.time_step;
+        let speed_squared = self.propagation_speed.powi(2);
+        let old_energy = self.energy();
+        let mut next_current = BTreeMap::new();
+        let mut absorbed_this_step = 0.0;
+
+        for (key, state) in self.grid.leaves.iter() {
+            if is_computational_boundary(&self.grid, *key) {
+                next_current.insert(*key, 0.0);
+                continue;
+            }
+            let bounds = self.grid.bounds_for_key(*key);
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let damping = self.damping_at(center_x, center_y);
+            let damping_step = 0.5 * damping * dt;
+            let area = self.grid.cell_area(*key);
+            let next = (2.0 * state.current
+                - (1.0 - damping_step) * state.previous
+                + dt.powi(2) * speed_squared * face_sums[key] / area)
+                / (1.0 + damping_step);
+            if !next.is_finite() {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+            let midpoint_velocity = (next - state.previous) / (2.0 * dt);
+            absorbed_this_step += area * damping * dt * midpoint_velocity.powi(2);
+            next_current.insert(*key, next);
+        }
+
+        absorbed_this_step *= self.energy_normalization;
+        let next_energy = self.discrete_energy(
+            &self
+                .grid
+                .leaves
+                .iter()
+                .map(|(key, state)| (*key, state.current))
+                .collect(),
+            &next_current,
+        );
+        let measured_loss = old_energy - next_energy;
+        let tolerance = 1.0e-10
+            * old_energy
+                .abs()
+                .max(next_energy.abs())
+                .max(absorbed_this_step.abs())
+                .max(1.0);
+        let next_absorbed_energy = self.absorbed_energy + absorbed_this_step;
+        if !next_energy.is_finite()
+            || next_energy < 0.0
+            || !absorbed_this_step.is_finite()
+            || absorbed_this_step < 0.0
+            || !measured_loss.is_finite()
+            || measured_loss < -tolerance
+            || (measured_loss - absorbed_this_step).abs() > tolerance
+            || !next_absorbed_energy.is_finite()
+        {
+            return Err(AdaptiveGridError::InvalidState);
+        }
+        let next_substeps_elapsed = self
+            .substeps_elapsed
+            .checked_add(1)
+            .ok_or(AdaptiveGridError::CounterOverflow)?;
+
+        for (key, next) in next_current {
+            let state = self.grid.leaves.get_mut(&key).unwrap();
+            state.previous = state.current;
+            state.current = next;
+        }
+        self.absorbed_energy = next_absorbed_energy;
+        self.substeps_elapsed = next_substeps_elapsed;
+        Ok(())
+    }
+
+    fn damping_at(&self, x: f64, y: f64) -> f64 {
+        let Some((layer_width, maximum_damping)) = self.absorbing_layer else {
+            return 0.0;
+        };
+        let world_width = self.grid.width as f64 * self.grid.base_spacing;
+        let world_height = self.grid.height as f64 * self.grid.base_spacing;
+        let distance = x
+            .min(world_width - x)
+            .min(y)
+            .min(world_height - y);
+        if distance >= layer_width {
+            0.0
+        } else {
+            let depth = (layer_width - distance) / layer_width;
+            maximum_damping * depth * depth
+        }
+    }
+
+    fn discrete_energy(
+        &self,
+        previous: &BTreeMap<CellKey, f64>,
+        current: &BTreeMap<CellKey, f64>,
+    ) -> f64 {
+        let mut kinetic_sum = 0.0;
+        for (key, state) in self.grid.leaves.iter() {
+            let velocity = (current[key] - previous[key]) / self.time_step;
+            kinetic_sum += self.grid.cell_area(*key) * velocity.powi(2);
+        }
+        let mut gradient_cross_sum = 0.0;
+        for face in self.grid.shared_faces() {
+            let conductance = face.length / face.center_distance;
+            gradient_cross_sum += conductance
+                * (current[&face.first] - current[&face.second])
+                * (previous[&face.first] - previous[&face.second]);
+        }
+        0.5 * self.energy_normalization
+            * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+    }
+}
+
+fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
+    let bounds = grid.bounds_for_key(key);
+    bounds.min_x == 0.0
+        || bounds.min_y == 0.0
+        || bounds.max_x == grid.width as f64 * grid.base_spacing
+        || bounds.max_y == grid.height as f64 * grid.base_spacing
+}
+
+fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid) -> f64 {
+    let mut row_sums: BTreeMap<CellKey, f64> =
+        grid.leaves.keys().map(|key| (*key, 0.0)).collect();
+    for face in grid.shared_faces() {
+        let conductance = face.length / face.center_distance;
+        if !is_computational_boundary(grid, face.first) {
+            *row_sums.get_mut(&face.first).unwrap() += conductance / grid.cell_area(face.first);
+        }
+        if !is_computational_boundary(grid, face.second) {
+            *row_sums.get_mut(&face.second).unwrap() += conductance / grid.cell_area(face.second);
+        }
+    }
+    row_sums.values().copied().fold(0.0, f64::max)
 }
 
 fn append_shared_faces(
