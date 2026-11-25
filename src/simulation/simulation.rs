@@ -3452,13 +3452,14 @@ mod live_ambient_energy_contract_tests {
             // 250x250 world-sized test domain. A 32x32 fixed-zero grid lets
             // the disturbance reach its computational edge during this run,
             // causing artificial energy loss unrelated to ambient coupling.
-            simulation.resonance_field = crate::live_resonance_field::LiveResonanceField::new(
+            simulation.resonance_field = crate::live_resonance_field::LiveResonanceField::new_with_test_window(
                 250.0,
                 250.0,
                 simulation
                     .ambient_energy
                     .sample_midpoint_before_current()
                     .expect("ambient carrier midpoint must be available"),
+                250,
             )
             .expect("small deterministic test field must initialize");
             simulation.resonance_field.set_initial_cell_state_for_test(
