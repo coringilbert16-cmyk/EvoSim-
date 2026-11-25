@@ -3452,14 +3452,6 @@ mod live_ambient_energy_contract_tests {
                     .expect("ambient carrier midpoint must be available"),
             )
             .expect("small deterministic test field must initialize");
-            let opening_field = simulation.resonance_field.energy_state();
-            simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
-            simulation
-                .energy_ledger
-                .total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
-            simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
-            simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
-
             simulation.resonance_field.set_initial_cell_state_for_test(
                 crate::adaptive_spatial_grid::CellKey {
                     level: 0,
