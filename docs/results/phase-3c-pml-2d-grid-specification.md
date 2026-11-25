@@ -203,26 +203,26 @@ The second potential term is exactly `||Γ1 Λ_h||²`, with `Λ_h=G_h ψ_h+Φ_h`
 
 The time indices in equation (3.38) are half-step indices. Cross-checking its structure against Lemma 13 gives
 
-`E_add^(n+1/2) = (Δt²/8) ( ||(Λ_h^(n+1)-Λ_h^n)/Δt||²_(Γ1) + ||2Γ1(Λ_h^(n+1)-Λ_h^n)/Δt + Γ1²(Λ_h^(n+1)+Λ_h^n)/2||² )`
+`E_add^(n+1/2) = (Δt²/8) ( ||Γ1(Λ_h^(n+1)-Λ_h^n)/Δt||² + ||2Γ1(Λ_h^(n+1)-Λ_h^n)/Δt + Γ1²(Λ_h^(n+1)+Λ_h^n)/2||² )`
 
 where
 
 - `Λ_h^n=G_h ψ_h^n+Φ_h^n`;
-- the first norm is weighted by `Γ1`: `||w||²_(Γ1)=<Γ1w,w>`;
+- both norms are ordinary compatible discrete L² norms; the first vector is explicitly multiplied by `Γ1`;
 - the second norm is the ordinary compatible discrete L² norm;
 - `Γ1²` means matrix composition.
 
-The factor **2** multiplying the first term inside the second norm is essential. It is consistent with Lemma 13, where the difference of this half-step vector produces `2Γ1[[Λ_h^n]]_Δt+Γ1²[Λ_h^n]_Δt`. This is the algebraic combination that appears in the energy proof. The two norms must not be split or simplified.
+The factor **2** multiplying the first term inside the second norm is essential. It is consistent with Lemma 13, where the difference of this half-step vector produces `2Γ1[[Λ_h^n]]_Δt+Γ1²[Λ_h^n]_Δt`. The first norm is the ordinary norm of `Γ1` times the forward difference; it is **not** the `Γ1`-weighted norm of the unmultiplied difference. The two norms must not be split or simplified.
 
 For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, giving
 
-`E_add,2D^(n+1/2) = (Δt²/8) [ ζx||(Λx^(n+1)-Λx^n)/Δt||² + ζy||(Λy^(n+1)-Λy^n)/Δt||² + ||2ζx(Λx^(n+1)-Λx^n)/Δt+ζx²(Λx^(n+1)+Λx^n)/2||² + ||2ζy(Λy^(n+1)-Λy^n)/Δt+ζy²(Λy^(n+1)+Λy^n)/2||² ]`.
+`E_add,2D^(n+1/2) = (Δt²/8) [ ζx²||(Λx^(n+1)-Λx^n)/Δt||² + ζy²||(Λy^(n+1)-Λy^n)/Δt||² + ||2ζx(Λx^(n+1)-Λx^n)/Δt+ζx²(Λx^(n+1)+Λx^n)/2||² + ||2ζy(Λy^(n+1)-Λy^n)/Δt+ζy²(Λy^(n+1)+Λy^n)/2||² ]`.
 
 Both contributions are nonnegative for nonnegative damping. They are analysis-energy corrections, not additional physical PML state variables.
 
 The full energy is `E_expl=E_k+E_p+E_add`. Theorem 5 / equation (3.41) gives
 
-`(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt/2)||[G_hu_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_hu_h^n+φ_h^n}_{1/4}||²_(Γ1)`.
+`(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt²/2)||[G_hu_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_hu_h^n+φ_h^n}_{1/4}||²_(Γ1)`.
 
 This identity is established for the paper's compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. It is not yet a proof for our proposed staggered finite-difference closure.
 
@@ -247,9 +247,9 @@ Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), espec
 
 The earlier Fourier screen used a centered-in-time update for the auxiliary field and therefore did **not** test the published scheme (62). It has been superseded by a new constant-coefficient amplification screen using the actual recurrence:
 
-- the second-order wave update with the quarter-weighted mixed term `b{u^n}_{1/4});
-- the forward Crank–Nicolson auxiliary update `(φ^{n+1}-φ^n)/Δt+Γ1(φ^{n+1}+φ^n)/2=Γ2G(u^{n+1}+u^n)/2);
-- the scalar proof variable update `(ψ^{n+1}-ψ^n)/Δt=(u^{n+1}+u^n)/2).
+- the second-order wave update with the quarter-weighted mixed term `b{u^n}_{1/4}`;
+- the forward Crank–Nicolson auxiliary update `(φ^{n+1}-φ^n)/Δt+Γ1(φ^{n+1}+φ^n)/2=Γ2G(u^{n+1}+u^n)/2`;
+- the scalar proof variable update `(ψ^{n+1}-ψ^n)/Δt=(u^{n+1}+u^n)/2`.
 
 For each Fourier mode, the amplification state was `(u^n,u^{n-1},ψ^n,φ_x^n,φ_y^n)`. The periodic forward-gradient / negative-adjoint-divergence symbols were used consistently, so `Δ_h=D_hG_h` exactly. The scan used `h_x=h_y=c=1`, 17 wave numbers per axis over `[0,π]`, damping coefficients independently sampled from `{0.1,1,5,20,100}`, and the 2D five-point CFL limit `Δt≤1/√2`.
 
@@ -266,4 +266,28 @@ Results:
 | 0.8 | 2.553945 | ζx=ζy=0.1, kx=ky=π |
 
 This supports the expected CFL threshold for the **constant-coefficient periodic Fourier model** and removes the previous centered-auxiliary screen as evidence. It is not a proof, does not test spatially varying damping or a finite PML interface/corner, and does not validate the proposed finite-difference boundary closure. The neutral spectral radius of one corresponds to the undamped/zero-frequency limit of the reduced system; it is not growth.
+
+
+
+## 10. Periodic-grid one-step energy identity audit
+
+A direct numerical reproduction of the published one-step identity now closes to floating-point roundoff for the proposed compatible periodic finite-difference operators.
+
+Test setup:
+
+- 16×16 periodic scalar grid, `h_x=h_y=1`;
+- forward face gradients and their exact negative-adjoint divergence, with `Δ_h=D_hG_h`;
+- `Δt=0.1`, below the operator CFL limit;
+- independent random `u^0,u^1), with `ψ^0=φ^0=Φ^0=Ψ^0=0`;
+- first-order auxiliary states at n=1 initialized by applying the n=0 trapezoidal updates, rather than incorrectly setting them to zero;
+- velocity sequence initialized consistently with equation (3.44);
+- 5 random seeds, 5 one-step identity checks per seed, for each damping pair `(ζx,ζy)=(0,0),(0.7,0),(0,1.1),(0.7,1.1),(2,3)`.
+
+The tested identity is
+
+`(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt²/2)||[G_hu_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_hu_h^n+φ_h^n}_{1/4}||²_(Γ1)`.
+
+Across the 125 checks, the maximum absolute residual was approximately `1.66×10⁻¹⁰` in double precision. The auxiliary identity from Lemma 12 and the energy decomposition identities were also checked independently; their residuals were at floating-point roundoff.
+
+This validates the **constant-coefficient periodic finite-difference realization** of the published explicit energy identity, provided the operator pair is exactly adjoint-compatible and the startup fields are initialized consistently. It does not validate non-periodic outer boundary closures, spatially varying damping profiles, PML interface reflection, corners, or adaptive-grid coupling.
 
