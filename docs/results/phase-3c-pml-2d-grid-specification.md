@@ -321,3 +321,46 @@ For each boundary type, five damping pairs `(0,0),(0.7,0),(0,1.1),(0.7,1.1),(2,3
 
 These tests validate the energy identity for these specific compatible homogeneous boundary closures. They do not validate spatially varying damping profiles, PML interface reflection, finite-layer performance, corners, or adaptive-grid coupling.
 
+
+
+## 11. Preliminary 2D variable-profile packet reflection experiment
+
+A first finite-layer experiment was run with the published 2D PML recurrence and spatially varying damping profiles. This is an empirical reflection test, not covered by the constant-coefficient energy theorem.
+
+Setup:
+
+- 128×128 interior nodal grid with homogeneous Dirichlet outer boundary;
+- physical square bounded by the PML interface at 24 cells from each side; 24-cell PML thickness;
+- `h=1`, `c=1`, `Δt=0.4`;
+- independent x/y damping profiles, zero in the physical region and smoothly ramped through the PML with cubic profile power 3;
+- face-sampled `ζx,ζy,Γ2x,Γ2y`, cell-sampled `a=ζx+ζy,b=ζxζy`;
+- right-going Gaussian packet centered in the physical region, with propagation angles 0°, 30°, and 45°;
+- reflection metric: maximum absolute field at one monitor point 12 cells inside the physical/PML interface during the first return window, divided by the outgoing peak at the same point. This is a point-monitor amplitude ratio, not a full-field reflection coefficient.
+
+For the 24-cell, cubic profile:
+
+| Maximum damping | 0° normal | 30° | 45° |
+|---:|---:|---:|---:|
+| 0 (hard boundary baseline) | 0.517 | 0.242 | 0.404 |
+| 0.25 | 0.0132 | 0.00643 | 0.00253 |
+| 0.5 | 0.000441 | 0.000198 | 0.0000646 |
+| 1.0 | 0.000174 | 0.000102 | 0.0000568 |
+| 2.0 | 0.000174 | 0.000103 | 0.0000568 |
+
+The result shows strong attenuation of the returning packet compared with the undamped hard-boundary baseline. Increasing peak damping beyond 1.0 did not materially improve the measured ratio, suggesting the observed floor is set by discretization/profile/interface effects rather than insufficient peak damping.
+
+A small profile/thickness sensitivity screen at peak damping 0.5 gave:
+
+| PML thickness | Profile power | 0° ratio | 45° ratio |
+|---:|---:|---:|---:|
+| 16 | 2 | 0.000953 | 0.000110 |
+| 16 | 3 | 0.00305 | 0.000381 |
+| 16 | 4 | 0.00695 | 0.00103 |
+| 24 | 3 | 0.000441 | 0.0000646 |
+| 32 | 3 | 0.000118 | 0.0000394 |
+
+The sampled solution norms remained bounded throughout these runs; this is only a finite-duration empirical check, not a stability proof. The cubic profile was not uniformly optimal at every thickness, and these results do not establish a universal damping choice.
+
+**Interpretation:** the PML recurrence is now supported by (1) a roundoff-level constant-coefficient energy identity audit for periodic, Dirichlet, and Neumann compatible operators, and (2) a promising preliminary variable-profile 2D packet test at three angles. The next experiment should broaden frequency and angle coverage, compare profile families at matched integrated damping, and inspect full-field energy/flux across the physical/PML interface and corner regions. Do not select production profile parameters from this single packet screen.
+
+No production solver code changed. No PR #446 changes were made.
