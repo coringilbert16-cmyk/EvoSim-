@@ -203,6 +203,56 @@ impl LiveResonanceField {
         self.initial_total_energy = total_energy;
     }
 
+    /// Seeds a resolved standing-wave mode that satisfies the fixed-zero
+    /// computational boundary exactly. This lets long accounting tests use a
+    /// compact window without mistaking boundary truncation for ambient work.
+    #[cfg(test)]
+    pub(crate) fn set_initial_standing_mode_for_test(&mut self, amplitude: f64) {
+        assert!(amplitude.is_finite());
+        let width = self.wave.grid().width();
+        let height = self.wave.grid().height();
+        assert!(width >= 4 && height >= 4);
+        let keys: Vec<_> = self.wave.grid().leaves().map(|(key, _)| key).collect();
+        for key in keys {
+            let value = if key.level == 0
+                && key.x > 0
+                && key.y > 0
+                && key.x + 1 < width
+                && key.y + 1 < height
+            {
+                let x_phase = std::f64::consts::PI * key.x as f64 / (width - 1) as f64;
+                let y_phase = std::f64::consts::PI * key.y as f64 / (height - 1) as f64;
+                amplitude * x_phase.sin() * y_phase.sin()
+            } else {
+                0.0
+            };
+            self.wave
+                .set_initial_state(
+                    key,
+                    crate::adaptive_spatial_grid::AdaptiveCell {
+                        previous: value,
+                        current: value,
+                    },
+                )
+                .expect("standing-wave test state must satisfy fixed-zero boundaries");
+        }
+        let integrals = self.wave.grid().integrated_state();
+        let disturbance_velocity = (integrals.current_displacement
+            - integrals.previous_displacement)
+            / self.wave.time_step();
+        let disturbance_energy = self.wave.energy();
+        let cross_energy =
+            FIELD_NORMALIZATION * self.ambient_sample.carrier_velocity * disturbance_velocity;
+        let total_energy = disturbance_energy + cross_energy;
+        self.energy_state = LiveFieldEnergyState {
+            disturbance_energy,
+            cross_energy,
+            total_energy,
+            ..LiveFieldEnergyState::default()
+        };
+        self.initial_total_energy = total_energy;
+    }
+
     /// Advances one logical tick. The adaptive solver performs its own CFL
     /// substeps and expands its computational window before the disturbance
     /// reaches the two-cell zero guard. The ambient inventory itself remains
