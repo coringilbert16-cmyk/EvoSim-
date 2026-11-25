@@ -976,6 +976,22 @@ impl Simulation {
             spatial_state.accounting_residual;
     }
 
+    /// Samples the composed ambient-plus-disturbance field at an actual world position.
+    /// Outside the current computational window, the disturbance uses its validated
+    /// zero-extension state while the uniform ambient carrier remains present.
+    pub(crate) fn sample_resonance_field_at(
+        &self,
+        x: f64,
+        y: f64,
+    ) -> Result<
+        crate::ambient_spatial_composition::ComposedFieldSample,
+        crate::ambient_spatial_composition::CompositionError,
+    > {
+        self.resonance_field
+            .sample(x, y)?
+            .ok_or(crate::ambient_spatial_composition::CompositionError::InvalidState)
+    }
+
     pub(crate) fn step(&mut self) {
         self.step_with_transport_reuse::<true>();
     }
@@ -3387,6 +3403,30 @@ mod decomposition_finalization_tests {
 #[cfg(test)]
 mod live_ambient_energy_contract_tests {
     use super::Simulation;
+
+    #[test]
+    fn simulation_exposes_composed_field_queries_at_world_positions() {
+        let simulation = Simulation::new(42, 10.0);
+        let world_sample = simulation
+            .sample_resonance_field_at(125.0, 125.0)
+            .expect("world-position field query should succeed");
+        let exterior_sample = simulation
+            .sample_resonance_field_at(-1_000.0, -1_000.0)
+            .expect("zero-extended exterior query should succeed");
+
+        assert_eq!(world_sample.disturbance_energy_density, 0.0);
+        assert_eq!(world_sample.cross_energy_density, 0.0);
+        assert_eq!(
+            world_sample.energy_density,
+            world_sample.ambient_oscillator_energy_density
+        );
+        assert_eq!(exterior_sample.disturbance_energy_density, 0.0);
+        assert_eq!(exterior_sample.cross_energy_density, 0.0);
+        assert_eq!(
+            exterior_sample.energy_density,
+            exterior_sample.ambient_oscillator_energy_density
+        );
+    }
 
     #[test]
     fn production_ambient_tick_updates_ambient_and_spatial_ledgers_together() {
