@@ -383,14 +383,18 @@ impl Simulation {
         let opening_ambient_energy = ambient_energy.sample().total_energy;
         energy_ledger.total_ambient_energy_held = opening_ambient_energy;
         energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
-        let resonance_field = crate::live_resonance_field::LiveResonanceField::new(
+        let mut resonance_field = crate::live_resonance_field::LiveResonanceField::new(
             environment.width,
             environment.height,
-            ambient_energy
-                .sample_midpoint_before_current()
-                .expect("initial ambient carrier midpoint must be available"),
+            ambient_energy.sample(),
         )
         .expect("live spatial resonance field must initialize");
+        let initial_ambient_sample = ambient_energy
+            .sample_at_offset(-0.5 * resonance_field.substep_time_step())
+            .expect("initial ambient sample must align with the leapfrog velocity time");
+        resonance_field
+            .set_initial_ambient_sample(initial_ambient_sample)
+            .expect("initial ambient sample must reconcile with the live field");
         let initial_spatial_field_energy = resonance_field.initial_total_energy();
         energy_ledger.total_spatial_disturbance_energy_held =
             resonance_field.energy_state().disturbance_energy;
@@ -958,22 +962,35 @@ impl Simulation {
     }
 
     fn advance_ambient_energy_with_domain_expansion(&mut self, expand_domain: bool) {
-        let ambient_before = self.ambient_energy.sample();
         let transfer = self
             .ambient_energy
             .advance_one_tick()
             .expect("ambient energy must advance deterministically by one tick");
+        let half_substep = 0.5 * self.resonance_field.substep_time_step();
+        let ambient_start = self
+            .ambient_energy
+            .sample_at_offset(-1.0 - half_substep)
+            .expect("ambient start sample must align with the first leapfrog velocity");
         let ambient_midpoint = self
             .ambient_energy
-            .sample_midpoint_before_current()
-            .expect("ambient carrier midpoint must be available after advancing");
+            .sample_at_offset(-0.5 - half_substep)
+            .expect("ambient midpoint sample must align with the midpoint leapfrog velocity");
+        let ambient_end = self
+            .ambient_energy
+            .sample_at_offset(-half_substep)
+            .expect("ambient end sample must align with the final leapfrog velocity");
         self.energy_ledger.total_ambient_energy_generated += transfer.generated_energy;
         self.energy_ledger.total_ambient_energy_withdrawn += transfer.withdrawn_energy;
         self.energy_ledger.total_ambient_energy_held = transfer.energy_after;
 
         let spatial_state = self
             .resonance_field
-            .advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, expand_domain)
+            .advance_one_tick_with_domain_policy(
+                ambient_start,
+                ambient_midpoint,
+                ambient_end,
+                expand_domain,
+            )
             .expect("spatial resonance field must advance and account deterministically");
         self.energy_ledger.total_spatial_disturbance_energy_held = spatial_state.disturbance_energy;
         self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
@@ -3455,13 +3472,18 @@ mod live_ambient_energy_contract_tests {
                 crate::live_resonance_field::LiveResonanceField::new_with_test_window(
                     250.0,
                     250.0,
-                    simulation
-                        .ambient_energy
-                        .sample_midpoint_before_current()
-                        .expect("ambient carrier midpoint must be available"),
+                    simulation.ambient_energy.sample(),
                     64,
                 )
                 .expect("compact deterministic test field must initialize");
+            let initial_ambient_sample = simulation
+                .ambient_energy
+                .sample_at_offset(-0.5 * simulation.resonance_field.substep_time_step())
+                .expect("test ambient sample must align with the leapfrog velocity time");
+            simulation
+                .resonance_field
+                .set_initial_ambient_sample(initial_ambient_sample)
+                .expect("test ambient sample must reconcile with the live field");
             simulation
                 .resonance_field
                 .set_initial_standing_mode_for_test(0.5);
