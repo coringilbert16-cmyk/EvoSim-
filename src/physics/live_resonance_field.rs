@@ -136,6 +136,37 @@ impl LiveResonanceField {
             .map(Some)
     }
 
+    #[cfg(test)]
+    fn set_initial_cell_state_for_test(
+        &mut self,
+        key: crate::adaptive_spatial_grid::CellKey,
+        previous: f64,
+        current: f64,
+    ) {
+        self.wave
+            .set_initial_state(
+                key,
+                crate::adaptive_spatial_grid::AdaptiveCell { previous, current },
+            )
+            .unwrap();
+        let integrals = self.wave.grid().integrated_state();
+        let disturbance_velocity =
+            (integrals.current_displacement - integrals.previous_displacement)
+                / self.wave.time_step();
+        let disturbance_energy = self.wave.energy();
+        let cross_energy = FIELD_NORMALIZATION
+            * self.ambient_sample.carrier_velocity
+            * disturbance_velocity;
+        let total_energy = disturbance_energy + cross_energy;
+        self.energy_state = LiveFieldEnergyState {
+            disturbance_energy,
+            cross_energy,
+            total_energy,
+            ..LiveFieldEnergyState::default()
+        };
+        self.initial_total_energy = total_energy;
+    }
+
     /// Advances one logical tick. The adaptive solver performs its own CFL
     /// substeps and expands its computational window before the disturbance
     /// reaches the two-cell zero guard. The ambient inventory itself remains
@@ -250,6 +281,40 @@ mod tests {
         assert_eq!(state.cumulative_world_work, 0.0);
         assert_eq!(state.cumulative_computational_outflow, 0.0);
         assert_eq!(state.accounting_residual, 0.0);
+    }
+
+    #[test]
+    fn nonzero_disturbance_reconciles_cross_energy_with_midpoint_world_work() {
+        let config = AmbientModeConfig::new(250.0 * 250.0, 1.0, 0.0, 0.0).unwrap();
+        let mut ambient = WorldGeneratedAmbientMode::new(config, 100).unwrap();
+        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let mut field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
+        field.set_initial_cell_state_for_test(
+            crate::adaptive_spatial_grid::CellKey {
+                level: 0,
+                x: 16,
+                y: 16,
+            },
+            0.0,
+            0.5,
+        );
+
+        let ambient_before = ambient.sample();
+        ambient.advance_one_tick().unwrap();
+        let ambient_midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let state = field
+            .advance_one_tick(ambient_before, ambient_midpoint)
+            .unwrap();
+
+        assert!(state.disturbance_energy > 0.0);
+        assert!(state.cross_energy.abs() > 0.0);
+        assert!(state.cumulative_world_work.abs() > 0.0);
+        assert!(
+            state.accounting_residual.abs()
+                < 1.0e-3 * state.total_energy.abs().max(1.0),
+            "nonzero composed-field balance residual: {}",
+            state.accounting_residual
+        );
     }
 
     #[test]
