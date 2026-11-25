@@ -106,6 +106,16 @@ impl LiveResonanceField {
         self.initial_total_energy
     }
 
+    /// Expands the zero-disturbance exterior into the computational window
+    /// before a caller establishes an initial condition at an arbitrary point.
+    pub(crate) fn ensure_position_covered(
+        &mut self,
+        x: f64,
+        y: f64,
+    ) -> Result<bool, AdaptiveGridError> {
+        self.wave.ensure_position_covered(x, y, 4.0, EXPANSION_PADDING_BASE_CELLS)
+    }
+
     pub(crate) fn sample(
         &self,
         x: f64,
@@ -278,6 +288,17 @@ mod tests {
         assert_eq!(state.cumulative_world_work, 0.0);
         assert_eq!(state.cumulative_computational_outflow, 0.0);
         assert_eq!(state.accounting_residual, 0.0);
+    }
+
+    #[test]
+    fn live_field_can_expand_to_cover_an_arbitrary_source_position() {
+        let ambient = ambient();
+        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let mut field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
+        assert!(field.ensure_position_covered(150.0, 100.0).unwrap());
+        assert!(field.wave.sample(150.0, 100.0).is_some());
+        assert!(field.wave.grid().origin().0 < 109.0);
+        assert!(field.wave.grid().origin().1 < 109.0);
     }
 
     #[test]
