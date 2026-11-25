@@ -3497,12 +3497,14 @@ mod live_ambient_energy_contract_tests {
         simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
 
         crate::adaptive_spatial_grid::reset_domain_expansion_profile();
+        crate::adaptive_spatial_grid::reset_solver_substep_profile();
         let warmup_start = Instant::now();
         for _ in 0..100 {
             simulation.advance_ambient_energy();
         }
         let warmup_elapsed = warmup_start.elapsed();
         let warmup_profile = crate::adaptive_spatial_grid::domain_expansion_profile();
+        let warmup_solver_profile = crate::adaptive_spatial_grid::solver_substep_profile();
 
         let measured_start = Instant::now();
         for _ in 0..20 {
@@ -3510,6 +3512,7 @@ mod live_ambient_energy_contract_tests {
         }
         let measured_elapsed = measured_start.elapsed();
         let measured_profile = crate::adaptive_spatial_grid::domain_expansion_profile();
+        let measured_solver_profile = crate::adaptive_spatial_grid::solver_substep_profile();
 
         let inventory = simulation.energy_inventory_snapshot();
         println!(
@@ -3528,6 +3531,19 @@ mod live_ambient_energy_contract_tests {
             inventory.residual(),
             inventory.current_spatial_field_energy,
             inventory.spatial_field_world_work,
+        );
+        println!(
+            "phase3c_substep_profile,warmup_matrix_ms={:.3},warmup_old_energy_ms={:.3},warmup_update_ms={:.3},warmup_new_energy_ms={:.3},warmup_commit_ms={:.3},measured_matrix_ms={:.3},measured_old_energy_ms={:.3},measured_update_ms={:.3},measured_new_energy_ms={:.3},measured_commit_ms={:.3}",
+            warmup_solver_profile.matrix_apply_ms,
+            warmup_solver_profile.previous_energy_ms,
+            warmup_solver_profile.state_update_ms,
+            warmup_solver_profile.next_energy_ms,
+            warmup_solver_profile.commit_ms,
+            measured_solver_profile.matrix_apply_ms - warmup_solver_profile.matrix_apply_ms,
+            measured_solver_profile.previous_energy_ms - warmup_solver_profile.previous_energy_ms,
+            measured_solver_profile.state_update_ms - warmup_solver_profile.state_update_ms,
+            measured_solver_profile.next_energy_ms - warmup_solver_profile.next_energy_ms,
+            measured_solver_profile.commit_ms - warmup_solver_profile.commit_ms,
         );
         assert!(inventory.current_spatial_field_energy.is_finite());
         assert!(inventory.is_balanced(1.0e-5));
