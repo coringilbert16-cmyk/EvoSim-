@@ -330,8 +330,7 @@ impl LiveResonanceField {
             - after_integrals.previous_displacement)
             / time_step;
         let ambient_end_velocity = ambient_end.carrier_velocity;
-        let cross_energy =
-            FIELD_NORMALIZATION * ambient_end_velocity * after_disturbance_velocity;
+        let cross_energy = FIELD_NORMALIZATION * ambient_end_velocity * after_disturbance_velocity;
         let midpoint_disturbance_velocity =
             0.5 * (before_disturbance_velocity + after_disturbance_velocity);
         // Simpson integration is aligned to the actual leapfrog velocity
