@@ -383,13 +383,12 @@ impl Simulation {
         let opening_ambient_energy = ambient_energy.sample().total_energy;
         energy_ledger.total_ambient_energy_held = opening_ambient_energy;
         energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
-        let resonance_field =
-            crate::live_resonance_field::LiveResonanceField::new(
-                environment.width,
-                environment.height,
-                ambient_energy.sample(),
-            )
-                .expect("live spatial resonance field must initialize");
+        let resonance_field = crate::live_resonance_field::LiveResonanceField::new(
+            environment.width,
+            environment.height,
+            ambient_energy.sample(),
+        )
+        .expect("live spatial resonance field must initialize");
         let initial_spatial_field_energy = resonance_field.initial_total_energy();
         energy_ledger.total_spatial_disturbance_energy_held =
             resonance_field.energy_state().disturbance_energy;
@@ -962,8 +961,7 @@ impl Simulation {
             .resonance_field
             .advance_one_tick(ambient_before, ambient_after)
             .expect("spatial resonance field must advance and account deterministically");
-        self.energy_ledger.total_spatial_disturbance_energy_held =
-            spatial_state.disturbance_energy;
+        self.energy_ledger.total_spatial_disturbance_energy_held = spatial_state.disturbance_energy;
         self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
         self.energy_ledger.total_spatial_field_energy_held = spatial_state.total_energy;
         self.energy_ledger.total_spatial_field_world_work = spatial_state.cumulative_world_work;
