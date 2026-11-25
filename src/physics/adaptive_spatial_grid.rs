@@ -1240,7 +1240,7 @@ impl AdaptiveWaveField {
         let speed_squared = self.propagation_speed.powi(2);
         #[cfg(test)]
         let phase_start = std::time::Instant::now();
-        let old_energy = self.energy();
+        let old_energy = self.energy_from_live_states();
         #[cfg(test)]
         PREVIOUS_ENERGY_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
         let mut next_current = BTreeMap::new();
@@ -1275,15 +1275,7 @@ impl AdaptiveWaveField {
         absorbed_this_step *= self.energy_normalization;
         #[cfg(test)]
         let phase_start = std::time::Instant::now();
-        let next_energy = self.discrete_energy(
-            &self
-                .grid
-                .leaves
-                .iter()
-                .map(|(key, state)| (*key, state.current))
-                .collect(),
-            &next_current,
-        );
+        let next_energy = self.energy_after_state_update(&next_current);
         #[cfg(test)]
         NEXT_ENERGY_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
         #[cfg(test)]
@@ -1342,6 +1334,40 @@ impl AdaptiveWaveField {
             let depth = (layer_width - distance) / layer_width;
             maximum_damping * depth * depth
         }
+    }
+
+    fn energy_from_live_states(&self) -> f64 {
+        let mut kinetic_sum = 0.0;
+        for (key, state) in &self.grid.leaves {
+            let velocity = (state.current - state.previous) / self.time_step;
+            kinetic_sum += self.grid.cell_area(*key) * velocity.powi(2);
+        }
+        let mut gradient_cross_sum = 0.0;
+        for (row, columns) in &self.stiffness {
+            let row_current = self.grid.leaves[row].current;
+            for (column, coefficient) in columns {
+                gradient_cross_sum += row_current * coefficient * self.grid.leaves[column].previous;
+            }
+        }
+        0.5 * self.energy_normalization
+            * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+    }
+
+    fn energy_after_state_update(&self, next_current: &BTreeMap<CellKey, f64>) -> f64 {
+        let mut kinetic_sum = 0.0;
+        for (key, state) in &self.grid.leaves {
+            let velocity = (next_current[key] - state.current) / self.time_step;
+            kinetic_sum += self.grid.cell_area(*key) * velocity.powi(2);
+        }
+        let mut gradient_cross_sum = 0.0;
+        for (row, columns) in &self.stiffness {
+            let row_current = next_current[row];
+            for (column, coefficient) in columns {
+                gradient_cross_sum += row_current * coefficient * self.grid.leaves[column].current;
+            }
+        }
+        0.5 * self.energy_normalization
+            * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
     }
 
     fn discrete_energy(
