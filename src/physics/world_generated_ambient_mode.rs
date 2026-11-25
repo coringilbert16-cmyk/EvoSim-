@@ -405,8 +405,14 @@ impl WorldGeneratedAmbientMode {
     pub(crate) fn sample_midpoint_before_current(
         &self,
     ) -> Result<AmbientModeSample, AmbientModeError> {
+        let day_tick = (self.tick % AMBIENT_DAY_TICKS) as f64 - 0.5;
+        let midpoint_tick = if day_tick < 0.0 {
+            day_tick + AMBIENT_DAY_TICKS as f64
+        } else {
+            day_tick
+        };
         self.config
-            .sample_at_fractional_tick(self.tick as f64 - 0.5, &self.trajectory)
+            .sample_at_fractional_tick(midpoint_tick, &self.trajectory)
     }
 
     /// Total world generation since this mode's opening inventory.
