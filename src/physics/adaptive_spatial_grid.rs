@@ -2428,7 +2428,15 @@ mod dense_uniform_solver_prototype_tests {
 
                 let start = Instant::now();
                 for _ in 0..steps {
+                    let old_energy = dense.energy();
                     dense.advance_one_substep();
+                    let next_energy = dense.energy();
+                    let energy_scale = old_energy.abs().max(next_energy.abs()).max(1.0);
+                    assert!(
+                        next_energy >= 0.0
+                            && (next_energy - old_energy).abs() <= 2.0e-9 * energy_scale,
+                        "dense energy-accounting mismatch: before={old_energy}, after={next_energy}"
+                    );
                 }
                 let dense_elapsed = start.elapsed();
                 let dense_energy = dense.energy();
