@@ -178,7 +178,9 @@ impl Laboratory {
         let resonance_field = crate::live_resonance_field::LiveResonanceField::new(
             config.width,
             config.height,
-            ambient_energy.sample(),
+            ambient_energy
+                .sample_midpoint_before_current()
+                .map_err(|_| "initial ambient carrier midpoint is unavailable")?,
         )
         .map_err(|_| "live spatial resonance field could not initialize")?;
         let opening_spatial_field_energy = resonance_field.initial_total_energy();
