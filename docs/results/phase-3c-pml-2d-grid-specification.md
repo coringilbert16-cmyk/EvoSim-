@@ -205,7 +205,7 @@ The paper's total explicit energy is
 
 The exact `E_add` expression (equation 68) contains additional time-difference terms involving the auxiliary proof fields and damping matrices. It has not yet been transcribed reliably from the source rendering, so it is deliberately not reconstructed from OCR fragments here. The complete identity (equation 71) is
 
-`(E_expl^{n+1/2}-E_expl^{n-1/2})/Δt = -(1/2)||[G_h u_h^n+φ_h^n]_{Δt}||_{Γ1}² - 2||{G_h u_h^n+φ_h^n}_{1/4}||_{Γ1}²`.
+`(E_expl^{n+1/2}-E_expl^{n-1/2})/Δt = -(Δt/2)||[G_h u_h^n+φ_h^n]_{Δt}||_{Γ1}² - 2||{G_h u_h^n+φ_h^n}_{1/4}||_{Γ1}²`.
 
 Here `[w^n]_{Δt}=(w^{n+1}-w^{n-1})/(2Δt)`, and `{w^n}_{1/4}=(w^{n+1}+2w^n+w^{n-1})/4`. The damping-weighted norms use the paper's compatible face-space inner product. For `Γ1 succeq 0`, both right-hand terms are nonnegative, so the energy is nonincreasing whenever the complete energy is positive.
 
