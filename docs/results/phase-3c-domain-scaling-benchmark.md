@@ -34,7 +34,7 @@ The benchmark passed: 1 test passed, 0 failed. The dedicated CI job completed su
 ## Findings
 
 1. **The current representation pays for the full domain.** Empty and localized-wave propagation times are nearly identical at each size. A localized disturbance does not currently provide a meaningful runtime saving.
-2. **Propagation cost scales approximately with cell count.** From 32 × 32 to 250 × 250, cell count increases by about 61×? The measured 20-tick advance increases by about 83–85×. This indicates additional size-dependent overhead beyond a perfectly linear cell-count model; timings are single-run observations on a hosted runner, not stable performance guarantees.
+2. **Propagation cost scales approximately with cell count.** From 32 × 32 to 250 × 250, cell count increases by about 61× The measured 20-tick advance increases by about 83–85×. This indicates additional size-dependent overhead beyond a perfectly linear cell-count model; timings are single-run observations on a hosted runner, not stable performance guarantees.
 3. **The 250 × 250 case is expensive.** Twenty logical ticks take 3.85–3.92 seconds (about 192–196 ms per logical tick) on this runner, before whole-simulation integration overhead.
 4. **Numerical energy behavior is strong in this bounded test.** Localized-wave relative drift is between approximately 3.2e-15 and 7.6e-15 over 20 ticks. This is not evidence of correct open-boundary export: the benchmark's outer computational boundary is still fixed-zero, and no wave is required to leave a finite world.
 5. **This benchmark does not measure memory.** Leaf count is reported, but no allocator/RSS measurement or reliable per-node memory accounting was performed.
