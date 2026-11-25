@@ -2519,9 +2519,11 @@ mod dense_uniform_solver_prototype_tests {
                     .configure_absorbing_boundary(layer_width, maximum_damping)
                     .unwrap();
 
+                let mut dense_absorbed_total = 0.0;
                 for step in 0..80 {
                     let dense_absorbed =
                         advance_dense_with_sponge(&mut dense, layer_width, maximum_damping);
+                    dense_absorbed_total += dense_absorbed;
                     reference.advance_substeps(1).unwrap();
                     assert_state_close(&reference, &dense, 3.0e-10);
 
@@ -2535,7 +2537,7 @@ mod dense_uniform_solver_prototype_tests {
                     );
 
                     let expected_absorbed =
-                        reference.absorbed_energy() - dense_absorbed;
+                        reference.absorbed_energy() - dense_absorbed_total;
                     assert!(
                         expected_absorbed.abs()
                             <= 3.0e-9 * reference.absorbed_energy().abs().max(1.0),
