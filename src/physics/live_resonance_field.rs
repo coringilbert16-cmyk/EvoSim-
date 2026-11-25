@@ -122,6 +122,9 @@ impl LiveResonanceField {
         x: f64,
         y: f64,
     ) -> Result<Option<ComposedFieldSample>, CompositionError> {
+        if !x.is_finite() || !y.is_finite() {
+            return Err(CompositionError::InvalidParameter);
+        }
         let disturbance = match self.wave.sample_kinematics(x, y) {
             Some(sample) => DisturbanceSample {
                 displacement: sample.displacement,
@@ -346,6 +349,21 @@ mod tests {
         assert!(
             maximum_residual < 1.0e-5 * state.total_energy.abs().max(1.0),
             "maximum nonzero composed-field balance residual: {maximum_residual}"
+        );
+    }
+
+    #[test]
+    fn field_queries_reject_non_finite_world_positions() {
+        let ambient = ambient();
+        let field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
+
+        assert_eq!(
+            field.sample(f64::NAN, 0.0),
+            Err(CompositionError::InvalidParameter)
+        );
+        assert_eq!(
+            field.sample(0.0, f64::INFINITY),
+            Err(CompositionError::InvalidParameter)
         );
     }
 
