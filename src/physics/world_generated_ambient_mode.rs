@@ -414,6 +414,21 @@ impl WorldGeneratedAmbientMode {
             .sample_at_fractional_tick(midpoint_tick, &self.trajectory)
     }
 
+    /// Samples the continuous ambient carrier at an offset from the current
+    /// integer tick. This aligns ambient work quadrature with the adaptive
+    /// wave solver's actual leapfrog substep timestamps.
+    pub(crate) fn sample_at_offset(
+        &self,
+        offset_ticks: f64,
+    ) -> Result<AmbientModeSample, AmbientModeError> {
+        if !offset_ticks.is_finite() {
+            return Err(AmbientModeError::InvalidParameter);
+        }
+        let day_tick = (self.tick % AMBIENT_DAY_TICKS) as f64 + offset_ticks;
+        self.config
+            .sample_at_fractional_tick(day_tick, &self.trajectory)
+    }
+
     /// Total world generation since this mode's opening inventory.
     #[cfg(test)]
     pub(crate) fn cumulative_generated_energy(&self) -> f64 {
