@@ -3439,6 +3439,27 @@ mod live_ambient_energy_contract_tests {
         // Seed the disturbance before the adaptive wave grid advances.
         // Its energy is opening inventory, not energy created by this test.
         for simulation in [&mut slow, &mut fast] {
+            // This test validates 120 ticks of deterministic coupling and
+            // world-work reconciliation, not production-domain scaling. Keep
+            // the field local so the long logical run does not repeatedly
+            // solve the full 250x250 world.
+            simulation.resonance_field = crate::live_resonance_field::LiveResonanceField::new(
+                32.0,
+                32.0,
+                simulation
+                    .ambient_energy
+                    .sample_midpoint_before_current()
+                    .expect("ambient carrier midpoint must be available"),
+            )
+            .expect("small deterministic test field must initialize");
+            let opening_field = simulation.resonance_field.energy_state();
+            simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
+            simulation
+                .energy_ledger
+                .total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
+            simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
+            simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
+
             simulation.resonance_field.set_initial_cell_state_for_test(
                 crate::adaptive_spatial_grid::CellKey {
                     level: 0,
@@ -3491,9 +3512,10 @@ mod live_ambient_energy_contract_tests {
         let opening = simulation.energy_ledger.total_ambient_energy_held;
 
         assert!((simulation.ambient_energy.sample().energy_density - 10.0).abs() < 1.0e-12);
-        for _ in 0..32 {
-            simulation.advance_ambient_energy();
-        }
+        // One production-sized tick verifies that the full world field is
+        // wired into the live ambient and spatial ledgers. Long-run numerical
+        // reconciliation is covered by the smaller-domain test above.
+        simulation.advance_ambient_energy();
 
         let ambient = simulation.ambient_energy.sample();
         let ledger = &simulation.energy_ledger;
