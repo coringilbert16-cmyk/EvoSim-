@@ -887,6 +887,51 @@ impl AdaptiveWaveField {
         Ok(near_boundary)
     }
 
+    /// Ensures an arbitrary physical position lies inside the active
+    /// computational window with a guard margin. Expansion is symmetric and
+    /// zero-extends the existing state without changing physical coordinates.
+    pub(crate) fn ensure_position_covered(
+        &mut self,
+        x: f64,
+        y: f64,
+        margin_base_cells: f64,
+        padding_base_cells: u32,
+    ) -> Result<bool, AdaptiveGridError> {
+        if !x.is_finite()
+            || !y.is_finite()
+            || !margin_base_cells.is_finite()
+            || margin_base_cells <= 2.0
+            || padding_base_cells == 0
+        {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
+        self.expand_if_disturbance_near_boundary(4.0, padding_base_cells)?;
+        let margin = margin_base_cells * self.grid.base_spacing;
+        let (origin_x, origin_y) = self.grid.origin();
+        let max_x = origin_x + self.grid.width() as f64 * self.grid.base_spacing;
+        let max_y = origin_y + self.grid.height() as f64 * self.grid.base_spacing;
+        if x >= origin_x + margin
+            && y >= origin_y + margin
+            && x < max_x - margin
+            && y < max_y - margin
+        {
+            return Ok(false);
+        }
+
+        let required_padding = ((origin_x + margin - x).max(0.0)
+            .max(x - (max_x - margin))
+            .max(origin_y + margin - y)
+            .max(y - (max_y - margin))
+            / self.grid.base_spacing)
+            .ceil()
+            .max(padding_base_cells as f64);
+        if !required_padding.is_finite() || required_padding > u32::MAX as f64 {
+            return Err(AdaptiveGridError::InvalidDimensions);
+        }
+        self.expand_domain(required_padding as u32)?;
+        Ok(true)
+    }
+
     /// Advances ticks while keeping the finite computational window ahead of
     /// every nonzero disturbance. Unlike a sponge, this does not dissipate or
     /// reclassify field energy as outflow.
