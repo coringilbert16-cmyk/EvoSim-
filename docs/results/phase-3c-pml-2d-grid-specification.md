@@ -177,42 +177,50 @@ This normalization is a necessary correction, not a proof that the exact stagger
 Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)–(71): https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
 
-## 8. Discrete energy specialization: verified terms and remaining transcription
+## 8. Discrete energy specialization: equation (3.38) recovered
 
-The previous wording that the reduced proof uses only a generic combined variable was incomplete. The fully discrete theorem (Baffet et al., equations 64–71) defines the half-time energy through three pieces. Under the invariant 2D reduction `ζ3=0`, `∂z=0`, and `φz=0`, the combined scalar is
+An independently indexed full-text copy of Baffet et al. (2019) exposes the complete explicit-energy definition in equation (3.38), corresponding to equation (68) in the other manuscript numbering. The correction is
 
-`q_h^n = v_h^n + a u_h^n + b ψ_h^n`
+`E_add,h^(n+1/2) = (Δt²/8) ( || Γ1 [Λ_h^n]_Δt ||² + || Γ1² Λ_h^(n+1/2) ||² )`
 
-where `v_h^n=(u_h^{n+1}-u_h^{n-1})/(2 Δt)`, and the analysis-only variable satisfies
+where
 
-`(ψ_h^{n+1}-ψ_h^n)/Δt = (u_h^{n+1}+u_h^n)/2`.
+- `[Λ_h^n]_Δt = (Λ_h^(n+1) - Λ_h^n)/Δt`;
+- `Λ_h^(n+1/2) = (Λ_h^(n+1) + Λ_h^n)/2`;
+- the norms are the paper's compatible discrete auxiliary-space L² norms;
+- `Γ1²` means matrix composition `Γ1 Γ1`, not an elementwise square of a vector.
 
-The integrated auxiliary field `Φ_h) satisfies `(Φ_h^{n+1}-Φ_h^n)/Δt=(φ_h^{n+1}+φ_h^n)/2`. Define
+For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, and
+`Λ_h^n=G_h ψ_h^n+Φ_h^n`, so the correction specializes directly to the two physical auxiliary components:
 
-`Ξ_h^n = G_h ψ_h^n + Φ_h^n`.
+`E_add,2D^(n+1/2) = (Δt²/8) ( || diag(ζx,ζy) [Λ_h^n]_Δt ||² + || diag(ζx²,ζy²) Λ_h^(n+1/2) ||² )`.
 
-The kinetic contribution is exactly
+Both contributions are nonnegative for nonnegative damping. They are analysis-energy corrections; they do not add physical PML state variables. The complete explicit energy is `E_expl=E_k+E_p+E_add`, with the already documented kinetic and potential terms. Theorem 3.2 / equation (3.41) gives
 
-`E_k^{n+1/2} = 1/2 ( ||q_h^{n+1/2}||_cell² - (Δt²/4)||G_h q_h^{n+1/2}||_face² )`.
+`(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt/2)||[G_h u_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_h u_h^n+φ_h^n}_1/4||²_(Γ1)`.
 
-The potential contribution specializes to
+This identity is for the paper's compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. It is not yet a proof for our proposed staggered finite-difference closure.
 
-`E_p^{n+1/2} = 1/2 ( ||G_h u_h^{n+1/2}+φ_h^{n+1/2}||_face² + ||Γ1 Ξ_h^{n+1/2}||_face² )`.
+### Initial conditions for the proof fields
 
-The paper's total explicit energy is
+The explicit scheme defines `Ψ_h^0=0` and requires the damping-weighted compatibility condition from equation (3.33):
 
-`E_expl^{n+1/2}=E_k^{n+1/2}+E_p^{n+1/2}+E_add^{n+1/2}`.
+`Γ1(Γ1 Φ_h^0 + φ_h^0 - Γ2 G_h ψ_h^0)=0`.
 
-The exact `E_add` expression (equation 68) contains additional time-difference terms involving the auxiliary proof fields and damping matrices. It has not yet been transcribed reliably from the source rendering, so it is deliberately not reconstructed from OCR fragments here. The complete identity (equation 71) is
+The implementation of the proof-field initialization must preserve this condition. Where a damping component is zero, the condition does not determine that component of `Φ_h^0`; do not divide by a zero damping coefficient.
 
-`(E_expl^{n+1/2}-E_expl^{n-1/2})/Δt = -(Δt/2)||[G_h u_h^n+φ_h^n]_{Δt}||_{Γ1}² - 2||{G_h u_h^n+φ_h^n}_{1/4}||_{Γ1}²`.
+### General wave speed remains a separate derivation
 
-Here `[w^n]_{Δt}=(w^{n+1}-w^{n-1})/(2Δt)`, and `{w^n}_{1/4}=(w^{n+1}+2w^n+w^{n-1})/4`. The damping-weighted norms use the paper's compatible face-space inner product. For `Γ1 succeq 0`, both right-hand terms are nonnegative, so the energy is nonincreasing whenever the complete energy is positive.
+Equation (3.38) is the paper's unit-speed formula. The earlier substitution `χ=φ/c²`, `s=ct` correctly normalizes the physical wave equation, but the integrated proof fields must also be transformed consistently:
 
-The CFL condition is the paper's operator condition `(Δt/2) sup_{w≠0} ||G_h w||/||w|| < 1`, equivalently `(Δt²/4) λ_max(G_h^*G_h)<1` for the chosen inner products. This is the positivity condition for the kinetic correction, not a standalone proof that the entire PML energy is positive if `E_add` is omitted.
+- `ψ' = c ψ`, so `∂s ψ'=u`;
+- `Φ' = Φ/c`, so `∂s Φ'=χ`;
+- `Ψ' = c² Ψ`, so `∂s Ψ'=ψ'`;
+- `Λ' = G ψ' + Φ' = c Gψ + Φ/c`;
+- `q'=q/c`.
 
-**Important distinction:** `ψ_h) and `Φ_h) are analysis-only integrated variables in this 2D reduction. They are not additional physical PML state fields. The physical 2D PML still has only `φx,φy`. The 3D proof's third component vanishes under the invariant restriction, while the scalar proof variable `ψ_h) remains in `q_h) because `tr Γ3=b).
+Therefore do not obtain the general-`c` energy by merely replacing `Δt` with `cΔt` in the unit-speed expression while leaving `Λ` unchanged. Apply the transformed proof variables above to every term, then check dimensions and the one-step identity. This general-`c` transformation has not yet been independently checked against the full discrete derivation.
 
-Reference: Baffet et al. (2019), Section 3.2.2, equations (62)–(71), https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
+Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.38), and (3.41), https://doi.org/10.1007/s10915-019-01089-9. Independent full-text copy: https://www.academia.edu/122512257/Energy_Decay_and_Stability_of_a_Perfectly_Matched_Layer_For_the_Wave_Equation
 
-**Unresolved:** transcribe equation (68) exactly from a legible source, transform all energy terms consistently to general wave speed c, and then perform the one-step numerical identity test. Until those are done, the discrete energy audit is incomplete and the finite-difference realization is not validated.
+**Remaining validation:** independently verify the transcription against a legible page image; derive and check the general-`c` transformed energy; then test the exact identity numerically for the paper's compatible discrete operators before comparing our staggered finite-difference realization. The finite-difference implementation remains unvalidated.
