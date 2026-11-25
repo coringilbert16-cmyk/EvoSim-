@@ -481,7 +481,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     simulation.energy_ledger.total_structural_energy_held = initial.current_structural_energy;
     simulation.energy_ledger.initial_ambient_energy_held = initial.current_ambient_energy;
     simulation.energy_ledger.total_ambient_energy_held = initial.current_ambient_energy;
-    simulation.energy_ledger.initial_spatial_field_energy_held =
+    simulation.energy_ledger.total_spatial_field_energy_held = initial.current_spatial_field_energy;
         initial.current_spatial_field_energy;
     simulation.energy_ledger.total_spatial_field_energy_held =
         initial.current_spatial_field_energy;
