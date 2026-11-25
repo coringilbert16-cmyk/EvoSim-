@@ -242,7 +242,7 @@ The full energy is `E_expl=E_k+E_p+E_add`. Theorem 5 / equation (3.41) gives
 
 `(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt²/2)||[G_hu_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_hu_h^n+φ_h^n}_{1/4}||²_(Γ1)`.
 
-The paper proves this identity for its compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. Section 10 below independently verifies the same algebra for our periodic staggered finite-difference operator pair; non-periodic boundary closures remain unvalidated.
+The paper proves this identity for its compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. Section 10 below independently verifies the same algebra for periodic, homogeneous Dirichlet, and homogeneous Neumann compatible finite-difference operator pairs; this verifies the energy algebra, not the reflection quality of a truncated PML boundary.
 
 ### Initial conditions for the proof fields
 
@@ -258,7 +258,7 @@ The exact normalization is derived in Section 7. Apply the published energy form
 
 Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.36)–(3.38), and Lemma 13: https://doi.org/10.1007/s10915-019-01089-9. Full-text preprint: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
-**Remaining validation:** test non-periodic outer boundary closures, piecewise/spatially varying damping, interface matching and corner behavior. The periodic constant-coefficient identity and the algebraic general-`c` normalization are established; no production PML implementation is authorized by this specification.
+**Remaining validation:** test piecewise/spatially varying damping, physical/PML interface matching, angle/frequency-dependent reflection, finite layer thickness, and corner behavior. The constant-coefficient identity is verified for periodic, Dirichlet, and Neumann compatible operators; no production PML implementation is authorized by this specification.
 
 
 ## 9. Revised Fourier screen using the published explicit time staggering
@@ -309,5 +309,15 @@ Across the 125 checks, the maximum absolute residual was approximately `1.66×10
 
 A separate normalization check used `c=2.5`, physical `Δt=0.04`, and normalized `Δs=0.1`, with normalized damping `(ζx',ζy')=(0.7,1.1)). Mapping the normalized solution back to physical variables gave maximum recurrence residuals of approximately `5.7×10⁻¹²` for the wave equation and `3.4×10⁻¹³` for the auxiliary equations; the normalized energy identity residual was approximately `5.0×10⁻¹¹`. This verifies the stated variable/time rescaling numerically for that case.
 
-This validates the **constant-coefficient periodic finite-difference realization** of the published explicit energy identity, provided the operator pair is exactly adjoint-compatible and the startup fields are initialized consistently. It does not validate non-periodic outer boundary closures, spatially varying damping profiles, PML interface reflection, corners, or adaptive-grid coupling.
+This validates the **constant-coefficient periodic finite-difference realization** of the published explicit energy identity, provided the operator pair is exactly adjoint-compatible and the startup fields are initialized consistently.
+
+The same audit was then run with two non-periodic compatible operator pairs on an 8×8 scalar grid:
+
+- homogeneous Dirichlet: interior nodal unknowns with fixed-zero boundary values; boundary-adjacent gradient edges are included;
+- homogeneous Neumann: cell-centered unknowns with zero normal boundary flux; only interior gradient faces are included;
+- in both cases, divergence was constructed as the exact negative adjoint of the gradient and `Δ_h=D_hG_h`.
+
+For each boundary type, five damping pairs `(0,0),(0.7,0),(0,1.1),(0.7,1.1),(2,3)` and three random seeds were tested, with five one-step identity checks per case (150 checks total). The maximum absolute residual was approximately `4.87×10⁻¹¹`. The actual largest stiffness eigenvalues were approximately 7.75877 (Dirichlet) and 7.69552 (Neumann), giving operator CFL numbers 0.1393 and 0.1387 at `Δt=0.1`, respectively.
+
+These tests validate the energy identity for these specific compatible homogeneous boundary closures. They do not validate spatially varying damping profiles, PML interface reflection, finite-layer performance, corners, or adaptive-grid coupling.
 
