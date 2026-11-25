@@ -2497,8 +2497,7 @@ mod dense_uniform_solver_prototype_tests {
                     - (1.0 - damping_step) * dense.previous[index]
                     - dt.powi(2) * speed_squared * applied[index] / dense.cell_area)
                     / (1.0 + damping_step);
-                let midpoint_velocity =
-                    (next[index] - dense.previous[index]) / (2.0 * dt);
+                let midpoint_velocity = (next[index] - dense.previous[index]) / (2.0 * dt);
                 absorbed += dense.cell_area * damping * dt * midpoint_velocity.powi(2);
             }
         }
@@ -2529,15 +2528,13 @@ mod dense_uniform_solver_prototype_tests {
 
                     let reference_energy = reference.energy();
                     let dense_energy = dense.energy();
-                    let energy_scale =
-                        reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                    let energy_scale = reference_energy.abs().max(dense_energy.abs()).max(1.0);
                     assert!(
                         (reference_energy - dense_energy).abs() <= 3.0e-9 * energy_scale,
                         "sponge energy mismatch size={size}, condition={condition}, step={step}: production={reference_energy}, dense={dense_energy}"
                     );
 
-                    let expected_absorbed =
-                        reference.absorbed_energy() - dense_absorbed_total;
+                    let expected_absorbed = reference.absorbed_energy() - dense_absorbed_total;
                     assert!(
                         expected_absorbed.abs()
                             <= 3.0e-9 * reference.absorbed_energy().abs().max(1.0),
@@ -2548,5 +2545,4 @@ mod dense_uniform_solver_prototype_tests {
             }
         }
     }
-
 }
