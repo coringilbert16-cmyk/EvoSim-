@@ -81,9 +81,8 @@ impl LiveResonanceField {
             origin_y,
         )?;
         let wave = AdaptiveWaveField::new(grid, PROPAGATION_SPEED, FIELD_NORMALIZATION)?;
-        let composition =
-            AmbientSpatialComposition::new(FIELD_NORMALIZATION, PROPAGATION_SPEED)
-                .map_err(|_| LiveResonanceFieldError::InvalidAccountingState)?;
+        let composition = AmbientSpatialComposition::new(FIELD_NORMALIZATION, PROPAGATION_SPEED)
+            .map_err(|_| LiveResonanceFieldError::InvalidAccountingState)?;
         if ambient_sample.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits() {
             return Err(LiveResonanceFieldError::InvalidAccountingState);
         }
@@ -154,9 +153,9 @@ impl LiveResonanceField {
 
         let before_integrals = self.wave.grid().integrated_state();
         let time_step = self.wave.time_step();
-        let before_disturbance_velocity =
-            (before_integrals.current_displacement - before_integrals.previous_displacement)
-                / time_step;
+        let before_disturbance_velocity = (before_integrals.current_displacement
+            - before_integrals.previous_displacement)
+            / time_step;
 
         self.wave.advance_ticks_with_domain_expansion(
             1,
@@ -165,9 +164,9 @@ impl LiveResonanceField {
         )?;
 
         let after_integrals = self.wave.grid().integrated_state();
-        let after_disturbance_velocity =
-            (after_integrals.current_displacement - after_integrals.previous_displacement)
-                / time_step;
+        let after_disturbance_velocity = (after_integrals.current_displacement
+            - after_integrals.previous_displacement)
+            / time_step;
         let ambient_midpoint_velocity =
             0.5 * (ambient_before.carrier_velocity + ambient_after.carrier_velocity);
         let ambient_midpoint_sample = midpoint_ambient_sample(ambient_before, ambient_after);
@@ -180,8 +179,7 @@ impl LiveResonanceField {
         let disturbance_energy = self.wave.energy();
         let total_energy = disturbance_energy + cross_energy;
         let cumulative_world_work = self.energy_state.cumulative_world_work + cross_drive_work;
-        let accounting_residual =
-            total_energy - self.initial_total_energy - cumulative_world_work;
+        let accounting_residual = total_energy - self.initial_total_energy - cumulative_world_work;
 
         if [
             before_disturbance_velocity,
@@ -214,7 +212,6 @@ impl LiveResonanceField {
         self.ambient_sample = ambient_midpoint_sample;
         Ok(self.energy_state)
     }
-
 }
 
 fn midpoint_ambient_sample(
@@ -229,8 +226,7 @@ fn midpoint_ambient_sample(
         amplitude_velocity: 0.5 * (before.amplitude_velocity + after.amplitude_velocity),
         field_normalization: before.field_normalization,
         angular_frequency: 0.5 * (before.angular_frequency + after.angular_frequency),
-        carrier_phase_radians: 0.5
-            * (before.carrier_phase_radians + after.carrier_phase_radians),
+        carrier_phase_radians: 0.5 * (before.carrier_phase_radians + after.carrier_phase_radians),
         carrier_value: 0.5 * (before.carrier_value + after.carrier_value),
         carrier_velocity: 0.5 * (before.carrier_velocity + after.carrier_velocity),
         carrier_acceleration: 0.5 * (before.carrier_acceleration + after.carrier_acceleration),
@@ -243,9 +239,7 @@ fn midpoint_ambient_sample(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world_generated_ambient_mode::{
-        AmbientModeConfig, WorldGeneratedAmbientMode,
-    };
+    use crate::world_generated_ambient_mode::{AmbientModeConfig, WorldGeneratedAmbientMode};
 
     fn ambient() -> WorldGeneratedAmbientMode {
         let config = AmbientModeConfig::new(250.0 * 250.0, 1.0, 0.0, 0.0).unwrap();
