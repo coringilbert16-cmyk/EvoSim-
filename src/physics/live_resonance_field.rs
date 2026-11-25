@@ -405,13 +405,16 @@ mod tests {
     #[test]
     fn live_field_advances_deterministically_without_inventing_energy() {
         let mut ambient = ambient();
-        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
-        let mut field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
-        let before = ambient.sample();
+        let mut field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
+        let half_substep = 0.5 * field.substep_time_step();
+        let initial_sample = ambient.sample_at_offset(-half_substep).unwrap();
+        field.set_initial_ambient_sample(initial_sample).unwrap();
         ambient.advance_one_tick().unwrap();
-        let midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let start = ambient.sample_at_offset(-1.0 - half_substep).unwrap();
+        let midpoint = ambient.sample_at_offset(-0.5 - half_substep).unwrap();
+        let end = ambient.sample_at_offset(-half_substep).unwrap();
 
-        let state = field.advance_one_tick(before, midpoint).unwrap();
+        let state = field.advance_one_tick(start, midpoint, end).unwrap();
         assert_eq!(state.disturbance_energy, 0.0);
         assert_eq!(state.cross_energy, 0.0);
         assert_eq!(state.total_energy, 0.0);
@@ -435,8 +438,10 @@ mod tests {
     fn nonzero_disturbance_reconciles_cross_energy_across_domain_expansion() {
         let config = AmbientModeConfig::new(250.0 * 250.0, 1.0, 0.0, 0.0).unwrap();
         let mut ambient = WorldGeneratedAmbientMode::new(config, 100).unwrap();
-        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
-        let mut field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
+        let mut field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
+        let half_substep = 0.5 * field.substep_time_step();
+        let initial_sample = ambient.sample_at_offset(-half_substep).unwrap();
+        field.set_initial_ambient_sample(initial_sample).unwrap();
         field.set_initial_cell_state_for_test(
             crate::adaptive_spatial_grid::CellKey {
                 level: 0,
@@ -450,11 +455,12 @@ mod tests {
         let mut maximum_residual: f64 = 0.0;
         let mut final_state = None;
         for _ in 0..20 {
-            let ambient_before = ambient.sample();
             ambient.advance_one_tick().unwrap();
-            let ambient_midpoint = ambient.sample_midpoint_before_current().unwrap();
+            let ambient_start = ambient.sample_at_offset(-1.0 - half_substep).unwrap();
+            let ambient_midpoint = ambient.sample_at_offset(-0.5 - half_substep).unwrap();
+            let ambient_end = ambient.sample_at_offset(-half_substep).unwrap();
             let state = field
-                .advance_one_tick(ambient_before, ambient_midpoint)
+                .advance_one_tick(ambient_start, ambient_midpoint, ambient_end)
                 .unwrap();
             maximum_residual = maximum_residual.max(state.accounting_residual.abs());
             final_state = Some(state);
