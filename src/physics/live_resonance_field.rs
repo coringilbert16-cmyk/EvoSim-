@@ -503,4 +503,83 @@ mod tests {
             sample.ambient_oscillator_energy_density
         );
     }
+    /// Full live-wrapper baseline for the Phase 3C workload. This includes
+    /// ambient sampling, adaptive domain expansion, all CFL substeps, composed
+    /// field queries, and the disturbance/cross-energy accounting update.
+    /// Run in release mode with --ignored; timings are diagnostic only.
+    #[test]
+    #[ignore = "manual Phase 3C live-field wrapper benchmark"]
+    fn benchmark_phase3c_live_wrapper_250x250_20_ticks() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        const TICKS: u64 = 20;
+        const SAMPLE_COUNT: usize = 128;
+
+        let mut ambient = ambient();
+        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let mut field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
+        let half_substep = 0.5 * field.substep_time_step();
+        let initial_sample = ambient.sample_at_offset(-half_substep).unwrap();
+        field.set_initial_ambient_sample(initial_sample).unwrap();
+        field.set_initial_standing_mode_for_test(0.5);
+
+        let initial_energy = field.energy_state().total_energy;
+        let start = Instant::now();
+        let mut sampled_energy = 0.0;
+        let mut maximum_leaf_count = field.wave.grid().leaf_count();
+
+        for tick in 1..=TICKS {
+            ambient.advance_one_tick().unwrap();
+            let ambient_start = ambient.sample_at_offset(-1.0 - half_substep).unwrap();
+            let ambient_midpoint = ambient.sample_at_offset(-0.5 - half_substep).unwrap();
+            let ambient_end = ambient.sample_at_offset(-half_substep).unwrap();
+            let state = field
+                .advance_one_tick(ambient_start, ambient_midpoint, ambient_end)
+                .unwrap();
+
+            // Model repeated world/material queries against the composed field,
+            // not merely the cost of advancing the wave stencil.
+            for sample_index in 0..SAMPLE_COUNT {
+                let x = 96.0 + (sample_index % 16) as f64 * 4.0;
+                let y = 96.0 + (sample_index / 16) as f64 * 4.0;
+                let sample = field.sample(x, y).unwrap().unwrap();
+                sampled_energy += sample.energy_density;
+                black_box(sample);
+            }
+
+            maximum_leaf_count = maximum_leaf_count.max(field.wave.grid().leaf_count());
+            assert!(state.total_energy.is_finite());
+            assert!(state.accounting_residual.abs() < 1.0e-7);
+            black_box(state);
+            if tick % 5 == 0 {
+                eprintln!(
+                    "phase3c_live_wrapper,tick={tick},leaves={},origin={:?},field_energy={:.12e},world_work={:.12e},residual={:.12e}",
+                    field.wave.grid().leaf_count(),
+                    field.wave.grid().origin(),
+                    state.total_energy,
+                    state.cumulative_world_work,
+                    state.accounting_residual
+                );
+            }
+        }
+
+        let elapsed = start.elapsed();
+        let final_state = field.energy_state();
+        eprintln!(
+            "phase3c_live_wrapper_summary,world=250x250,ticks={TICKS},substeps_per_tick={},samples_per_tick={SAMPLE_COUNT},initial_leaves={},maximum_leaves={maximum_leaf_count},final_leaves={},elapsed_ms={:.3},ms_per_tick={:.3},initial_energy={initial_energy:.12e},final_energy={:.12e},world_work={:.12e},residual={:.12e},sample_checksum={sampled_energy:.12e}",
+            field.wave.substeps_per_tick(),
+            32 * 32,
+            field.wave.grid().leaf_count(),
+            elapsed.as_secs_f64() * 1000.0,
+            elapsed.as_secs_f64() * 1000.0 / TICKS as f64,
+            final_state.total_energy,
+            final_state.cumulative_world_work,
+            final_state.accounting_residual
+        );
+        assert!(elapsed.as_secs_f64().is_finite());
+        assert!(final_state.disturbance_energy > 0.0);
+        assert!(final_state.accounting_residual.abs() < 1.0e-7);
+    }
+
 }
