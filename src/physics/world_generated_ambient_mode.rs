@@ -130,8 +130,7 @@ impl AmbientModeConfig {
         let cosine = carrier_phase_radians.cos();
         let sine = carrier_phase_radians.sin();
         let carrier_value = amplitude * cosine;
-        let carrier_velocity =
-            amplitude_velocity * cosine - amplitude * angular_frequency * sine;
+        let carrier_velocity = amplitude_velocity * cosine - amplitude * angular_frequency * sine;
         let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
@@ -524,8 +523,8 @@ mod tests {
         let mut mode = mode_at(0, 1.0);
         mode.advance_one_tick().unwrap();
         let midpoint = mode.sample_midpoint_before_current().unwrap();
-        let expected_phase = TAU * 0.5 * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
-            / AMBIENT_DAY_TICKS as f64;
+        let expected_phase =
+            TAU * 0.5 * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
         assert!((midpoint.carrier_phase_radians - expected_phase).abs() < 1.0e-12);
         assert!(midpoint.amplitude > 0.0);
         assert!(midpoint.carrier_velocity.is_finite());
