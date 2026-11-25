@@ -131,3 +131,20 @@ The Fourier screen's dt ≤ 1/√2 bound assumes hx=hy=c=1. The general five-poi
 ## 6. Scope and decision
 
 This is a research specification only. It does not authorize production integration, adaptive-grid changes, or changes to PR #446. The PML remains a computational layer outside the physical 250 × 250 domain. Energy exported from the physical domain, energy held in PML state, and cumulative numerical PML dissipation remain distinct quantities.
+
+### Exact periodic-grid CFL bound
+
+For the stated forward-difference gradient and its negative-adjoint divergence on a periodic rectangular grid, the stiffness operator is
+`K = -DG = G*G`. Its Fourier eigenvalue is
+
+`λ(kx,ky) = 4 sin²(kx hx/2)/hx² + 4 sin²(ky hy/2)/hy²`.
+
+Thus `λ_max ≤ 4(hx⁻² + hy⁻²)`; equality is attained when the grid supports the Nyquist mode in both directions. The paper's kinetic energy correction is positive when
+
+`(dt²/4) λ_max < 1`,
+
+which gives the familiar sufficient bound
+
+`c dt sqrt(hx⁻² + hy⁻²) < 1`.
+
+For a particular finite grid or non-periodic boundary closure, use the actual largest eigenvalue of `-DG`; do not assume the periodic Nyquist value is attained. This verifies the CFL factor for the kinetic correction only. It does not by itself verify the remaining PML energy terms or their one-step identity.
