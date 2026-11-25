@@ -3429,41 +3429,52 @@ mod live_ambient_energy_contract_tests {
     }
 
     #[test]
-    fn nonzero_live_field_reconciles_through_the_independent_world_inventory() {
-        let mut simulation = Simulation::new(42, 10.0);
-        simulation
-            .resonance_field
-            .set_initial_cell_state_for_test(
-                crate::adaptive_spatial_grid::CellKey {
-                    level: 0,
-                    x: 16,
-                    y: 16,
-                },
-                0.0,
-                0.5,
-            );
+    fn nonzero_live_field_is_deterministic_and_reconciles_world_inventory() {
+        let mut slow = Simulation::new(42, 1.0);
+        let mut fast = Simulation::new(42, 900.0);
 
-        // Treat the seeded disturbance as part of the test's opening inventory,
+        // Treat the seeded disturbance as part of each opening inventory,
         // not as energy created during the measured interval.
-        let opening_field = simulation.resonance_field.energy_state();
-        simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
-        simulation.energy_ledger.total_spatial_disturbance_energy_held =
-            opening_field.disturbance_energy;
-        simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
-        simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
-
-        for _ in 0..20 {
-            simulation.advance_ambient_energy();
+        for simulation in [&mut slow, &mut fast] {
+            simulation
+                .resonance_field
+                .set_initial_cell_state_for_test(
+                    crate::adaptive_spatial_grid::CellKey {
+                        level: 0,
+                        x: 16,
+                        y: 16,
+                    },
+                    0.0,
+                    0.5,
+                );
+            let opening_field = simulation.resonance_field.energy_state();
+            simulation.energy_ledger.initial_spatial_field_energy_held =
+                opening_field.total_energy;
+            simulation.energy_ledger.total_spatial_disturbance_energy_held =
+                opening_field.disturbance_energy;
+            simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
+            simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
         }
 
-        let inventory = simulation.energy_inventory_snapshot();
-        assert!(inventory.current_spatial_field_energy > 0.0);
-        assert!(inventory.spatial_field_world_work.abs() > 0.0);
-        assert!(
-            inventory.is_balanced(1.0e-5),
-            "nonzero live field must reconcile with ambient world work: {:?}",
-            inventory.residual()
+        for _ in 0..20 {
+            slow.advance_ambient_energy();
+            fast.advance_ambient_energy();
+        }
+
+        assert_eq!(
+            slow.resonance_field.energy_state(),
+            fast.resonance_field.energy_state()
         );
+        for simulation in [&slow, &fast] {
+            let inventory = simulation.energy_inventory_snapshot();
+            assert!(inventory.current_spatial_field_energy > 0.0);
+            assert!(inventory.spatial_field_world_work.abs() > 0.0);
+            assert!(
+                inventory.is_balanced(1.0e-5),
+                "nonzero live field must reconcile with ambient world work: {:?}",
+                inventory.residual()
+            );
+        }
     }
 
     #[test]
