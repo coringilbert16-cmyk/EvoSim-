@@ -383,6 +383,15 @@ impl Simulation {
         let opening_ambient_energy = ambient_energy.sample().total_energy;
         energy_ledger.total_ambient_energy_held = opening_ambient_energy;
         energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
+        let resonance_field =
+            crate::live_resonance_field::LiveResonanceField::new(environment.width, environment.height)
+                .expect("live spatial resonance field must initialize");
+        let initial_spatial_field_energy = resonance_field.initial_total_energy();
+        energy_ledger.total_spatial_disturbance_energy_held =
+            resonance_field.energy_state().disturbance_energy;
+        energy_ledger.total_spatial_cross_energy_held = resonance_field.energy_state().cross_energy;
+        energy_ledger.total_spatial_field_energy_held = resonance_field.energy_state().total_energy;
+        energy_ledger.initial_spatial_field_energy_held = initial_spatial_field_energy;
         Self {
             tick: 0,
             ticks_per_second,
@@ -410,6 +419,7 @@ impl Simulation {
             record_environmental_molecular_history: false,
             flow_field: crate::environment_flow::FlowFieldConfig::default(),
             ambient_energy,
+            resonance_field,
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -934,13 +944,27 @@ impl Simulation {
     /// Advances the approved ambient energy envelope as part of the live simulation clock.
     /// Signed changes are booked separately from receiver/chemistry transactions.
     fn advance_ambient_energy(&mut self) {
+        let ambient_before = self.ambient_energy.sample();
         let transfer = self
             .ambient_energy
             .advance_one_tick()
             .expect("ambient energy must advance deterministically by one tick");
+        let ambient_after = self.ambient_energy.sample();
         self.energy_ledger.total_ambient_energy_generated += transfer.generated_energy;
         self.energy_ledger.total_ambient_energy_withdrawn += transfer.withdrawn_energy;
         self.energy_ledger.total_ambient_energy_held = transfer.energy_after;
+
+        let spatial_state = self
+            .resonance_field
+            .advance_one_tick(ambient_before, ambient_after)
+            .expect("spatial resonance field must advance and account deterministically");
+        self.energy_ledger.total_spatial_disturbance_energy_held =
+            spatial_state.disturbance_energy;
+        self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
+        self.energy_ledger.total_spatial_field_energy_held = spatial_state.total_energy;
+        self.energy_ledger.total_spatial_field_world_work = spatial_state.cumulative_world_work;
+        self.energy_ledger.total_spatial_field_computational_outflow =
+            spatial_state.cumulative_computational_outflow;
     }
 
     pub(crate) fn step(&mut self) {
