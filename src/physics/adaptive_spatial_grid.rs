@@ -8,6 +8,52 @@
 
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct DomainExpansionProfile {
+    pub(crate) expansion_check_ms: f64,
+    pub(crate) regrid_ms: f64,
+    pub(crate) solver_ms: f64,
+    pub(crate) expansions: u64,
+}
+
+#[cfg(test)]
+static EXPANSION_CHECK_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static REGRID_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static SOLVER_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static DOMAIN_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+pub(crate) fn reset_domain_expansion_profile() {
+    EXPANSION_CHECK_NANOS.store(0, Ordering::Relaxed);
+    REGRID_NANOS.store(0, Ordering::Relaxed);
+    SOLVER_NANOS.store(0, Ordering::Relaxed);
+    DOMAIN_EXPANSIONS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+pub(crate) fn domain_expansion_profile() -> DomainExpansionProfile {
+    const NANOS_PER_MILLISECOND: f64 = 1_000_000.0;
+    DomainExpansionProfile {
+        expansion_check_ms: EXPANSION_CHECK_NANOS.load(Ordering::Relaxed) as f64
+            / NANOS_PER_MILLISECOND,
+        regrid_ms: REGRID_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        solver_ms: SOLVER_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        expansions: DOMAIN_EXPANSIONS.load(Ordering::Relaxed),
+    }
+}
+
+#[cfg(test)]
+fn elapsed_nanos(start: std::time::Instant) -> u64 {
+    start.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AdaptiveGridError {
     InvalidDimensions,
@@ -961,11 +1007,20 @@ impl AdaptiveWaveField {
             .checked_mul(self.substeps_per_tick as u64)
             .ok_or(AdaptiveGridError::CounterOverflow)?;
         for _ in 0..count {
+            #[cfg(test)]
+            let expansion_check_start = std::time::Instant::now();
             self.expand_if_disturbance_near_boundary(
                 trigger_margin_base_cells,
                 padding_base_cells,
             )?;
+            #[cfg(test)]
+            EXPANSION_CHECK_NANOS.fetch_add(elapsed_nanos(expansion_check_start), Ordering::Relaxed);
+
+            #[cfg(test)]
+            let solver_start = std::time::Instant::now();
             self.advance_one_substep()?;
+            #[cfg(test)]
+            SOLVER_NANOS.fetch_add(elapsed_nanos(solver_start), Ordering::Relaxed);
         }
         Ok(())
     }
@@ -976,6 +1031,8 @@ impl AdaptiveWaveField {
         &mut self,
         padding_base_cells: u32,
     ) -> Result<(), AdaptiveGridError> {
+        #[cfg(test)]
+        let regrid_start = std::time::Instant::now();
         let target_energy = self.energy();
         let mut candidate = self.grid.clone();
         candidate.expand_by_base_cells(padding_base_cells)?;
@@ -1008,6 +1065,11 @@ impl AdaptiveWaveField {
         }
         self.grid = candidate;
         self.stiffness = candidate_stiffness;
+        #[cfg(test)]
+        {
+            REGRID_NANOS.fetch_add(elapsed_nanos(regrid_start), Ordering::Relaxed);
+            DOMAIN_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
+        }
         Ok(())
     }
 
