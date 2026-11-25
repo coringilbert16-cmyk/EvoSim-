@@ -60,6 +60,20 @@ The independent world inventory must reconcile initial field energy plus ambient
 
 The graded sponge is a candidate, not a default. If its reflected energy cannot meet the declared tolerance across the required incidence/frequency cases, investigate a better-matched open-boundary treatment. Do not silently treat fixed-zero reflection or arbitrary damping as physical escape.
 
+## Preliminary reflection sweep (2026-11-25)
+
+An isolated reference-solver diagnostic was added and run on the CI benchmark job. It uses a right-side boundary, a single resolved packet profile, a 12-cell sponge, and measures the returning interior peak relative to the incident peak. The values below are **amplitude ratios**, not energy ratios.
+
+| Incidence angle | Damping 0.000 | Damping 0.050 | Damping 0.150 | Damping 0.400 |
+|---|---:|---:|---:|---:|
+| 0° | 0.8382 | 0.6894 | 0.4659 | 0.1754 |
+| 25° | 0.1911 | 0.1574 | 0.1071 | 0.0405 |
+| 45° | 0.000893 | 0.000682 | 0.000412 | 0.000153 |
+
+The corresponding measured absorbed-energy values increased with damping, but that sink is not itself proof of low reflection. The large normal-incidence return (17.5% amplitude even at maximum tested damping) is not acceptable evidence for a validated open boundary. The strong angle dependence also means the 25° and 45° results cannot be used to infer normal or near-grazing behavior.
+
+**Disposition:** preliminary only. This sweep covers one side, one frequency/profile, and three angles; it does not include near-grazing incidence, all sides, corners, or interference. It does not select sponge parameters, establish an acceptance tolerance, validate energy export, or authorize production integration. Expand the diagnostic matrix before selecting a boundary method.
+
 ## Production integration gates
 
 After a boundary treatment passes the isolated tests:
