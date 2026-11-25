@@ -10,10 +10,14 @@ mod world_generated_ambient_mode;
 mod adaptive_spatial_grid;
 
 // Combined ambient-carrier / propagating-disturbance energy and flux identities.
-// Connected to the live field adapter in the next Phase 3C implementation slice.
 #[path = "physics/ambient_spatial_composition.rs"]
 #[allow(dead_code)]
 mod ambient_spatial_composition;
+
+// Persistent adaptive spatial disturbance field and live ambient composition/accounting.
+#[path = "physics/live_resonance_field.rs"]
+#[allow(dead_code)]
+mod live_resonance_field;
 
 // Isolated Phase 3B hotspot profile mathematics; not connected to live sources.
 #[path = "physics/hotspot_profile.rs"]
