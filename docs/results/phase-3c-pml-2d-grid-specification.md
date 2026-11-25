@@ -419,3 +419,16 @@ A matched-integral thickness sweep at `k=0.30`, p=3, and `∫ζ ds=3` used peak 
 | 40 | 0.300 | 0.00132 | 0.000726 | 0.000508 |
 
 The thicker layer improves the low-frequency monitor ratio even when integrated damping is held constant. That suggests propagation distance through the layer matters independently of total damping strength in this discrete configuration.
+
+
+### Energy-accounting gate before any PML ledger claims
+
+A first attempt to integrate a continuum-style interface flux from pointwise `u_t(∇u+φ)` did not reconcile with the discrete physical-domain energy change. The discrepancy is expected to be sensitive to the leapfrog time staggering and the partition of interface-face terms. That estimate is **not** accepted as exported energy.
+
+Before reporting the three requested ledger quantities, derive the exact subdomain balance from the discrete operator pair:
+
+1. physical-domain energy change;
+2. signed energy transfer across the physical/PML interface, using the physical-side restriction of the discrete gradient and the exact time-level pairing;
+3. PML auxiliary-state storage and cumulative PML damping, with any variable-profile commutator/remainder terms shown explicitly.
+
+Raw `||φ||²` is only an auxiliary-state norm, not automatically stored physical energy. Likewise, the constant-coefficient dissipation expression is only a diagnostic under variable damping until the extra profile-dependent terms are accounted for. Do not label either as a conserved ledger category prematurely.
