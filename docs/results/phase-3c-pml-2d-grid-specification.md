@@ -181,19 +181,24 @@ Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)
 
 An independently indexed full-text copy of Baffet et al. (2019) exposes the complete explicit-energy definition in equation (3.38), corresponding to equation (68) in the other manuscript numbering. The correction is
 
-`E_add,h^(n+1/2) = (Δt²/8) ( || Γ1 [Λ_h^n]_Δt ||² + || Γ1² Λ_h^(n+1/2) ||² )`
+`E_add,h^(n+1/2) = (Δt²/8) ( || [Λ_h^n]_Δt ||²_(Γ1) + || Γ1 [Λ_h^n]_Δt + Γ1² Λ_h^(n+1/2) ||² )`
 
 where
 
 - `[Λ_h^n]_Δt = (Λ_h^(n+1) - Λ_h^n)/Δt`;
 - `Λ_h^(n+1/2) = (Λ_h^(n+1) + Λ_h^n)/2`;
-- the norms are the paper's compatible discrete auxiliary-space L² norms;
-- `Γ1²` means matrix composition `Γ1 Γ1`, not an elementwise square of a vector.
+- `||w||²_(Γ1) = <Γ1 w,w>` in the paper's compatible discrete auxiliary-space inner product;
+- the second norm is the ordinary compatible discrete L² norm;
+- `Γ1²` means matrix composition `Γ1 Γ1`.
+
+The second norm contains a **sum inside the norm**. It is not the sum of separate norms, and the first term is a `Γ1)-weighted norm of the difference rather than an ordinary norm of `Γ1) times the difference.
 
 For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, and
-`Λ_h^n=G_h ψ_h^n+Φ_h^n`, so the correction specializes directly to the two physical auxiliary components:
+`Λ_h^n=G_h ψ_h^n+Φ_h^n`. The correction is therefore
 
-`E_add,2D^(n+1/2) = (Δt²/8) ( || diag(ζx,ζy) [Λ_h^n]_Δt ||² + || diag(ζx²,ζy²) Λ_h^(n+1/2) ||² )`.
+`E_add,2D^(n+1/2) = (Δt²/8) ( ζx ||[Λx]_Δt||² + ζy ||[Λy]_Δt||² + ||ζx[Λx]_Δt + ζx²Λx^(n+1/2)||² + ||ζy[Λy]_Δt + ζy²Λy^(n+1/2)||² )`.
+
+Both terms are nonnegative for nonnegative damping. They are analysis-energy corrections; they do not add physical PML state variables.
 
 Both contributions are nonnegative for nonnegative damping. They are analysis-energy corrections; they do not add physical PML state variables. The complete explicit energy is `E_expl=E_k+E_p+E_add`, with the already documented kinetic and potential terms. Theorem 3.2 / equation (3.41) gives
 
@@ -223,4 +228,4 @@ Therefore do not obtain the general-`c` energy by merely replacing `Δt` with `c
 
 Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.38), and (3.41), https://doi.org/10.1007/s10915-019-01089-9. Independent full-text copy: https://www.academia.edu/122512257/Energy_Decay_and_Stability_of_a_Perfectly_Matched_Layer_For_the_Wave_Equation
 
-**Remaining validation:** independently verify the transcription against a legible page image; derive and check the general-`c` transformed energy; then test the exact identity numerically for the paper's compatible discrete operators before comparing our staggered finite-difference realization. The finite-difference implementation remains unvalidated.
+**Remaining validation:** the full-text preprint rendering now exposes equation (3.38) and Lemma 13 clearly enough to recover the exact structure above. A numerical reproduction is still required: first implement the paper's full staggered time indexing and compatible operators exactly, verify its one-step identity, then compare our staggered finite-difference realization. The general-`c` transformed energy also remains to be independently checked. The finite-difference implementation remains unvalidated.
