@@ -325,16 +325,18 @@ mod tests {
         );
 
         let mut maximum_residual: f64 = 0.0;
-        let mut state = field.energy_state();
+        let mut final_state = None;
         for _ in 0..20 {
             let ambient_before = ambient.sample();
             ambient.advance_one_tick().unwrap();
             let ambient_midpoint = ambient.sample_midpoint_before_current().unwrap();
-            state = field
+            let state = field
                 .advance_one_tick(ambient_before, ambient_midpoint)
                 .unwrap();
             maximum_residual = maximum_residual.max(state.accounting_residual.abs());
+            final_state = Some(state);
         }
+        let state = final_state.expect("the test advances twenty logical ticks");
 
         assert!(state.disturbance_energy > 0.0);
         assert!(state.cross_energy.abs() > 0.0);
