@@ -23,7 +23,7 @@ fn benchmark_wave_energy_accounting_cost() {
     const COMPACT_RADIUS: f64 = 6.0;
 
     eprintln!(
-        "case,width,height,leaves,substeps_per_tick,energy_passes,energy_pass_ms,integrated_state_passes,integrated_state_ms,advance_ms"
+        "case,width,height,leaves,substeps_per_tick,solver_energy_passes,solver_energy_ms,live_tick_energy_passes,live_tick_energy_ms,integrated_state_passes,integrated_state_ms,advance_ms"
     );
 
     for size in SIZES {
@@ -63,14 +63,21 @@ fn benchmark_wave_energy_accounting_cost() {
                 .expect("profile solver must satisfy its CFL bound");
             let leaves = field.grid().leaf_count();
             let substeps = field.substeps_per_tick();
-            let energy_passes = 2 * substeps as u64 * TICKS + TICKS;
+            let solver_energy_passes = 2 * substeps as u64 * TICKS;
+            let live_tick_energy_passes = TICKS;
             let integrated_state_passes = 2 * TICKS;
 
             let energy_start = Instant::now();
-            for _ in 0..energy_passes {
+            for _ in 0..solver_energy_passes {
                 black_box(field.energy());
             }
             let energy_elapsed = energy_start.elapsed();
+
+            let tick_energy_start = Instant::now();
+            for _ in 0..live_tick_energy_passes {
+                black_box(field.energy());
+            }
+            let tick_energy_elapsed = tick_energy_start.elapsed();
 
             let integral_start = Instant::now();
             for _ in 0..integrated_state_passes {
@@ -85,8 +92,9 @@ fn benchmark_wave_energy_accounting_cost() {
             let advance_elapsed = advance_start.elapsed();
 
             eprintln!(
-                "{case},{size},{size},{leaves},{substeps},{energy_passes},{:.3},{integrated_state_passes},{:.3},{:.3}",
+                "{case},{size},{size},{leaves},{substeps},{solver_energy_passes},{:.3},{live_tick_energy_passes},{:.3},{integrated_state_passes},{:.3},{:.3}",
                 energy_elapsed.as_secs_f64() * 1000.0,
+                tick_energy_elapsed.as_secs_f64() * 1000.0,
                 integral_elapsed.as_secs_f64() * 1000.0,
                 advance_elapsed.as_secs_f64() * 1000.0,
             );
