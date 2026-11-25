@@ -126,12 +126,16 @@ impl AdaptiveSpatialGrid {
         let finest_spacing = base_spacing / finest_scale as f64;
         let world_width = width as f64 * base_spacing;
         let world_height = height as f64 * base_spacing;
+        let world_max_x = origin_x + world_width;
+        let world_max_y = origin_y + world_height;
         if !finest_spacing.is_finite()
             || finest_spacing <= 0.0
             || !(finest_spacing * finest_spacing).is_finite()
             || finest_spacing * finest_spacing <= 0.0
             || !world_width.is_finite()
             || !world_height.is_finite()
+            || !world_max_x.is_finite()
+            || !world_max_y.is_finite()
         {
             return Err(AdaptiveGridError::InvalidParameter);
         }
@@ -643,13 +647,24 @@ impl AdaptiveSpatialGrid {
                 }
             }
         }
+        let new_origin_x = self.origin_x - padding as f64 * self.base_spacing;
+        let new_origin_y = self.origin_y - padding as f64 * self.base_spacing;
+        let new_max_x = new_origin_x + new_width as f64 * self.base_spacing;
+        let new_max_y = new_origin_y + new_height as f64 * self.base_spacing;
+        if !new_origin_x.is_finite()
+            || !new_origin_y.is_finite()
+            || !new_max_x.is_finite()
+            || !new_max_y.is_finite()
+        {
+            return Err(AdaptiveGridError::InvalidDimensions);
+        }
         let candidate = Self {
             width: new_width,
             height: new_height,
             base_spacing: self.base_spacing,
             max_refinement_level: self.max_refinement_level,
-            origin_x: self.origin_x - padding as f64 * self.base_spacing,
-            origin_y: self.origin_y - padding as f64 * self.base_spacing,
+            origin_x: new_origin_x,
+            origin_y: new_origin_y,
             leaves: expanded,
         };
         if candidate
