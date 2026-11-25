@@ -631,11 +631,23 @@ impl AdaptiveSpatialGrid {
                 }
             }
         }
-        self.width = new_width;
-        self.height = new_height;
-        self.origin_x -= padding as f64 * self.base_spacing;
-        self.origin_y -= padding as f64 * self.base_spacing;
-        self.leaves = expanded;
+        let candidate = Self {
+            width: new_width,
+            height: new_height,
+            base_spacing: self.base_spacing,
+            max_refinement_level: self.max_refinement_level,
+            origin_x: self.origin_x - padding as f64 * self.base_spacing,
+            origin_y: self.origin_y - padding as f64 * self.base_spacing,
+            leaves: expanded,
+        };
+        if candidate
+            .shared_faces()
+            .iter()
+            .any(|face| face.first.level.abs_diff(face.second.level) > 1)
+        {
+            return Err(AdaptiveGridError::UnbalancedRefinement);
+        }
+        *self = candidate;
         Ok(())
     }
 
@@ -1422,8 +1434,8 @@ fn stiffness_matrix(grid: &AdaptiveSpatialGrid) -> StiffnessMatrix {
 
         for vertex_key in [face.start_vertex, face.end_vertex] {
             let vertex_position = (
-                vertex_key.0 as f64 * finest_spacing,
-                vertex_key.1 as f64 * finest_spacing,
+                grid.origin_x + vertex_key.0 as f64 * finest_spacing,
+                grid.origin_y + vertex_key.1 as f64 * finest_spacing,
             );
             let local = triangle_stiffness(first_center, second_center, vertex_position);
             let star = vertices.entry(vertex_key).or_default();
