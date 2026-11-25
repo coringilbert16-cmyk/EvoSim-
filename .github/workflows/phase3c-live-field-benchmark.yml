@@ -6,7 +6,7 @@ on:
       - 'experiment/phase3c-contiguous-live-benchmark'
   pull_request:
     branches:
-      - main
+      - 'phase3c/live-field-integration'
 
 permissions:
   contents: read
