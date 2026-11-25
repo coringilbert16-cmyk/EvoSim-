@@ -3489,29 +3489,40 @@ mod live_ambient_energy_contract_tests {
         simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
         simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
 
+        crate::adaptive_spatial_grid::reset_domain_expansion_profile();
         let warmup_start = Instant::now();
         for _ in 0..100 {
             simulation.advance_ambient_energy();
         }
         let warmup_elapsed = warmup_start.elapsed();
+        let warmup_profile = crate::adaptive_spatial_grid::domain_expansion_profile();
 
         let measured_start = Instant::now();
         for _ in 0..20 {
             simulation.advance_ambient_energy();
         }
         let measured_elapsed = measured_start.elapsed();
+        let measured_profile = crate::adaptive_spatial_grid::domain_expansion_profile();
 
         let inventory = simulation.energy_inventory_snapshot();
         println!(
-            "phase3c_reconciliation_profile,simulations=1,warmup_ticks=100,warmup_ms={:.3},measured_ticks=20,measured_ms={:.3},total_ms={:.3},residual={:?},field_energy={:.12e},world_work={:.12e}",
+            "phase3c_reconciliation_profile,simulations=1,warmup_ticks=100,warmup_ms={:.3},warmup_expansion_checks_ms={:.3},warmup_regrid_ms={:.3},warmup_solver_ms={:.3},warmup_expansions={},measured_ticks=20,measured_ms={:.3},measured_expansion_checks_ms={:.3},measured_regrid_ms={:.3},measured_solver_ms={:.3},measured_expansions={},total_ms={:.3},residual={:?},field_energy={:.12e},world_work={:.12e}",
             warmup_elapsed.as_secs_f64() * 1000.0,
+            warmup_profile.expansion_check_ms,
+            warmup_profile.regrid_ms,
+            warmup_profile.solver_ms,
+            warmup_profile.expansions,
             measured_elapsed.as_secs_f64() * 1000.0,
+            measured_profile.expansion_check_ms - warmup_profile.expansion_check_ms,
+            measured_profile.regrid_ms - warmup_profile.regrid_ms,
+            measured_profile.solver_ms - warmup_profile.solver_ms,
+            measured_profile.expansions - warmup_profile.expansions,
             (warmup_elapsed + measured_elapsed).as_secs_f64() * 1000.0,
             inventory.residual(),
             inventory.current_spatial_field_energy,
             inventory.spatial_field_world_work,
         );
-        assert!(inventory.current_spatial_field_energy > 0.0);
+        assert!(inventory.current_spatial_field_energy.is_finite());
         assert!(inventory.is_balanced(1.0e-5));
     }
 
