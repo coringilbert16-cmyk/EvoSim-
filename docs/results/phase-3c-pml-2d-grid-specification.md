@@ -397,3 +397,25 @@ An extended angular sweep at `k=0.55`, peak damping 0.5, thickness 24, and cubic
 | 90° | 0.000441 |
 
 The near-symmetry around 45° is consistent with the symmetric x/y layer construction. It does not rule out other corner, frequency, or grid-alignment artifacts.
+
+A fairer profile comparison was then made at matched integrated damping,
+`∫₀ᵀ ζ(s) ds = ζmax T/(p+1)=3` (in grid-cell units), with `T=24`:
+
+| Profile power p | Peak damping | k=0.55: 0° / 30° / 45° | k=0.30: 0° / 30° / 45° |
+|---:|---:|---:|---:|
+| 2 | 0.375 | 0.000533 / 0.000231 / 0.0000696 | 0.00324 / 0.00183 / 0.00106 |
+| 3 | 0.500 | 0.000441 / 0.000198 / 0.0000646 | 0.00325 / 0.00185 / 0.00106 |
+| 4 | 0.625 | 0.000369 / 0.000172 / 0.0000610 | 0.00326 / 0.00186 / 0.00106 |
+
+At `k=0.30`, the three profiles are effectively indistinguishable at this resolution. At `k=0.55`, the steeper p=4 profile is modestly better in this particular monitor metric. This is not enough evidence to select a profile.
+
+A matched-integral thickness sweep at `k=0.30`, p=3, and `∫ζ ds=3` used peak damping `ζmax=12/T`:
+
+| Thickness T | Peak damping | 0° | 30° | 45° |
+|---:|---:|---:|---:|---:|
+| 16 | 0.750 | 0.00577 | 0.00310 | 0.00154 |
+| 24 | 0.500 | 0.00325 | 0.00185 | 0.00106 |
+| 32 | 0.375 | 0.00195 | 0.00115 | 0.000679 |
+| 40 | 0.300 | 0.00132 | 0.000726 | 0.000508 |
+
+The thicker layer improves the low-frequency monitor ratio even when integrated damping is held constant. That suggests propagation distance through the layer matters independently of total damping strength in this discrete configuration.
