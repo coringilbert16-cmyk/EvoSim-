@@ -2628,4 +2628,187 @@ mod dense_uniform_solver_prototype_tests {
             }
         }
     }
+
+    /// Test-only adaptive leaf store with contiguous state storage. Topology
+    /// keys are kept in a compact sorted vector; state values live inline
+    /// rather than in a tree node allocation per leaf.
+    #[derive(Clone)]
+    struct ContiguousAdaptiveStore {
+        width: u32,
+        height: u32,
+        base_spacing: f64,
+        max_refinement_level: u8,
+        leaves: Vec<(CellKey, AdaptiveCell)>,
+        indices: std::collections::HashMap<CellKey, usize>,
+    }
+
+    impl ContiguousAdaptiveStore {
+        fn from_reference(grid: &AdaptiveSpatialGrid) -> Self {
+            let mut store = Self {
+                width: grid.width,
+                height: grid.height,
+                base_spacing: grid.base_spacing,
+                max_refinement_level: grid.max_refinement_level,
+                leaves: grid.leaves().collect(),
+                indices: std::collections::HashMap::new(),
+            };
+            store.rebuild_indices();
+            store
+        }
+
+        fn rebuild_indices(&mut self) {
+            self.leaves.sort_unstable_by_key(|(key, _)| *key);
+            self.indices.clear();
+            self.indices.reserve(self.leaves.len());
+            for (index, (key, _)) in self.leaves.iter().enumerate() {
+                self.indices.insert(*key, index);
+            }
+        }
+
+        fn state(&self, key: CellKey) -> Option<AdaptiveCell> {
+            self.indices
+                .get(&key)
+                .map(|index| self.leaves[*index].1)
+        }
+
+        fn bounds(&self, key: CellKey) -> CellBounds {
+            let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
+            let min_x = key.x as f64 * spacing;
+            let min_y = key.y as f64 * spacing;
+            CellBounds {
+                min_x,
+                min_y,
+                max_x: min_x + spacing,
+                max_y: min_y + spacing,
+            }
+        }
+
+        fn refine(&mut self, key: CellKey) -> Result<[CellKey; 4], AdaptiveGridError> {
+            let index = *self.indices.get(&key).ok_or(AdaptiveGridError::MissingCell)?;
+            let parent_state = self.leaves[index].1;
+            if key.level >= self.max_refinement_level {
+                return Err(AdaptiveGridError::MaximumRefinementReached);
+            }
+            let child_level = key.level + 1;
+            let child_x = key.x.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?;
+            let child_y = key.y.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?;
+            let children = [
+                CellKey { level: child_level, x: child_x, y: child_y },
+                CellKey { level: child_level, x: child_x + 1, y: child_y },
+                CellKey { level: child_level, x: child_x, y: child_y + 1 },
+                CellKey { level: child_level, x: child_x + 1, y: child_y + 1 },
+            ];
+            let parent_bounds = self.bounds(key);
+            for (neighbor_key, _) in &self.leaves {
+                if *neighbor_key != key
+                    && cells_share_face(parent_bounds, self.bounds(*neighbor_key))
+                    && neighbor_key.level + 1 < child_level
+                {
+                    return Err(AdaptiveGridError::UnbalancedRefinement);
+                }
+            }
+            self.leaves.swap_remove(index);
+            self.leaves.extend(children.iter().map(|child| (*child, parent_state)));
+            self.rebuild_indices();
+            Ok(children)
+        }
+
+        fn coarsen(&mut self, parent: CellKey) -> Result<AdaptiveCell, AdaptiveGridError> {
+            let child_level = parent.level.checked_add(1).ok_or(AdaptiveGridError::IncompleteChildren)?;
+            let child_x = parent.x.checked_mul(2).ok_or(AdaptiveGridError::IncompleteChildren)?;
+            let child_y = parent.y.checked_mul(2).ok_or(AdaptiveGridError::IncompleteChildren)?;
+            let children = [
+                CellKey { level: child_level, x: child_x, y: child_y },
+                CellKey { level: child_level, x: child_x + 1, y: child_y },
+                CellKey { level: child_level, x: child_x, y: child_y + 1 },
+                CellKey { level: child_level, x: child_x + 1, y: child_y + 1 },
+            ];
+            let states = children.map(|key| self.state(key).ok_or(AdaptiveGridError::IncompleteChildren));
+            let [a, b, c, d] = states;
+            let states = [a?, b?, c?, d?];
+            let parent_state = AdaptiveCell {
+                previous: states.iter().map(|state| state.previous).sum::<f64>() * 0.25,
+                current: states.iter().map(|state| state.current).sum::<f64>() * 0.25,
+            };
+            if !parent_state.previous.is_finite() || !parent_state.current.is_finite() {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+            let parent_bounds = self.bounds(parent);
+            for (neighbor_key, _) in &self.leaves {
+                if children.contains(neighbor_key) {
+                    continue;
+                }
+                if cells_share_face(parent_bounds, self.bounds(*neighbor_key))
+                    && neighbor_key.level > parent.level + 1
+                {
+                    return Err(AdaptiveGridError::UnbalancedRefinement);
+                }
+            }
+            self.leaves.retain(|(key, _)| !children.contains(key));
+            self.leaves.push((parent, parent_state));
+            self.rebuild_indices();
+            Ok(parent_state)
+        }
+
+        fn integrated_state(&self) -> IntegratedState {
+            let mut total = IntegratedState::default();
+            for (key, state) in &self.leaves {
+                let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
+                let area = spacing * spacing;
+                total.current_displacement += area * state.current;
+                total.previous_displacement += area * state.previous;
+            }
+            total
+        }
+
+        fn matches_reference(&self, grid: &AdaptiveSpatialGrid) {
+            assert_eq!(self.width, grid.width);
+            assert_eq!(self.height, grid.height);
+            assert_eq!(self.leaves.len(), grid.leaf_count());
+            for (key, state) in grid.leaves() {
+                assert_eq!(self.state(key), Some(state), "state mismatch at {key:?}");
+            }
+            let contiguous_integrals = self.integrated_state();
+            let reference_integrals = grid.integrated_state();
+            close(contiguous_integrals.current_displacement, reference_integrals.current_displacement);
+            close(contiguous_integrals.previous_displacement, reference_integrals.previous_displacement);
+        }
+    }
+
+    #[test]
+    fn contiguous_adaptive_store_matches_reference_refinement_and_coarsening() {
+        let mut reference = AdaptiveSpatialGrid::new(8, 8, 1.0, 3).unwrap();
+        for (key, state) in reference.leaves().collect::<Vec<_>>() {
+            let value = (key.x as f64 * 0.17 + key.y as f64 * 0.31).sin();
+            reference.set_state(key, AdaptiveCell {
+                previous: value * 0.7,
+                current: value,
+            }).unwrap();
+        }
+        let mut contiguous = ContiguousAdaptiveStore::from_reference(&reference);
+        contiguous.matches_reference(&reference);
+
+        let root = CellKey { level: 0, x: 3, y: 3 };
+        assert_eq!(contiguous.refine(root), reference.refine(root));
+        contiguous.matches_reference(&reference);
+
+        let nested_parent = CellKey { level: 1, x: 6, y: 6 };
+        assert_eq!(contiguous.refine(nested_parent), reference.refine(nested_parent));
+        contiguous.matches_reference(&reference);
+
+        let sibling_parent = CellKey { level: 1, x: 7, y: 6 };
+        assert_eq!(contiguous.refine(sibling_parent), reference.refine(sibling_parent));
+        contiguous.matches_reference(&reference);
+
+        let invalid_parent = CellKey { level: 0, x: 3, y: 3 };
+        assert_eq!(contiguous.coarsen(invalid_parent), reference.coarsen(invalid_parent));
+        contiguous.matches_reference(&reference);
+
+        assert_eq!(contiguous.coarsen(nested_parent), reference.coarsen(nested_parent));
+        contiguous.matches_reference(&reference);
+        assert_eq!(contiguous.coarsen(sibling_parent), reference.coarsen(sibling_parent));
+        contiguous.matches_reference(&reference);
+        assert_eq!(contiguous.coarsen(root), reference.coarsen(root));
+        contiguous.matches_reference(&reference);
+    }
 }
