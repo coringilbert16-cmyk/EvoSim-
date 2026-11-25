@@ -208,10 +208,17 @@ impl LiveResonanceField {
         let ambient_midpoint_velocity = ambient_midpoint.carrier_velocity;
         let cross_energy =
             FIELD_NORMALIZATION * ambient_midpoint_velocity * after_disturbance_velocity;
+        let midpoint_disturbance_velocity =
+            0.5 * (before_disturbance_velocity + after_disturbance_velocity);
+        // Simpson integration spans the two leapfrog half-tick states. The
+        // ambient acceleration is sampled at both endpoints and the integer
+        // tick midpoint; disturbance velocity at the midpoint is interpolated
+        // from the two centered half-tick values.
         let cross_drive_work = FIELD_NORMALIZATION
-            * ambient_before.carrier_acceleration
-            * 0.5
-            * (before_disturbance_velocity + after_disturbance_velocity);
+            * (self.ambient_sample.carrier_acceleration * before_disturbance_velocity
+                + 4.0 * ambient_before.carrier_acceleration * midpoint_disturbance_velocity
+                + ambient_midpoint.carrier_acceleration * after_disturbance_velocity)
+            / 6.0;
         let disturbance_energy = self.wave.energy();
         let total_energy = disturbance_energy + cross_energy;
         let cumulative_world_work = self.energy_state.cumulative_world_work + cross_drive_work;
@@ -302,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn nonzero_disturbance_reconciles_cross_energy_with_midpoint_world_work() {
+    fn nonzero_disturbance_reconciles_cross_energy_across_domain_expansion() {
         let config = AmbientModeConfig::new(250.0 * 250.0, 1.0, 0.0, 0.0).unwrap();
         let mut ambient = WorldGeneratedAmbientMode::new(config, 100).unwrap();
         let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
@@ -317,20 +324,25 @@ mod tests {
             0.5,
         );
 
-        let ambient_before = ambient.sample();
-        ambient.advance_one_tick().unwrap();
-        let ambient_midpoint = ambient.sample_midpoint_before_current().unwrap();
-        let state = field
-            .advance_one_tick(ambient_before, ambient_midpoint)
-            .unwrap();
+        let mut maximum_residual: f64 = 0.0;
+        let mut state = field.energy_state();
+        for _ in 0..20 {
+            let ambient_before = ambient.sample();
+            ambient.advance_one_tick().unwrap();
+            let ambient_midpoint = ambient.sample_midpoint_before_current().unwrap();
+            state = field
+                .advance_one_tick(ambient_before, ambient_midpoint)
+                .unwrap();
+            maximum_residual = maximum_residual.max(state.accounting_residual.abs());
+        }
 
         assert!(state.disturbance_energy > 0.0);
         assert!(state.cross_energy.abs() > 0.0);
         assert!(state.cumulative_world_work.abs() > 0.0);
+        assert!(field.wave.grid().width() > INITIAL_WINDOW_BASE_CELLS);
         assert!(
-            state.accounting_residual.abs() < 1.0e-3 * state.total_energy.abs().max(1.0),
-            "nonzero composed-field balance residual: {}",
-            state.accounting_residual
+            maximum_residual < 1.0e-5 * state.total_energy.abs().max(1.0),
+            "maximum nonzero composed-field balance residual: {maximum_residual}"
         );
     }
 
