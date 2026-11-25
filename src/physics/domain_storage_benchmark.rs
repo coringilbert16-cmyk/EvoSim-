@@ -51,11 +51,11 @@ fn profile(width: usize, height: usize, x: usize, y: usize) -> State {
 }
 
 impl Dense {
-    fn new(width: usize, height: usize) -> Self {
+    fn new(width: usize, height: usize, localized: bool) -> Self {
         let mut cells = vec![State::default(); width * height];
         for y in 0..height {
             for x in 0..width {
-                cells[y * width + x] = profile(width, height, x, y);
+                cells[y * width + x] = if localized { profile(width, height, x, y) } else { State::default() };
             }
         }
         Self { width, height, cells }
@@ -94,7 +94,7 @@ impl OrderedMap {
         let mut cells = BTreeMap::new();
         for y in 0..height {
             for x in 0..width {
-                cells.insert(y * width + x, profile(width, height, x, y));
+                cells.insert(y * width + x, if localized { profile(width, height, x, y) } else { State::default() });
             }
         }
         Self { width, height, cells }
@@ -133,7 +133,8 @@ impl OrderedMap {
 }
 
 impl ActiveRegion {
-    fn new(world_width: usize, world_height: usize) -> Self {
+    fn new(world_width: usize, world_height: usize, localized: bool) -> Self {
+        if !localized { return Self { world_width, world_height, x0: 1, y0: 1, width: 0, height: 0, cells: Vec::new() }; }
         let center_x = (world_width - 1) / 2;
         let center_y = (world_height - 1) / 2;
         let radius = 5usize;
@@ -204,9 +205,6 @@ impl ActiveRegion {
         self.cells.capacity() * size_of::<State>()
     }
 
-    fn nonzero_cells(&self) -> usize {
-        self.cells.iter().filter(|cell| cell.previous != 0.0 || cell.current != 0.0).count()
-    }
 }
 
 fn max_difference(dense: &Dense, map: &OrderedMap, region: &ActiveRegion) -> f64 {
@@ -240,62 +238,53 @@ fn benchmark_fixed_domain_domain_scaling_storage_layouts() {
     const SUBSTEPS_PER_TICK: usize = 2;
     const SUBSTEPS: usize = LOGICAL_TICKS * SUBSTEPS_PER_TICK;
 
-    eprintln!("case,width,height,layout,advance_ms,logical_payload_bytes,active_region_cells,max_abs_difference");
+    eprintln!("case,width,height,layout,build_ms,advance_ms,stored_cells,state_payload_bytes_estimate,max_abs_difference");
     for size in SIZES {
-        let dense_build = Instant::now();
-        let mut dense = Dense::new(size, size);
-        let dense_build_elapsed = dense_build.elapsed();
-        let dense_start = Instant::now();
-        dense.advance(SUBSTEPS);
-        let dense_elapsed = dense_start.elapsed();
+        for localized in [false, true] {
+            let case = if localized { "localized_wave" } else { "empty" };
+            let dense_build = Instant::now();
+            let mut dense = Dense::new(size, size, localized);
+            let dense_build_elapsed = dense_build.elapsed();
+            let dense_start = Instant::now();
+            dense.advance(SUBSTEPS);
+            let dense_elapsed = dense_start.elapsed();
 
-        let map_build = Instant::now();
-        let mut map = OrderedMap::new(size, size);
-        let map_build_elapsed = map_build.elapsed();
-        let map_start = Instant::now();
-        map.advance(SUBSTEPS);
-        let map_elapsed = map_start.elapsed();
+            let map_build = Instant::now();
+            let mut map = OrderedMap::new(size, size, localized);
+            let map_build_elapsed = map_build.elapsed();
+            let map_start = Instant::now();
+            map.advance(SUBSTEPS);
+            let map_elapsed = map_start.elapsed();
 
-        let region_build = Instant::now();
-        let mut region = ActiveRegion::new(size, size);
-        let region_build_elapsed = region_build.elapsed();
-        let region_start = Instant::now();
-        region.advance(SUBSTEPS);
-        let region_elapsed = region_start.elapsed();
+            let region_build = Instant::now();
+            let mut region = ActiveRegion::new(size, size, localized);
+            let region_build_elapsed = region_build.elapsed();
+            let region_start = Instant::now();
+            region.advance(SUBSTEPS);
+            let region_elapsed = region_start.elapsed();
 
-        let difference = max_difference(&dense, &map, &region);
-        assert!(difference <= 1.0e-12, "storage layouts diverged by {difference:e}");
+            let difference = max_difference(&dense, &map, &region);
+            assert!(difference <= 1.0e-12, "storage layouts diverged by {difference:e}");
 
-        eprintln!(
-            "localized_wave,{size},{size},dense_vec,{:.3},{},{} ,0",
-            dense_elapsed.as_secs_f64() * 1000.0,
-            dense.bytes(),
-            size * size,
-        );
-        eprintln!(
-            "localized_wave,{size},{size},ordered_map,{:.3},{},{} ,0",
-            map_elapsed.as_secs_f64() * 1000.0,
-            map.bytes_lower_bound(),
-            size * size,
-        );
-        eprintln!(
-            "localized_wave,{size},{size},active_region,{:.3},{},{},0",
-            region_elapsed.as_secs_f64() * 1000.0,
-            region.bytes(),
-            region.nonzero_cells(),
-        );
-        eprintln!(
-            "build_ms,{size},{size},dense_vec,{:.3},0,0,0",
-            dense_build_elapsed.as_secs_f64() * 1000.0
-        );
-        eprintln!(
-            "build_ms,{size},{size},ordered_map,{:.3},0,0,0",
-            map_build_elapsed.as_secs_f64() * 1000.0
-        );
-        eprintln!(
-            "build_ms,{size},{size},active_region,{:.3},0,0,0",
-            region_build_elapsed.as_secs_f64() * 1000.0
-        );
-        black_box((dense.cells[size * size / 2], map.cells[&(size * size / 2)], region.get(size / 2, size / 2)));
+            eprintln!("{case},{size},{size},dense_vec,{:.3},{:.3},{},{},{difference:.6e}",
+                dense_build_elapsed.as_secs_f64() * 1000.0,
+                dense_elapsed.as_secs_f64() * 1000.0,
+                dense.cells.len(),
+                dense.bytes(),
+            );
+            eprintln!("{case},{size},{size},ordered_map,{:.3},{:.3},{},{},{difference:.6e}",
+                map_build_elapsed.as_secs_f64() * 1000.0,
+                map_elapsed.as_secs_f64() * 1000.0,
+                map.cells.len(),
+                map.bytes_lower_bound(),
+            );
+            eprintln!("{case},{size},{size},active_region,{:.3},{:.3},{},{},{difference:.6e}",
+                region_build_elapsed.as_secs_f64() * 1000.0,
+                region_elapsed.as_secs_f64() * 1000.0,
+                region.cells.len(),
+                region.bytes(),
+            );
+            black_box((dense.cells[size * size / 2], map.cells[&(size * size / 2)], region.get(size / 2, size / 2)));
+        }
     }
 }
