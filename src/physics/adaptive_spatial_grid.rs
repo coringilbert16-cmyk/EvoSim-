@@ -1014,7 +1014,8 @@ impl AdaptiveWaveField {
                 padding_base_cells,
             )?;
             #[cfg(test)]
-            EXPANSION_CHECK_NANOS.fetch_add(elapsed_nanos(expansion_check_start), Ordering::Relaxed);
+            EXPANSION_CHECK_NANOS
+                .fetch_add(elapsed_nanos(expansion_check_start), Ordering::Relaxed);
 
             #[cfg(test)]
             let solver_start = std::time::Instant::now();
