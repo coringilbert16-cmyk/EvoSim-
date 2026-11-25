@@ -236,6 +236,24 @@ pub(crate) struct EnergyLedger {
     /// Current stored energy in the live ambient mode.
     #[serde(default)]
     pub(crate) total_ambient_energy_held: f64,
+    /// Disturbance-only energy in the persistent adaptive spatial field.
+    #[serde(default)]
+    pub(crate) total_spatial_disturbance_energy_held: f64,
+    /// Signed ambient/disturbance cross-energy; ambient inventory is not duplicated.
+    #[serde(default)]
+    pub(crate) total_spatial_cross_energy_held: f64,
+    /// Disturbance plus cross-energy held by the spatial field.
+    #[serde(default)]
+    pub(crate) total_spatial_field_energy_held: f64,
+    /// Tick-zero spatial-field energy baseline.
+    #[serde(default)]
+    pub(crate) initial_spatial_field_energy_held: f64,
+    /// Cumulative signed world work on the spatial disturbance through the ambient cross-drive.
+    #[serde(default)]
+    pub(crate) total_spatial_field_world_work: f64,
+    /// Cumulative signed computational outflow from the composed spatial field.
+    #[serde(default)]
+    pub(crate) total_spatial_field_computational_outflow: f64,
     /// Opening ambient inventory; excluded from generated-energy totals.
     #[serde(default)]
     pub(crate) initial_ambient_energy_held: f64,
@@ -1248,6 +1266,8 @@ pub(crate) struct Simulation {
     pub(crate) flow_field: crate::environment_flow::FlowFieldConfig,
     /// Persistent world-generated ambient resonance state, advanced once per physics tick.
     pub(crate) ambient_energy: crate::world_generated_ambient_mode::WorldGeneratedAmbientMode,
+    /// Persistent propagating disturbance field, composed with the ambient mode each tick.
+    pub(crate) resonance_field: crate::live_resonance_field::LiveResonanceField,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
