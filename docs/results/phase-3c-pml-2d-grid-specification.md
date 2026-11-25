@@ -179,44 +179,52 @@ Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)
 
 ## 8. Discrete energy specialization: equation (3.38) recovered
 
-An independently indexed full-text copy of Baffet et al. (2019) exposes the complete explicit-energy definition in equation (3.38), corresponding to equation (68) in the other manuscript numbering. The correction is
+The explicit energy is the sum of three terms, equations (3.36)–(3.39) in Baffet et al. The auxiliary velocity sequence is defined by
 
-`E_add,h^(n+1/2) = (Δt²/8) ( || [Λ_h^n]_Δt ||²_(Γ1) + || Γ1 [Λ_h^n]_Δt + (1/2)Γ1² {Λ_h^n}_{1/4} ||² )`
+`(v_h^(n+1)+v_h^n)/2 = (u_h^(n+1)-u_h^n)/Δt`.
+
+It is not simply the centered difference of u. Under the invariant 2D reduction, the combined scalar is
+
+`q_h^n = v_h^n + a u_h^n + b ψ_h^n`
+
+with `a=ζx+ζy`, `b=ζxζy`, and `(ψ_h^(n+1)-ψ_h^n)/Δt=(u_h^(n+1)+u_h^n)/2`.
+
+The kinetic contribution is
+
+`E_k^(n+1/2) = 1/2 ( ||q_h^(n+1/2)||² - (Δt²/4)||G_h q_h^(n+1/2)||² )`.
+
+The potential contribution is
+
+`E_p^(n+1/2) = 1/2 ( ||G_h u_h^(n+1/2)+φ_h^(n+1/2)||² + ||Γ1 G_h ψ_h^(n+1/2)+Φ_h^(n+1/2)||² )`.
+
+The second potential term is **not** `||Γ1 Λ_h||²`. The paper defines `Λ_h=G_h ψ_h+Φ_h` for the auxiliary identity, but equation (3.37) uses `Γ1 G_h ψ_h+Φ_h`.
+
+### Additional explicit-energy correction
+
+The full-text preprint's equation (3.38), cross-checked against Lemma 13, gives
+
+`E_add^(n+1/2) = (Δt²/8) ( ||[Λ_h^n]_Δt||²_(Γ1) + ||Γ1[Λ_h^n]_Δt + (1/2)Γ1²{Λ_h^n}_{1/4}||² )`
 
 where
 
-- `[Λ_h^n]_Δt = (Λ_h^(n+1) - Λ_h^n)/Δt`;
-- `{Λ_h^n}_{1/4} = (Λ_h^(n+1)+2Λ_h^n+Λ_h^(n-1))/4`;
-- `||w||²_(Γ1) = <Γ1 w,w>` in the paper's compatible discrete auxiliary-space inner product;
+- `Λ_h^n=G_h ψ_h^n+Φ_h^n`;
+- `[Λ_h^n]_Δt=(Λ_h^(n+1)-Λ_h^(n-1))/(2Δt)` is the centered first difference;
+- `{Λ_h^n}_{1/4}=(Λ_h^(n+1)+2Λ_h^n+Λ_h^(n-1))/4`;
+- `||w||²_(Γ1)=<Γ1w,w>` in the compatible auxiliary-space inner product;
 - the second norm is the ordinary compatible discrete L² norm;
-- `Γ1²` means matrix composition `Γ1 Γ1`.
+- `Γ1²` means matrix composition.
 
-The second norm contains a **sum inside the norm**. It is not the sum of separate norms, and the first term is a `Γ1`-weighted norm of the difference rather than an ordinary norm of `Γ1` times the difference. The quarter-weighted average reaches back to `n-1`; it is not the simple midpoint `(Λ^n+Λ^(n+1))/2`.
+For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, so
 
-The potential contribution from equation (3.37) must be kept distinct from this correction. Its 2D specialization is
+`E_add,2D^(n+1/2) = (Δt²/8) [ ζx||[Λx]_Δt||² + ζy||[Λy]_Δt||² + ||ζx[Λx]_Δt+(1/2)ζx²{Λx}_{1/4}||² + ||ζy[Λy]_Δt+(1/2)ζy²{Λy}_{1/4}||² ]`.
 
-`E_p^(n+1/2) = 1/2 ( ||G_h u_h^(n+1/2)+φ_h^(n+1/2)||² + ||Γ1 G_h ψ_h^(n+1/2)+Φ_h^(n+1/2)||² )`.
+The second norm contains a sum inside the norm; it must not be split into separate squared norms. Its quarter-weighted average reaches back to n−1, not merely the n/n+1 midpoint. Both contributions are nonnegative for nonnegative damping. These are analysis-energy corrections, not additional physical PML state variables.
 
-In particular, the second potential term is **not** `||Γ1 Λ_h||²`: the paper defines `Λ_h=G_h ψ_h+Φ_h` for the auxiliary identity, but equation (3.37) uses `Γ1 G_h ψ_h+Φ_h`.
+The full energy is `E_expl=E_k+E_p+E_add`. Theorem 5 / equation (3.41) gives
 
-The potential contribution from equation (3.37) must be kept distinct from this correction. Its 2D specialization is
+`(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt/2)||[G_hu_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_hu_h^n+φ_h^n}_{1/4}||²_(Γ1)`.
 
-`E_p^(n+1/2) = 1/2 ( ||G_h u_h^(n+1/2)+φ_h^(n+1/2)||² + ||Γ1 G_h ψ_h^(n+1/2)+Φ_h^(n+1/2)||² )`.
-
-The second potential term is **not** `||Γ1 Λ_h||²`: the paper defines `Λ_h=G_h ψ_h+Φ_h` for the auxiliary identity, but equation (3.37) uses `Γ1 G_h ψ_h+Φ_h`.
-
-For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, and
-`Λ_h^n=G_h ψ_h^n+Φ_h^n`. The correction is therefore
-
-`E_add,2D^(n+1/2) = (Δt²/8) [ ζx ||[Λx]_Δt||² + ζy ||[Λy]_Δt||² + ||ζx[Λx]_Δt + (1/2)ζx²{Λx}_{1/4}||² + ||ζy[Λy]_Δt + (1/2)ζy²{Λy}_{1/4}||² ]`.
-
-Both terms are nonnegative for nonnegative damping. They are analysis-energy corrections; they do not add physical PML state variables.
-
-Both contributions are nonnegative for nonnegative damping. They are analysis-energy corrections; they do not add physical PML state variables. The complete explicit energy is `E_expl=E_k+E_p+E_add`, with the already documented kinetic and potential terms. Theorem 3.2 / equation (3.41) gives
-
-`(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt/2)||[G_h u_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_h u_h^n+φ_h^n}_1/4||²_(Γ1)`.
-
-This identity is for the paper's compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. It is not yet a proof for our proposed staggered finite-difference closure.
+This identity is established for the paper's compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. It is not yet a proof for our proposed staggered finite-difference closure.
 
 ### Initial conditions for the proof fields
 
@@ -224,20 +232,12 @@ The explicit scheme defines `Ψ_h^0=0` and requires the damping-weighted compati
 
 `Γ1(Γ1 Φ_h^0 + φ_h^0 - Γ2 G_h ψ_h^0)=0`.
 
-The implementation of the proof-field initialization must preserve this condition. Where a damping component is zero, the condition does not determine that component of `Φ_h^0`; do not divide by a zero damping coefficient.
+Preserve this condition when initializing proof fields. Where a damping component is zero, the condition does not determine that component of `Φ_h^0`; do not divide by zero.
 
 ### General wave speed remains a separate derivation
 
-Equation (3.38) is the paper's unit-speed formula. The earlier substitution `χ=φ/c²`, `s=ct` correctly normalizes the physical wave equation, but the integrated proof fields must also be transformed consistently:
+Equation (3.38) is the paper's unit-speed formula. The physical normalization `χ=φ/c²`, `s=ct` is necessary, but the integrated proof fields and every term in `E_k`, `E_p`, and `E_add` must be transformed consistently. The previous candidate transformations for `ψ,Phi,Psi,Lambda,q` have not yet been independently verified against the complete discrete definitions and should be treated as provisional, not as a completed derivation.
 
-- `ψ' = c ψ`, so `∂s ψ'=u`;
-- `Φ' = Φ/c`, so `∂s Φ'=χ`;
-- `Ψ' = c² Ψ`, so `∂s Ψ'=ψ'`;
-- `Λ' = G ψ' + Φ' = c Gψ + Φ/c`;
-- `q'=q/c`.
+Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.36)–(3.38), and Lemma 13: https://doi.org/10.1007/s10915-019-01089-9. Full-text preprint: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
-Therefore do not obtain the general-`c` energy by merely replacing `Δt` with `cΔt` in the unit-speed expression while leaving `Λ` unchanged. Apply the transformed proof variables above to every term, then check dimensions and the one-step identity. This general-`c` transformation has not yet been independently checked against the full discrete derivation.
-
-Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.38), and (3.41), https://doi.org/10.1007/s10915-019-01089-9. Independent full-text copy: https://www.academia.edu/122512257/Energy_Decay_and_Stability_of_a_Perfectly_Matched_Layer_For_the_Wave_Equation
-
-**Remaining validation:** the full-text preprint rendering now exposes equation (3.38) and Lemma 13 clearly enough to recover the exact structure above. A numerical reproduction is still required: first implement the paper's full staggered time indexing and compatible operators exactly, verify its one-step identity, then compare our staggered finite-difference realization. The general-`c` transformed energy also remains to be independently checked. The finite-difference implementation remains unvalidated.
+**Remaining validation:** independently reproduce the paper's full time indexing and compatible operators, verify the one-step identity numerically, then compare our staggered finite-difference realization. The general-`c` energy transformation also remains open. No production PML implementation is validated by this specification.
