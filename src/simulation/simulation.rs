@@ -3376,34 +3376,48 @@ mod live_ambient_energy_contract_tests {
     use super::Simulation;
 
     #[test]
-    fn production_ambient_schedule_and_world_exchange_close_over_one_day() {
+    fn production_ambient_tick_updates_ambient_and_spatial_ledgers_together() {
         let mut simulation = Simulation::new(42, 10.0);
         let opening = simulation.energy_ledger.total_ambient_energy_held;
-        let area = simulation.environment.width * simulation.environment.height;
-        assert!((simulation.ambient_energy.sample().energy_density - 10.0).abs() < 1.0e-12);
 
-        for expected in [5.5, 1.0, 5.5, 10.0] {
-            for _ in 0..6_000 {
-                simulation.advance_ambient_energy();
-            }
-            assert!((simulation.ambient_energy.sample().energy_density - expected).abs() < 1.0e-10);
+        assert!((simulation.ambient_energy.sample().energy_density - 10.0).abs() < 1.0e-12);
+        for _ in 0..32 {
+            simulation.advance_ambient_energy();
         }
 
+        let ambient = simulation.ambient_energy.sample();
         let ledger = &simulation.energy_ledger;
-        assert!((ledger.total_ambient_energy_generated - 9.0 * area).abs() < 1.0e-7);
-        assert!((ledger.total_ambient_energy_withdrawn - 9.0 * area).abs() < 1.0e-7);
-        assert!((ledger.total_ambient_energy_held - opening).abs() < 1.0e-7);
-        let accounting_residual = opening + ledger.total_ambient_energy_generated
+        assert_eq!(ledger.total_ambient_energy_held, ambient.total_energy);
+        assert!((opening + ledger.total_ambient_energy_generated
             - ledger.total_ambient_energy_withdrawn
-            - ledger.total_ambient_energy_held;
-        assert!(accounting_residual.abs() < 1.0e-7);
+            - ledger.total_ambient_energy_held)
+            .abs()
+            < 1.0e-7);
+
+        let spatial = simulation.resonance_field.energy_state();
+        assert_eq!(ledger.total_spatial_disturbance_energy_held, spatial.disturbance_energy);
+        assert_eq!(ledger.total_spatial_cross_energy_held, spatial.cross_energy);
+        assert_eq!(ledger.total_spatial_field_energy_held, spatial.total_energy);
+        assert_eq!(ledger.total_spatial_field_world_work, spatial.cumulative_world_work);
+        assert_eq!(
+            ledger.total_spatial_field_computational_outflow,
+            spatial.cumulative_computational_outflow
+        );
+        assert_eq!(
+            ledger.total_spatial_field_accounting_residual,
+            spatial.accounting_residual
+        );
+        assert!(spatial.accounting_residual.abs() < 1.0e-9);
     }
 
     #[test]
     fn ambient_phase_uses_simulation_ticks_not_runtime_pacing() {
         let mut slow = Simulation::new(42, 1.0);
         let mut fast = Simulation::new(42, 900.0);
-        for _ in 0..3_000 {
+        // The complete daily envelope is covered by the standalone ambient-mode
+        // test. This integration test only needs enough live ticks to prove that
+        // runtime pacing does not alter logical-tick advancement.
+        for _ in 0..32 {
             slow.advance_ambient_energy();
             fast.advance_ambient_energy();
         }
