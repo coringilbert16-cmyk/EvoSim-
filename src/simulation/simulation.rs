@@ -3567,17 +3567,25 @@ mod live_ambient_energy_contract_tests {
                 .set_initial_ambient_sample(initial_ambient_sample)
                 .expect("diagnostic initial ambient sample must reconcile");
             if standing_mode {
-                simulation.resonance_field.set_initial_standing_mode_for_test(0.5);
+                simulation
+                    .resonance_field
+                    .set_initial_standing_mode_for_test(0.5);
             } else {
                 simulation.resonance_field.set_initial_cell_state_for_test(
-                    crate::adaptive_spatial_grid::CellKey { level: 0, x: 16, y: 16 },
+                    crate::adaptive_spatial_grid::CellKey {
+                        level: 0,
+                        x: 16,
+                        y: 16,
+                    },
                     0.0,
                     0.5,
                 );
             }
             let opening = simulation.resonance_field.energy_state();
             simulation.energy_ledger.initial_spatial_field_energy_held = opening.total_energy;
-            simulation.energy_ledger.total_spatial_disturbance_energy_held = opening.disturbance_energy;
+            simulation
+                .energy_ledger
+                .total_spatial_disturbance_energy_held = opening.disturbance_energy;
             simulation.energy_ledger.total_spatial_cross_energy_held = opening.cross_energy;
             simulation.energy_ledger.total_spatial_field_energy_held = opening.total_energy;
 
@@ -3587,9 +3595,14 @@ mod live_ambient_energy_contract_tests {
                 simulation.advance_ambient_energy_with_domain_expansion(expand_domain);
                 let state = simulation.resonance_field.energy_state();
                 maximum_residual = maximum_residual.max(state.accounting_residual.abs());
-                maximum_outflow = maximum_outflow.max(state.cumulative_computational_outflow.abs());
+                maximum_outflow =
+                    maximum_outflow.max(state.cumulative_computational_outflow.abs());
             }
-            let final_residual = simulation.resonance_field.energy_state().accounting_residual.abs();
+            let final_residual = simulation
+                .resonance_field
+                .energy_state()
+                .accounting_residual
+                .abs();
             (maximum_residual, final_residual, maximum_outflow)
         }
 
