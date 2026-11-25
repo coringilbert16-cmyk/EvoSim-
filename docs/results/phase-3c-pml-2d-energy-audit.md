@@ -13,20 +13,20 @@ References:
 
 ## 2D continuous system
 
-For damping coefficients \u03b6x, \u03b6y >= 0, define
+For damping coefficients ζx, ζy >= 0, define
 
-\u03b1 = \u03b6x + \u03b6y,  \u03b2 = \u03b6x \u03b6y,
-\u0393_1 = diag(\u03b6x, \u03b6y),
-\u0393_2 = diag(\u03b6y - \u03b6x, \u03b6x - \u03b6y).
+α = ζx + ζy,  β = ζx ζy,
+Γ_1 = diag(ζx, ζy),
+Γ_2 = diag(ζy - ζx, ζx - ζy).
 
 Then
 
-u_tt + \u03b1 u_t + \u03b2 u - \u0394u - div(\u03c6) = 0,
-\u03c6_t + \u0393_1 \u03c6 = \u0393_2 grad(u).
+u_tt + α u_t + β u - Δu - div(φ) = 0,
+φ_t + Γ_1 φ = Γ_2 grad(u).
 
 There are two auxiliary components in 2D. The scalar auxiliary variable used in the 3D formulation is absent.
 
-The continuous energy used by Baffet et al. is a coupled functional involving u_t + \u03b1u, grad(u)+\u03c6, a damping-weighted norm of \u03c6, and \u03b2||u||^2. It is not the ordinary wave energy plus a simple accumulated sink. The weighting and coupling matter, especially where both damping directions are nonzero.
+The continuous energy used by Baffet et al. is a coupled functional involving u_t + αu, grad(u)+φ, a damping-weighted norm of φ, and β||u||^2. It is not the ordinary wave energy plus a simple accumulated sink. The weighting and coupling matter, especially where both damping directions are nonzero.
 
 ## Explicit time discretization to carry forward
 
@@ -38,25 +38,25 @@ Use the standard centered differences
 
 The 2D specialization of the explicit PML update has the structure
 
-[[u^n]]_dt + \u03b1 [u^n]_dt + \u03b2 {u^n}_1/4
-    - \u0394_h u^n - div_h(\u03c6^n) = 0,
+[[u^n]]_dt + α [u^n]_dt + β {u^n}_1/4
+    - Δ_h u^n - div_h(φ^n) = 0,
 
-[\u03c6^n]_dt + \u0393_1 {\u03c6^n}_1/2
-    = \u0393_2 grad_h({u^n}_1/2),
+[φ^n]_dt + Γ_1 {φ^n}_1/2
+    = Γ_2 grad_h({u^n}_1/2),
 
-where {v^n}_1/2 = (v^(n+1)+v^n)/2. This is the weighted recurrence previously screened. The weighted \u03b2 term is the stability-relevant difference from the original Grote–Sim finite-difference recurrence, which evaluates the mixed term at n.
+where {v^n}_1/2 = (v^(n+1)+v^n)/2. This is the weighted recurrence previously screened. The weighted β term is the stability-relevant difference from the original Grote–Sim finite-difference recurrence, which evaluates the mixed term at n.
 
-Baffet et al.'s spatial discretization is expressed through compatible discrete gradient/divergence operators satisfying the adjoint relation and \u0394_h = div_h grad_h. Their energy proof depends on this compatibility. It must not be transplanted to arbitrary collocated differences.
+Baffet et al.'s spatial discretization is expressed through compatible discrete gradient/divergence operators satisfying the adjoint relation and Δ_h = div_h grad_h. Their energy proof depends on this compatibility. It must not be transplanted to arbitrary collocated differences.
 
 ## Mapping to EvoSim's uniform grid
 
 A viable finite-difference realization is:
 - u at cell centers;
 - grad_h u on oriented faces;
-- \u03c6_x and \u03c6_y stored on their corresponding oriented faces;
+- φ_x and φ_y stored on their corresponding oriented faces;
 - div_h is the negative adjoint of grad_h under the selected grid inner products;
-- \u0394_h is defined as div_h grad_h, not independently coded with a potentially inconsistent stencil;
-- damping coefficients are sampled consistently at the auxiliary component locations and at the scalar locations where \u03b1 and \u03b2 are evaluated.
+- Δ_h is defined as div_h grad_h, not independently coded with a potentially inconsistent stencil;
+- damping coefficients are sampled consistently at the auxiliary component locations and at the scalar locations where α and β are evaluated.
 
 This is a compatible staggered operator design, not yet a verified transcription of every interpolation detail in Grote & Sim Section 4. The original finite-difference paper places auxiliary components on staggered locations and averages them transversely before taking divergence. The 2D indexing and coefficient interpolation must be written down explicitly before coding.
 
