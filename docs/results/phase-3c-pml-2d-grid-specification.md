@@ -85,26 +85,48 @@ and analogously for φy, with its face-sampled coefficients.
 
 The b-term uses the quarter-weighted time average. Replacing it with b u^n is the older recurrence that failed the high-damping Fourier screen.
 
-## 4. What the published proof covers
+## 4. What the published proof covers — corrected dimensional reduction
 
-Baffet et al. explicitly state energy decay and L2 stability bounds for continuous and discrete formulations in both two and three dimensions with constant damping coefficients. Their paper's 2D system is exactly the two-auxiliary-field system above. Their fully explicit discretization uses the quarter-weighted mixed term and a CFL condition independent of the damping magnitude.
+Baffet et al. (2019) derive the continuous two-dimensional system directly in Section 2.1. Their Section 3 fully discrete proof is written for the three-dimensional formulation. The two-dimensional explicit recurrence above is obtained as an invariant dimensional reduction of that discrete system, not by copying the three-dimensional energy formula unchanged.
 
-The earlier Fourier amplification screen is consistent with this formulation, but it remains an independent reduced check, not a substitute for the published energy proof.
+Set the third-direction damping to zero and restrict all fields to be independent of the third coordinate:
 
-The published theorem does not establish monotone energy decay for the spatially varying damping profiles required in a finite PML. Their piecewise-constant numerical experiments show that the energy can have small positive excursions near layer entry while remaining bounded over long runs.
+- Γ1 = diag(ζx, ζy, 0)
+- Γ2 = diag(ζy - ζx, ζx - ζy, ζx + ζy)
+- Γ3 = diag(0, 0, ζx ζy)
+- det(Γ1) = 0
+- φz = 0, with zero initial φz and ∂z u = 0
+
+The three-dimensional scalar equation then reduces to the two-dimensional equation because tr(Γ1)=a and tr(Γ3)=b. The x/y auxiliary equations reduce exactly to the two-field system in Section 1: their Γ3 components vanish. The remaining third auxiliary component stays identically zero.
+
+The discrete proof nevertheless uses analysis-only integrated variables. In this reduction:
+- ψ satisfies ψ_t = u;
+- Φ_t = φ for the two physical auxiliary components;
+- Ψ_t = ψ;
+- q = v + a u + b ψ, where v is the centered discrete velocity.
+
+These are proof variables, not additional physical PML fields. They allow the quarter-weighted b u term to be handled in the energy argument. In particular, do not add ψ, Φ, or Ψ to the physical PML state merely because they appear in the proof.
+
+The paper's discrete theorem uses compatible discrete operators with Δ_h = div_h grad_h and proves a CFL-conditioned positive explicit energy with a one-step non-increase identity for constant damping. The dimensional reduction above carries that algebra to 2D when the discrete spaces/operators preserve the invariant subspace and the same adjoint/compatibility assumptions. It does **not** automatically prove the result for every finite-difference boundary closure or coefficient interpolation.
+
+Reference: Baffet et al. (2019), Section 2.1 (2D continuous system), Section 3.2 (explicit discrete scheme and energy identity), especially equations (61)–(71): https://doi.org/10.1007/s10915-019-01089-9
+
+The earlier Fourier amplification screen remains an independent reduced check, not a substitute for verifying the exact discrete energy.
+
+The constant-coefficient theorem does not establish monotone energy decay for the spatially varying damping profiles required in a finite PML. The paper's variable-profile experiments are empirical, not a general variable-coefficient proof.
 
 ## 5. Exact remaining proof obligation for this implementation
 
-The forward-gradient / negative-adjoint-divergence pair above is compatible by construction, but the published finite-element energy identity cannot simply be asserted for this finite-difference realization without checking the time-discrete algebra and boundary terms.
+The key mathematical gap is now narrower: specialize the paper's discrete energy (equations 66–71) to the invariant 2D reduction, then determine whether our face-centered finite-difference realization satisfies the same hypotheses and boundary terms.
 
-Next, derive the one-step energy difference for this exact recurrence using D = -G*:
-1. State the discrete energy at the correct half-time level, including any CFL-dependent correction terms.
-2. Show the energy difference equals the negative damping quadratic form, or identify the precise residual terms.
-3. Verify the identity numerically to roundoff for random states on periodic/closed test grids with constant ζx, ζy, including ζx=0, ζy=0, single-face damping and two-direction corner damping.
-4. Check positive definiteness under the stated CFL condition.
+Next:
+1. Write the complete reduced half-time energy, including the kinetic CFL correction and all additional time-discretization terms. Keep ψ, Φ, and Ψ explicitly labeled analysis-only.
+2. Derive the one-step identity for the exact 2D recurrence using D = -G* and Δ_h = DG. Identify any terms that fail to cancel for our finite-difference boundary closure.
+3. Verify the identity numerically to roundoff for random states on periodic/closed test grids with constant ζx, ζy, including both-zero, one-axis-only, and two-direction damping.
+4. Check positive definiteness under the actual operator CFL bound, not just the five-point periodic estimate.
 5. Only then introduce spatially varying profiles and measure reflection.
 
-The Fourier screen's dt ≤ 1/√2 bound assumes hx=hy=c=1. The general 2D five-point CFL condition is c dt sqrt(hx⁻² + hy⁻²) ≤ 1.
+The Fourier screen's dt ≤ 1/√2 bound assumes hx=hy=c=1. The general five-point CFL condition is c dt sqrt(hx⁻² + hy⁻²) ≤ 1; the exact operator CFL should be computed from the largest eigenvalue of -DG.
 
 ## 6. Scope and decision
 
