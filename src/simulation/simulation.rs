@@ -3436,15 +3436,8 @@ mod live_ambient_energy_contract_tests {
         let mut slow = Simulation::new(42, 1.0);
         let mut fast = Simulation::new(42, 900.0);
 
-        // Begin at the same nonzero ambient phase used by the verified field
-        // expansion test, so the disturbance couples to a moving carrier.
-        for _ in 0..100 {
-            slow.advance_ambient_energy();
-            fast.advance_ambient_energy();
-        }
-
-        // Treat the seeded disturbance as part of each opening inventory,
-        // not as energy created during the measured interval.
+        // Seed the disturbance before the adaptive wave grid advances.
+        // Its energy is opening inventory, not energy created by this test.
         for simulation in [&mut slow, &mut fast] {
             simulation.resonance_field.set_initial_cell_state_for_test(
                 crate::adaptive_spatial_grid::CellKey {
@@ -3462,6 +3455,13 @@ mod live_ambient_energy_contract_tests {
                 .total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
             simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
             simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
+        }
+
+        // Advance to the moving ambient phase used by the validated expansion
+        // test. This also evolves the already-seeded disturbance correctly.
+        for _ in 0..100 {
+            slow.advance_ambient_energy();
+            fast.advance_ambient_energy();
         }
 
         for _ in 0..20 {
