@@ -90,7 +90,7 @@ impl Dense {
 }
 
 impl OrderedMap {
-    fn new(width: usize, height: usize) -> Self {
+    fn new(width: usize, height: usize, localized: bool) -> Self {
         let mut cells = BTreeMap::new();
         for y in 0..height {
             for x in 0..width {
