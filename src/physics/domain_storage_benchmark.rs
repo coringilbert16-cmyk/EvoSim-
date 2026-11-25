@@ -55,7 +55,7 @@ impl Dense {
         let mut cells = vec![State::default(); width * height];
         for y in 0..height {
             for x in 0..width {
-                cells[y * width + x] = if localized { profile(width, height, x, y) } else { State::default() };
+                cells[y * width + x] = if localized {\n                    profile(width, height, x, y)\n                } else {\n                    State::default()\n                };
             }
         }
         Self { width, height, cells }
@@ -94,7 +94,7 @@ impl OrderedMap {
         let mut cells = BTreeMap::new();
         for y in 0..height {
             for x in 0..width {
-                cells.insert(y * width + x, if localized { profile(width, height, x, y) } else { State::default() });
+                cells.insert(\n                    y * width + x,\n                    if localized {\n                        profile(width, height, x, y)\n                    } else {\n                        State::default()\n                    },\n                );
             }
         }
         Self { width, height, cells }
@@ -134,7 +134,7 @@ impl OrderedMap {
 
 impl ActiveRegion {
     fn new(world_width: usize, world_height: usize, localized: bool) -> Self {
-        if !localized { return Self { world_width, world_height, x0: 1, y0: 1, width: 0, height: 0, cells: Vec::new() }; }
+        if !localized {\n            return Self {\n                world_width,\n                world_height,\n                x0: 1,\n                y0: 1,\n                width: 0,\n                height: 0,\n                cells: Vec::new(),\n            };\n        }
         let center_x = (world_width - 1) / 2;
         let center_y = (world_height - 1) / 2;
         let radius = 5usize;
@@ -150,7 +150,7 @@ impl ActiveRegion {
                 cells[(y - y0) * width + (x - x0)] = profile(world_width, world_height, x, y);
             }
         }
-        Self { world_width, world_height, x0, y0, width, height, cells }
+        Self {\n            world_width,\n            world_height,\n            x0,\n            y0,\n            width,\n            height,\n            cells,\n        }
     }
 
     fn get(&self, x: usize, y: usize) -> State {
@@ -187,7 +187,7 @@ impl ActiveRegion {
                         + self.get(x, y + 1).current
                         - 4.0 * center.current;
                     next[i] = 2.0 * center.current - center.previous + 0.25 * laplacian;
-                    shifted[i] = State { previous: center.current, current: 0.0 };
+                    shifted[i] = State {\n                        previous: center.current,\n                        current: 0.0,\n                    };
                 }
             }
             for (cell, value) in shifted.iter_mut().zip(next) {
@@ -238,7 +238,7 @@ fn benchmark_fixed_domain_domain_scaling_storage_layouts() {
     const SUBSTEPS_PER_TICK: usize = 2;
     const SUBSTEPS: usize = LOGICAL_TICKS * SUBSTEPS_PER_TICK;
 
-    eprintln!("case,width,height,layout,build_ms,advance_ms,stored_cells,state_payload_bytes_estimate,max_abs_difference");
+    eprintln!(\n        "case,width,height,layout,build_ms,advance_ms,stored_cells,state_payload_bytes_estimate,max_abs_difference"\n    );
     for size in SIZES {
         for localized in [false, true] {
             let case = if localized { "localized_wave" } else { "empty" };
@@ -264,27 +264,27 @@ fn benchmark_fixed_domain_domain_scaling_storage_layouts() {
             let region_elapsed = region_start.elapsed();
 
             let difference = max_difference(&dense, &map, &region);
-            assert!(difference <= 1.0e-12, "storage layouts diverged by {difference:e}");
+            assert!(\n                difference <= 1.0e-12,\n                "storage layouts diverged by {difference:e}"\n            );
 
-            eprintln!("{case},{size},{size},dense_vec,{:.3},{:.3},{},{},{difference:.6e}",
+            eprintln!(\n                "{case},{size},{size},dense_vec,{:.3},{:.3},{},{},{difference:.6e}",
                 dense_build_elapsed.as_secs_f64() * 1000.0,
                 dense_elapsed.as_secs_f64() * 1000.0,
                 dense.cells.len(),
                 dense.bytes(),
             );
-            eprintln!("{case},{size},{size},ordered_map,{:.3},{:.3},{},{},{difference:.6e}",
+            eprintln!(\n                "{case},{size},{size},ordered_map,{:.3},{:.3},{},{},{difference:.6e}",
                 map_build_elapsed.as_secs_f64() * 1000.0,
                 map_elapsed.as_secs_f64() * 1000.0,
                 map.cells.len(),
                 map.bytes_lower_bound(),
             );
-            eprintln!("{case},{size},{size},active_region,{:.3},{:.3},{},{},{difference:.6e}",
+            eprintln!(\n                "{case},{size},{size},active_region,{:.3},{:.3},{},{},{difference:.6e}",
                 region_build_elapsed.as_secs_f64() * 1000.0,
                 region_elapsed.as_secs_f64() * 1000.0,
                 region.cells.len(),
                 region.bytes(),
             );
-            black_box((dense.cells[size * size / 2], map.cells[&(size * size / 2)], region.get(size / 2, size / 2)));
+            black_box((\n                dense.cells[size * size / 2],\n                map.cells[&(size * size / 2)],\n                region.get(size / 2, size / 2),\n            ));
         }
     }
 }
