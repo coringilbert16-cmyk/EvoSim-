@@ -241,3 +241,29 @@ Equation (3.38) is the paper's unit-speed formula. The physical normalization `�
 Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.36)–(3.38), and Lemma 13: https://doi.org/10.1007/s10915-019-01089-9. Full-text preprint: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
 **Remaining validation:** independently reproduce the paper's full time indexing and compatible operators, verify the one-step identity numerically, then compare our staggered finite-difference realization. The general-`c` energy transformation also remains open. No production PML implementation is validated by this specification.
+
+
+## 9. Revised Fourier screen using the published explicit time staggering
+
+The earlier Fourier screen used a centered-in-time update for the auxiliary field and therefore did **not** test the published scheme (62). It has been superseded by a new constant-coefficient amplification screen using the actual recurrence:
+
+- the second-order wave update with the quarter-weighted mixed term `b{u^n}_{1/4});
+- the forward Crank–Nicolson auxiliary update `(φ^{n+1}-φ^n)/Δt+Γ1(φ^{n+1}+φ^n)/2=Γ2G(u^{n+1}+u^n)/2);
+- the scalar proof variable update `(ψ^{n+1}-ψ^n)/Δt=(u^{n+1}+u^n)/2).
+
+For each Fourier mode, the amplification state was `(u^n,u^{n-1},ψ^n,φ_x^n,φ_y^n)`. The periodic forward-gradient / negative-adjoint-divergence symbols were used consistently, so `Δ_h=D_hG_h` exactly. The scan used `h_x=h_y=c=1`, 17 wave numbers per axis over `[0,π]`, damping coefficients independently sampled from `{0.1,1,5,20,100}`, and the 2D five-point CFL limit `Δt≤1/√2`.
+
+Results:
+
+| Δt | Maximum sampled spectral radius | Worst-case parameters |
+|---:|---:|---|
+| 0.2 | 1.000000 | ζx=ζy=0.1, kx=ky=0 |
+| 0.4 | 1.000000 | ζx=ζy=0.1, kx=ky=0 |
+| 0.6 | 1.000000 | ζx=ζy=0.1, kx=ky=0 |
+| 0.7 | 1.000000 | ζx=ζy=0.1, kx=ky=0 |
+| 1/√2 | 1.000000 | ζx=ζy=0.1, kx=ky=0 |
+| 0.71 | 1.131240 | ζx=ζy=0.1, kx=ky=π |
+| 0.8 | 2.553945 | ζx=ζy=0.1, kx=ky=π |
+
+This supports the expected CFL threshold for the **constant-coefficient periodic Fourier model** and removes the previous centered-auxiliary screen as evidence. It is not a proof, does not test spatially varying damping or a finite PML interface/corner, and does not validate the proposed finite-difference boundary closure. The neutral spectral radius of one corresponds to the undamped/zero-frequency limit of the reduced system; it is not growth.
+
