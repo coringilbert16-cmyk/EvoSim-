@@ -83,6 +83,101 @@ impl AmbientModeConfig {
         TAU * carrier_cycles.rem_euclid(1.0)
     }
 
+    /// Samples the continuous carrier at a fractional logical tick using
+    /// cubic-Hermite interpolation of the precomputed amplitude trajectory.
+    fn sample_at_fractional_tick(
+        self,
+        tick: f64,
+        trajectory: &AmbientModeTrajectory,
+    ) -> Result<AmbientModeSample, AmbientModeError> {
+        if !tick.is_finite() {
+            return Err(AmbientModeError::InvalidParameter);
+        }
+        let day_tick = tick.rem_euclid(AMBIENT_DAY_TICKS as f64);
+        let day_cycles = day_tick / AMBIENT_DAY_TICKS as f64 + self.day_phase_offset_cycles;
+        let envelope = 0.5 * (1.0 + (TAU * day_cycles).cos());
+        let energy_density = AMBIENT_MIN_ENERGY_DENSITY
+            + (AMBIENT_MAX_ENERGY_DENSITY - AMBIENT_MIN_ENERGY_DENSITY) * envelope;
+        let total_energy = energy_density * self.world_area;
+        let angular_frequency =
+            TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
+        let lower_index = day_tick.floor() as usize;
+        let upper_index = (lower_index + 1) % AMBIENT_DAY_TICKS as usize;
+        let fraction = day_tick - lower_index as f64;
+        let t2 = fraction * fraction;
+        let t3 = t2 * fraction;
+        let h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
+        let h10 = t3 - 2.0 * t2 + fraction;
+        let h01 = -2.0 * t3 + 3.0 * t2;
+        let h11 = t3 - t2;
+        let a0 = trajectory.amplitude[lower_index];
+        let a1 = trajectory.amplitude[upper_index];
+        let v0 = trajectory.amplitude_velocity[lower_index];
+        let v1 = trajectory.amplitude_velocity[upper_index];
+        let amplitude = h00 * a0 + h10 * v0 + h01 * a1 + h11 * v1;
+        let amplitude_velocity = (6.0 * t2 - 6.0 * fraction) * a0
+            + (3.0 * t2 - 4.0 * fraction + 1.0) * v0
+            + (-6.0 * t2 + 6.0 * fraction) * a1
+            + (3.0 * t2 - 2.0 * fraction) * v1;
+        let amplitude_acceleration = (12.0 * fraction - 6.0) * a0
+            + (6.0 * fraction - 4.0) * v0
+            + (-12.0 * fraction + 6.0) * a1
+            + (6.0 * fraction - 2.0) * v1;
+        let carrier_cycles = day_tick * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
+            / AMBIENT_DAY_TICKS as f64
+            + self.carrier_phase_offset_cycles;
+        let carrier_phase_radians = TAU * carrier_cycles.rem_euclid(1.0);
+        let cosine = carrier_phase_radians.cos();
+        let sine = carrier_phase_radians.sin();
+        let carrier_value = amplitude * cosine;
+        let carrier_velocity =
+            amplitude_velocity * cosine - amplitude * angular_frequency * sine;
+        let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
+            * cosine
+            - 2.0 * amplitude_velocity * angular_frequency * sine;
+        let instantaneous_oscillator_energy_density = 0.5
+            * self.field_normalization
+            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
+
+        if [
+            energy_density,
+            total_energy,
+            angular_frequency,
+            amplitude,
+            amplitude_velocity,
+            amplitude_acceleration,
+            carrier_phase_radians,
+            carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_oscillator_energy_density,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+            || energy_density < AMBIENT_MIN_ENERGY_DENSITY
+            || energy_density > AMBIENT_MAX_ENERGY_DENSITY
+            || total_energy <= 0.0
+            || amplitude <= 0.0
+        {
+            return Err(AmbientModeError::InvalidState);
+        }
+
+        Ok(AmbientModeSample {
+            tick: day_tick.floor() as u64,
+            energy_density,
+            total_energy,
+            amplitude,
+            amplitude_velocity,
+            field_normalization: self.field_normalization,
+            angular_frequency,
+            carrier_phase_radians,
+            carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_oscillator_energy_density,
+        })
+    }
+
     fn sample_at(
         self,
         tick: u64,
@@ -302,6 +397,19 @@ impl WorldGeneratedAmbientMode {
 
     pub(crate) fn sample(&self) -> AmbientModeSample {
         self.current
+    }
+
+    /// Exact midpoint carrier sample for the interval ending at the current
+    /// integer tick. The amplitude and its derivatives use cubic-Hermite
+    /// interpolation of the deterministic daily trajectory.
+    pub(crate) fn sample_midpoint_before_current(
+        &self,
+    ) -> Result<AmbientModeSample, AmbientModeError> {
+        if self.tick == 0 {
+            return Err(AmbientModeError::InvalidState);
+        }
+        self.config
+            .sample_at_fractional_tick(self.tick as f64 - 0.5, &self.trajectory)
     }
 
     /// Total world generation since this mode's opening inventory.
