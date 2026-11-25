@@ -2,7 +2,7 @@
 
 **Status:** Approved architectural direction; implementation roadmap. The continuous, time-propagating wave field is the target architecture. This document is the required reference for every future resonance-field investigation, issue, branch, pull request, implementation, and validation run.
 
-**Architecture decision:** The resonance field is a persistent spatial wave field with phase-resolved, finite-speed propagation. Its ambient energy is held by the field as a spatially uniform background state with the approved daily envelope and explicit generation/withdrawal accounting. Spatial wave behavior is built on the already validated propagation model. Matter interacts through its actual exposed physical geometry. The field is not a molecule-to-molecule interaction cache, instantaneous redistribution, or diffusion approximation.
+**Architecture decision:** The resonance field is a persistent spatial wave field with phase-resolved, finite-speed propagation inside a finite active simulation domain. Waves that cross the domain boundary leave the modeled world into the void and never return or reflect. The active domain is tied to the modeled chemistry-world bounds, not camera zoom. Its spatial resolution is bounded by the configured maximum refinement level. Ambient energy is held by the field as a spatially uniform background state with the approved daily envelope and explicit generation/withdrawal accounting. Matter interacts through its actual exposed physical geometry. The field is not a molecule-to-molecule interaction cache, instantaneous redistribution, or diffusion approximation.
 
 **Current approved ambient model:** one simulated day is 24,000 ticks; the ambient carrier completes 440 cycles per day; cycle-averaged ambient energy density follows the approved cosine envelope 10 → 1 at tick 12,000 → 10 at tick 24,000. Opening inventory is not generation. Positive stored-energy change is world generation; negative change is world withdrawal. The environment area is used only to calculate total ambient inventory, never as a propagation boundary. This is implemented in the live simulation and documented in [the Phase 3 ambient-energy report](../results/phase-3-live-ambient-energy.md).
 
@@ -77,7 +77,7 @@ Phase 1 resolves the design decisions below. They govern Phase 2 and every later
 6. **Spatial field and matter interaction:** The ambient background and spatial wave field must coexist without duplicating energy or creating a second accounting authority. The already validated finite-speed propagation model remains the spatial transport foundation. Material interaction is passive unless a separately approved physical mechanism is introduced; absorption/reflection/transmission/scattering must transfer energy through the unified accounting path and actual supported physical geometry. Do not turn resonance response into an energy source.
 7. **Material coupling:** Define frequency-dependent absorption, reflection, transmission, scattering, and response rules. Reuse established material/resonance semantics where valid; do not create molecule-specific propagation exceptions.
 8. **Attenuation and dissipation:** Derive how amplitude, energy density, and flux change during propagation. Distinguish geometric spreading from true dissipative loss. The existing distance law A(d)=A0/(1+d), E(d)=E0/(1+d)^2 is legacy/reference behavior, not automatically the governing law for a finite-speed wave solver. Any change must be derived, documented, and validated rather than silently copied or discarded.
-9. **Infinite-plane geometry and laboratory containment:** The physical world is an infinite flat two-dimensional plane. The rectangular display is only an observation window. There are no global environmental edges or edge boundary conditions. Define world-distance units, planar numerical representation, and continuity across storage/viewer windows. Chemistry-lab walls are ordinary physical objects with material-specific interactions, not special environment boundaries; they must be removable without changing the physics.
+9. **Finite active world domain and void boundary:** The modeled chemistry world is a finite two-dimensional domain using the environment's physical width and height, independent of camera zoom. Its outer edge is a real boundary of the currently simulated world. A wave crossing that edge exits into the void permanently: it is removed from the active field, does not reflect, does not interfere with or affect anything inside afterward, and cannot return. The outgoing energy is recorded as exported-to-void energy so the modeled-world ledger reconciles; it is not silently destroyed. Chemistry-lab walls inside the domain remain ordinary physical materials, not special world boundaries. The active domain must not expand to follow outgoing waves. The numerical boundary treatment must be validated for negligible/no reflected energy at the stated tolerance, including oblique incidence and the composed ambient/disturbance energy terms.
 10. **Numerical stability:** Specify discretization, spatial/time resolution relationship, stability condition (including a CFL-like bound where applicable), interpolation, and error/convergence criteria.
 11. **Determinism:** Define update ordering, source ordering, accumulation precision, and deterministic handling of parallel work.
 
@@ -92,7 +92,7 @@ These invariants are non-negotiable throughout all phases:
 - Energy in the field is represented explicitly or otherwise accounted for in a rigorously equivalent ledger state.
 - Energy transferred to a receiver leaves the field exactly once and enters the receiver's legitimate energy/response accounting exactly once.
 - Propagation loss is not charged once per receiver. Dissipated energy is settled as environmental heat exactly once.
-- Reflected, scattered, transmitted, escaped, and still-propagating energy must have explicit destinations/accounting; no silent disappearance.
+- Reflected, scattered, transmitted, escaped, and still-propagating energy must have explicit destinations/accounting; no silent disappearance. Energy carried by a wave crossing the finite world boundary is exported to the void, removed from the active field, and never reflected or returned.
 - A spectrum, amplitude, phase, or perception magnitude is not itself an energy credit.
 - Internal transfers cancel at world scale. The complete inventory must reconcile source input, field energy, receiver holdings/work, stored structural energy where applicable, and heat/escape.
 - Failed or rejected transactions must not partially commit field debit, receiver credit, geometry changes, or ledger changes.
@@ -233,7 +233,7 @@ These results remain available as research and reusable code where appropriate. 
 
 #### Phase 3C — Ambient background and spatial field integration: IN PROGRESS — live integration and total-field accounting
 
-**Goal:** Integrate the approved ambient background and the validated finite-speed disturbance physics into the live simulation as one persistent resonance field, using the approved adaptive spatial-grid architecture.
+**Goal:** Integrate the approved ambient background and the validated finite-speed disturbance physics into the live simulation as one persistent resonance field over the finite chemistry-world domain, using the approved adaptive spatial-grid architecture and a validated open boundary into the void.
 
 **Implementation order:**
 1. **Reuse the validated numerical core.** The reusable leapfrog reference copy is `src/physics/reference_wave_solver.rs` (extracted from PR #410 and retained on main through the Phase 3B work). Preserve its discrete energy invariant, CFL condition, and accounted computational outflow. Do not rebuild it or repeat propagation/convergence experiments.
@@ -267,9 +267,9 @@ These results remain available as research and reusable code where appropriate. 
 - **Resolved in PR #446 implementation, pending full validation:** the adaptive API reconstructs position-resolved midpoint displacement, centered time derivative, and spatial gradient from face-neighbor finite-volume averages with a weighted least-squares fit. Rank-deficient local stencils fail closed. This is not nearest-cell or centroid sampling.
 - **Added, pending exact-head CI:** a nonzero initial disturbance test now verifies that the signed ambient cross-energy and midpoint world work reconcile within a focused one-tick tolerance. A zero-field-only passing test is not being used as the sole accounting evidence.
 - **Still open:** extend the nonzero composed-field balance check across multiple ticks and at least one controlled domain expansion before declaring total-field accounting validated.
-- **Still open:** the current 32 × 32 initial disturbance window is centered on the modeled world. Outside it, the disturbance is treated as zero; future nonzero initial conditions or sources outside this window need an explicit coordinate-covering expansion path before they can be admitted. No matter interaction or source coupling is part of PR #446.
+- **Superseded by the 2026-11-25 finite-domain decision:** the current 32 × 32 expandable computational window is not the final active domain. The live field must instead cover the fixed chemistry-world bounds and must not expand when a wave approaches the edge. The current PR #446 expansion path is therefore not suitable as the final domain policy. No matter interaction or source coupling is part of PR #446.
 - The existing `EnergyLedger` owns ambient inventory totals but has no spatial-field energy, ambient/disturbance cross-energy, signed cross-drive work, or total-field computational-outflow entries. Extend the existing authority and its independent inventory reconciliation; do not add a second ledger.
-- The 250 × 250 ambient footprint remains an inventory convention only. Select a separate computational-window policy, with explicit expansion or a validated total-field outgoing treatment, before live integration can be considered complete.
+- The 250 × 250 environment dimensions are no longer inventory-only for spatial propagation: the finite active field domain must use the actual chemistry-world bounds. Confirm the runtime dimensions and coordinate origin from `Environment`; do not infer them from camera zoom. The ambient inventory remains calculated from the same world area.
 
 These are implementation requirements discovered by source inspection, not requests to change the approved physical model. They do not reopen the completed PR #444 numerical validation gate.
 **Phase 3C exit criteria:**
@@ -277,7 +277,8 @@ These are implementation requirements discovered by source inspection, not reque
 - The approved ambient background and propagating disturbance are composed with the full energy/flux terms.
 - Ambient inventory, field energy, world work, and computational outflow reconcile under one accounting authority.
 - The field is deterministic and independent of wall-clock pacing.
-- The adaptive implementation preserves the validated propagation behavior without introducing a physical boundary.
+- The adaptive implementation preserves validated interior propagation within the finite world domain.
+- Waves crossing the outer boundary leave into the void without reflection or return, and total-field exported energy reconciles under the unified ledger.
 
 **Not included in Phase 3C:** material absorption/chemistry settlement, organism behavior, GUI redesign, performance optimization, or new source classes.
 
@@ -489,3 +490,39 @@ The Phase 1 specification and the earlier source-coupling plans contain candidat
 **Current phase order:** Phase 3C integrates the validated spatial field with the live ambient background and accounting. Phase 3D implements passive material interaction. Phase 4 connects field effects to movement and chemistry. Phase 5 optimizes measured costs. Phase 6 retires the legacy resonance path. Each phase uses focused checks for its new integration boundary; completed propagation mathematics and validation are not repeated.
 
 **Project-native units:** L, tick, E remain authoritative. Runtime pacing is execution speed only. No SI or wall-clock time calibration is required.
+
+
+## 12. Approved finite chemistry-world domain and void boundary (2026-11-25)
+
+This decision is later and more specific than the Phase 1 infinite-plane assumption. It supersedes every earlier statement in this roadmap that the active chemistry world is physically infinite, that the 250 × 250 environment is inventory-only, or that the live field must expand its computational window to follow outgoing waves. The validated Phase 2 solver remains a reference implementation; its historical tests are not being reopened.
+
+### Physical model
+
+- The active chemistry simulation occupies a finite two-dimensional world domain, using the actual environment width, height, and world-coordinate origin. The initial target is the existing 250 × 250 chemistry environment, but implementation must read the runtime dimensions rather than hardcode them.
+- The domain is a property of the simulated world, not the camera viewport or current zoom level. Changing the camera must not change the field domain.
+- The outer world boundary is open to the void. A wave crossing it leaves the modeled world permanently. It has no subsequent effect, cannot return, and must not reflect back into the domain.
+- Energy crossing the boundary is recorded as exported-to-void energy in the existing single conservation authority. It is removed from the active field and is not deposited into materials, heat, or an artificial reservoir.
+- Interior wave physics remain unchanged. No arbitrary propagation-radius cutoff, amplitude threshold, or dropping of low-amplitude waves is permitted inside the domain.
+- The adaptive mesh retains the approved base spacing and maximum refinement level unless controlled validation justifies a separately approved change. Maximum refinement is a hard numerical ceiling; the physical domain itself does not grow.
+
+### Required Phase 3C implementation sequence
+
+1. **Confirm domain mapping.** Trace the runtime Environment dimensions, coordinate origin, and field-query coordinate convention. Initialize the field over the complete finite chemistry-world domain. Do not use camera bounds or the old centered 32 × 32 initial window as the physical domain.
+2. **Remove unbounded expansion from the live path.** The live simulation must not call automatic domain expansion when a disturbance approaches an edge. Retain generic expansion helpers only if another isolated reference/test use still requires them; they must not affect the active world.
+3. **Select the outgoing boundary treatment.** Audit the existing fixed-zero boundary and absorbing-layer implementation. The existing disturbance-only sponge is not automatically acceptable: it must not create reflections, and its energy loss must account for the complete ambient-plus-disturbance field, including cross-energy and cross-flux terms. Select/derive the appropriate open-boundary method before implementation; do not assume damping is equivalent to waves leaving the domain.
+4. **Implement void export accounting.** Measure the outgoing total-field energy flux across the finite world boundary, remove that energy from the active field exactly once, and record cumulative exported-to-void energy in the existing ledger. No parallel ledger or silent energy deletion.
+5. **Validate boundary behavior.** Test normal and oblique wave incidence, multiple frequencies, phase/interference near the edge, and waves crossing each side/corner. Verify no meaningful reflected wave returns to the interior, deterministic behavior, and conservation of initial field energy plus ambient world work against current field energy plus exported energy.
+6. **Validate interior invariance.** Before a wave reaches the boundary, compare the bounded-domain solution with the established reference solver over the shared interior region and the previously validated numerical envelope. Boundary treatment must not change interior propagation prematurely.
+7. **Measure bounded cost.** Record cell/leaf count, solver substeps per logical tick, runtime, and peak memory for the full active domain at the approved refinement ceiling. Compare with the current 32 × 32 expandable implementation; do not assume a larger fixed domain is automatically faster. Keep performance tuning separate from physics changes.
+8. **Complete live-field integration gates.** Extend nonzero composed-field energy reconciliation across multiple ticks and at least one boundary-crossing event. Require exact-head CI green before Phase 3C can advance.
+
+### Phase boundaries and downstream work
+
+- These domain and boundary changes belong in **Phase 3C**, because they define the active spatial field's domain, propagation termination, and energy lifecycle. They are prerequisites to declaring live-field integration complete.
+- **Phase 3D remains on hold** until Phase 3C passes full validation. Do not add passive material absorption/reflection/transmission/scattering while implementing the void boundary.
+- **Phase 4 chemistry integration** uses the finite active domain. No field interaction outside the modeled world is required until the chemistry world itself expands in a separately approved change.
+- Any future increase in world dimensions is an explicit world-model change, not automatic wave-following expansion. The boundary moves only when the modeled chemistry world is deliberately resized; waves previously exported to the void do not re-enter.
+
+### Current disposition
+
+PR #446 currently implements a 32 × 32 expandable computational window, zero-extension before edge contact, and no live-path absorber/outflow (reported computational outflow remains zero). That implementation does not yet satisfy this approved finite-domain model. Keep PR #446 unmerged while its scope is reconciled with this decision. The next code work is a focused Phase 3C redesign of domain initialization, expansion removal from the live path, open-boundary physics, and total-field void-export accounting. Do not proceed to Phase 3D or make performance-only shortcuts.
