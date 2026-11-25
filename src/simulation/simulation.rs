@@ -2784,6 +2784,9 @@ mod decomposition_finalization_tests {
         // The starting usable reserve is an explicit external input, not a
         // tick-zero stored baseline. Counting both would double-count it.
         assert_eq!(inventory.initial_usable_energy, 0.0);
+        assert_eq!(inventory.initial_ambient_energy, inventory.current_ambient_energy);
+        assert_eq!(inventory.initial_spatial_field_energy, 0.0);
+        assert_eq!(inventory.current_spatial_field_energy, 0.0);
         assert_eq!(
             inventory.external_energy_input,
             inventory.current_usable_energy
@@ -3418,6 +3421,12 @@ mod live_ambient_energy_contract_tests {
             spatial.accounting_residual
         );
         assert!(spatial.accounting_residual.abs() < 1.0e-9);
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            inventory.is_balanced_without_creation(1.0e-7),
+            "live ambient and spatial-field energy must reconcile in the independent world inventory: {:?}",
+            inventory.residual()
+        );
     }
 
     #[test]
