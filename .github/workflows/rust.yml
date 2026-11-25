@@ -13,6 +13,11 @@ on:
         options:
           - '10'
           - '60'
+      run_domain_scaling_benchmark:
+        description: 'Run the manual 32/64/128/250 bounded-domain scaling benchmark'
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main, 'movement/**']
   pull_request:
@@ -111,3 +116,19 @@ jobs:
         if: success()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
+
+  domain-scaling-benchmark:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_domain_scaling_benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo dependencies and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Benchmark bounded resonance-domain sizes
+        run: bash scripts/benchmark_resonance_domain_scaling.sh
