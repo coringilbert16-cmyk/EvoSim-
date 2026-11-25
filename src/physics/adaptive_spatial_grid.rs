@@ -2894,6 +2894,68 @@ mod tests {
             }
         }
     }
+
+    /// Diagnostic only: compares the cost of the full-field energy evaluator
+    /// with the complete solver advance at the same grid sizes. This isolates
+    /// the repeated global accounting pass without changing production code.
+    #[test]
+    #[ignore = "manual wave energy accounting profile"]
+    fn benchmark_wave_energy_accounting_cost() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        const SIZES: [u32; 4] = [32, 64, 128, 250];
+        const TICKS: u64 = 20;
+
+        eprintln!("width,height,leaves,substeps_per_tick,energy_passes,energy_passes_ms,advance_ms,estimated_energy_share_pct");
+        for size in SIZES {
+            let mut grid = AdaptiveSpatialGrid::new(size, size, 1.0, 2)
+                .expect("benchmark grid dimensions are valid");
+            let center = (size as f64 - 1.0) * 0.5;
+            for key in grid.leaves.keys().copied().collect::<Vec<_>>() {
+                let bounds = grid.cell_bounds(key).unwrap();
+                let x = 0.5 * (bounds.min_x + bounds.max_x);
+                let y = 0.5 * (bounds.min_y + bounds.max_y);
+                let envelope =
+                    (-((x - center).powi(2) + (y - center).powi(2)) / 18.0).exp();
+                let phase = 0.7 * (x - center);
+                if !is_computational_boundary(&grid, key) {
+                    grid.set_state(
+                        key,
+                        AdaptiveCell {
+                            previous: envelope * (phase + 0.08).cos(),
+                            current: envelope * phase.cos(),
+                        },
+                    )
+                    .unwrap();
+                }
+            }
+
+            let mut field = AdaptiveWaveField::new(grid, 1.0, 1.0)
+                .expect("benchmark solver must satisfy its CFL bound");
+            let energy_passes = 2 * field.substeps_per_tick() as u64 * TICKS;
+            let energy_start = Instant::now();
+            for _ in 0..energy_passes {
+                black_box(field.energy());
+            }
+            let energy_elapsed = energy_start.elapsed();
+
+            let advance_start = Instant::now();
+            field.advance_ticks(TICKS).expect("benchmark ticks must advance");
+            let advance_elapsed = advance_start.elapsed();
+
+            let energy_ms = energy_elapsed.as_secs_f64() * 1000.0;
+            let advance_ms = advance_elapsed.as_secs_f64() * 1000.0;
+            let estimated_share = 100.0 * energy_ms / advance_ms;
+            eprintln!(
+                "{size},{size},{},{},{energy_passes},{energy_ms:.3},{advance_ms:.3},{estimated_share:.1}",
+                field.grid().leaf_count(),
+                field.substeps_per_tick(),
+            );
+            black_box(field.energy());
+        }
+    }
+
 }
 
 #[cfg(test)]
