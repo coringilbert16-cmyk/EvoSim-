@@ -113,7 +113,8 @@ impl LiveResonanceField {
         x: f64,
         y: f64,
     ) -> Result<bool, AdaptiveGridError> {
-        self.wave.ensure_position_covered(x, y, 4.0, EXPANSION_PADDING_BASE_CELLS)
+        self.wave
+            .ensure_position_covered(x, y, 4.0, EXPANSION_PADDING_BASE_CELLS)
     }
 
     pub(crate) fn sample(
