@@ -90,3 +90,30 @@ After a boundary treatment passes the isolated tests:
 ## Current disposition
 
 No production solver behavior has been changed by this investigation. PR #446 remains unmerged and does not yet satisfy the approved finite-domain model. Phase 3D remains on hold.
+
+## Hybrid soft-plus-hard boundary experiment (2026-11-25)
+
+The proposed hybrid is now represented by an isolated, ignored reference-solver diagnostic. It is not connected to the live solver and does not alter production physics.
+
+The experiment applies the existing graded sponge and then explicitly clears a narrow terminal strip at the right edge after each solver substep. It sweeps two sponge widths (12 and 20 cells) and two maximum damping values (0.15 and 0.40). It reports independently:
+
+- Reflected-to-incident **amplitude** ratio at an interior probe.
+- The reference solver's exact discrete soft-layer absorbed-energy total.
+- The signed change in discrete field energy caused by terminal-strip removal.
+- Remaining discrete field energy.
+
+The terminal removal is deliberately reported as a signed quantity. Clearing a strip changes not only its local kinetic state but also the discrete gradient cross-energy at the interface. If the signed change is negative, the proposed hard cleanup has increased the solver's discrete energy and cannot be interpreted as exported energy. Even if positive, it must be tested for reflection and shown to represent the complete energy change exactly once.
+
+This first diagnostic uses a right-going packet and one probe. It is a mechanism check, not boundary validation. It does not establish an acceptance tolerance, cover other edges/corners/angles/frequencies, or validate the live ambient-composed energy balance. The broader incidence matrix remains required.
+
+## Live-field inventory failure investigation
+
+The exact-head CI failure is independent of boundary crossing: the failing integration test advances a 64-cell test window with domain expansion disabled and a standing-wave initial condition.
+
+A per-tick diagnostic has been added to compare:
+- Change in composed spatial-field energy.
+- Incremental ambient world work currently calculated by the live adapter.
+- Change in disturbance-only energy.
+- The resulting per-tick and cumulative accounting residual.
+
+This will distinguish an ambient-work integration mismatch from disturbance-energy drift. No accounting formula has been changed pending those measurements. The observed final residual on the preceding run was 183.19864464313255; this is not attributed to the boundary or counted as exported energy.
