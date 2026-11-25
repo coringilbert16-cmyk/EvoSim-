@@ -3429,6 +3429,44 @@ mod live_ambient_energy_contract_tests {
     }
 
     #[test]
+    fn nonzero_live_field_reconciles_through_the_independent_world_inventory() {
+        let mut simulation = Simulation::new(42, 10.0);
+        simulation
+            .resonance_field
+            .set_initial_cell_state_for_test(
+                crate::adaptive_spatial_grid::CellKey {
+                    level: 0,
+                    x: 16,
+                    y: 16,
+                },
+                0.0,
+                0.5,
+            );
+
+        // Treat the seeded disturbance as part of the test's opening inventory,
+        // not as energy created during the measured interval.
+        let opening_field = simulation.resonance_field.energy_state();
+        simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
+        simulation.energy_ledger.total_spatial_disturbance_energy_held =
+            opening_field.disturbance_energy;
+        simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
+        simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
+
+        for _ in 0..20 {
+            simulation.advance_ambient_energy();
+        }
+
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!(inventory.current_spatial_field_energy > 0.0);
+        assert!(inventory.spatial_field_world_work.abs() > 0.0);
+        assert!(
+            inventory.is_balanced(1.0e-5),
+            "nonzero live field must reconcile with ambient world work: {:?}",
+            inventory.residual()
+        );
+    }
+
+    #[test]
     fn production_ambient_tick_updates_ambient_and_spatial_ledgers_together() {
         let mut simulation = Simulation::new(42, 10.0);
         let opening = simulation.energy_ledger.total_ambient_energy_held;
