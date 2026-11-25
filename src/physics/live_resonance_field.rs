@@ -143,10 +143,10 @@ impl LiveResonanceField {
     pub(crate) fn advance_one_tick(
         &mut self,
         ambient_before: AmbientModeSample,
-        ambient_after: AmbientModeSample,
+        ambient_midpoint: AmbientModeSample,
     ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
         if ambient_before.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
-            || ambient_after.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
+            || ambient_midpoint.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
         {
             return Err(LiveResonanceFieldError::InvalidAccountingState);
         }
@@ -167,9 +167,7 @@ impl LiveResonanceField {
         let after_disturbance_velocity = (after_integrals.current_displacement
             - after_integrals.previous_displacement)
             / time_step;
-        let ambient_midpoint_velocity =
-            0.5 * (ambient_before.carrier_velocity + ambient_after.carrier_velocity);
-        let ambient_midpoint_sample = midpoint_ambient_sample(ambient_before, ambient_after);
+        let ambient_midpoint_velocity = ambient_midpoint.carrier_velocity;
         let cross_energy =
             FIELD_NORMALIZATION * ambient_midpoint_velocity * after_disturbance_velocity;
         let cross_drive_work = FIELD_NORMALIZATION
@@ -209,30 +207,8 @@ impl LiveResonanceField {
             cumulative_computational_outflow: 0.0,
             accounting_residual,
         };
-        self.ambient_sample = ambient_midpoint_sample;
+        self.ambient_sample = ambient_midpoint;
         Ok(self.energy_state)
-    }
-}
-
-fn midpoint_ambient_sample(
-    before: AmbientModeSample,
-    after: AmbientModeSample,
-) -> AmbientModeSample {
-    AmbientModeSample {
-        tick: after.tick,
-        energy_density: 0.5 * (before.energy_density + after.energy_density),
-        total_energy: 0.5 * (before.total_energy + after.total_energy),
-        amplitude: 0.5 * (before.amplitude + after.amplitude),
-        amplitude_velocity: 0.5 * (before.amplitude_velocity + after.amplitude_velocity),
-        field_normalization: before.field_normalization,
-        angular_frequency: 0.5 * (before.angular_frequency + after.angular_frequency),
-        carrier_phase_radians: 0.5 * (before.carrier_phase_radians + after.carrier_phase_radians),
-        carrier_value: 0.5 * (before.carrier_value + after.carrier_value),
-        carrier_velocity: 0.5 * (before.carrier_velocity + after.carrier_velocity),
-        carrier_acceleration: 0.5 * (before.carrier_acceleration + after.carrier_acceleration),
-        instantaneous_oscillator_energy_density: 0.5
-            * (before.instantaneous_oscillator_energy_density
-                + after.instantaneous_oscillator_energy_density),
     }
 }
 
@@ -263,9 +239,9 @@ mod tests {
         let mut field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
         let before = ambient.sample();
         ambient.advance_one_tick().unwrap();
-        let after = ambient.sample();
+        let midpoint = ambient.sample_midpoint_before_current().unwrap();
 
-        let state = field.advance_one_tick(before, after).unwrap();
+        let state = field.advance_one_tick(before, midpoint).unwrap();
         assert_eq!(state.disturbance_energy, 0.0);
         assert_eq!(state.cross_energy, 0.0);
         assert_eq!(state.total_energy, 0.0);
