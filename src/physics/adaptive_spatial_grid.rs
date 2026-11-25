@@ -2847,7 +2847,8 @@ mod tests {
 
                 if localized {
                     let center = (size as f64 - 1.0) * 0.5;
-                    for (key, _) in grid.leaves() {
+                    let keys: Vec<_> = grid.leaves().map(|(key, _)| key).collect();
+                    for key in keys {
                         let bounds = grid.cell_bounds(key).unwrap();
                         let x = 0.5 * (bounds.min_x + bounds.max_x);
                         let y = 0.5 * (bounds.min_y + bounds.max_y);
