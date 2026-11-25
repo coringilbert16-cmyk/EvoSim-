@@ -2852,12 +2852,14 @@ mod tests {
                         let bounds = grid.cell_bounds(key).unwrap();
                         let x = 0.5 * (bounds.min_x + bounds.max_x);
                         let y = 0.5 * (bounds.min_y + bounds.max_y);
-                        let envelope = (-((x - center).powi(2) + (y - center).powi(2)) / 18.0).exp();
+                        let envelope =
+                            (-((x - center).powi(2) + (y - center).powi(2)) / 18.0).exp();
                         let phase = 0.7 * (x - center);
                         let previous = envelope * (phase + 0.08).cos();
                         let current = envelope * phase.cos();
                         if !is_computational_boundary(&grid, key) {
-                            grid.set_state(key, AdaptiveCell { previous, current }).unwrap();
+                            grid.set_state(key, AdaptiveCell { previous, current })
+                                .unwrap();
                         }
                     }
                 }
@@ -2869,7 +2871,9 @@ mod tests {
                 let solver_build = solver_start.elapsed();
                 let initial_energy = field.energy();
                 let advance_start = Instant::now();
-                field.advance_ticks(TICKS).expect("benchmark ticks must advance");
+                field
+                    .advance_ticks(TICKS)
+                    .expect("benchmark ticks must advance");
                 let advance = advance_start.elapsed();
                 let final_energy = field.energy();
                 let drift = if initial_energy.abs() <= f64::MIN_POSITIVE {
@@ -2890,5 +2894,4 @@ mod tests {
             }
         }
     }
-
 }
