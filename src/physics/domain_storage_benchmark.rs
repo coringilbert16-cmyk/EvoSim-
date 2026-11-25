@@ -80,9 +80,8 @@ impl Dense {
                         + self.cells[i - self.width].current
                         + self.cells[i + self.width].current
                         - 4.0 * self.cells[i].current;
-                    next[i] = 2.0 * self.cells[i].current
-                        - self.cells[i].previous
-                        + 0.25 * laplacian;
+                    next[i] =
+                        2.0 * self.cells[i].current - self.cells[i].previous + 0.25 * laplacian;
                 }
             }
             for (cell, value) in self.cells.iter_mut().zip(next) {
@@ -112,7 +111,11 @@ impl OrderedMap {
                 );
             }
         }
-        Self { width, height, cells }
+        Self {
+            width,
+            height,
+            cells,
+        }
     }
 
     fn current(&self, index: usize) -> f64 {
@@ -142,6 +145,8 @@ impl OrderedMap {
         }
     }
 
+    // This is a lower bound: BTreeMap node links, color/allocator metadata,
+    // and allocator rounding are intentionally not guessed.
     fn bytes_lower_bound(&self) -> usize {
         self.cells.len() * (size_of::<usize>() + size_of::<State>())
     }
@@ -240,7 +245,6 @@ impl ActiveRegion {
     fn bytes(&self) -> usize {
         self.cells.capacity() * size_of::<State>()
     }
-
 }
 
 fn max_difference(dense: &Dense, map: &OrderedMap, region: &ActiveRegion) -> f64 {
