@@ -3436,6 +3436,13 @@ mod live_ambient_energy_contract_tests {
         let mut slow = Simulation::new(42, 1.0);
         let mut fast = Simulation::new(42, 900.0);
 
+        // Begin at the same nonzero ambient phase used by the verified field
+        // expansion test, so the disturbance couples to a moving carrier.
+        for _ in 0..100 {
+            slow.advance_ambient_energy();
+            fast.advance_ambient_energy();
+        }
+
         // Treat the seeded disturbance as part of each opening inventory,
         // not as energy created during the measured interval.
         for simulation in [&mut slow, &mut fast] {
