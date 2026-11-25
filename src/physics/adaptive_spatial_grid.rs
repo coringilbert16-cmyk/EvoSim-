@@ -1734,7 +1734,7 @@ mod tests {
     fn expanding_tick_runner_moves_window_before_disturbance_reaches_boundary() {
         let mut grid = AdaptiveSpatialGrid::new(12, 12, 1.0, 2).unwrap();
         grid.set_state(
-            CellKey { level: 0, x: 4, y: 5 },
+            CellKey { level: 0, x: 3, y: 5 },
             AdaptiveCell {
                 previous: 0.0,
                 current: 0.5,
