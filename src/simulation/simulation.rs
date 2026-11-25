@@ -3448,10 +3448,9 @@ mod live_ambient_energy_contract_tests {
         // Seed the disturbance before the adaptive wave grid advances.
         // Its energy is opening inventory, not energy created by this test.
         for simulation in [&mut slow, &mut fast] {
-            // Keep the full 120-tick coupling check inside the approved
-            // 250x250 world-sized test domain. A 32x32 fixed-zero grid lets
-            // the disturbance reach its computational edge during this run,
-            // causing artificial energy loss unrelated to ambient coupling.
+            // A resolved standing-wave mode satisfies the fixed-zero test
+            // boundary, so it remains conservative for all 120 ticks without
+            // requiring a full 250x250 point-source propagation window.
             simulation.resonance_field =
                 crate::live_resonance_field::LiveResonanceField::new_with_test_window(
                     250.0,
@@ -3460,18 +3459,12 @@ mod live_ambient_energy_contract_tests {
                         .ambient_energy
                         .sample_midpoint_before_current()
                         .expect("ambient carrier midpoint must be available"),
-                    250,
+                    64,
                 )
-                .expect("small deterministic test field must initialize");
-            simulation.resonance_field.set_initial_cell_state_for_test(
-                crate::adaptive_spatial_grid::CellKey {
-                    level: 0,
-                    x: 125,
-                    y: 125,
-                },
-                0.0,
-                0.5,
-            );
+                .expect("compact deterministic test field must initialize");
+            simulation
+                .resonance_field
+                .set_initial_standing_mode_for_test(0.5);
             let opening_field = simulation.resonance_field.energy_state();
             simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
             simulation
