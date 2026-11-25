@@ -949,6 +949,15 @@ impl Simulation {
     /// Advances the approved ambient energy envelope as part of the live simulation clock.
     /// Signed changes are booked separately from receiver/chemistry transactions.
     fn advance_ambient_energy(&mut self) {
+        self.advance_ambient_energy_with_domain_expansion(true);
+    }
+
+    #[cfg(test)]
+    fn advance_ambient_energy_without_domain_expansion(&mut self) {
+        self.advance_ambient_energy_with_domain_expansion(false);
+    }
+
+    fn advance_ambient_energy_with_domain_expansion(&mut self, expand_domain: bool) {
         let ambient_before = self.ambient_energy.sample();
         let transfer = self
             .ambient_energy
@@ -962,10 +971,14 @@ impl Simulation {
         self.energy_ledger.total_ambient_energy_withdrawn += transfer.withdrawn_energy;
         self.energy_ledger.total_ambient_energy_held = transfer.energy_after;
 
-        let spatial_state = self
-            .resonance_field
-            .advance_one_tick(ambient_before, ambient_midpoint)
-            .expect("spatial resonance field must advance and account deterministically");
+        let spatial_state = if expand_domain {
+            self.resonance_field
+                .advance_one_tick(ambient_before, ambient_midpoint)
+        } else {
+            self.resonance_field
+                .advance_one_tick_without_domain_expansion(ambient_before, ambient_midpoint)
+        }
+        .expect("spatial resonance field must advance and account deterministically");
         self.energy_ledger.total_spatial_disturbance_energy_held = spatial_state.disturbance_energy;
         self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
         self.energy_ledger.total_spatial_field_energy_held = spatial_state.total_energy;
@@ -3473,13 +3486,13 @@ mod live_ambient_energy_contract_tests {
         // Advance to the moving ambient phase used by the validated expansion
         // test. This also evolves the already-seeded disturbance correctly.
         for _ in 0..100 {
-            slow.advance_ambient_energy();
-            fast.advance_ambient_energy();
+            slow.advance_ambient_energy_without_domain_expansion();
+            fast.advance_ambient_energy_without_domain_expansion();
         }
 
         for _ in 0..20 {
-            slow.advance_ambient_energy();
-            fast.advance_ambient_energy();
+            slow.advance_ambient_energy_without_domain_expansion();
+            fast.advance_ambient_energy_without_domain_expansion();
         }
 
         assert_eq!(
