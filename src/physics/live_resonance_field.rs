@@ -131,6 +131,35 @@ impl LiveResonanceField {
         self.initial_total_energy
     }
 
+    pub(crate) fn substep_time_step(&self) -> f64 {
+        self.wave.time_step()
+    }
+
+    pub(crate) fn set_initial_ambient_sample(
+        &mut self,
+        ambient_sample: AmbientModeSample,
+    ) -> Result<(), LiveResonanceFieldError> {
+        if ambient_sample.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits() {
+            return Err(LiveResonanceFieldError::InvalidAccountingState);
+        }
+        let integrals = self.wave.grid().integrated_state();
+        let disturbance_velocity = (integrals.current_displacement
+            - integrals.previous_displacement)
+            / self.wave.time_step();
+        let disturbance_energy = self.wave.energy();
+        let cross_energy = FIELD_NORMALIZATION * ambient_sample.carrier_velocity * disturbance_velocity;
+        let total_energy = disturbance_energy + cross_energy;
+        if !total_energy.is_finite() || disturbance_energy < 0.0 {
+            return Err(LiveResonanceFieldError::InvalidAccountingState);
+        }
+        self.ambient_sample = ambient_sample;
+        self.energy_state.disturbance_energy = disturbance_energy;
+        self.energy_state.cross_energy = cross_energy;
+        self.energy_state.total_energy = total_energy;
+        self.initial_total_energy = total_energy;
+        Ok(())
+    }
+
     /// Expands the zero-disturbance exterior into the computational window
     /// before a caller establishes an initial condition at an arbitrary point.
     pub(crate) fn ensure_position_covered(
@@ -259,20 +288,23 @@ impl LiveResonanceField {
     /// separately accounted by WorldGeneratedAmbientMode.
     pub(crate) fn advance_one_tick(
         &mut self,
-        ambient_before: AmbientModeSample,
+        ambient_start: AmbientModeSample,
         ambient_midpoint: AmbientModeSample,
+        ambient_end: AmbientModeSample,
     ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
-        self.advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, true)
+        self.advance_one_tick_with_domain_policy(ambient_start, ambient_midpoint, ambient_end, true)
     }
 
     pub(crate) fn advance_one_tick_with_domain_policy(
         &mut self,
-        ambient_before: AmbientModeSample,
+        ambient_start: AmbientModeSample,
         ambient_midpoint: AmbientModeSample,
+        ambient_end: AmbientModeSample,
         expand_domain: bool,
     ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
-        if ambient_before.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
+        if ambient_start.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
             || ambient_midpoint.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
+            || ambient_end.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
         {
             return Err(LiveResonanceFieldError::InvalidAccountingState);
         }
@@ -297,19 +329,18 @@ impl LiveResonanceField {
         let after_disturbance_velocity = (after_integrals.current_displacement
             - after_integrals.previous_displacement)
             / time_step;
-        let ambient_midpoint_velocity = ambient_midpoint.carrier_velocity;
+        let ambient_end_velocity = ambient_end.carrier_velocity;
         let cross_energy =
-            FIELD_NORMALIZATION * ambient_midpoint_velocity * after_disturbance_velocity;
+            FIELD_NORMALIZATION * ambient_end_velocity * after_disturbance_velocity;
         let midpoint_disturbance_velocity =
             0.5 * (before_disturbance_velocity + after_disturbance_velocity);
-        // Simpson integration spans the two leapfrog half-tick states. The
-        // ambient acceleration is sampled at both endpoints and the integer
-        // tick midpoint; disturbance velocity at the midpoint is interpolated
-        // from the two centered half-tick values.
+        // Simpson integration is aligned to the actual leapfrog velocity
+        // timestamps: t - dt/2, t + 1/2 - dt/2, and t + 1 - dt/2.
+        // The ambient samples are supplied at those same three times.
         let cross_drive_work = FIELD_NORMALIZATION
-            * (self.ambient_sample.carrier_acceleration * before_disturbance_velocity
-                + 4.0 * ambient_before.carrier_acceleration * midpoint_disturbance_velocity
-                + ambient_midpoint.carrier_acceleration * after_disturbance_velocity)
+            * (ambient_start.carrier_acceleration * before_disturbance_velocity
+                + 4.0 * ambient_midpoint.carrier_acceleration * midpoint_disturbance_velocity
+                + ambient_end.carrier_acceleration * after_disturbance_velocity)
             / 6.0;
         let disturbance_energy = self.wave.energy();
         let total_energy = disturbance_energy + cross_energy;
@@ -319,7 +350,7 @@ impl LiveResonanceField {
         if [
             before_disturbance_velocity,
             after_disturbance_velocity,
-            ambient_midpoint_velocity,
+            ambient_end_velocity,
             cross_energy,
             cross_drive_work,
             disturbance_energy,
@@ -344,7 +375,7 @@ impl LiveResonanceField {
             cumulative_computational_outflow: 0.0,
             accounting_residual,
         };
-        self.ambient_sample = ambient_midpoint;
+        self.ambient_sample = ambient_end;
         Ok(self.energy_state)
     }
 }
