@@ -432,3 +432,46 @@ Before reporting the three requested ledger quantities, derive the exact subdoma
 3. PML auxiliary-state storage and cumulative PML damping, with any variable-profile commutator/remainder terms shown explicitly.
 
 Raw `||φ||²` is only an auxiliary-state norm, not automatically stored physical energy. Likewise, the constant-coefficient dissipation expression is only a diagnostic under variable damping until the extra profile-dependent terms are accounted for. Do not label either as a conserved ledger category prematurely.
+
+
+## 12. Discrete subdomain balance: interface term defined by restriction
+
+The failed pointwise continuum-flux estimate is replaced by an operator-level definition. This section establishes the algebraic interface term; it does **not** yet claim a closed physical/PML energy ledger for the full damped recurrence.
+
+Let the scalar degrees of freedom be partitioned into physical and PML subsets, with restriction/injection operators (R_Omega) and (R_P). Let (G) map cell scalars to oriented faces, and let (D=-G^*) under the actual cell/face inner products. Split the face set into faces wholly inside each subdomain and interface-crossing faces.
+
+For any scalar fields (v,w), the stiffness pairing on the physical subdomain has the discrete Green identity
+
+`<v, K w>_Ω = <G_Ω v, G_Ω w>_faces,Ω + B_Ω(v,w)`
+
+where `K=G^*G=-DG`, and `B_Ω` is the signed contribution from interface-crossing faces after applying the physical-side restriction. This boundary bilinear form is computed from the *same face gradient entries* used by the global solver. It is not an independently discretized flux.
+
+For the second-order physical wave energy, the undamped part of the semidiscrete equation contributes the interface power
+
+`P_interface^wave = -c² B_Ω(u_t,u)`
+
+with sign fixed by the convention that positive power is energy entering the PML from the physical domain. The auxiliary-divergence term contributes a separate face pairing,
+
+`P_interface^aux = - B_Ω(u_t, φ_n)`
+
+where `φ_n` denotes the oriented normal auxiliary component on the crossing face. The combined interface transfer is the sum of these operator-derived pairings, evaluated with the solver's actual staggered time-level/average for the explicit recurrence.
+
+**Important qualification:** these expressions identify the interface terms from the spatial summation-by-parts split. To obtain a complete discrete ledger, they must be paired with the exact half-step kinetic/potential energy of the published recurrence, including its `ψ,Φ,Ψ` analysis fields, damping terms, and any variable-profile commutators. The simple wave-energy expression above is not yet the final discrete export formula.
+
+### Required numerical reconciliation
+
+For each test, compute independently:
+
+1. physical-subdomain energy change from the specialized discrete energy;
+2. interface transfer from the restricted operator bilinear form, using the recurrence's exact temporal pairing;
+3. interior PML energy change plus PML damping/remainder terms.
+
+Then evaluate the closure residual
+
+`r_Ω = ΔE_Ω + Δt P_interface - Δt W_Ω`
+
+with the sign convention stated above, where `W_Ω` includes all non-interface physical-domain work terms. A valid implementation should close to the expected floating-point/operator tolerance before the interface term is reported as exported energy.
+
+Use a manufactured packet crossing a straight interface first, then an oblique packet and a corner-directed packet. Run the same state with the interface moved by one grid cell; the total global balance should remain invariant while the partitioned export changes consistently with the new cut.
+
+No production code or energy ledger was changed. The interface flux is now defined as an operator-derived candidate, not a validated measurement.
