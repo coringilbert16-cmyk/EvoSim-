@@ -971,14 +971,14 @@ impl Simulation {
         self.energy_ledger.total_ambient_energy_withdrawn += transfer.withdrawn_energy;
         self.energy_ledger.total_ambient_energy_held = transfer.energy_after;
 
-        let spatial_state = if expand_domain {
-            self.resonance_field
-                .advance_one_tick(ambient_before, ambient_midpoint)
-        } else {
-            self.resonance_field
-                .advance_one_tick_without_domain_expansion(ambient_before, ambient_midpoint)
-        }
-        .expect("spatial resonance field must advance and account deterministically");
+        let spatial_state = self
+            .resonance_field
+            .advance_one_tick_with_domain_policy(
+                ambient_before,
+                ambient_midpoint,
+                expand_domain,
+            )
+            .expect("spatial resonance field must advance and account deterministically");
         self.energy_ledger.total_spatial_disturbance_energy_held = spatial_state.disturbance_energy;
         self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
         self.energy_ledger.total_spatial_field_energy_held = spatial_state.total_energy;
