@@ -415,8 +415,7 @@ impl AdaptiveSpatialGrid {
         }
         let gradient_x = (yy * rhs_x - xy * rhs_y) / determinant;
         let gradient_y = (xx * rhs_y - xy * rhs_x) / determinant;
-        (gradient_x.is_finite() && gradient_y.is_finite())
-            .then_some((gradient_x, gradient_y))
+        (gradient_x.is_finite() && gradient_y.is_finite()).then_some((gradient_x, gradient_y))
     }
 
     /// Position-resolved midpoint state reconstructed from the two stored
@@ -443,10 +442,8 @@ impl AdaptiveSpatialGrid {
         let offset_y = y - center_y;
         let midpoint_gradient_x = 0.5 * (previous_gradient.0 + current_gradient.0);
         let midpoint_gradient_y = 0.5 * (previous_gradient.1 + current_gradient.1);
-        let velocity_gradient_x =
-            (current_gradient.0 - previous_gradient.0) / time_step;
-        let velocity_gradient_y =
-            (current_gradient.1 - previous_gradient.1) / time_step;
+        let velocity_gradient_x = (current_gradient.0 - previous_gradient.0) / time_step;
+        let velocity_gradient_y = (current_gradient.1 - previous_gradient.1) / time_step;
         let displacement = 0.5 * (state.previous + state.current)
             + midpoint_gradient_x * offset_x
             + midpoint_gradient_y * offset_y;
@@ -559,16 +556,17 @@ impl AdaptiveSpatialGrid {
     /// The operation is valid only while a two-cell guard band at the old
     /// boundary is exactly undisturbed, so the old fixed-zero boundary has not
     /// truncated an outgoing signal.
-    pub(crate) fn expand_by_base_cells(
-        &mut self,
-        padding: u32,
-    ) -> Result<(), AdaptiveGridError> {
+    pub(crate) fn expand_by_base_cells(&mut self, padding: u32) -> Result<(), AdaptiveGridError> {
         if padding == 0 {
             return Err(AdaptiveGridError::InvalidParameter);
         }
         let new_width = self
             .width
-            .checked_add(padding.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?)
+            .checked_add(
+                padding
+                    .checked_mul(2)
+                    .ok_or(AdaptiveGridError::InvalidDimensions)?,
+            )
             .ok_or(AdaptiveGridError::InvalidDimensions)?;
         let new_height = self
             .height
@@ -586,7 +584,9 @@ impl AdaptiveSpatialGrid {
         let old_max_x = self.origin_x + self.width as f64 * self.base_spacing;
         let old_max_y = self.origin_y + self.height as f64 * self.base_spacing;
         for (key, state) in self.leaves() {
-            let bounds = self.cell_bounds(key).ok_or(AdaptiveGridError::MissingCell)?;
+            let bounds = self
+                .cell_bounds(key)
+                .ok_or(AdaptiveGridError::MissingCell)?;
             let in_guard = bounds.min_x < self.origin_x + guard_width
                 || bounds.min_y < self.origin_y + guard_width
                 || bounds.max_x > old_max_x - guard_width
@@ -605,7 +605,11 @@ impl AdaptiveSpatialGrid {
                 level: key.level,
                 x: key
                     .x
-                    .checked_add(padding.checked_mul(scale).ok_or(AdaptiveGridError::InvalidDimensions)?)
+                    .checked_add(
+                        padding
+                            .checked_mul(scale)
+                            .ok_or(AdaptiveGridError::InvalidDimensions)?,
+                    )
                     .ok_or(AdaptiveGridError::InvalidDimensions)?,
                 y: key
                     .y
@@ -908,8 +912,7 @@ impl AdaptiveWaveField {
         candidate.expand_by_base_cells(padding_base_cells)?;
         let candidate_stiffness = stiffness_matrix(&candidate);
         let maximum_row_sum = maximum_stiffness_row_sum(&candidate, &candidate_stiffness);
-        let stability_measure =
-            self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
+        let stability_measure = self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
         if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
             return Err(AdaptiveGridError::UnstableTimeStep);
         }
@@ -961,11 +964,7 @@ impl AdaptiveWaveField {
 
     /// Returns displacement, centered time derivative, and spatial gradient
     /// at an arbitrary position using the adaptive finite-volume state.
-    pub(crate) fn sample_kinematics(
-        &self,
-        x: f64,
-        y: f64,
-    ) -> Option<ReconstructedWaveSample> {
+    pub(crate) fn sample_kinematics(&self, x: f64, y: f64) -> Option<ReconstructedWaveSample> {
         self.grid.reconstruct_sample(x, y, self.time_step)
     }
 
@@ -1703,7 +1702,11 @@ mod tests {
     #[test]
     fn grid_expansion_preserves_physical_coordinates_and_integrated_state() {
         let mut grid = AdaptiveSpatialGrid::new_at_origin(6, 6, 1.0, 2, 10.0, 20.0).unwrap();
-        let key = CellKey { level: 0, x: 2, y: 3 };
+        let key = CellKey {
+            level: 0,
+            x: 2,
+            y: 3,
+        };
         let state = AdaptiveCell {
             previous: -0.25,
             current: 0.75,
@@ -1734,7 +1737,11 @@ mod tests {
     fn expanding_tick_runner_moves_window_before_disturbance_reaches_boundary() {
         let mut grid = AdaptiveSpatialGrid::new(12, 12, 1.0, 2).unwrap();
         grid.set_state(
-            CellKey { level: 0, x: 3, y: 5 },
+            CellKey {
+                level: 0,
+                x: 3,
+                y: 5,
+            },
             AdaptiveCell {
                 previous: 0.0,
                 current: 0.5,
@@ -1759,7 +1766,11 @@ mod tests {
     fn wave_domain_expansion_preserves_energy_and_sampled_state() {
         let mut grid = AdaptiveSpatialGrid::new(8, 8, 1.0, 2).unwrap();
         grid.set_state(
-            CellKey { level: 0, x: 3, y: 3 },
+            CellKey {
+                level: 0,
+                x: 3,
+                y: 3,
+            },
             AdaptiveCell {
                 previous: 0.2,
                 current: 0.4,
