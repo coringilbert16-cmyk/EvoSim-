@@ -269,7 +269,6 @@ fn max_difference(dense: &Dense, map: &OrderedMap, region: &ActiveRegion) -> f64
     maximum
 }
 
-
 #[test]
 fn dense_uniform_kernel_matches_production_adaptive_uniform_operator() {
     const SIZE: usize = 32;
