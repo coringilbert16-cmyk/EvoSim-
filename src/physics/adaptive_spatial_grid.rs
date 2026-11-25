@@ -1812,7 +1812,10 @@ mod tests {
 
             close(field.energy(), energy_before);
             close(field.absorbed_energy(), outflow_before);
-            close(field.energy() + field.absorbed_energy(), total_accounted_before);
+            close(
+                field.energy() + field.absorbed_energy(),
+                total_accounted_before,
+            );
             close(
                 field.grid().integrated_state().current_displacement,
                 integrals_before.current_displacement,
@@ -1836,10 +1839,7 @@ mod tests {
 
             close(field.energy(), energy_before_coarsen);
             close(field.absorbed_energy(), outflow_before_coarsen);
-            close(
-                field.energy() + field.absorbed_energy(),
-                evolved_total,
-            );
+            close(field.energy() + field.absorbed_energy(), evolved_total);
             close(
                 field.grid().integrated_state().current_displacement,
                 integrals_before_coarsen.current_displacement,
