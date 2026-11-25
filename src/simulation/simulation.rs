@@ -3458,6 +3458,64 @@ mod live_ambient_energy_contract_tests {
     }
 
     #[test]
+    #[ignore = "release-mode profiling diagnostic; run explicitly"]
+    fn profile_live_field_reconciliation_single_simulation() {
+        use std::time::Instant;
+
+        let mut simulation = Simulation::new(42, 1.0);
+        simulation.resonance_field =
+            crate::live_resonance_field::LiveResonanceField::new_with_test_window(
+                250.0,
+                250.0,
+                simulation.ambient_energy.sample(),
+                64,
+            )
+            .expect("compact deterministic test field must initialize");
+        let initial_ambient_sample = simulation
+            .ambient_energy
+            .sample_at_offset(-0.5 * simulation.resonance_field.substep_time_step())
+            .expect("test ambient sample must align with leapfrog velocity time");
+        simulation.resonance_field
+            .set_initial_ambient_sample(initial_ambient_sample)
+            .expect("test ambient sample must reconcile with the live field");
+        simulation.resonance_field.set_initial_cell_state_for_test(
+            crate::adaptive_spatial_grid::CellKey { level: 0, x: 16, y: 16 },
+            0.0,
+            0.5,
+        );
+        let opening_field = simulation.resonance_field.energy_state();
+        simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
+        simulation.energy_ledger.total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
+        simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
+        simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
+
+        let warmup_start = Instant::now();
+        for _ in 0..100 {
+            simulation.advance_ambient_energy();
+        }
+        let warmup_elapsed = warmup_start.elapsed();
+
+        let measured_start = Instant::now();
+        for _ in 0..20 {
+            simulation.advance_ambient_energy();
+        }
+        let measured_elapsed = measured_start.elapsed();
+
+        let inventory = simulation.energy_inventory_snapshot();
+        println!(
+            "phase3c_reconciliation_profile,simulations=1,warmup_ticks=100,warmup_ms={:.3},measured_ticks=20,measured_ms={:.3},total_ms={:.3},residual={:.12e},field_energy={:.12e},world_work={:.12e}",
+            warmup_elapsed.as_secs_f64() * 1000.0,
+            measured_elapsed.as_secs_f64() * 1000.0,
+            (warmup_elapsed + measured_elapsed).as_secs_f64() * 1000.0,
+            inventory.residual().unwrap_or(f64::NAN),
+            inventory.current_spatial_field_energy,
+            inventory.spatial_field_world_work,
+        );
+        assert!(inventory.current_spatial_field_energy > 0.0);
+        assert!(inventory.is_balanced(1.0e-5));
+    }
+
+    #[test]
     fn nonzero_live_field_is_deterministic_and_reconciles_world_inventory() {
         let mut slow = Simulation::new(42, 1.0);
         let mut fast = Simulation::new(42, 900.0);
