@@ -933,7 +933,8 @@ impl AdaptiveWaveField {
             return Ok(false);
         }
 
-        let required_padding = ((origin_x + margin - x).max(0.0)
+        let required_padding = ((origin_x + margin - x)
+            .max(0.0)
             .max(x - (max_x - margin))
             .max(origin_y + margin - y)
             .max(y - (max_y - margin))
