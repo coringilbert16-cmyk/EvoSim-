@@ -2848,9 +2848,7 @@ mod tests {
                 for x in 1..width - 1 {
                     let dx = x as f64 - source_x;
                     let dy = y as f64 - source_y;
-                    let envelope = (-0.5
-                        * ((dx / 8.0).powi(2) + (dy / 18.0).powi(2)))
-                    .exp();
+                    let envelope = (-0.5 * ((dx / 8.0).powi(2) + (dy / 18.0).powi(2))).exp();
                     let phase = wave_number * dx;
                     let index = field.index(x, y);
                     field.current[index] = envelope * phase.cos();
@@ -2860,8 +2858,7 @@ mod tests {
             }
 
             let incident_center = (probe_x - source_x) / 1.0;
-            let reflected_center =
-                ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x);
+            let reflected_center = ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x);
             let incident_window = (incident_center - 12.0)..=(incident_center + 12.0);
             let reflected_window = (reflected_center - 15.0)..=(reflected_center + 15.0);
             let final_tick = reflected_center + 17.0;
