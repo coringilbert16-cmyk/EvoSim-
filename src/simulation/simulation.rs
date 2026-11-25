@@ -2800,7 +2800,10 @@ mod decomposition_finalization_tests {
         // The starting usable reserve is an explicit external input, not a
         // tick-zero stored baseline. Counting both would double-count it.
         assert_eq!(inventory.initial_usable_energy, 0.0);
-        assert_eq!(inventory.initial_ambient_energy, inventory.current_ambient_energy);
+        assert_eq!(
+            inventory.initial_ambient_energy,
+            inventory.current_ambient_energy
+        );
         assert_eq!(inventory.initial_spatial_field_energy, 0.0);
         assert_eq!(inventory.current_spatial_field_energy, 0.0);
         assert_eq!(
@@ -3436,22 +3439,20 @@ mod live_ambient_energy_contract_tests {
         // Treat the seeded disturbance as part of each opening inventory,
         // not as energy created during the measured interval.
         for simulation in [&mut slow, &mut fast] {
-            simulation
-                .resonance_field
-                .set_initial_cell_state_for_test(
-                    crate::adaptive_spatial_grid::CellKey {
-                        level: 0,
-                        x: 16,
-                        y: 16,
-                    },
-                    0.0,
-                    0.5,
-                );
+            simulation.resonance_field.set_initial_cell_state_for_test(
+                crate::adaptive_spatial_grid::CellKey {
+                    level: 0,
+                    x: 16,
+                    y: 16,
+                },
+                0.0,
+                0.5,
+            );
             let opening_field = simulation.resonance_field.energy_state();
-            simulation.energy_ledger.initial_spatial_field_energy_held =
-                opening_field.total_energy;
-            simulation.energy_ledger.total_spatial_disturbance_energy_held =
-                opening_field.disturbance_energy;
+            simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
+            simulation
+                .energy_ledger
+                .total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
             simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
             simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
         }
@@ -3490,17 +3491,25 @@ mod live_ambient_energy_contract_tests {
         let ambient = simulation.ambient_energy.sample();
         let ledger = &simulation.energy_ledger;
         assert_eq!(ledger.total_ambient_energy_held, ambient.total_energy);
-        assert!((opening + ledger.total_ambient_energy_generated
-            - ledger.total_ambient_energy_withdrawn
-            - ledger.total_ambient_energy_held)
-            .abs()
-            < 1.0e-7);
+        assert!(
+            (opening + ledger.total_ambient_energy_generated
+                - ledger.total_ambient_energy_withdrawn
+                - ledger.total_ambient_energy_held)
+                .abs()
+                < 1.0e-7
+        );
 
         let spatial = simulation.resonance_field.energy_state();
-        assert_eq!(ledger.total_spatial_disturbance_energy_held, spatial.disturbance_energy);
+        assert_eq!(
+            ledger.total_spatial_disturbance_energy_held,
+            spatial.disturbance_energy
+        );
         assert_eq!(ledger.total_spatial_cross_energy_held, spatial.cross_energy);
         assert_eq!(ledger.total_spatial_field_energy_held, spatial.total_energy);
-        assert_eq!(ledger.total_spatial_field_world_work, spatial.cumulative_world_work);
+        assert_eq!(
+            ledger.total_spatial_field_world_work,
+            spatial.cumulative_world_work
+        );
         assert_eq!(
             ledger.total_spatial_field_computational_outflow,
             spatial.cumulative_computational_outflow
