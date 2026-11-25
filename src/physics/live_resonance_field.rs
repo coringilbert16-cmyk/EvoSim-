@@ -9,7 +9,7 @@ use crate::ambient_spatial_composition::{
     AmbientSpatialComposition, ComposedFieldSample, CompositionError, DisturbanceSample,
 };
 use crate::adaptive_spatial_grid::{
-    AdaptiveGridError, AdaptiveSpatialGrid, AdaptiveWaveField, CellKey,
+    AdaptiveGridError, AdaptiveSpatialGrid, AdaptiveWaveField,
 };
 use crate::world_generated_ambient_mode::AmbientModeSample;
 
@@ -199,15 +199,6 @@ impl LiveResonanceField {
         Ok(self.energy_state)
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_cell_state_for_test(
-        &mut self,
-        key: CellKey,
-        previous: f64,
-        current: f64,
-    ) -> Result<(), AdaptiveGridError> {
-        self.wave.grid_mut_for_test(key, previous, current)
-    }
 }
 
 #[cfg(test)]
