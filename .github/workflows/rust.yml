@@ -118,7 +118,7 @@ jobs:
 
 
   domain-scaling-benchmark:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_domain_scaling_benchmark
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_domain_scaling_benchmark)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
