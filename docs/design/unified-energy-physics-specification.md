@@ -58,7 +58,7 @@ The chemistry laboratory is a temporary experimental arrangement inside the plan
 
 The camera/observation window is nonphysical. It may pan, zoom, and follow subjects; crossing its edge changes only visibility. Objects and energy continue through that edge without any simulation event.
 
-For the initial homogeneous empty-space model, propagation speed is universal and constant. It is expressed in project-native world-distance units per simulation tick. Do not infer it from the old movement cutoff, viewer dimensions, observed wall-clock throughput, or a desired benchmark result.
+For the initial homogeneous empty-space model, propagation speed is universal and constant. It is expressed in project-native world-distance units per simulation tick. **User-approved initial reference value: `c = 1.0 L/tick` (2026-11-24).** This is a project-native scale convention, not an SI conversion, wall-clock calibration, or experimentally measured universal constant. It means a disturbance wavefront advances one world-distance unit per logical tick in homogeneous empty space. Retain the parameter as an explicit, versioned configuration value so later physical evidence can revise it without changing the governing equation. Do not infer it from the old movement cutoff, viewer dimensions, observed wall-clock throughput, or a desired benchmark result.
 
 The physical plane is infinite even if a numerical solver uses a finite computational window. Any truncation used for computation must be handled as a numerical approximation (for example, by a validated outgoing/absorbing treatment or a sufficiently expanded domain), never as an unmodeled physical wall. Numerical truncation must not silently reflect, absorb, delete, or duplicate energy.
 
@@ -86,7 +86,7 @@ One simulated day and one complete solar orbit are exactly 24,000 ticks. The sun
 
 For dimensionless u, dimensional consistency requires [c]=L/tick, [K]=E·tick²/L², [e]=E/L², [J]=E/(L·tick), [f]=1/tick², and [K u_t f]=E/(L²·tick). If u has another project-native dimension, derive the corresponding dimensions of K and f. Integrated field energy is ∫e dA; integrated source-to-field power is ∫K u_t f dA.
 
-Project-native values for propagation speed, field normalization K, source power, hotspot radius, material coefficients, grid spacing, and solver step remain open calibration parameters. Select and version them through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. Never derive them from wall-clock throughput, legacy reaction rates, or an assumed seconds-per-tick mapping.
+Initial numerical scale decisions approved 2026-11-24: `c = 1.0 L/tick`; `K = 1.0` under the normalized field variable; adaptive base-cell spacing `Δx = 1.0 L`; maximum adaptive refinement level `2` (finest cell width `0.25 L`). The adaptive solver must continue to choose its substeps from its conservative CFL bound; no fixed substep count is prescribed. These are initial, versioned project-native reference settings, not experimentally measured universal constants. Preserve the ambient 1–10 energy-density schedule when using `K = 1` by keeping the normalized field amplitude and all field/ambient composition terms consistent. Remaining calibration parameters include source power, hotspot radius, material coefficients, and any future constitutive values. Validate the selected numerical settings through dimensional consistency, source ownership, conservation, controlled reference comparisons, stability, and convergence. Never derive them from wall-clock throughput, legacy reaction rates, or an assumed seconds-per-tick mapping.
 
 ## 3. Unified energy ontology
 
@@ -319,11 +319,11 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Field interpretation | Approved initial scalar, linear, isotropic, nondispersive reference model | Phase 2 validates against analytic/reference cases; expand only if evidence requires it |
 | Frequency representation | One time-domain field carries simultaneous frequencies and phases | Phase 2 tests superposition, interference, and frequency-resolved behavior |
 | Material emission/response | Powered oscillators with owned internal energy; passive absorption/reflection/transmission/scattering | Numeric coefficients are Phase 3 calibration values; ownership and atomic transfer rules are specified |
-| Empty-space propagation speed | Universal constant in homogeneous empty space, expressed L/tick | Select a project-native value in Phase 2 using controlled propagation tests; never use wall-clock or legacy movement calibration |
-| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | Select project-native field normalization in Phase 2 and verify measured energy/flux closure |
+| Empty-space propagation speed | Universal constant in homogeneous empty space, expressed L/tick | **Initial reference: `c = 1.0 L/tick`, user-approved 2026-11-24; provisional scale convention, revisable only through documented physical evidence** |
+| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | **Initial normalization: `K = 1.0` with consistently normalized field amplitude; preserve exact ambient energy envelope and cross terms** |
 | Dimensional basis | Project-native L, tick, E approved | Keep all equations in project-native L, tick, and E; no SI or wall-clock conversion is required |
 | Scalar field dimensions | Dimensionless u is the initial reference convention | Preserve the documented project-native dimensions for K and forcing in the solver |
-| Spatial unit and propagation speed | L and tick basis approved; numerical scales remain uncalibrated | Use project-native L/tick values and define any sub-tick solver step as a fraction of a tick |
+| Spatial unit and propagation speed | Project-native L/tick basis; initial `c = 1.0 L/tick` approved 2026-11-24 | Keep `c` explicit/versioned; solver substeps remain fractions of logical ticks and independent of runtime pacing |
 | Source-to-field transfer | Signed field-work identity and atomic source debit/field credit specified | Phase 2 proves the contract with a finite-budget mathematical test source; source power values remain calibration parameters |
 | Source time units | Logical tick convention resolved | Express all source schedules and powers in ticks; runtime pacing is metadata only |
 | World-tone source | Isotropic 3D external sun; above-plane perpendicular circular orbit; 24,000-tick orbit/day; 440-cycle/day carrier | Orbit/source values remain project-native parameters; Phase 2 validates retarded-time and conservative half-plane interception |
@@ -381,8 +381,24 @@ The orbit anchor at world origin is a coordinate convention, not a physical cent
 
 ### 12.1 Calibration values intentionally left open
 
-The approved defaults do not assign values to orbit radius/height, finite source budgets/power, propagation speed in L/tick, hotspot power/radius, material response coefficients, field normalization, grid spacing, or solver time step. Select and version these through dimensional consistency, source ownership, conservation, controlled reference experiments, stability, and convergence. No SI conversion or wall-clock calibration is required. Do not tune them to reproduce legacy movement or reaction behavior.
+The following remain uncalibrated: orbit radius/height, finite source budgets/power, hotspot power/radius, material response coefficients, and future constitutive parameters. The initial propagation speed, field normalization, adaptive base spacing, and maximum refinement level are now selected as recorded above. The solver still computes its stable substep count from the adaptive CFL bound. No SI conversion or wall-clock calibration is required. Do not tune any parameter to reproduce legacy movement or reaction behavior.
 
-### 12.2 Phase 1 decision status
+### 12.2 Phase 3C numerical scale decisions (2026-11-24)
+
+The following initial production-reference values are user-approved:
+
+| Parameter | Initial value | Meaning / constraint |
+|---|---:|---|
+| Propagation speed `c` | `1.0 L/tick` | One world-distance unit per logical tick in homogeneous empty space; project-native and provisional |
+| Energy normalization `K` | `1.0` | Use the normalized field amplitude consistently; no independent scale factor remains in the initial reference configuration |
+| Adaptive base spacing `Δx` | `1.0 L` | Base-cell width |
+| Maximum refinement | `2` | Finest cell width is `0.25 L` |
+| Solver substeps | Automatic | Choose the smallest integer substep count satisfying the conservative adaptive CFL bound; do not hardcode a count |
+
+`K = 1` is a normalization convention, not a reduction of the ambient energy inventory. The ambient carrier amplitude must be expressed in the same normalized variable, and the ambient/disturbance cross-energy, cross-flux, and world-drive terms must remain complete. If a later change rescales the field variable, transform every field state, source coupling, and amplitude-dependent quantity consistently so physical energy remains unchanged.
+
+These settings do not establish a finite physical world boundary. Any finite adaptive-grid extent is a computational window and must use validated outgoing treatment or controlled expansion with explicit computational-outflow accounting. The 250 × 250 ambient inventory footprint is not automatically the propagation domain.
+
+### 12.3 Phase 1 decision status
 
 The architecture and modeling-default decisions, source/material contracts, project-native clock and units, energy-transfer rules, numerical stability bound, and convergence/tolerance policy are specified. Phase 1 is complete at the specification level. Phase 2 will select numerical parameters and validate the reference solver; no production solver or chemistry/movement behavior is authorized by this completion.
