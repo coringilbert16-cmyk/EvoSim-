@@ -189,7 +189,7 @@ These substitutions map the full general-`c` discrete recurrence to the paper's 
 
 `E_add' = (Δs²/8) ( ||Γ1'(Λ'^(n+1)-Λ'^n)/Δs||² + ||2Γ1'(Λ'^(n+1)-Λ'^n)/Δs + Γ1'^2(Λ'^(n+1)+Λ'^n)/2||² )`.
 
-The one-step identity is then the unit-speed identity in `s)-time, with `Δs` and the primed damping matrix. Do not apply the unit-speed energy directly to the unscaled physical `φ,ψ,Φ,Ψ,v` fields. The normalized energy is not obtained by changing the timestep alone; all auxiliary and proof fields above must be transformed consistently.
+The one-step identity is then the unit-speed identity in s-time, with `Δs` and the primed damping matrix. Do not apply the unit-speed energy directly to the unscaled physical `φ,ψ,Φ,Ψ,v` fields. The normalized energy is not obtained by changing the timestep alone; all auxiliary and proof fields above must be transformed consistently.
 
 This completes the algebraic wave-speed normalization. It does not extend the constant-coefficient theorem to spatially varying damping or prove arbitrary boundary closures.
 
@@ -258,7 +258,7 @@ The exact normalization is derived in Section 7. Apply the published energy form
 
 Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.36)–(3.38), and Lemma 13: https://doi.org/10.1007/s10915-019-01089-9. Full-text preprint: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
-**Remaining validation:** derive and verify the general-`c` energy transformation, then test non-periodic outer boundary closures, piecewise/spatially varying damping, interface matching and corner behavior. The periodic constant-coefficient identity is validated, but no production PML implementation is authorized by this specification.
+**Remaining validation:** test non-periodic outer boundary closures, piecewise/spatially varying damping, interface matching and corner behavior. The periodic constant-coefficient identity and the algebraic general-`c` normalization are established; no production PML implementation is authorized by this specification.
 
 
 ## 9. Revised Fourier screen using the published explicit time staggering
