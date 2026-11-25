@@ -2965,6 +2965,11 @@ mod dense_uniform_solver_prototype_tests {
             y: 3,
         })
         .unwrap();
+        // Refine the four face-neighboring base cells as well, so the
+        // nested refinement remains 2:1 balanced at every coarse/fine face.
+        for (x, y) in [(2, 3), (4, 3), (3, 2), (3, 4)] {
+            grid.refine(CellKey { level: 0, x, y }).unwrap();
+        }
         grid.refine(CellKey {
             level: 1,
             x: 6,
