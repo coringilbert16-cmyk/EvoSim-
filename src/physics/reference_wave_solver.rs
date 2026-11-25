@@ -2709,4 +2709,92 @@ mod tests {
             }
         }
     }
+    /// Diagnostic only: quantify the reference sponge's reflected wave for
+    /// normal and oblique packets before considering it for the live boundary.
+    /// This deliberately reports measurements rather than selecting a tolerance.
+    #[test]
+    #[ignore = "manual Phase 3C open-boundary reflection characterization"]
+    fn diagnostic_sponge_reflection_by_incidence() {
+        let angles_degrees = [0.0_f64, 25.0, 45.0];
+        let damping_values = [0.0_f64, 0.05, 0.15, 0.4];
+        let width = 101_usize;
+        let height = 401_usize;
+        let source_x = 25.0;
+        let source_y = 200.0;
+        let probe_x = 55.0;
+        let wave_number = 2.0 * std::f64::consts::PI / 12.0;
+        let longitudinal_width = 8.0;
+        let transverse_width = 18.0;
+
+        for angle_degrees in angles_degrees {
+            let angle = angle_degrees.to_radians();
+            let direction_x = angle.cos();
+            let direction_y = angle.sin();
+            let probe_y = source_y + (probe_x - source_x) * angle.tan();
+            let incident_center = (probe_x - source_x) / direction_x;
+            let reflected_center =
+                ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x)
+                    / direction_x;
+
+            for maximum_damping in damping_values {
+                let mut field = solver(width, height, 1.0, 2);
+                if maximum_damping > 0.0 {
+                    field
+                        .configure_absorbing_boundary(12, maximum_damping)
+                        .expect("valid diagnostic sponge configuration");
+                }
+
+                let angular_frequency = wave_number;
+                for y in 1..height - 1 {
+                    for x in 1..width - 1 {
+                        let dx = x as f64 - source_x;
+                        let dy = y as f64 - source_y;
+                        let longitudinal = dx * direction_x + dy * direction_y;
+                        let transverse = -dx * direction_y + dy * direction_x;
+                        let envelope = (-0.5
+                            * ((longitudinal / longitudinal_width).powi(2)
+                                + (transverse / transverse_width).powi(2)))
+                        .exp();
+                        let phase = wave_number * longitudinal;
+                        let index = field.index(x, y);
+                        field.current[index] = envelope * phase.cos();
+                        field.previous[index] =
+                            envelope * (phase + angular_frequency * field.time_step()).cos();
+                    }
+                }
+
+                let incident_start = (incident_center - 12.0).max(0.0);
+                let incident_end = incident_center + 12.0;
+                let reflected_start = (reflected_center - 15.0).max(0.0);
+                let reflected_end = reflected_center + 15.0;
+                let final_tick = reflected_end + 2.0;
+                let mut incident_peak: f64 = 0.0;
+                let mut reflected_peak: f64 = 0.0;
+                let probe_x_index = probe_x.round() as usize;
+                let probe_y_index = probe_y.round() as usize;
+
+                while field.logical_time_ticks() < final_tick {
+                    field.advance_substeps(1).expect("stable diagnostic evolution");
+                    let tick = field.logical_time_ticks();
+                    let value = field
+                        .sample(probe_x_index, probe_y_index)
+                        .expect("probe remains inside the field")
+                        .abs();
+                    if (incident_start..=incident_end).contains(&tick) {
+                        incident_peak = incident_peak.max(value);
+                    }
+                    if (reflected_start..=reflected_end).contains(&tick) {
+                        reflected_peak = reflected_peak.max(value);
+                    }
+                }
+
+                let reflected_ratio = reflected_peak / incident_peak.max(f64::MIN_POSITIVE);
+                println!(
+                    "boundary_reflection,angle_degrees={angle_degrees:.1},maximum_damping={maximum_damping:.3},layer_width=12,incident_peak={incident_peak:.8e},reflected_peak={reflected_peak:.8e},reflected_amplitude_ratio={reflected_ratio:.8e},absorbed_energy={:.8e}",
+                    field.boundary_absorbed_energy()
+                );
+            }
+        }
+    }
+
 }
