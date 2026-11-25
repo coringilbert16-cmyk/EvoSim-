@@ -1,0 +1,26 @@
+name: Phase 3C Live Field Benchmark
+
+on:
+  push:
+    branches:
+      - 'experiment/phase3c-contiguous-live-benchmark'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate live-field accounting contract
+        run: cargo test --release --locked --lib live_field_advances_deterministically_without_inventing_energy -- --nocapture
+      - name: Benchmark complete Phase 3C live-field wrapper
+        timeout-minutes: 15
+        run: cargo test --release --locked --lib benchmark_phase3c_live_wrapper_250x250_20_ticks -- --ignored --nocapture
