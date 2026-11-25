@@ -1,0 +1,23 @@
+name: Dense Wave Solver Prototype
+
+on:
+  push:
+    branches:
+      - 'movement/dense-wave-solver-prototype'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate contiguous solver state and energy parity
+        run: cargo test --release --locked --lib contiguous_uniform_solver_matches_reference_state_and_energy -- --nocapture
+      - name: Benchmark contiguous solver against adaptive reference
+        timeout-minutes: 15
+        run: cargo test --release --locked --lib benchmark_contiguous_uniform_solver_against_adaptive_reference -- --ignored --nocapture
