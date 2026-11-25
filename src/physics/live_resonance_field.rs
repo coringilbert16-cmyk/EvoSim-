@@ -225,7 +225,8 @@ mod tests {
     #[test]
     fn live_field_initializes_with_approved_scales_and_zero_disturbance() {
         let ambient = ambient();
-        let field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
+        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
         assert_eq!(field.energy_state().disturbance_energy, 0.0);
         assert_eq!(field.energy_state().cross_energy, 0.0);
         assert_eq!(field.energy_state().total_energy, 0.0);
@@ -236,7 +237,8 @@ mod tests {
     #[test]
     fn live_field_advances_deterministically_without_inventing_energy() {
         let mut ambient = ambient();
-        let mut field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
+        let initial_midpoint = ambient.sample_midpoint_before_current().unwrap();
+        let mut field = LiveResonanceField::new(250.0, 250.0, initial_midpoint).unwrap();
         let before = ambient.sample();
         ambient.advance_one_tick().unwrap();
         let midpoint = ambient.sample_midpoint_before_current().unwrap();
