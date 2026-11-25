@@ -2215,7 +2215,6 @@ mod tests {
     }
 }
 
-
 /// Test-only contiguous uniform-grid solver used to validate a storage-layout
 /// prototype against the adaptive solver. It deliberately shares the same
 /// finite-volume stencil, fixed-zero boundary, leapfrog update, and energy
@@ -2291,7 +2290,9 @@ mod dense_uniform_solver_prototype_tests {
             }
             let mut applied_previous = vec![0.0; self.current.len()];
             self.apply_stiffness(&self.previous, &mut applied_previous);
-            let gradient_cross_sum = self.current.iter()
+            let gradient_cross_sum = self
+                .current
+                .iter()
                 .zip(applied_previous.iter())
                 .map(|(current, applied)| current * applied)
                 .sum::<f64>();
@@ -2311,7 +2312,8 @@ mod dense_uniform_solver_prototype_tests {
                     if x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height {
                         continue;
                     }
-                    next[index] = 2.0 * self.current[index] - self.previous[index]
+                    next[index] = 2.0 * self.current[index]
+                        - self.previous[index]
                         - dt.powi(2) * speed_squared * applied[index] / self.cell_area;
                     assert!(next[index].is_finite());
                 }
@@ -2338,10 +2340,14 @@ mod dense_uniform_solver_prototype_tests {
                 }
                 let envelope = (-radius_squared / 18.0).exp();
                 let phase = 0.7 * dx;
-                grid.set_state(key, AdaptiveCell {
-                    previous: envelope * (phase + 0.08).cos(),
-                    current: envelope * phase.cos(),
-                }).unwrap();
+                grid.set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: envelope * (phase + 0.08).cos(),
+                        current: envelope * phase.cos(),
+                    },
+                )
+                .unwrap();
             }
         }
         let reference = AdaptiveWaveField::new(grid, 1.0, 1.0).unwrap();
@@ -2356,12 +2362,14 @@ mod dense_uniform_solver_prototype_tests {
             assert!(
                 (state.current - dense.current[index]).abs() <= tolerance * scale,
                 "current mismatch at {key:?}: adaptive={}, dense={}",
-                state.current, dense.current[index]
+                state.current,
+                dense.current[index]
             );
             assert!(
                 (state.previous - dense.previous[index]).abs() <= tolerance * scale,
                 "previous mismatch at {key:?}: adaptive={}, dense={}",
-                state.previous, dense.previous[index]
+                state.previous,
+                dense.previous[index]
             );
         }
     }
@@ -2372,7 +2380,10 @@ mod dense_uniform_solver_prototype_tests {
             for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
                 let (mut reference, mut dense) = initialized_pair(size, condition);
                 let initial_energy = reference.energy();
-                assert!((initial_energy - dense.energy()).abs() <= 1.0e-11 * initial_energy.abs().max(1.0));
+                assert!(
+                    (initial_energy - dense.energy()).abs()
+                        <= 1.0e-11 * initial_energy.abs().max(1.0)
+                );
                 for step in 0..80 {
                     reference.advance_substeps(1).unwrap();
                     dense.advance_one_substep();
@@ -2386,8 +2397,12 @@ mod dense_uniform_solver_prototype_tests {
                     );
                 }
                 let final_energy = reference.energy();
-                let drift = (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
-                assert!(drift < 2.0e-9, "reference energy drift size={size}, condition={condition}: {drift}");
+                let drift =
+                    (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+                assert!(
+                    drift < 2.0e-9,
+                    "reference energy drift size={size}, condition={condition}: {drift}"
+                );
             }
         }
     }
@@ -2421,10 +2436,14 @@ mod dense_uniform_solver_prototype_tests {
                 assert!((reference_energy - dense_energy).abs() <= 2.0e-9 * scale);
                 assert_state_close(&reference, &dense, 2.0e-9);
 
-                eprintln!("{condition},{size},adaptive_reference,{steps},{:.3},{reference_energy:.12e}",
-                    reference_elapsed.as_secs_f64() * 1000.0);
-                eprintln!("{condition},{size},contiguous_dense,{steps},{:.3},{dense_energy:.12e}",
-                    dense_elapsed.as_secs_f64() * 1000.0);
+                eprintln!(
+                    "{condition},{size},adaptive_reference,{steps},{:.3},{reference_energy:.12e}",
+                    reference_elapsed.as_secs_f64() * 1000.0
+                );
+                eprintln!(
+                    "{condition},{size},contiguous_dense,{steps},{:.3},{dense_energy:.12e}",
+                    dense_elapsed.as_secs_f64() * 1000.0
+                );
                 black_box(&dense);
             }
         }
