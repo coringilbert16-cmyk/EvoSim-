@@ -2214,3 +2214,219 @@ mod tests {
         }
     }
 }
+
+
+/// Test-only contiguous uniform-grid solver used to validate a storage-layout
+/// prototype against the adaptive solver. It deliberately shares the same
+/// finite-volume stencil, fixed-zero boundary, leapfrog update, and energy
+/// invariant; it is not connected to production simulation paths.
+#[cfg(test)]
+mod dense_uniform_solver_prototype_tests {
+    use super::*;
+
+    #[derive(Clone)]
+    struct DenseUniformWave {
+        width: usize,
+        height: usize,
+        previous: Vec<f64>,
+        current: Vec<f64>,
+        time_step: f64,
+        propagation_speed: f64,
+        energy_normalization: f64,
+        cell_area: f64,
+    }
+
+    impl DenseUniformWave {
+        fn from_reference(field: &AdaptiveWaveField) -> Self {
+            let grid = field.grid();
+            assert!(grid.leaves.keys().all(|key| key.level == 0));
+            let width = grid.width as usize;
+            let height = grid.height as usize;
+            let mut previous = vec![0.0; width * height];
+            let mut current = vec![0.0; width * height];
+            for (key, state) in grid.leaves() {
+                let index = key.y as usize * width + key.x as usize;
+                previous[index] = state.previous;
+                current[index] = state.current;
+            }
+            Self {
+                width,
+                height,
+                previous,
+                current,
+                time_step: field.time_step,
+                propagation_speed: field.propagation_speed,
+                energy_normalization: field.energy_normalization,
+                cell_area: grid.base_spacing.powi(2),
+            }
+        }
+
+        fn apply_stiffness(&self, values: &[f64], output: &mut [f64]) {
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = y * self.width + x;
+                    let mut value = 0.0;
+                    if x > 0 {
+                        value += values[index] - values[index - 1];
+                    }
+                    if x + 1 < self.width {
+                        value += values[index] - values[index + 1];
+                    }
+                    if y > 0 {
+                        value += values[index] - values[index - self.width];
+                    }
+                    if y + 1 < self.height {
+                        value += values[index] - values[index + self.width];
+                    }
+                    output[index] = value;
+                }
+            }
+        }
+
+        fn energy(&self) -> f64 {
+            let mut kinetic_sum = 0.0;
+            for index in 0..self.current.len() {
+                let velocity = (self.current[index] - self.previous[index]) / self.time_step;
+                kinetic_sum += self.cell_area * velocity.powi(2);
+            }
+            let mut applied_previous = vec![0.0; self.current.len()];
+            self.apply_stiffness(&self.previous, &mut applied_previous);
+            let gradient_cross_sum = self.current.iter()
+                .zip(applied_previous.iter())
+                .map(|(current, applied)| current * applied)
+                .sum::<f64>();
+            0.5 * self.energy_normalization
+                * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+        }
+
+        fn advance_one_substep(&mut self) {
+            let mut applied = vec![0.0; self.current.len()];
+            self.apply_stiffness(&self.current, &mut applied);
+            let dt = self.time_step;
+            let speed_squared = self.propagation_speed.powi(2);
+            let mut next = vec![0.0; self.current.len()];
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = y * self.width + x;
+                    if x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height {
+                        continue;
+                    }
+                    next[index] = 2.0 * self.current[index] - self.previous[index]
+                        - dt.powi(2) * speed_squared * applied[index] / self.cell_area;
+                    assert!(next[index].is_finite());
+                }
+            }
+            self.previous.copy_from_slice(&self.current);
+            self.current = next;
+        }
+    }
+
+    fn initialized_pair(size: u32, condition: &str) -> (AdaptiveWaveField, DenseUniformWave) {
+        let mut grid = AdaptiveSpatialGrid::new(size, size, 1.0, 2).unwrap();
+        let center = (size as f64 - 1.0) * 0.5;
+        for y in 0..size {
+            for x in 0..size {
+                let key = CellKey { level: 0, x, y };
+                if is_computational_boundary(&grid, key) || condition == "exact_zero" {
+                    continue;
+                }
+                let dx = x as f64 - center;
+                let dy = y as f64 - center;
+                let radius_squared = dx * dx + dy * dy;
+                if condition == "compact_support" && radius_squared > 36.0 {
+                    continue;
+                }
+                let envelope = (-radius_squared / 18.0).exp();
+                let phase = 0.7 * dx;
+                grid.set_state(key, AdaptiveCell {
+                    previous: envelope * (phase + 0.08).cos(),
+                    current: envelope * phase.cos(),
+                }).unwrap();
+            }
+        }
+        let reference = AdaptiveWaveField::new(grid, 1.0, 1.0).unwrap();
+        let dense = DenseUniformWave::from_reference(&reference);
+        (reference, dense)
+    }
+
+    fn assert_state_close(reference: &AdaptiveWaveField, dense: &DenseUniformWave, tolerance: f64) {
+        for (key, state) in reference.grid().leaves() {
+            let index = key.y as usize * dense.width + key.x as usize;
+            let scale = state.current.abs().max(state.previous.abs()).max(1.0);
+            assert!(
+                (state.current - dense.current[index]).abs() <= tolerance * scale,
+                "current mismatch at {key:?}: adaptive={}, dense={}",
+                state.current, dense.current[index]
+            );
+            assert!(
+                (state.previous - dense.previous[index]).abs() <= tolerance * scale,
+                "previous mismatch at {key:?}: adaptive={}, dense={}",
+                state.previous, dense.previous[index]
+            );
+        }
+    }
+
+    #[test]
+    fn contiguous_uniform_solver_matches_reference_state_and_energy() {
+        for size in [32, 64, 128] {
+            for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
+                let (mut reference, mut dense) = initialized_pair(size, condition);
+                let initial_energy = reference.energy();
+                assert!((initial_energy - dense.energy()).abs() <= 1.0e-11 * initial_energy.abs().max(1.0));
+                for step in 0..80 {
+                    reference.advance_substeps(1).unwrap();
+                    dense.advance_one_substep();
+                    assert_state_close(&reference, &dense, 2.0e-11);
+                    let reference_energy = reference.energy();
+                    let dense_energy = dense.energy();
+                    let scale = reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                    assert!(
+                        (reference_energy - dense_energy).abs() <= 2.0e-10 * scale,
+                        "energy mismatch size={size}, condition={condition}, step={step}: adaptive={reference_energy}, dense={dense_energy}"
+                    );
+                }
+                let final_energy = reference.energy();
+                let drift = (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+                assert!(drift < 2.0e-9, "reference energy drift size={size}, condition={condition}: {drift}");
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual release-mode dense solver performance comparison"]
+    fn benchmark_contiguous_uniform_solver_against_adaptive_reference() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        const TICKS: u64 = 20;
+        eprintln!("case,size,solver,steps,elapsed_ms,final_energy");
+        for size in [32, 64, 128, 250] {
+            for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
+                let (mut reference, mut dense) = initialized_pair(size, condition);
+                let steps = TICKS * reference.substeps_per_tick() as u64;
+
+                let start = Instant::now();
+                reference.advance_substeps(steps).unwrap();
+                let reference_elapsed = start.elapsed();
+                let reference_energy = reference.energy();
+                black_box(&reference);
+
+                let start = Instant::now();
+                for _ in 0..steps {
+                    dense.advance_one_substep();
+                }
+                let dense_elapsed = start.elapsed();
+                let dense_energy = dense.energy();
+                let scale = reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                assert!((reference_energy - dense_energy).abs() <= 2.0e-9 * scale);
+                assert_state_close(&reference, &dense, 2.0e-9);
+
+                eprintln!("{condition},{size},adaptive_reference,{steps},{:.3},{reference_energy:.12e}",
+                    reference_elapsed.as_secs_f64() * 1000.0);
+                eprintln!("{condition},{size},contiguous_dense,{steps},{:.3},{dense_energy:.12e}",
+                    dense_elapsed.as_secs_f64() * 1000.0);
+                black_box(&dense);
+            }
+        }
+    }
+}
