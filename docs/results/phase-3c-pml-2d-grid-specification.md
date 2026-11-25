@@ -72,10 +72,10 @@ The candidate explicit 2D update is
 [[u]]^n + a [u]^n + b {u}^n_1/4
     - c² D G u^n - D φ^n = 0
 
-[φ]^n + Γ1 {φ}^(n+1/2)
-    = c² Γ2 G {u}^(n+1/2)
+(φ^(n+1)-φ^n)/dt + Γ1 (φ^(n+1)+φ^n)/2
+    = c² Γ2 G ((u^(n+1)+u^n)/2)
 
-The scalar update is explicit because the u^(n+1) coefficient is diagonal/local after moving known spatial terms to the right. The face auxiliary updates are local scalar solves:
+The scalar update is explicit because the u^(n+1) coefficient is diagonal/local after moving known spatial terms to the right. The auxiliary update is a forward-in-time Crank–Nicolson step (not a centered leapfrog difference); its face solves are local scalar solves:
 
 φx^(n+1) = ((1 - dt ζx/2) φx^n
             + dt c²(ζy-ζx) (Gx(u^(n+1)+u^n)/2))
@@ -83,7 +83,7 @@ The scalar update is explicit because the u^(n+1) coefficient is diagonal/local 
 
 and analogously for φy, with its face-sampled coefficients.
 
-The b-term uses the quarter-weighted time average. Replacing it with b u^n is the older recurrence that failed the high-damping Fourier screen.
+The b-term uses the quarter-weighted time average. The φ update uses the forward midpoint pair (n,n+1), exactly as in Baffet et al. equation (3.32c). Do not replace it with a centered (n−1,n+1) difference. The earlier Fourier screen for a centered-φ candidate is not evidence for this published recurrence and must be rerun with the correct update before it is used to support a stability claim.
 
 ## 4. What the published proof covers — corrected dimensional reduction
 
