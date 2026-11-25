@@ -2733,8 +2733,7 @@ mod tests {
             let probe_y = source_y + (probe_x - source_x) * angle.tan();
             let incident_center = (probe_x - source_x) / direction_x;
             let reflected_center =
-                ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x)
-                    / direction_x;
+                ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x) / direction_x;
 
             for maximum_damping in damping_values {
                 let mut field = solver(width, height, 1.0, 2);
@@ -2774,7 +2773,9 @@ mod tests {
                 let probe_y_index = probe_y.round() as usize;
 
                 while field.logical_time_ticks() < final_tick {
-                    field.advance_substeps(1).expect("stable diagnostic evolution");
+                    field
+                        .advance_substeps(1)
+                        .expect("stable diagnostic evolution");
                     let tick = field.logical_time_ticks();
                     let value = field
                         .sample(probe_x_index, probe_y_index)
