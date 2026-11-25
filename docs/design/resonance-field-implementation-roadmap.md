@@ -261,6 +261,15 @@ These results remain available as research and reusable code where appropriate. 
 
 **Live integration is now unblocked by the adaptive-operator gate, but remains unimplemented.** The next implementation must integrate the persistent field, ambient composition, and one reconciled energy-accounting authority. A finite adaptive-grid extent is only a computational window: the 250 × 250 ambient inventory footprint is not automatically the propagation domain. Use validated outgoing treatment or controlled domain expansion with explicit computational-outflow accounting; never introduce a physical edge or silently discard energy.
 
+**Integration constraints confirmed by the post-PR-444 source audit:**
+
+- `AdaptiveSpatialGrid` currently has a fixed finite extent. Its physical-position sampler returns no value outside that extent, and outer boundary cells are fixed-zero numerical nodes. The grid has no domain-expansion or recentering operation. Do not silently treat the current grid rectangle as the infinite physical plane.
+- The current absorbing sponge accounts for the discrete damping loss of the disturbance-only solver. It does not yet prove the energy balance of the composed ambient-plus-disturbance field, whose total energy includes the ambient/disturbance cross term. The absorber must not be credited as complete total-field outflow accounting until that cross-term contribution is derived and validated, or the computational-domain strategy avoids that truncation.
+- The current adaptive API exposes a cell's current displacement sample, but not a complete position-resolved state containing displacement, time derivative, and spatial gradient. Add a deterministic, numerically consistent query/reconstruction path before relying on local composed energy, flux, or material-boundary values. Do not substitute nearest-cell or centroid sampling.
+- The existing `EnergyLedger` owns ambient inventory totals but has no spatial-field energy, ambient/disturbance cross-energy, signed cross-drive work, or total-field computational-outflow entries. Extend the existing authority and its independent inventory reconciliation; do not add a second ledger.
+- The 250 × 250 ambient footprint remains an inventory convention only. Select a separate computational-window policy, with explicit expansion or a validated total-field outgoing treatment, before live integration can be considered complete.
+
+These are implementation requirements discovered by source inspection, not requests to change the approved physical model. They do not reopen the completed PR #444 numerical validation gate.
 **Phase 3C exit criteria:**
 - The live simulation owns and advances a persistent adaptive spatial resonance field.
 - The approved ambient background and propagating disturbance are composed with the full energy/flux terms.
