@@ -475,3 +475,28 @@ with the sign convention stated above, where `W_Ω` includes all non-interface p
 Use a manufactured packet crossing a straight interface first, then an oblique packet and a corner-directed packet. Run the same state with the interface moved by one grid cell; the total global balance should remain invariant while the partitioned export changes consistently with the new cut.
 
 No production code or energy ledger was changed. The interface flux is now defined as an operator-derived candidate, not a validated measurement.
+
+
+## 13. Interface-flux method cross-check against SBP literature
+
+The operator-derived interface approach is consistent with the standard summation-by-parts energy method: domainwise integration by parts produces boundary trace pairings, and energy stability at an interface depends on the discrete traces and compatible interface treatment—not on a separately sampled continuum flux.
+
+A particularly clear derivation is given in the LLNL report *Finite Difference Methods for the Wave Equation*, Section 4.1, equations (4.12)–(4.14): the fine/coarse subdomain energy rates contain opposite-signed interface products of boundary velocity and discrete normal derivative. Their sum cancels when the interface interpolation/restriction operators satisfy the stated adjoint compatibility. This is the correct structural model for our physical/PML cut, though their refinement interface is not itself a PML.
+
+A second relevant result is Duru, Gabriel & Kreiss, *On energy stable discontinuous Galerkin spectral element approximations of the perfectly matched layer for the wave equation* (arXiv:1802.06388). Their analysis emphasizes that the numerical flux and inter-element/boundary procedures must be extended consistently to the PML auxiliary equations; stability of the base wave operator alone is insufficient to certify the coupled PML.
+
+Consequences for EvoSim:
+
+- Define the interface transfer from the discrete boundary trace pairings induced by the actual `G,D` pair.
+- Include the auxiliary divergence equation's boundary pairing; do not collapse it into the scalar wave flux before deriving the coupled energy.
+- Verify cancellation between physical-side and PML-side interface terms with the chosen orientation.
+- For a finite PML terminating at a wall, the outer-boundary contribution is a separate term and must not be silently counted as physical-domain export.
+- Spatially varying damping introduces interior work terms in the coupled auxiliary energy. They must be derived from the coefficient-sampled recurrence rather than inferred from the constant-coefficient theorem.
+
+This literature cross-check supports the derivation method, not the yet-uncomputed EvoSim flux formula or its numerical ledger closure.
+
+Sources:
+- LLNL, *Finite Difference Methods for the Wave Equation*, Section 4.1, interface energy derivation: https://computing.llnl.gov/sites/default/files/SISC_wave_mr-LLNL-cover_1.pdf
+- Duru, Gabriel & Kreiss (2018), arXiv:1802.06388: https://arxiv.org/abs/1802.06388
+- O'Reilly & Petersson (2020), *Energy conservative SBP discretizations of the acoustic wave equation in covariant form on staggered curvilinear grids*, DOI 10.1016/j.jcp.2020.109386.
+
