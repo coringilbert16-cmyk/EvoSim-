@@ -5,11 +5,9 @@
 //! disturbance energy and ambient/disturbance cross-energy so ambient inventory
 //! is never counted twice.
 
+use crate::adaptive_spatial_grid::{AdaptiveGridError, AdaptiveSpatialGrid, AdaptiveWaveField};
 use crate::ambient_spatial_composition::{
     AmbientSpatialComposition, ComposedFieldSample, CompositionError, DisturbanceSample,
-};
-use crate::adaptive_spatial_grid::{
-    AdaptiveGridError, AdaptiveSpatialGrid, AdaptiveWaveField,
 };
 use crate::world_generated_ambient_mode::AmbientModeSample;
 
@@ -150,13 +148,12 @@ impl LiveResonanceField {
             )
             .unwrap();
         let integrals = self.wave.grid().integrated_state();
-        let disturbance_velocity =
-            (integrals.current_displacement - integrals.previous_displacement)
-                / self.wave.time_step();
+        let disturbance_velocity = (integrals.current_displacement
+            - integrals.previous_displacement)
+            / self.wave.time_step();
         let disturbance_energy = self.wave.energy();
-        let cross_energy = FIELD_NORMALIZATION
-            * self.ambient_sample.carrier_velocity
-            * disturbance_velocity;
+        let cross_energy =
+            FIELD_NORMALIZATION * self.ambient_sample.carrier_velocity * disturbance_velocity;
         let total_energy = disturbance_energy + cross_energy;
         self.energy_state = LiveFieldEnergyState {
             disturbance_energy,
@@ -310,8 +307,7 @@ mod tests {
         assert!(state.cross_energy.abs() > 0.0);
         assert!(state.cumulative_world_work.abs() > 0.0);
         assert!(
-            state.accounting_residual.abs()
-                < 1.0e-3 * state.total_energy.abs().max(1.0),
+            state.accounting_residual.abs() < 1.0e-3 * state.total_energy.abs().max(1.0),
             "nonzero composed-field balance residual: {}",
             state.accounting_residual
         );
