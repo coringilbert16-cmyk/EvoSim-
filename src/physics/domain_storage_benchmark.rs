@@ -4,6 +4,7 @@
 //! deterministic row-major update order. This isolates storage/iteration cost;
 //! it is not a replacement for the adaptive production operator.
 
+use super::*;
 use std::collections::BTreeMap;
 use std::mem::size_of;
 use std::time::Instant;
@@ -266,6 +267,57 @@ fn max_difference(dense: &Dense, map: &OrderedMap, region: &ActiveRegion) -> f64
         }
     }
     maximum
+}
+
+
+#[test]
+fn dense_uniform_kernel_matches_production_adaptive_uniform_operator() {
+    const SIZE: usize = 32;
+    const TICKS: u64 = 20;
+
+    let mut grid = AdaptiveSpatialGrid::new(SIZE as u32, SIZE as u32, 1.0, 2).unwrap();
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let state = profile(SIZE, SIZE, x, y);
+            grid.set_state(
+                CellKey {
+                    level: 0,
+                    x: x as u32,
+                    y: y as u32,
+                },
+                AdaptiveCell {
+                    previous: state.previous,
+                    current: state.current,
+                },
+            )
+            .unwrap();
+        }
+    }
+
+    let mut production_operator = AdaptiveWaveField::new(grid, 1.0, 1.0).unwrap();
+    let initial_energy = production_operator.energy();
+    assert_eq!(production_operator.substeps_per_tick(), 2);
+    production_operator.advance_ticks(TICKS).unwrap();
+
+    let mut dense = Dense::new(SIZE, SIZE, true);
+    dense.advance(TICKS as usize * production_operator.substeps_per_tick());
+
+    let mut maximum_difference: f64 = 0.0;
+    for (key, state) in production_operator.grid().leaves() {
+        let index = key.y as usize * SIZE + key.x as usize;
+        maximum_difference = maximum_difference
+            .max((state.previous - dense.cells[index].previous).abs())
+            .max((state.current - dense.cells[index].current).abs());
+    }
+    assert!(
+        maximum_difference <= 1.0e-12,
+        "dense uniform stencil differs from adaptive production operator by {maximum_difference:e}"
+    );
+    let final_energy = production_operator.energy();
+    assert!(
+        (final_energy - initial_energy).abs() <= 1.0e-10 * initial_energy.abs().max(1.0),
+        "uniform production operator energy drift exceeded tolerance"
+    );
 }
 
 #[test]
