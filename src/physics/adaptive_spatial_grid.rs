@@ -1841,6 +1841,36 @@ mod tests {
     }
 
     #[test]
+    fn affine_reconstruction_is_exact_on_a_refined_grid_with_nonzero_origin() {
+        let mut grid = AdaptiveSpatialGrid::new_at_origin(6, 6, 1.0, 2, 10.0, 20.0).unwrap();
+        grid.refine(CellKey {
+            level: 0,
+            x: 2,
+            y: 2,
+        })
+        .unwrap();
+        for (key, _) in grid.leaves().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            grid.set_state(
+                key,
+                AdaptiveCell {
+                    previous: 1.5 * center_x - 0.5 * center_y + 2.0,
+                    current: 2.5 * center_x - 1.5 * center_y - 1.0,
+                },
+            )
+            .unwrap();
+        }
+
+        let sample = grid.reconstruct_sample(12.25, 22.25, 0.25).unwrap();
+        close(sample.displacement, 2.0 * 12.25 - 22.25 + 0.5);
+        close(sample.velocity, (12.25 - 22.25 - 3.0) / 0.25);
+        close(sample.gradient_x, 2.0);
+        close(sample.gradient_y, -1.0);
+    }
+
+    #[test]
     fn rank_deficient_reconstruction_stencil_fails_closed() {
         let mut grid = AdaptiveSpatialGrid::new(1, 3, 1.0, 1).unwrap();
         for y in 0..3 {
