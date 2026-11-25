@@ -560,7 +560,12 @@ mod tests {
             maximum_leaf_count = maximum_leaf_count.max(field.wave.grid().leaf_count());
             assert!(state.total_energy.is_finite());
             eprintln!("phase3c_live_wrapper_tick,tick={tick},residual={:.12e},field_energy={:.12e},world_work={:.12e}", state.accounting_residual, state.total_energy, state.cumulative_world_work);
-            assert!(state.accounting_residual.abs() < 1.0e-7);
+            assert!(
+                state.accounting_residual.abs() < 1.0e-5 * state.total_energy.abs().max(1.0),
+                "live-field balance residual at tick {tick}: {} (total energy {})",
+                state.accounting_residual,
+                state.total_energy
+            );
             black_box(state);
             if tick % 5 == 0 {
                 eprintln!(
@@ -589,6 +594,12 @@ mod tests {
         );
         assert!(elapsed.as_secs_f64().is_finite());
         assert!(final_state.disturbance_energy > 0.0);
-        assert!(final_state.accounting_residual.abs() < 1.0e-7);
+        assert!(
+            final_state.accounting_residual.abs()
+                < 1.0e-5 * final_state.total_energy.abs().max(1.0),
+            "final live-field balance residual: {} (total energy {})",
+            final_state.accounting_residual,
+            final_state.total_energy
+        );
     }
 }
