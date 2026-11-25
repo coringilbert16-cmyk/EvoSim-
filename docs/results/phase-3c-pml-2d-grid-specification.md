@@ -148,3 +148,30 @@ which gives the familiar sufficient bound
 `c dt sqrt(hx⁻² + hy⁻²) < 1`.
 
 For a particular finite grid or non-periodic boundary closure, use the actual largest eigenvalue of `-DG`; do not assume the periodic Nyquist value is attained. This verifies the CFL factor for the kinetic correction only. It does not by itself verify the remaining PML energy terms or their one-step identity.
+
+
+## 7. Wave-speed normalization required before using the published discrete energy
+
+The published analysis in Baffet et al. uses unit wave speed. The candidate recurrence above is written for general wave speed c and stores the auxiliary field with the c² scaling:
+
+`u_tt + a u_t + b u - c² Δu - div(φ) = 0`
+
+`φ_t + Γ1 φ = c² Γ2 grad(u)`
+
+Therefore the paper's energy expressions cannot be copied literally with this stored φ. Define the unit-speed auxiliary variable `χ = φ / c²`, and rescale time by `s = c t`. Then the system becomes
+
+`u_ss + (a/c) u_s + (b/c²) u - Δu - div(χ) = 0`
+
+`χ_s + (Γ1/c) χ = (Γ2/c) grad(u)`
+
+Thus the unit-speed damping coefficients are `ζx' = ζx/c` and `ζy' = ζy/c`, and the dimensionless timestep is `Δs = c Δt`. The same transformation applies to the discrete recurrence: divide the wave update by c², use `χ = φ/c²`, and express centered differences in `s)-time. This recovers the unit-speed scheme analyzed in Section 3.2.
+
+Consequences:
+- The published CFL condition must be applied to `Δs = c Δt), not to `Δt) alone.
+- All auxiliary-state and energy terms must use χ (or be transformed back consistently to φ).
+- The exact discrete energy and its additional correction term must be transcribed after this normalization; the earlier unit-speed formulas are not yet a valid energy audit for the general-c candidate as written.
+- The reduction to two dimensions remains an invariant restriction of the paper's three-dimensional discrete scheme: set `ζz=0`, `∂z=0`, initialize `φz=0`, and retain the proof variable `ψ_t=u`. Then `tr Γ3 = ζx ζy` supplies the mixed `b u) term while `det Γ1=0`. The physical third auxiliary component remains zero.
+
+This normalization is a necessary correction, not a proof that the exact staggered finite-difference realization satisfies every hypothesis. The remaining work is to write the fully reduced half-time energy (including `E_add)), derive the one-step identity using the actual cell/face inner products, and verify it numerically for the constant-coefficient cases.
+
+Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)–(71): https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
