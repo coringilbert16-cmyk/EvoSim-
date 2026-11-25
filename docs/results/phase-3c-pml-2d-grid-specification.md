@@ -201,24 +201,24 @@ The second potential term is **not** `||Γ1 Λ_h||²`. The paper defines `Λ_h=G
 
 ### Additional explicit-energy correction
 
-The full-text preprint's equation (3.38), cross-checked against Lemma 13, gives
+The time indices in equation (3.38) are half-step indices. Cross-checking its structure against Lemma 13 gives
 
-`E_add^(n+1/2) = (Δt²/8) ( ||[Λ_h^n]_Δt||²_(Γ1) + ||Γ1[Λ_h^n]_Δt + (1/2)Γ1²{Λ_h^n}_{1/4}||² )`
+`E_add^(n+1/2) = (Δt²/8) ( ||(Λ_h^(n+1)-Λ_h^n)/Δt||²_(Γ1) + ||2Γ1(Λ_h^(n+1)-Λ_h^n)/Δt + Γ1²(Λ_h^(n+1)+Λ_h^n)/2||² )`
 
 where
 
 - `Λ_h^n=G_h ψ_h^n+Φ_h^n`;
-- `[Λ_h^n]_Δt=(Λ_h^(n+1)-Λ_h^(n-1))/(2Δt)` is the centered first difference;
-- `{Λ_h^n}_{1/4}=(Λ_h^(n+1)+2Λ_h^n+Λ_h^(n-1))/4`;
-- `||w||²_(Γ1)=<Γ1w,w>` in the compatible auxiliary-space inner product;
+- the first norm is weighted by `Γ1`: `||w||²_(Γ1)=<Γ1w,w>`;
 - the second norm is the ordinary compatible discrete L² norm;
 - `Γ1²` means matrix composition.
 
-For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, so
+The factor **2** multiplying the first term inside the second norm is essential. It is consistent with Lemma 13, where the difference of this half-step vector produces `2Γ1[[Λ_h^n]]_Δt+Γ1²[Λ_h^n]_Δt`. This is the algebraic combination that appears in the energy proof. The two norms must not be split or simplified.
 
-`E_add,2D^(n+1/2) = (Δt²/8) [ ζx||[Λx]_Δt||² + ζy||[Λy]_Δt||² + ||ζx[Λx]_Δt+(1/2)ζx²{Λx}_{1/4}||² + ||ζy[Λy]_Δt+(1/2)ζy²{Λy}_{1/4}||² ]`.
+For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, giving
 
-The second norm contains a sum inside the norm; it must not be split into separate squared norms. Its quarter-weighted average reaches back to n−1, not merely the n/n+1 midpoint. Both contributions are nonnegative for nonnegative damping. These are analysis-energy corrections, not additional physical PML state variables.
+`E_add,2D^(n+1/2) = (Δt²/8) [ ζx||(Λx^(n+1)-Λx^n)/Δt||² + ζy||(Λy^(n+1)-Λy^n)/Δt||² + ||2ζx(Λx^(n+1)-Λx^n)/Δt+ζx²(Λx^(n+1)+Λx^n)/2||² + ||2ζy(Λy^(n+1)-Λy^n)/Δt+ζy²(Λy^(n+1)+Λy^n)/2||² ]`.
+
+Both contributions are nonnegative for nonnegative damping. They are analysis-energy corrections, not additional physical PML state variables.
 
 The full energy is `E_expl=E_k+E_p+E_add`. Theorem 5 / equation (3.41) gives
 
