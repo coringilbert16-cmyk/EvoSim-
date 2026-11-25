@@ -3546,6 +3546,66 @@ mod live_ambient_energy_contract_tests {
     }
 
     #[test]
+    #[ignore = "diagnostic comparison for the Phase 3C live-field accounting failure"]
+    fn diagnose_live_field_boundary_flux_vs_domain_expansion() {
+        fn run_case(expand_domain: bool, standing_mode: bool) -> (f64, f64, f64) {
+            let mut simulation = Simulation::new(42, 1.0);
+            simulation.resonance_field =
+                crate::live_resonance_field::LiveResonanceField::new_with_test_window(
+                    250.0,
+                    250.0,
+                    simulation.ambient_energy.sample(),
+                    64,
+                )
+                .expect("compact diagnostic field must initialize");
+            let initial_ambient_sample = simulation
+                .ambient_energy
+                .sample_at_offset(-0.5 * simulation.resonance_field.substep_time_step())
+                .expect("diagnostic ambient sample must align with leapfrog velocity");
+            simulation
+                .resonance_field
+                .set_initial_ambient_sample(initial_ambient_sample)
+                .expect("diagnostic initial ambient sample must reconcile");
+            if standing_mode {
+                simulation.resonance_field.set_initial_standing_mode_for_test(0.5);
+            } else {
+                simulation.resonance_field.set_initial_cell_state_for_test(
+                    crate::adaptive_spatial_grid::CellKey { level: 0, x: 16, y: 16 },
+                    0.0,
+                    0.5,
+                );
+            }
+            let opening = simulation.resonance_field.energy_state();
+            simulation.energy_ledger.initial_spatial_field_energy_held = opening.total_energy;
+            simulation.energy_ledger.total_spatial_disturbance_energy_held = opening.disturbance_energy;
+            simulation.energy_ledger.total_spatial_cross_energy_held = opening.cross_energy;
+            simulation.energy_ledger.total_spatial_field_energy_held = opening.total_energy;
+
+            let mut maximum_residual: f64 = 0.0;
+            let mut maximum_outflow: f64 = 0.0;
+            for _ in 0..120 {
+                simulation.advance_ambient_energy_with_domain_expansion(expand_domain);
+                let state = simulation.resonance_field.energy_state();
+                maximum_residual = maximum_residual.max(state.accounting_residual.abs());
+                maximum_outflow = maximum_outflow.max(state.cumulative_computational_outflow.abs());
+            }
+            let final_residual = simulation.resonance_field.energy_state().accounting_residual.abs();
+            (maximum_residual, final_residual, maximum_outflow)
+        }
+
+        for (name, expand, standing) in [
+            ("standing_no_expansion", false, true),
+            ("localized_no_expansion", false, false),
+            ("localized_with_expansion", true, false),
+        ] {
+            let (maximum_residual, final_residual, maximum_outflow) = run_case(expand, standing);
+            println!(
+                "phase3c_boundary_diagnostic,case={name},max_residual={maximum_residual:.12e},final_residual={final_residual:.12e},max_recorded_outflow={maximum_outflow:.12e}"
+            );
+        }
+    }
+
+    #[test]
     fn production_ambient_tick_updates_ambient_and_spatial_ledgers_together() {
         let mut simulation = Simulation::new(42, 10.0);
         let opening = simulation.energy_ledger.total_ambient_energy_held;
