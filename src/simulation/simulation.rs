@@ -3490,10 +3490,9 @@ mod live_ambient_energy_contract_tests {
             let current = slow.resonance_field.energy_state();
             let tick_world_work = current.cumulative_world_work - previous.cumulative_world_work;
             let tick_total_change = current.total_energy - previous.total_energy;
-            let tick_disturbance_change =
-                current.disturbance_energy - previous.disturbance_energy;
-            maximum_tick_work_mismatch = maximum_tick_work_mismatch
-                .max((tick_total_change - tick_world_work).abs());
+            let tick_disturbance_change = current.disturbance_energy - previous.disturbance_energy;
+            maximum_tick_work_mismatch =
+                maximum_tick_work_mismatch.max((tick_total_change - tick_world_work).abs());
             maximum_disturbance_energy_change =
                 maximum_disturbance_energy_change.max(tick_disturbance_change.abs());
             if tick % 5 == 0 {
