@@ -423,7 +423,7 @@ impl ReactionEnergyBalance {
 /// counted once across all structures. Initial values are the tick-zero baseline;
 /// cumulative flows are totals since that baseline. Internal transfers cancel
 /// at world scale and are intentionally absent.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_usable_energy: f64,
     pub(crate) current_usable_energy: f64,
@@ -434,6 +434,14 @@ pub(crate) struct EnergyInventorySnapshot {
     /// Signed pair-interaction potential relative to the tick-zero reference.
     pub(crate) initial_pair_interaction_potential: f64,
     pub(crate) current_pair_interaction_potential: f64,
+    pub(crate) initial_ambient_energy: f64,
+    pub(crate) current_ambient_energy: f64,
+    pub(crate) initial_spatial_field_energy: f64,
+    pub(crate) current_spatial_field_energy: f64,
+    pub(crate) ambient_energy_generated: f64,
+    pub(crate) ambient_energy_withdrawn: f64,
+    pub(crate) spatial_field_world_work: f64,
+    pub(crate) spatial_field_computational_outflow: f64,
     pub(crate) external_energy_input: f64,
     /// External resonant-field energy that leaves the modeled world after material response.
     pub(crate) world_tone_energy_escaped: f64,
@@ -465,6 +473,9 @@ impl EnergyInventorySnapshot {
             || !self.current_structural_energy.is_finite()
             || !self.initial_pair_interaction_potential.is_finite()
             || !self.current_pair_interaction_potential.is_finite()
+            || !self.initial_spatial_field_energy.is_finite()
+            || !self.current_spatial_field_energy.is_finite()
+            || !self.spatial_field_world_work.is_finite()
             || nonnegative_values
                 .iter()
                 .any(|value| !value.is_finite() || *value < 0.0)
@@ -476,6 +487,9 @@ impl EnergyInventorySnapshot {
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
         let pair_potential_delta =
             self.current_pair_interaction_potential - self.initial_pair_interaction_potential;
+        let ambient_delta = self.current_ambient_energy - self.initial_ambient_energy;
+        let spatial_field_delta =
+            self.current_spatial_field_energy - self.initial_spatial_field_energy;
         // Compensated summation keeps one-ULP positive roundoff from being
         // mistaken for created energy when large world totals nearly cancel.
         let terms = [
@@ -483,9 +497,15 @@ impl EnergyInventorySnapshot {
             resonant_delta,
             structural_delta,
             pair_potential_delta,
+            ambient_delta,
+            spatial_field_delta,
             self.work_expended,
             self.heat_dissipated,
             self.world_tone_energy_escaped,
+            self.spatial_field_computational_outflow,
+            self.ambient_energy_withdrawn,
+            -self.ambient_energy_generated,
+            -self.spatial_field_world_work,
             -self.external_energy_input,
             -self.other_energy_released,
         ];
@@ -518,7 +538,9 @@ impl EnergyInventorySnapshot {
                 .residual()
                 .is_some_and(|residual| residual <= 0.0 && residual.abs() <= tolerance)
     }
-}
+
+            ..EnergyInventorySnapshot::default(),
+        }
 
 /// Settle a signed change in the conservative resonance pair potential.
 ///
@@ -1282,6 +1304,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: 0.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced_without_creation(1e-12));
@@ -1303,6 +1327,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: 0.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced_without_creation(1e-12));
@@ -1324,6 +1350,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: 5.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced_without_creation(1e-12));
@@ -1509,6 +1537,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: 0.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert!(created.is_balanced(1e-9));
         assert!(!created.is_balanced_without_creation(1e-9));
@@ -1536,6 +1566,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 1.0,
             heat_dissipated: 1.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced(1e-12));
@@ -1567,6 +1599,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: ledger.total_heat_dissipated,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert!(inventory.is_balanced(1e-12));
     }
@@ -1712,6 +1746,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 2.0,
             heat_dissipated: 2.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced(1e-12));
@@ -1733,6 +1769,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: 3.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced(1e-12));
@@ -1754,6 +1792,8 @@ mod tests {
             other_energy_released: 1.0,
             work_expended: 0.0,
             heat_dissipated: 0.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         assert_eq!(snapshot.residual(), None);
         assert!(!snapshot.is_balanced(1.0));
@@ -1775,6 +1815,8 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 2.0,
             heat_dissipated: 2.0,
+        
+            ..EnergyInventorySnapshot::default(),
         };
         inventory.current_usable_energy += 1.0;
         assert!(!inventory.is_balanced(1e-12));
