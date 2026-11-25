@@ -405,9 +405,6 @@ impl WorldGeneratedAmbientMode {
     pub(crate) fn sample_midpoint_before_current(
         &self,
     ) -> Result<AmbientModeSample, AmbientModeError> {
-        if self.tick == 0 {
-            return Err(AmbientModeError::InvalidState);
-        }
         self.config
             .sample_at_fractional_tick(self.tick as f64 - 0.5, &self.trajectory)
     }
