@@ -517,6 +517,19 @@ mod tests {
     }
 
     #[test]
+    fn half_tick_sample_has_the_expected_carrier_phase_and_finite_state() {
+        let mut mode = mode_at(0, 1.0);
+        mode.advance_one_tick().unwrap();
+        let midpoint = mode.sample_midpoint_before_current().unwrap();
+        let expected_phase = TAU * 0.5 * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
+            / AMBIENT_DAY_TICKS as f64;
+        assert!((midpoint.carrier_phase_radians - expected_phase).abs() < 1.0e-12);
+        assert!(midpoint.amplitude > 0.0);
+        assert!(midpoint.carrier_velocity.is_finite());
+        assert!(midpoint.carrier_acceleration.is_finite());
+    }
+
+    #[test]
     fn oscillator_amplitude_matches_the_declared_energy_density() {
         let mut mode = mode_at(0, 3.0);
         for tick in 0..AMBIENT_DAY_TICKS {
