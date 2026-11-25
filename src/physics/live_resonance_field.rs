@@ -190,16 +190,7 @@ impl LiveResonanceField {
         self.advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, true)
     }
 
-    #[cfg(test)]
-    pub(crate) fn advance_one_tick_without_domain_expansion(
-        &mut self,
-        ambient_before: AmbientModeSample,
-        ambient_midpoint: AmbientModeSample,
-    ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
-        self.advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, false)
-    }
-
-    fn advance_one_tick_with_domain_policy(
+    pub(crate) fn advance_one_tick_with_domain_policy(
         &mut self,
         ambient_before: AmbientModeSample,
         ambient_midpoint: AmbientModeSample,
