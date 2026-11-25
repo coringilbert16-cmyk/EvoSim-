@@ -2839,6 +2839,176 @@ mod dense_uniform_solver_prototype_tests {
         }
     }
 
+    /// Test-only adaptive wave solver. It consumes the production adaptive
+    /// stiffness operator once, then stores its sparse rows and all evolving
+    /// state in contiguous vectors. This validates the actual mixed-level
+    /// stencil and discrete energy, not only the mesh topology.
+    struct ContiguousAdaptiveWave {
+        keys: Vec<CellKey>,
+        indices: std::collections::HashMap<CellKey, usize>,
+        rows: Vec<Vec<(usize, f64)>>,
+        areas: Vec<f64>,
+        boundaries: Vec<bool>,
+        previous: Vec<f64>,
+        current: Vec<f64>,
+        time_step: f64,
+        propagation_speed: f64,
+        energy_normalization: f64,
+    }
+
+    impl ContiguousAdaptiveWave {
+        fn from_reference(field: &AdaptiveWaveField) -> Self {
+            let keys: Vec<_> = field.grid.leaves.keys().copied().collect();
+            let indices: std::collections::HashMap<_, _> = keys
+                .iter()
+                .enumerate()
+                .map(|(index, key)| (*key, index))
+                .collect();
+            let rows = keys
+                .iter()
+                .map(|key| {
+                    field.stiffness[key]
+                        .iter()
+                        .map(|(column, coefficient)| (indices[column], *coefficient))
+                        .collect()
+                })
+                .collect();
+            let areas = keys
+                .iter()
+                .map(|key| field.grid.cell_area(*key))
+                .collect();
+            let boundaries = keys
+                .iter()
+                .map(|key| is_computational_boundary(&field.grid, *key))
+                .collect();
+            let previous = keys
+                .iter()
+                .map(|key| field.grid.leaves[key].previous)
+                .collect();
+            let current = keys
+                .iter()
+                .map(|key| field.grid.leaves[key].current)
+                .collect();
+            Self {
+                keys,
+                indices,
+                rows,
+                areas,
+                boundaries,
+                previous,
+                current,
+                time_step: field.time_step,
+                propagation_speed: field.propagation_speed,
+                energy_normalization: field.energy_normalization,
+            }
+        }
+
+        fn apply_stiffness(&self, values: &[f64], output: &mut [f64]) {
+            for (row_index, row) in self.rows.iter().enumerate() {
+                output[row_index] = row
+                    .iter()
+                    .map(|(column, coefficient)| coefficient * values[*column])
+                    .sum();
+            }
+        }
+
+        fn energy(&self) -> f64 {
+            let mut kinetic_sum = 0.0;
+            for index in 0..self.keys.len() {
+                let velocity =
+                    (self.current[index] - self.previous[index]) / self.time_step;
+                kinetic_sum += self.areas[index] * velocity.powi(2);
+            }
+            let mut applied_previous = vec![0.0; self.keys.len()];
+            self.apply_stiffness(&self.previous, &mut applied_previous);
+            let gradient_cross_sum = self
+                .current
+                .iter()
+                .zip(applied_previous.iter())
+                .map(|(current, applied)| current * applied)
+                .sum::<f64>();
+            0.5 * self.energy_normalization
+                * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+        }
+
+        fn advance_one_substep(&mut self) {
+            let mut applied = vec![0.0; self.keys.len()];
+            self.apply_stiffness(&self.current, &mut applied);
+            let dt_squared = self.time_step.powi(2);
+            let speed_squared = self.propagation_speed.powi(2);
+            let mut next = vec![0.0; self.keys.len()];
+            for index in 0..self.keys.len() {
+                if !self.boundaries[index] {
+                    next[index] = 2.0 * self.current[index] - self.previous[index]
+                        - dt_squared * speed_squared * applied[index] / self.areas[index];
+                    assert!(next[index].is_finite());
+                }
+            }
+            self.previous.copy_from_slice(&self.current);
+            self.current = next;
+        }
+
+        fn matches_reference(&self, field: &AdaptiveWaveField) {
+            assert_eq!(self.keys.len(), field.grid.leaf_count());
+            for (key, state) in field.grid.leaves() {
+                let index = self.indices[&key];
+                close(self.previous[index], state.previous);
+                close(self.current[index], state.current);
+            }
+            close(self.energy(), field.energy());
+        }
+    }
+
+    #[test]
+    fn contiguous_adaptive_solver_matches_mixed_level_stencil_state_and_energy() {
+        let mut grid = AdaptiveSpatialGrid::new(8, 8, 1.0, 3).unwrap();
+        grid.refine(CellKey {
+            level: 0,
+            x: 3,
+            y: 3,
+        })
+        .unwrap();
+        grid.refine(CellKey {
+            level: 1,
+            x: 6,
+            y: 6,
+        })
+        .unwrap();
+        for (key, _) in grid.leaves().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let boundary = is_computational_boundary(&grid, key);
+            let phase = 0.43 * center_x - 0.29 * center_y;
+            let envelope = (-((center_x - 4.0).powi(2) + (center_y - 4.0).powi(2)) / 8.0).exp();
+            grid.set_state(
+                key,
+                AdaptiveCell {
+                    previous: if boundary { 0.0 } else { envelope * (phase + 0.11).cos() },
+                    current: if boundary { 0.0 } else { envelope * phase.cos() },
+                },
+            )
+            .unwrap();
+        }
+
+        let mut reference = AdaptiveWaveField::new(grid, 0.3, 1.7).unwrap();
+        let mut contiguous = ContiguousAdaptiveWave::from_reference(&reference);
+        assert!(reference.grid.leaves.keys().any(|key| key.level == 0));
+        assert!(reference.grid.leaves.keys().any(|key| key.level == 1));
+        assert!(reference.grid.leaves.keys().any(|key| key.level == 2));
+        contiguous.matches_reference(&reference);
+
+        for step in 0..120 {
+            contiguous.advance_one_substep();
+            reference.advance_substeps(1).unwrap();
+            contiguous.matches_reference(&reference);
+            assert!(
+                contiguous.energy().is_finite(),
+                "non-finite energy after mixed-level step {step}"
+            );
+        }
+    }
+
     #[test]
     fn contiguous_adaptive_store_matches_reference_refinement_and_coarsening() {
         let mut reference = AdaptiveSpatialGrid::new(8, 8, 1.0, 3).unwrap();
