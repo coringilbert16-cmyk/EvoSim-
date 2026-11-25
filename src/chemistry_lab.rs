@@ -175,13 +175,12 @@ impl Laboratory {
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(ambient_config, 0)
                 .expect("laboratory ambient energy must initialize at tick zero");
         let opening_ambient_energy = ambient_energy.sample().total_energy;
-        let resonance_field =
-            crate::live_resonance_field::LiveResonanceField::new(
-                config.width,
-                config.height,
-                ambient_energy.sample(),
-            )
-                .map_err(|_| "live spatial resonance field could not initialize")?;
+        let resonance_field = crate::live_resonance_field::LiveResonanceField::new(
+            config.width,
+            config.height,
+            ambient_energy.sample(),
+        )
+        .map_err(|_| "live spatial resonance field could not initialize")?;
         let opening_spatial_field_energy = resonance_field.initial_total_energy();
         let spatial_energy_state = resonance_field.energy_state();
         let energy_ledger = EnergyLedger {
