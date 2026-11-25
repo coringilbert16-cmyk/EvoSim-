@@ -384,3 +384,16 @@ At the lower wavenumber `k=0.30`, increasing layer thickness reduced the measure
 | 40 | 0.00119 | 0.000853 | 0.000516 |
 
 This indicates that the low-frequency end is the more demanding case in this packet screen, and that added thickness improves attenuation. The numbers remain monitor-based preliminary diagnostics; they are not angle/frequency-independent reflection bounds.
+
+An extended angular sweep at `k=0.55`, peak damping 0.5, thickness 24, and cubic profile gave:
+
+| Propagation angle | Point-monitor reflected/outgoing amplitude |
+|---:|---:|
+| 0° | 0.000441 |
+| 30° | 0.000198 |
+| 45° (corner-directed) | 0.0000646 |
+| 60° | 0.000198 |
+| 75° | 0.000389 |
+| 90° | 0.000441 |
+
+The near-symmetry around 45° is consistent with the symmetric x/y layer construction. It does not rule out other corner, frequency, or grid-alignment artifacts.
