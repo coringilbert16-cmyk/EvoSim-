@@ -2374,6 +2374,12 @@ mod tests {
         simulation.energy_ledger.initial_structural_energy_held =
             baseline.current_structural_energy;
         simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
+        simulation.energy_ledger.initial_ambient_energy_held = baseline.current_ambient_energy;
+        simulation.energy_ledger.total_ambient_energy_held = baseline.current_ambient_energy;
+        simulation.energy_ledger.initial_spatial_field_energy_held =
+            baseline.current_spatial_field_energy;
+        simulation.energy_ledger.total_spatial_field_energy_held =
+            baseline.current_spatial_field_energy;
 
         let mut accumulation = BTreeMap::new();
         let mut committed = false;
@@ -3035,6 +3041,12 @@ mod tests {
         simulation.energy_ledger.initial_structural_energy_held =
             baseline.current_structural_energy;
         simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
+        simulation.energy_ledger.initial_ambient_energy_held = baseline.current_ambient_energy;
+        simulation.energy_ledger.total_ambient_energy_held = baseline.current_ambient_energy;
+        simulation.energy_ledger.initial_spatial_field_energy_held =
+            baseline.current_spatial_field_energy;
+        simulation.energy_ledger.total_spatial_field_energy_held =
+            baseline.current_spatial_field_energy;
 
         let mut accumulation = BTreeMap::new();
         let mut committed = false;
@@ -3351,6 +3363,12 @@ mod tests {
         simulation.energy_ledger.initial_structural_energy_held =
             baseline.current_structural_energy;
         simulation.energy_ledger.total_structural_energy_held = baseline.current_structural_energy;
+        simulation.energy_ledger.initial_ambient_energy_held = baseline.current_ambient_energy;
+        simulation.energy_ledger.total_ambient_energy_held = baseline.current_ambient_energy;
+        simulation.energy_ledger.initial_spatial_field_energy_held =
+            baseline.current_spatial_field_energy;
+        simulation.energy_ledger.total_spatial_field_energy_held =
+            baseline.current_spatial_field_energy;
         // Simulate an older cumulative history whose small next structural
         // increment rounds away. The live held total must still track the
         // actual COMBINE/BREAK bond mutations.
