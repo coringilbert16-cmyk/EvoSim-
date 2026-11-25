@@ -1807,6 +1807,16 @@ impl Simulation {
             current_pair_interaction_potential: self
                 .energy_ledger
                 .total_pair_interaction_potential_held,
+            initial_ambient_energy: self.energy_ledger.initial_ambient_energy_held,
+            current_ambient_energy: self.ambient_energy.sample().total_energy,
+            initial_spatial_field_energy: self.energy_ledger.initial_spatial_field_energy_held,
+            current_spatial_field_energy: self.resonance_field.energy_state().total_energy,
+            ambient_energy_generated: self.energy_ledger.total_ambient_energy_generated,
+            ambient_energy_withdrawn: self.energy_ledger.total_ambient_energy_withdrawn,
+            spatial_field_world_work: self.energy_ledger.total_spatial_field_world_work,
+            spatial_field_computational_outflow: self
+                .energy_ledger
+                .total_spatial_field_computational_outflow,
             external_energy_input: self.energy_ledger.total_external_energy_input,
             world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,
