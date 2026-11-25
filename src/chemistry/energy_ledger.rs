@@ -544,7 +544,7 @@ impl EnergyInventorySnapshot {
                 .is_some_and(|residual| residual <= 0.0 && residual.abs() <= tolerance)
     }
 
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         }
 
 /// Settle a signed change in the conservative resonance pair potential.
@@ -1310,7 +1310,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: 0.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced_without_creation(1e-12));
@@ -1333,7 +1333,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: 0.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced_without_creation(1e-12));
@@ -1356,7 +1356,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: 5.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced_without_creation(1e-12));
@@ -1543,7 +1543,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: 0.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert!(created.is_balanced(1e-9));
         assert!(!created.is_balanced_without_creation(1e-9));
@@ -1572,7 +1572,7 @@ mod tests {
             work_expended: 1.0,
             heat_dissipated: 1.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced(1e-12));
@@ -1605,7 +1605,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: ledger.total_heat_dissipated,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert!(inventory.is_balanced(1e-12));
     }
@@ -1752,7 +1752,7 @@ mod tests {
             work_expended: 2.0,
             heat_dissipated: 2.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced(1e-12));
@@ -1775,7 +1775,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: 3.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(inventory.residual(), Some(0.0));
         assert!(inventory.is_balanced(1e-12));
@@ -1798,7 +1798,7 @@ mod tests {
             work_expended: 0.0,
             heat_dissipated: 0.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         assert_eq!(snapshot.residual(), None);
         assert!(!snapshot.is_balanced(1.0));
@@ -1821,7 +1821,7 @@ mod tests {
             work_expended: 2.0,
             heat_dissipated: 2.0,
         
-            ..EnergyInventorySnapshot::default(),
+            ..EnergyInventorySnapshot::default()
         };
         inventory.current_usable_energy += 1.0;
         assert!(!inventory.is_balanced(1e-12));
