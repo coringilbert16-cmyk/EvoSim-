@@ -149,7 +149,7 @@ impl LiveResonanceField {
     }
 
     #[cfg(test)]
-    fn set_initial_cell_state_for_test(
+    pub(crate) fn set_initial_cell_state_for_test(
         &mut self,
         key: crate::adaptive_spatial_grid::CellKey,
         previous: f64,
