@@ -1,0 +1,21 @@
+name: Wave Energy Accounting Profile
+
+on:
+  push:
+    branches:
+      - 'movement/wave-energy-profile'
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run release-mode exact-zero, compact-support, and Gaussian profile
+        timeout-minutes: 10
+        run: cargo test --release --locked --lib benchmark_wave_energy_accounting_cost -- --ignored --nocapture
