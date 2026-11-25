@@ -59,6 +59,14 @@ pub(crate) struct SharedFace {
     pub(crate) end_vertex: (u32, u32),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ReconstructedWaveSample {
+    pub(crate) displacement: f64,
+    pub(crate) velocity: f64,
+    pub(crate) gradient_x: f64,
+    pub(crate) gradient_y: f64,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct IntegratedState {
     /// Area integral of displacement at the current leapfrog level.
@@ -327,6 +335,119 @@ impl AdaptiveSpatialGrid {
     /// Returns the state of the leaf containing a physical position. Cell
     /// values are finite-volume averages; this is not a nearest-cell fallback.
     pub(crate) fn sample(&self, x: f64, y: f64) -> Option<AdaptiveCell> {
+        self.locate_cell(x, y)
+            .and_then(|key| self.leaves.get(&key).copied())
+    }
+
+    /// Reconstructs a linear field from finite-volume cell averages using a
+    /// face-weighted least-squares fit. The reconstruction is exact for affine
+    /// fields on uniform and balanced coarse/fine meshes when the local stencil
+    /// spans both spatial dimensions. Rank-deficient stencils fail closed.
+    fn reconstruct_gradient(
+        &self,
+        key: CellKey,
+        value: impl Fn(AdaptiveCell) -> f64,
+    ) -> Option<(f64, f64)> {
+        let center = self.cell_bounds(key)?;
+        let center_x = 0.5 * (center.min_x + center.max_x);
+        let center_y = 0.5 * (center.min_y + center.max_y);
+        let center_value = value(*self.leaves.get(&key)?);
+        let mut xx = 0.0;
+        let mut xy = 0.0;
+        let mut yy = 0.0;
+        let mut rhs_x = 0.0;
+        let mut rhs_y = 0.0;
+
+        for face in self.shared_faces() {
+            let neighbor = if face.first == key {
+                face.second
+            } else if face.second == key {
+                face.first
+            } else {
+                continue;
+            };
+            let bounds = self.cell_bounds(neighbor)?;
+            let neighbor_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let neighbor_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let dx = neighbor_x - center_x;
+            let dy = neighbor_y - center_y;
+            let difference = value(*self.leaves.get(&neighbor)?) - center_value;
+            let weight = face.length / face.center_distance;
+            xx += weight * dx * dx;
+            xy += weight * dx * dy;
+            yy += weight * dy * dy;
+            rhs_x += weight * dx * difference;
+            rhs_y += weight * dy * difference;
+        }
+
+        let determinant = xx * yy - xy * xy;
+        let scale = (xx * yy).abs().max(1.0);
+        if !determinant.is_finite()
+            || determinant <= 1.0e-12 * scale
+            || [rhs_x, rhs_y].iter().any(|value| !value.is_finite())
+        {
+            return None;
+        }
+        let gradient_x = (yy * rhs_x - xy * rhs_y) / determinant;
+        let gradient_y = (xx * rhs_y - xy * rhs_x) / determinant;
+        (gradient_x.is_finite() && gradient_y.is_finite())
+            .then_some((gradient_x, gradient_y))
+    }
+
+    /// Position-resolved midpoint state reconstructed from the two stored
+    /// leapfrog levels. Velocity is centered between those levels; gradients
+    /// use the same affine reconstruction as displacement. No nearest-cell
+    /// or centroid-only value is returned.
+    fn reconstruct_sample(
+        &self,
+        x: f64,
+        y: f64,
+        time_step: f64,
+    ) -> Option<ReconstructedWaveSample> {
+        if !time_step.is_finite() || time_step <= 0.0 {
+            return None;
+        }
+        let key = self.locate_cell(x, y)?;
+        let state = *self.leaves.get(&key)?;
+        let bounds = self.cell_bounds(key)?;
+        let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+        let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+        let previous_gradient = self.reconstruct_gradient(key, |cell| cell.previous)?;
+        let current_gradient = self.reconstruct_gradient(key, |cell| cell.current)?;
+        let offset_x = x - center_x;
+        let offset_y = y - center_y;
+        let midpoint_gradient_x = 0.5 * (previous_gradient.0 + current_gradient.0);
+        let midpoint_gradient_y = 0.5 * (previous_gradient.1 + current_gradient.1);
+        let velocity_gradient_x =
+            (current_gradient.0 - previous_gradient.0) / time_step;
+        let velocity_gradient_y =
+            (current_gradient.1 - previous_gradient.1) / time_step;
+        let displacement = 0.5 * (state.previous + state.current)
+            + midpoint_gradient_x * offset_x
+            + midpoint_gradient_y * offset_y;
+        let velocity = (state.current - state.previous) / time_step
+            + velocity_gradient_x * offset_x
+            + velocity_gradient_y * offset_y;
+        if [
+            displacement,
+            velocity,
+            midpoint_gradient_x,
+            midpoint_gradient_y,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+        {
+            return None;
+        }
+        Some(ReconstructedWaveSample {
+            displacement,
+            velocity,
+            gradient_x: midpoint_gradient_x,
+            gradient_y: midpoint_gradient_y,
+        })
+    }
+
+    fn locate_cell(&self, x: f64, y: f64) -> Option<CellKey> {
         if !x.is_finite()
             || !y.is_finite()
             || x < 0.0
@@ -343,8 +464,8 @@ impl AdaptiveSpatialGrid {
                 x: (x / spacing).floor() as u32,
                 y: (y / spacing).floor() as u32,
             };
-            if let Some(state) = self.leaves.get(&key) {
-                return Some(*state);
+            if self.leaves.contains_key(&key) {
+                return Some(key);
             }
         }
         None
@@ -612,6 +733,16 @@ impl AdaptiveWaveField {
 
     pub(crate) fn sample(&self, x: f64, y: f64) -> Option<f64> {
         self.grid.sample(x, y).map(|state| state.current)
+    }
+
+    /// Returns displacement, centered time derivative, and spatial gradient
+    /// at an arbitrary position using the adaptive finite-volume state.
+    pub(crate) fn sample_kinematics(
+        &self,
+        x: f64,
+        y: f64,
+    ) -> Option<ReconstructedWaveSample> {
+        self.grid.reconstruct_sample(x, y, self.time_step)
     }
 
     /// Configures an energy-accounted computational sponge. Outer leaf cells
@@ -1338,6 +1469,47 @@ mod tests {
             (a - b).abs() <= 1.0e-12 * a.abs().max(b.abs()).max(1.0),
             "{a} != {b}"
         );
+    }
+
+    #[test]
+    fn affine_field_reconstruction_returns_position_resolved_state_and_gradient() {
+        let mut grid = AdaptiveSpatialGrid::new(5, 5, 1.0, 2).unwrap();
+        for y in 0..5 {
+            for x in 0..5 {
+                let center_x = x as f64 + 0.5;
+                let center_y = y as f64 + 0.5;
+                grid.set_state(
+                    CellKey { level: 0, x, y },
+                    AdaptiveCell {
+                        previous: 2.0 * center_x + 3.0 * center_y + 1.0,
+                        current: 4.0 * center_x + 6.0 * center_y + 3.0,
+                    },
+                )
+                .unwrap();
+            }
+        }
+
+        let sample = grid.reconstruct_sample(2.2, 2.3, 0.25).unwrap();
+        close(sample.displacement, 3.0 * 2.2 + 4.5 * 2.3 + 2.0);
+        close(sample.velocity, (2.0 * 2.2 + 3.0 * 2.3 + 2.0) / 0.25);
+        close(sample.gradient_x, 3.0);
+        close(sample.gradient_y, 4.5);
+    }
+
+    #[test]
+    fn rank_deficient_reconstruction_stencil_fails_closed() {
+        let mut grid = AdaptiveSpatialGrid::new(1, 3, 1.0, 1).unwrap();
+        for y in 0..3 {
+            grid.set_state(
+                CellKey { level: 0, x: 0, y },
+                AdaptiveCell {
+                    previous: y as f64,
+                    current: y as f64 + 1.0,
+                },
+            )
+            .unwrap();
+        }
+        assert!(grid.reconstruct_sample(0.5, 1.5, 0.5).is_none());
     }
 
     #[test]
