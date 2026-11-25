@@ -2214,7 +2214,6 @@ mod tests {
         }
     }
 }
-
 #[cfg(test)]
 #[path = "wave_energy_profile_benchmark.rs"]
 mod wave_energy_profile_benchmark;
