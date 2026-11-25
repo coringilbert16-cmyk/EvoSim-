@@ -2456,4 +2456,95 @@ mod dense_uniform_solver_prototype_tests {
             }
         }
     }
+
+    /// Stage-two validation: exercise the production uniform-grid stencil,
+    /// sponge update, and absorbed-energy ledger against contiguous storage.
+    /// The reference remains the production AdaptiveWaveField implementation.
+    fn advance_dense_with_sponge(
+        dense: &mut DenseUniformWave,
+        layer_width: f64,
+        maximum_damping: f64,
+    ) -> f64 {
+        let mut applied = vec![0.0; dense.current.len()];
+        dense.apply_stiffness(&dense.current, &mut applied);
+        let dt = dense.time_step;
+        let speed_squared = dense.propagation_speed.powi(2);
+        let world_width = dense.width as f64;
+        let world_height = dense.height as f64;
+        let mut next = vec![0.0; dense.current.len()];
+        let mut absorbed = 0.0;
+
+        for y in 0..dense.height {
+            for x in 0..dense.width {
+                let index = y * dense.width + x;
+                if x == 0 || y == 0 || x + 1 == dense.width || y + 1 == dense.height {
+                    continue;
+                }
+                let center_x = x as f64 + 0.5;
+                let center_y = y as f64 + 0.5;
+                let distance = center_x
+                    .min(world_width - center_x)
+                    .min(center_y)
+                    .min(world_height - center_y);
+                let damping = if distance >= layer_width {
+                    0.0
+                } else {
+                    let depth = (layer_width - distance) / layer_width;
+                    maximum_damping * depth * depth
+                };
+                let damping_step = 0.5 * damping * dt;
+                next[index] = (2.0 * dense.current[index]
+                    - (1.0 - damping_step) * dense.previous[index]
+                    - dt.powi(2) * speed_squared * applied[index] / dense.cell_area)
+                    / (1.0 + damping_step);
+                let midpoint_velocity =
+                    (next[index] - dense.previous[index]) / (2.0 * dt);
+                absorbed += dense.cell_area * damping * dt * midpoint_velocity.powi(2);
+            }
+        }
+
+        dense.previous.copy_from_slice(&dense.current);
+        dense.current = next;
+        absorbed * dense.energy_normalization
+    }
+
+    #[test]
+    fn contiguous_solver_matches_production_sponge_and_absorbed_energy_ledger() {
+        for size in [32, 64, 128] {
+            for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
+                let (mut reference, mut dense) = initialized_pair(size, condition);
+                let layer_width = 8.0;
+                let maximum_damping = 0.05;
+                reference
+                    .configure_absorbing_boundary(layer_width, maximum_damping)
+                    .unwrap();
+
+                for step in 0..80 {
+                    let dense_absorbed =
+                        advance_dense_with_sponge(&mut dense, layer_width, maximum_damping);
+                    reference.advance_substeps(1).unwrap();
+                    assert_state_close(&reference, &dense, 3.0e-10);
+
+                    let reference_energy = reference.energy();
+                    let dense_energy = dense.energy();
+                    let energy_scale =
+                        reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                    assert!(
+                        (reference_energy - dense_energy).abs() <= 3.0e-9 * energy_scale,
+                        "sponge energy mismatch size={size}, condition={condition}, step={step}: production={reference_energy}, dense={dense_energy}"
+                    );
+
+                    let expected_absorbed =
+                        reference.absorbed_energy() - dense_absorbed;
+                    assert!(
+                        expected_absorbed.abs()
+                            <= 3.0e-9 * reference.absorbed_energy().abs().max(1.0),
+                        "absorbed-energy mismatch size={size}, condition={condition}, step={step}: production={}, dense increment={dense_absorbed}",
+                        reference.absorbed_energy()
+                    );
+                }
+            }
+        }
+    }
+
 }
