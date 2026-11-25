@@ -45,7 +45,8 @@ pub(crate) fn solver_substep_profile() -> SolverSubstepProfile {
     const NANOS_PER_MILLISECOND: f64 = 1_000_000.0;
     SolverSubstepProfile {
         matrix_apply_ms: MATRIX_APPLY_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
-        previous_energy_ms: PREVIOUS_ENERGY_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        previous_energy_ms: PREVIOUS_ENERGY_NANOS.load(Ordering::Relaxed) as f64
+            / NANOS_PER_MILLISECOND,
         state_update_ms: STATE_UPDATE_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
         next_energy_ms: NEXT_ENERGY_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
         commit_ms: SUBSTEP_COMMIT_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
