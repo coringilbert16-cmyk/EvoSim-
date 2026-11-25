@@ -950,6 +950,25 @@ impl AdaptiveWaveField {
         Ok(())
     }
 
+    /// Sets an initial finite-volume state before the first solver substep.
+    /// This is for deterministic initial conditions; live sources must use a
+    /// separately accounted interaction transaction.
+    pub(crate) fn set_initial_state(
+        &mut self,
+        key: CellKey,
+        state: AdaptiveCell,
+    ) -> Result<(), AdaptiveGridError> {
+        if self.substeps_elapsed != 0 {
+            return Err(AdaptiveGridError::AlreadyStarted);
+        }
+        if is_computational_boundary(&self.grid, key)
+            && (state.previous != 0.0 || state.current != 0.0)
+        {
+            return Err(AdaptiveGridError::InvalidState);
+        }
+        self.grid.set_state(key, state)
+    }
+
     pub(crate) fn time_step(&self) -> f64 {
         self.time_step
     }
