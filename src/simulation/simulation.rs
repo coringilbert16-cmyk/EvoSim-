@@ -3481,10 +3481,32 @@ mod live_ambient_energy_contract_tests {
             fast.advance_ambient_energy_without_domain_expansion();
         }
 
-        for _ in 0..20 {
+        let mut previous = slow.resonance_field.energy_state();
+        let mut maximum_tick_work_mismatch: f64 = 0.0;
+        let mut maximum_disturbance_energy_change: f64 = 0.0;
+        for tick in 1..=20 {
             slow.advance_ambient_energy_without_domain_expansion();
             fast.advance_ambient_energy_without_domain_expansion();
+            let current = slow.resonance_field.energy_state();
+            let tick_world_work = current.cumulative_world_work - previous.cumulative_world_work;
+            let tick_total_change = current.total_energy - previous.total_energy;
+            let tick_disturbance_change =
+                current.disturbance_energy - previous.disturbance_energy;
+            maximum_tick_work_mismatch = maximum_tick_work_mismatch
+                .max((tick_total_change - tick_world_work).abs());
+            maximum_disturbance_energy_change =
+                maximum_disturbance_energy_change.max(tick_disturbance_change.abs());
+            if tick % 5 == 0 {
+                println!(
+                    "live_field_accounting,tick={tick},delta_total={tick_total_change:.12e},delta_world_work={tick_world_work:.12e},delta_disturbance={tick_disturbance_change:.12e},residual={:.12e}",
+                    current.accounting_residual
+                );
+            }
+            previous = current;
         }
+        println!(
+            "live_field_accounting_summary,max_tick_work_mismatch={maximum_tick_work_mismatch:.12e},max_disturbance_energy_change={maximum_disturbance_energy_change:.12e}"
+        );
 
         assert_eq!(
             slow.resonance_field.energy_state(),
