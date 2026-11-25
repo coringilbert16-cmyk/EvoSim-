@@ -209,7 +209,6 @@ where
 
 - `Λ_h^n=G_h ψ_h^n+Φ_h^n`;
 - both norms are ordinary compatible discrete L² norms; the first vector is explicitly multiplied by `Γ1`;
-- the second norm is the ordinary compatible discrete L² norm;
 - `Γ1²` means matrix composition.
 
 The factor **2** multiplying the first term inside the second norm is essential. It is consistent with Lemma 13, where the difference of this half-step vector produces `2Γ1[[Λ_h^n]]_Δt+Γ1²[Λ_h^n]_Δt`. The first norm is the ordinary norm of `Γ1` times the forward difference; it is **not** the `Γ1`-weighted norm of the unmultiplied difference. The two norms must not be split or simplified.
@@ -224,7 +223,7 @@ The full energy is `E_expl=E_k+E_p+E_add`. Theorem 5 / equation (3.41) gives
 
 `(E_expl^(n+1/2)-E_expl^(n-1/2))/Δt = -(Δt²/2)||[G_hu_h^n+φ_h^n]_Δt||²_(Γ1) - 2||{G_hu_h^n+φ_h^n}_{1/4}||²_(Γ1)`.
 
-This identity is established for the paper's compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. It is not yet a proof for our proposed staggered finite-difference closure.
+The paper proves this identity for its compatible Galerkin/mass-lumped spatial operators, constant damping coefficients, and stated boundary conditions. Section 10 below independently verifies the same algebra for our periodic staggered finite-difference operator pair; non-periodic boundary closures remain unvalidated.
 
 ### Initial conditions for the proof fields
 
@@ -240,7 +239,7 @@ Equation (3.38) is the paper's unit-speed formula. The physical normalization `�
 
 Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.36)–(3.38), and Lemma 13: https://doi.org/10.1007/s10915-019-01089-9. Full-text preprint: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
-**Remaining validation:** independently reproduce the paper's full time indexing and compatible operators, verify the one-step identity numerically, then compare our staggered finite-difference realization. The general-`c` energy transformation also remains open. No production PML implementation is validated by this specification.
+**Remaining validation:** derive and verify the general-`c` energy transformation, then test non-periodic outer boundary closures, piecewise/spatially varying damping, interface matching and corner behavior. The periodic constant-coefficient identity is validated, but no production PML implementation is authorized by this specification.
 
 
 ## 9. Revised Fourier screen using the published explicit time staggering
@@ -278,7 +277,7 @@ Test setup:
 - 16×16 periodic scalar grid, `h_x=h_y=1`;
 - forward face gradients and their exact negative-adjoint divergence, with `Δ_h=D_hG_h`;
 - `Δt=0.1`, below the operator CFL limit;
-- independent random `u^0,u^1), with `ψ^0=φ^0=Φ^0=Ψ^0=0`;
+- independent random `u^0,u^1`, with `ψ^0=φ^0=Φ^0=Ψ^0=0`;
 - first-order auxiliary states at n=1 initialized by applying the n=0 trapezoidal updates, rather than incorrectly setting them to zero;
 - velocity sequence initialized consistently with equation (3.44);
 - 5 random seeds, 5 one-step identity checks per seed, for each damping pair `(ζx,ζy)=(0,0),(0.7,0),(0,1.1),(0.7,1.1),(2,3)`.
