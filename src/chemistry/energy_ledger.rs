@@ -453,15 +453,20 @@ pub(crate) struct EnergyInventorySnapshot {
 }
 
 impl EnergyInventorySnapshot {
-    /// Signed conservation residual. A value of zero means the change in
-    /// usable, resonant, and structural energy plus work, heat, and escaped tone
-    /// equals all external sources.
+    /// Signed conservation residual across chemical holders, the ambient mode,
+    /// and the live spatial field. Ambient generation and spatial world work are
+    /// source terms; ambient withdrawal and computational outflow are sinks.
     pub(crate) fn residual(self) -> Option<f64> {
         let nonnegative_values = [
             self.initial_usable_energy,
             self.current_usable_energy,
             self.initial_resonant_energy,
             self.current_resonant_energy,
+            self.initial_ambient_energy,
+            self.current_ambient_energy,
+            self.ambient_energy_generated,
+            self.ambient_energy_withdrawn,
+            self.spatial_field_computational_outflow,
             self.external_energy_input,
             self.world_tone_energy_escaped,
             self.other_energy_released,
