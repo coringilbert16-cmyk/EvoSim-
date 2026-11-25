@@ -41,6 +41,7 @@ pub(crate) struct LiveFieldEnergyState {
     pub(crate) total_energy: f64,
     pub(crate) cumulative_world_work: f64,
     pub(crate) cumulative_computational_outflow: f64,
+    pub(crate) accounting_residual: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -49,12 +50,14 @@ pub(crate) struct LiveResonanceField {
     composition: AmbientSpatialComposition,
     energy_state: LiveFieldEnergyState,
     initial_total_energy: f64,
+    ambient_sample: AmbientModeSample,
 }
 
 impl LiveResonanceField {
     pub(crate) fn new(
         world_width: f64,
         world_height: f64,
+        ambient_sample: AmbientModeSample,
     ) -> Result<Self, LiveResonanceFieldError> {
         if !world_width.is_finite()
             || world_width <= 0.0
@@ -81,6 +84,9 @@ impl LiveResonanceField {
         let composition =
             AmbientSpatialComposition::new(FIELD_NORMALIZATION, PROPAGATION_SPEED)
                 .map_err(|_| LiveResonanceFieldError::InvalidAccountingState)?;
+        if ambient_sample.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits() {
+            return Err(LiveResonanceFieldError::InvalidAccountingState);
+        }
         let energy_state = LiveFieldEnergyState {
             disturbance_energy: wave.energy(),
             ..LiveFieldEnergyState::default()
@@ -91,6 +97,7 @@ impl LiveResonanceField {
             composition,
             energy_state,
             initial_total_energy,
+            ambient_sample,
         })
     }
 
@@ -104,7 +111,6 @@ impl LiveResonanceField {
 
     pub(crate) fn sample(
         &self,
-        ambient: AmbientModeSample,
         x: f64,
         y: f64,
     ) -> Result<Option<ComposedFieldSample>, CompositionError> {
@@ -116,15 +122,19 @@ impl LiveResonanceField {
                 gradient_y: sample.gradient_y,
             },
             // Outside the disturbance window the exterior state is zero.
-            // Any nonzero wave is kept inside the expanding window.
-            None => DisturbanceSample {
+            // A failed reconstruction inside the window is not silently treated
+            // as zero; callers must handle the unavailable stencil explicitly.
+            None if self.wave.grid().sample(x, y).is_none() => DisturbanceSample {
                 displacement: 0.0,
                 velocity: 0.0,
                 gradient_x: 0.0,
                 gradient_y: 0.0,
             },
+            None => return Err(CompositionError::InvalidState),
         };
-        self.composition.compose(ambient, disturbance).map(Some)
+        self.composition
+            .compose(self.ambient_sample, disturbance)
+            .map(Some)
     }
 
     /// Advances one logical tick. The adaptive solver performs its own CFL
@@ -160,6 +170,7 @@ impl LiveResonanceField {
                 / time_step;
         let ambient_midpoint_velocity =
             0.5 * (ambient_before.carrier_velocity + ambient_after.carrier_velocity);
+        let ambient_midpoint_sample = midpoint_ambient_sample(ambient_before, ambient_after);
         let cross_energy =
             FIELD_NORMALIZATION * ambient_midpoint_velocity * after_disturbance_velocity;
         let cross_drive_work = FIELD_NORMALIZATION
@@ -169,6 +180,8 @@ impl LiveResonanceField {
         let disturbance_energy = self.wave.energy();
         let total_energy = disturbance_energy + cross_energy;
         let cumulative_world_work = self.energy_state.cumulative_world_work + cross_drive_work;
+        let accounting_residual =
+            total_energy - self.initial_total_energy - cumulative_world_work;
 
         if [
             before_disturbance_velocity,
@@ -179,6 +192,7 @@ impl LiveResonanceField {
             disturbance_energy,
             total_energy,
             cumulative_world_work,
+            accounting_residual,
         ]
         .iter()
         .any(|value| !value.is_finite())
@@ -195,10 +209,35 @@ impl LiveResonanceField {
             cumulative_world_work,
             // No absorber or finite-edge escape is used in the live path.
             cumulative_computational_outflow: 0.0,
+            accounting_residual,
         };
+        self.ambient_sample = ambient_midpoint_sample;
         Ok(self.energy_state)
     }
 
+}
+
+fn midpoint_ambient_sample(
+    before: AmbientModeSample,
+    after: AmbientModeSample,
+) -> AmbientModeSample {
+    AmbientModeSample {
+        tick: after.tick,
+        energy_density: 0.5 * (before.energy_density + after.energy_density),
+        total_energy: 0.5 * (before.total_energy + after.total_energy),
+        amplitude: 0.5 * (before.amplitude + after.amplitude),
+        amplitude_velocity: 0.5 * (before.amplitude_velocity + after.amplitude_velocity),
+        field_normalization: before.field_normalization,
+        angular_frequency: 0.5 * (before.angular_frequency + after.angular_frequency),
+        carrier_phase_radians: 0.5
+            * (before.carrier_phase_radians + after.carrier_phase_radians),
+        carrier_value: 0.5 * (before.carrier_value + after.carrier_value),
+        carrier_velocity: 0.5 * (before.carrier_velocity + after.carrier_velocity),
+        carrier_acceleration: 0.5 * (before.carrier_acceleration + after.carrier_acceleration),
+        instantaneous_oscillator_energy_density: 0.5
+            * (before.instantaneous_oscillator_energy_density
+                + after.instantaneous_oscillator_energy_density),
+    }
 }
 
 #[cfg(test)]
@@ -215,7 +254,8 @@ mod tests {
 
     #[test]
     fn live_field_initializes_with_approved_scales_and_zero_disturbance() {
-        let field = LiveResonanceField::new(250.0, 250.0).unwrap();
+        let ambient = ambient();
+        let field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
         assert_eq!(field.energy_state().disturbance_energy, 0.0);
         assert_eq!(field.energy_state().cross_energy, 0.0);
         assert_eq!(field.energy_state().total_energy, 0.0);
@@ -225,8 +265,8 @@ mod tests {
 
     #[test]
     fn live_field_advances_deterministically_without_inventing_energy() {
-        let mut field = LiveResonanceField::new(250.0, 250.0).unwrap();
         let mut ambient = ambient();
+        let mut field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
         let before = ambient.sample();
         ambient.advance_one_tick().unwrap();
         let after = ambient.sample();
@@ -237,13 +277,14 @@ mod tests {
         assert_eq!(state.total_energy, 0.0);
         assert_eq!(state.cumulative_world_work, 0.0);
         assert_eq!(state.cumulative_computational_outflow, 0.0);
+        assert_eq!(state.accounting_residual, 0.0);
     }
 
     #[test]
     fn outside_window_queries_use_zero_disturbance_over_ambient_field() {
-        let field = LiveResonanceField::new(250.0, 250.0).unwrap();
-        let ambient = ambient().sample();
-        let sample = field.sample(ambient, -1000.0, -1000.0).unwrap().unwrap();
+        let ambient = ambient();
+        let field = LiveResonanceField::new(250.0, 250.0, ambient.sample()).unwrap();
+        let sample = field.sample(-1000.0, -1000.0).unwrap().unwrap();
         assert_eq!(sample.disturbance_energy_density, 0.0);
         assert_eq!(sample.cross_energy_density, 0.0);
         assert_eq!(
