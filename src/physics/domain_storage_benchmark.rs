@@ -62,7 +62,11 @@ impl Dense {
                 };
             }
         }
-        Self { width, height, cells }
+        Self {
+            width,
+            height,
+            cells,
+        }
     }
 
     fn advance(&mut self, substeps: usize) {
