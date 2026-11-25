@@ -150,31 +150,50 @@ which gives the familiar sufficient bound
 For a particular finite grid or non-periodic boundary closure, use the actual largest eigenvalue of `-DG`; do not assume the periodic Nyquist value is attained. This verifies the CFL factor for the kinetic correction only. It does not by itself verify the remaining PML energy terms or their one-step identity.
 
 
-## 7. Wave-speed normalization required before using the published discrete energy
+## 7. Exact normalization for general wave speed
 
-The published analysis in Baffet et al. uses unit wave speed. The candidate recurrence above is written for general wave speed c and stores the auxiliary field with the c² scaling:
+The published discrete energy analysis assumes unit wave speed. For a candidate physical system with constant wave speed `c>0`,
 
 `u_tt + a u_t + b u - c² Δu - div(φ) = 0`
 
-`φ_t + Γ1 φ = c² Γ2 grad(u)`
+`φ_t + Γ1 φ = c² Γ2 grad(u)`,
 
-Therefore the paper's energy expressions cannot be copied literally with this stored φ. Define the unit-speed auxiliary variable `χ = φ / c²`, and rescale time by `s = c t`. Then the system becomes
+define normalized time and physical auxiliary field
 
-`u_ss + (a/c) u_s + (b/c²) u - Δu - div(χ) = 0`
+`s=ct`, `Δs=cΔt`, `χ=φ/c²`.
 
-`χ_s + (Γ1/c) χ = (Γ2/c) grad(u)`
+The unit-speed coefficients are
 
-Thus the unit-speed damping coefficients are `ζx' = ζx/c` and `ζy' = ζy/c`, and the dimensionless timestep is `Δs = c Δt`. The same transformation applies to the discrete recurrence: divide the wave update by c², use `χ = φ/c²`, and express centered differences in `s)-time. This recovers the unit-speed scheme analyzed in Section 3.2.
+`a'=a/c`, `b'=b/c²`, `Γ1'=Γ1/c`, `Γ2'=Γ2/c`, `Γ3'=Γ3/c²`.
 
-Consequences:
-- The published CFL condition must be applied to `Δs = c Δt), not to `Δt) alone.
-- All auxiliary-state and energy terms must use χ (or be transformed back consistently to φ).
-- The exact discrete energy and its additional correction term must be transcribed after this normalization; the earlier unit-speed formulas are not yet a valid energy audit for the general-c candidate as written.
-- The reduction to two dimensions remains an invariant restriction of the paper's three-dimensional discrete scheme: set `ζz=0`, `∂z=0`, initialize `φz=0`, and retain the proof variable `ψ_t=u`. Then `tr Γ3 = ζx ζy` supplies the mixed `b u) term while `det Γ1=0`. The physical third auxiliary component remains zero.
+In 2D, this is equivalent to `ζx'=ζx/c`, `ζy'=ζy/c`, with `a'=ζx'+ζy'` and `b'=ζx'ζy'`. The normalized physical equations become
 
-This normalization is a necessary correction, not a proof that the exact staggered finite-difference realization satisfies every hypothesis. The remaining work is to write the fully reduced half-time energy (including `E_add)), derive the one-step identity using the actual cell/face inner products, and verify it numerically for the constant-coefficient cases.
+`u_ss + a' u_s + b' u - Δu - div(χ) = 0`
 
-Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)–(71): https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
+`χ_s + Γ1'χ = Γ2' grad(u)`.
+
+The analysis-only fields must also be transformed from their defining discrete/continuous update equations, not left unchanged:
+
+- scalar auxiliary: `ψ'=cψ`, so `∂sψ'=u`;
+- integrated vector auxiliary: `Φ'=Φ/c`, so `∂sΦ'=χ`;
+- integrated scalar auxiliary: `Ψ'=c²Ψ`, so `∂sΨ'=ψ'`;
+- auxiliary velocity: `v'=v/c`, preserving `(v'^(n+1)+v'^n)/2=(u^(n+1)-u^n)/Δs`;
+- combined vector: `Λ'=Gψ'+Φ'=cGψ+Φ/c`;
+- combined scalar: `q'=v'+a'u+b'ψ'=q/c`.
+
+These substitutions map the full general-`c` discrete recurrence to the paper's unit-speed recurrence exactly when the timestep is changed to `Δs=cΔt`. Therefore every published energy term must be evaluated using the primed variables:
+
+`E_k' = 1/2 ( ||q'^(n+1/2)||² - (Δs²/4)||Gq'^(n+1/2)||² )`
+
+`E_p' = 1/2 ( ||Gu^(n+1/2)+χ^(n+1/2)||² + ||Γ1'(Gψ'^(n+1/2)+Φ'^(n+1/2))||² )`
+
+`E_add' = (Δs²/8) ( ||Γ1'(Λ'^(n+1)-Λ'^n)/Δs||² + ||2Γ1'(Λ'^(n+1)-Λ'^n)/Δs + Γ1'^2(Λ'^(n+1)+Λ'^n)/2||² )`.
+
+The one-step identity is then the unit-speed identity in `s)-time, with `Δs` and the primed damping matrix. Do not apply the unit-speed energy directly to the unscaled physical `φ,ψ,Φ,Ψ,v` fields. The normalized energy is not obtained by changing the timestep alone; all auxiliary and proof fields above must be transformed consistently.
+
+This completes the algebraic wave-speed normalization. It does not extend the constant-coefficient theorem to spatially varying damping or prove arbitrary boundary closures.
+
+Reference: Baffet et al. (2019), Sections 2.1 and 3.2.2, equations (3.32)–(3.41): https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
 
 ## 8. Discrete energy specialization: equation (3.38) recovered
@@ -233,9 +252,9 @@ The explicit scheme defines `Ψ_h^0=0` and requires the damping-weighted compati
 
 Preserve this condition when initializing proof fields. Where a damping component is zero, the condition does not determine that component of `Φ_h^0`; do not divide by zero.
 
-### General wave speed remains a separate derivation
+### General wave speed
 
-Equation (3.38) is the paper's unit-speed formula. The physical normalization `χ=φ/c²`, `s=ct` is necessary, but the integrated proof fields and every term in `E_k`, `E_p`, and `E_add` must be transformed consistently. The previous candidate transformations for `ψ,Phi,Psi,Lambda,q` have not yet been independently verified against the complete discrete definitions and should be treated as provisional, not as a completed derivation.
+The exact normalization is derived in Section 7. Apply the published energy formulas to the primed variables and normalized timestep; do not mix physical and normalized auxiliary fields.
 
 Reference: Baffet et al. (2019), Section 3.2.2, equations (3.32)–(3.41), especially (3.33), (3.36)–(3.38), and Lemma 13: https://doi.org/10.1007/s10915-019-01089-9. Full-text preprint: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
 
