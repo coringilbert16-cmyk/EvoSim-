@@ -2820,4 +2820,74 @@ mod tests {
                 .all(|(_, state)| { state.current.is_finite() && state.previous.is_finite() }));
         }
     }
+
+    /// Manual, release-mode scaling benchmark for selecting the bounded world
+    /// grid representation. Run with:
+    /// cargo test --release --locked --lib benchmark_fixed_domain_domain_scaling -- --ignored --nocapture
+    ///
+    /// This is intentionally ignored in normal CI: timings are diagnostic and
+    /// must not become machine-dependent pass/fail thresholds.
+    #[test]
+    #[ignore = "manual domain-size performance benchmark"]
+    fn benchmark_fixed_domain_domain_scaling() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        const SIZES: [u32; 4] = [32, 64, 128, 250];
+        const TICKS: u64 = 20;
+
+        eprintln!("case,width,height,leaves,grid_build_ms,solver_build_ms,substeps_per_tick,ticks,advance_ms,relative_energy_drift");
+        for size in SIZES {
+            for localized in [false, true] {
+                let label = if localized { "localized_wave" } else { "empty" };
+                let grid_start = Instant::now();
+                let mut grid = AdaptiveSpatialGrid::new(size, size, 1.0, 2)
+                    .expect("benchmark grid dimensions are valid");
+                let grid_build = grid_start.elapsed();
+
+                if localized {
+                    let center = (size as f64 - 1.0) * 0.5;
+                    for (key, _) in grid.leaves() {
+                        let bounds = grid.cell_bounds(key).unwrap();
+                        let x = 0.5 * (bounds.min_x + bounds.max_x);
+                        let y = 0.5 * (bounds.min_y + bounds.max_y);
+                        let envelope = (-((x - center).powi(2) + (y - center).powi(2)) / 18.0).exp();
+                        let phase = 0.7 * (x - center);
+                        let previous = envelope * (phase + 0.08).cos();
+                        let current = envelope * phase.cos();
+                        if !is_computational_boundary(&grid, key) {
+                            grid.set_state(key, AdaptiveCell { previous, current }).unwrap();
+                        }
+                    }
+                }
+
+                let leaves = grid.leaf_count();
+                let solver_start = Instant::now();
+                let mut field = AdaptiveWaveField::new(grid, 1.0, 1.0)
+                    .expect("benchmark solver must satisfy its CFL bound");
+                let solver_build = solver_start.elapsed();
+                let initial_energy = field.energy();
+                let advance_start = Instant::now();
+                field.advance_ticks(TICKS).expect("benchmark ticks must advance");
+                let advance = advance_start.elapsed();
+                let final_energy = field.energy();
+                let drift = if initial_energy.abs() <= f64::MIN_POSITIVE {
+                    0.0
+                } else {
+                    (final_energy - initial_energy).abs() / initial_energy.abs()
+                };
+
+                eprintln!(
+                    "{label},{size},{size},{leaves},{:.3},{:.3},{},{TICKS},{:.3},{:.6e}",
+                    grid_build.as_secs_f64() * 1000.0,
+                    solver_build.as_secs_f64() * 1000.0,
+                    field.substeps_per_tick(),
+                    advance.as_secs_f64() * 1000.0,
+                    drift,
+                );
+                black_box(field.energy());
+            }
+        }
+    }
+
 }
