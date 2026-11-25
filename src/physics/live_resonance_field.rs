@@ -57,22 +57,47 @@ impl LiveResonanceField {
         world_height: f64,
         ambient_sample: AmbientModeSample,
     ) -> Result<Self, LiveResonanceFieldError> {
+        Self::new_with_window_cells(
+            world_width,
+            world_height,
+            ambient_sample,
+            INITIAL_WINDOW_BASE_CELLS,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_with_test_window(
+        world_width: f64,
+        world_height: f64,
+        ambient_sample: AmbientModeSample,
+        window_cells: u32,
+    ) -> Result<Self, LiveResonanceFieldError> {
+        Self::new_with_window_cells(world_width, world_height, ambient_sample, window_cells)
+    }
+
+    fn new_with_window_cells(
+        world_width: f64,
+        world_height: f64,
+        ambient_sample: AmbientModeSample,
+        window_cells: u32,
+    ) -> Result<Self, LiveResonanceFieldError> {
         if !world_width.is_finite()
             || world_width <= 0.0
             || !world_height.is_finite()
             || world_height <= 0.0
+            || window_cells < 4
         {
             return Err(LiveResonanceFieldError::InvalidWorldDimensions);
         }
         // The disturbance window begins around the modeled world's center.
-        // Its zero exterior is implicit; the window expands before any
-        // nonzero disturbance can reach its computational edge.
-        let half_width = 0.5 * INITIAL_WINDOW_BASE_CELLS as f64 * BASE_SPACING;
+        // Its zero exterior is implicit; the production window expands before
+        // any nonzero disturbance can reach its computational edge.
+        let half_width = 0.5 * window_cells as f64 * BASE_SPACING;
         let origin_x = 0.5 * world_width - half_width;
         let origin_y = 0.5 * world_height - half_width;
         let grid = AdaptiveSpatialGrid::new_at_origin(
-            INITIAL_WINDOW_BASE_CELLS,
-            INITIAL_WINDOW_BASE_CELLS,
+            window_cells,
+            window_cells,
             BASE_SPACING,
             MAX_REFINEMENT_LEVEL,
             origin_x,
