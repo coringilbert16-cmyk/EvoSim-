@@ -544,8 +544,7 @@ impl EnergyInventorySnapshot {
                 .is_some_and(|residual| residual <= 0.0 && residual.abs() <= tolerance)
     }
 
-            ..EnergyInventorySnapshot::default()
-        }
+}
 
 /// Settle a signed change in the conservative resonance pair potential.
 ///
