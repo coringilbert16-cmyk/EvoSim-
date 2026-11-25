@@ -3503,11 +3503,11 @@ mod live_ambient_energy_contract_tests {
 
         let inventory = simulation.energy_inventory_snapshot();
         println!(
-            "phase3c_reconciliation_profile,simulations=1,warmup_ticks=100,warmup_ms={:.3},measured_ticks=20,measured_ms={:.3},total_ms={:.3},residual={:.12e},field_energy={:.12e},world_work={:.12e}",
+            "phase3c_reconciliation_profile,simulations=1,warmup_ticks=100,warmup_ms={:.3},measured_ticks=20,measured_ms={:.3},total_ms={:.3},residual={:?},field_energy={:.12e},world_work={:.12e}",
             warmup_elapsed.as_secs_f64() * 1000.0,
             measured_elapsed.as_secs_f64() * 1000.0,
             (warmup_elapsed + measured_elapsed).as_secs_f64() * 1000.0,
-            inventory.residual().unwrap_or(f64::NAN),
+            inventory.residual(),
             inventory.current_spatial_field_energy,
             inventory.spatial_field_world_work,
         );
