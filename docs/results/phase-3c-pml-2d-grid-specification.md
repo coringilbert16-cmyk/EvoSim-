@@ -175,3 +175,44 @@ Consequences:
 This normalization is a necessary correction, not a proof that the exact staggered finite-difference realization satisfies every hypothesis. The remaining work is to write the fully reduced half-time energy (including `E_add)), derive the one-step identity using the actual cell/face inner products, and verify it numerically for the constant-coefficient cases.
 
 Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)–(71): https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
+
+
+## 8. Discrete energy specialization: verified terms and remaining transcription
+
+The previous wording that the reduced proof uses only a generic combined variable was incomplete. The fully discrete theorem (Baffet et al., equations 64–71) defines the half-time energy through three pieces. Under the invariant 2D reduction `ζ3=0`, `∂z=0`, and `φz=0`, the combined scalar is
+
+`q_h^n = v_h^n + a u_h^n + b ψ_h^n`
+
+where `v_h^n=(u_h^{n+1}-u_h^{n-1})/(2 Δt)`, and the analysis-only variable satisfies
+
+`(ψ_h^{n+1}-ψ_h^n)/Δt = (u_h^{n+1}+u_h^n)/2`.
+
+The integrated auxiliary field `Φ_h) satisfies `(Φ_h^{n+1}-Φ_h^n)/Δt=(φ_h^{n+1}+φ_h^n)/2`. Define
+
+`Ξ_h^n = G_h ψ_h^n + Φ_h^n`.
+
+The kinetic contribution is exactly
+
+`E_k^{n+1/2} = 1/2 ( ||q_h^{n+1/2}||_cell² - (Δt²/4)||G_h q_h^{n+1/2}||_face² )`.
+
+The potential contribution specializes to
+
+`E_p^{n+1/2} = 1/2 ( ||G_h u_h^{n+1/2}+φ_h^{n+1/2}||_face² + ||Γ1 Ξ_h^{n+1/2}||_face² )`.
+
+The paper's total explicit energy is
+
+`E_expl^{n+1/2}=E_k^{n+1/2}+E_p^{n+1/2}+E_add^{n+1/2}`.
+
+The exact `E_add` expression (equation 68) contains additional time-difference terms involving the auxiliary proof fields and damping matrices. It has not yet been transcribed reliably from the source rendering, so it is deliberately not reconstructed from OCR fragments here. The complete identity (equation 71) is
+
+`(E_expl^{n+1/2}-E_expl^{n-1/2})/Δt = -(1/2)||[G_h u_h^n+φ_h^n]_{Δt}||_{Γ1}² - 2||{G_h u_h^n+φ_h^n}_{1/4}||_{Γ1}²`.
+
+Here `[w^n]_{Δt}=(w^{n+1}-w^{n-1})/(2Δt)`, and `{w^n}_{1/4}=(w^{n+1}+2w^n+w^{n-1})/4`. The damping-weighted norms use the paper's compatible face-space inner product. For `Γ1 succeq 0`, both right-hand terms are nonnegative, so the energy is nonincreasing whenever the complete energy is positive.
+
+The CFL condition is the paper's operator condition `(Δt/2) sup_{w≠0} ||G_h w||/||w|| < 1`, equivalently `(Δt²/4) λ_max(G_h^*G_h)<1` for the chosen inner products. This is the positivity condition for the kinetic correction, not a standalone proof that the entire PML energy is positive if `E_add` is omitted.
+
+**Important distinction:** `ψ_h) and `Φ_h) are analysis-only integrated variables in this 2D reduction. They are not additional physical PML state fields. The physical 2D PML still has only `φx,φy`. The 3D proof's third component vanishes under the invariant restriction, while the scalar proof variable `ψ_h) remains in `q_h) because `tr Γ3=b).
+
+Reference: Baffet et al. (2019), Section 3.2.2, equations (62)–(71), https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
+
+**Unresolved:** transcribe equation (68) exactly from a legible source, transform all energy terms consistently to general wave speed c, and then perform the one-step numerical identity test. Until those are done, the discrete energy audit is incomplete and the finite-difference realization is not validated.
