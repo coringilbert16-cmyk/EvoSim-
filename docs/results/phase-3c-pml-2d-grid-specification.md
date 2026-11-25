@@ -364,3 +364,23 @@ The sampled solution norms remained bounded throughout these runs; this is only 
 **Interpretation:** the PML recurrence is now supported by (1) a roundoff-level constant-coefficient energy identity audit for periodic, Dirichlet, and Neumann compatible operators, and (2) a promising preliminary variable-profile 2D packet test at three angles. The next experiment should broaden frequency and angle coverage, compare profile families at matched integrated damping, and inspect full-field energy/flux across the physical/PML interface and corner regions. Do not select production profile parameters from this single packet screen.
 
 No production solver code changed. No PR #446 changes were made.
+
+A carrier-wavenumber sweep at the same 24-cell cubic profile and peak damping 0.5 produced:
+
+| Carrier wavenumber k | 0° normal | 30° | 45° |
+|---:|---:|---:|---:|
+| 0.30 | 0.00325 | 0.00185 | 0.00106 |
+| 0.55 | 0.000441 | 0.000198 | 0.0000646 |
+| 0.85 | 0.000264 | 0.0000712 | 0.0000161 |
+| 1.10 | 0.000177 | 0.0000199 | 0.0000137 |
+
+At the lower wavenumber `k=0.30`, increasing layer thickness reduced the measured ratio:
+
+| Thickness | 0° normal | 30° | 45° |
+|---:|---:|---:|---:|
+| 16 | 0.00736 | 0.00391 | 0.00162 |
+| 24 | 0.00325 | 0.00185 | 0.00106 |
+| 32 | 0.00197 | 0.00125 | 0.000722 |
+| 40 | 0.00119 | 0.000853 | 0.000516 |
+
+This indicates that the low-frequency end is the more demanding case in this packet screen, and that added thickness improves attenuation. The numbers remain monitor-based preliminary diagnostics; they are not angle/frequency-independent reflection bounds.
