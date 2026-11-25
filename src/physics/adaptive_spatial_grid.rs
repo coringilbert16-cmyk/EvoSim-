@@ -2306,6 +2306,14 @@ mod tests {
 mod dense_uniform_solver_prototype_tests {
     use super::*;
 
+    fn close(actual: f64, expected: f64) {
+        let scale = actual.abs().max(expected.abs()).max(1.0);
+        assert!(
+            (actual - expected).abs() <= 1.0e-12 * scale,
+            "{actual} != {expected}"
+        );
+    }
+
     #[derive(Clone)]
     struct DenseUniformWave {
         width: usize,
