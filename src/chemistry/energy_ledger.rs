@@ -2318,4 +2318,35 @@ mod tests {
         assert!(ledger.transfer(&mut a, &mut b, 4.0));
         assert_eq!(a + b, 12.0);
     }
+
+    #[test]
+    fn world_inventory_reconciles_ambient_and_spatial_field_energy() {
+        let inventory = EnergyInventorySnapshot {
+            initial_ambient_energy: 100.0,
+            current_ambient_energy: 101.0,
+            ambient_energy_generated: 2.0,
+            ambient_energy_withdrawn: 1.0,
+            initial_spatial_field_energy: 0.0,
+            current_spatial_field_energy: 3.0,
+            spatial_field_world_work: 3.0,
+            ..EnergyInventorySnapshot::default()
+        };
+
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced_without_creation(1.0e-12));
+    }
+
+    #[test]
+    fn world_inventory_counts_spatial_computational_outflow_as_a_sink() {
+        let inventory = EnergyInventorySnapshot {
+            initial_spatial_field_energy: 0.0,
+            current_spatial_field_energy: 2.0,
+            spatial_field_world_work: 3.0,
+            spatial_field_computational_outflow: 1.0,
+            ..EnergyInventorySnapshot::default()
+        };
+
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced_without_creation(1.0e-12));
+    }
 }
