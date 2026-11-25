@@ -2873,10 +2873,7 @@ mod dense_uniform_solver_prototype_tests {
                         .collect()
                 })
                 .collect();
-            let areas = keys
-                .iter()
-                .map(|key| field.grid.cell_area(*key))
-                .collect();
+            let areas = keys.iter().map(|key| field.grid.cell_area(*key)).collect();
             let boundaries = keys
                 .iter()
                 .map(|key| is_computational_boundary(&field.grid, *key))
@@ -2915,8 +2912,7 @@ mod dense_uniform_solver_prototype_tests {
         fn energy(&self) -> f64 {
             let mut kinetic_sum = 0.0;
             for index in 0..self.keys.len() {
-                let velocity =
-                    (self.current[index] - self.previous[index]) / self.time_step;
+                let velocity = (self.current[index] - self.previous[index]) / self.time_step;
                 kinetic_sum += self.areas[index] * velocity.powi(2);
             }
             let mut applied_previous = vec![0.0; self.keys.len()];
@@ -2939,7 +2935,8 @@ mod dense_uniform_solver_prototype_tests {
             let mut next = vec![0.0; self.keys.len()];
             for index in 0..self.keys.len() {
                 if !self.boundaries[index] {
-                    next[index] = 2.0 * self.current[index] - self.previous[index]
+                    next[index] = 2.0 * self.current[index]
+                        - self.previous[index]
                         - dt_squared * speed_squared * applied[index] / self.areas[index];
                     assert!(next[index].is_finite());
                 }
@@ -2984,8 +2981,16 @@ mod dense_uniform_solver_prototype_tests {
             grid.set_state(
                 key,
                 AdaptiveCell {
-                    previous: if boundary { 0.0 } else { envelope * (phase + 0.11).cos() },
-                    current: if boundary { 0.0 } else { envelope * phase.cos() },
+                    previous: if boundary {
+                        0.0
+                    } else {
+                        envelope * (phase + 0.11).cos()
+                    },
+                    current: if boundary {
+                        0.0
+                    } else {
+                        envelope * phase.cos()
+                    },
                 },
             )
             .unwrap();
