@@ -203,6 +203,30 @@ impl WaveField {
         Ok(())
     }
 
+    #[cfg(test)]
+    fn hard_remove_right_strip_for_test(
+        &mut self,
+        first_column: usize,
+    ) -> Result<f64, WaveFieldError> {
+        if first_column == 0 || first_column >= self.width - 1 {
+            return Err(WaveFieldError::InvalidParameter);
+        }
+        let energy_before = self.energy();
+        for y in 1..self.height - 1 {
+            for x in first_column..self.width - 1 {
+                let index = self.index(x, y);
+                self.previous[index] = 0.0;
+                self.current[index] = 0.0;
+            }
+        }
+        let energy_after = self.energy();
+        let signed_removed_energy = energy_before - energy_after;
+        if !signed_removed_energy.is_finite() || !energy_after.is_finite() || energy_after < 0.0 {
+            return Err(WaveFieldError::InvalidState);
+        }
+        Ok(signed_removed_energy)
+    }
+
     pub(crate) fn sample(&self, x: usize, y: usize) -> Option<f64> {
         if x >= self.width || y >= self.height {
             return None;
@@ -2795,6 +2819,82 @@ mod tests {
                     field.boundary_absorbed_energy()
                 );
             }
+        }
+    }
+
+    /// Isolated hybrid experiment: graded damping followed by an explicit
+    /// terminal strip removal. The signed terminal energy change is reported
+    /// separately because abrupt truncation can alter discrete interface energy.
+    #[test]
+    #[ignore = "manual Phase 3C hybrid soft-plus-hard boundary characterization"]
+    fn diagnostic_hybrid_sponge_and_terminal_removal() {
+        let width = 101_usize;
+        let height = 401_usize;
+        let source_x = 25.0;
+        let source_y = 200.0;
+        let probe_x = 55.0;
+        let probe_y = source_y;
+        let wave_number = 2.0 * std::f64::consts::PI / 12.0;
+        let damping_cases = [(12_usize, 0.15_f64), (12, 0.4), (20, 0.15), (20, 0.4)];
+        let first_hard_column = width - 4;
+
+        for (layer_width, maximum_damping) in damping_cases {
+            let mut field = solver(width, height, 1.0, 2);
+            field
+                .configure_absorbing_boundary(layer_width, maximum_damping)
+                .expect("valid hybrid sponge configuration");
+
+            for y in 1..height - 1 {
+                for x in 1..width - 1 {
+                    let dx = x as f64 - source_x;
+                    let dy = y as f64 - source_y;
+                    let envelope = (-0.5
+                        * ((dx / 8.0).powi(2) + (dy / 18.0).powi(2)))
+                    .exp();
+                    let phase = wave_number * dx;
+                    let index = field.index(x, y);
+                    field.current[index] = envelope * phase.cos();
+                    field.previous[index] =
+                        envelope * (phase + wave_number * field.time_step()).cos();
+                }
+            }
+
+            let incident_center = (probe_x - source_x) / 1.0;
+            let reflected_center =
+                ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x);
+            let incident_window = (incident_center - 12.0)..=(incident_center + 12.0);
+            let reflected_window = (reflected_center - 15.0)..=(reflected_center + 15.0);
+            let final_tick = reflected_center + 17.0;
+            let mut incident_peak: f64 = 0.0;
+            let mut reflected_peak: f64 = 0.0;
+            let mut terminal_removed_energy = 0.0;
+
+            while field.logical_time_ticks() < final_tick {
+                field
+                    .advance_substeps(1)
+                    .expect("stable hybrid diagnostic evolution");
+                terminal_removed_energy += field
+                    .hard_remove_right_strip_for_test(first_hard_column)
+                    .expect("terminal strip removal must remain finite");
+                let tick = field.logical_time_ticks();
+                let value = field
+                    .sample(probe_x as usize, probe_y as usize)
+                    .expect("probe remains inside the field")
+                    .abs();
+                if incident_window.contains(&tick) {
+                    incident_peak = incident_peak.max(value);
+                }
+                if reflected_window.contains(&tick) {
+                    reflected_peak = reflected_peak.max(value);
+                }
+            }
+
+            println!(
+                "hybrid_boundary,layer_width={layer_width},maximum_damping={maximum_damping:.3},hard_first_column={first_hard_column},incident_peak={incident_peak:.8e},reflected_peak={reflected_peak:.8e},reflected_amplitude_ratio={:.8e},soft_absorbed_energy={:.8e},hard_signed_removed_energy={terminal_removed_energy:.8e},remaining_energy={:.8e}",
+                reflected_peak / incident_peak.max(f64::MIN_POSITIVE),
+                field.boundary_absorbed_energy(),
+                field.energy()
+            );
         }
     }
 }
