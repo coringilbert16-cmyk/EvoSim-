@@ -195,9 +195,9 @@ The kinetic contribution is
 
 The potential contribution is
 
-`E_p^(n+1/2) = 1/2 ( ||G_h u_h^(n+1/2)+φ_h^(n+1/2)||² + ||Γ1 G_h ψ_h^(n+1/2)+Φ_h^(n+1/2)||² )`.
+`E_p^(n+1/2) = 1/2 ( ||G_h u_h^(n+1/2)+φ_h^(n+1/2)||² + ||Γ1(G_h ψ_h^(n+1/2)+Φ_h^(n+1/2))||² )`.
 
-The second potential term is **not** `||Γ1 Λ_h||²`. The paper defines `Λ_h=G_h ψ_h+Φ_h` for the auxiliary identity, but equation (3.37) uses `Γ1 G_h ψ_h+Φ_h`.
+The second potential term is exactly `||Γ1 Λ_h||²`, with `Λ_h=G_h ψ_h+Φ_h`.
 
 ### Additional explicit-energy correction
 
