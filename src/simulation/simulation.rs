@@ -3448,13 +3448,13 @@ mod live_ambient_energy_contract_tests {
         // Seed the disturbance before the adaptive wave grid advances.
         // Its energy is opening inventory, not energy created by this test.
         for simulation in [&mut slow, &mut fast] {
-            // This test validates 120 ticks of deterministic coupling and
-            // world-work reconciliation, not production-domain scaling. Keep
-            // the field local so the long logical run does not repeatedly
-            // solve the full 250x250 world.
+            // Keep the full 120-tick coupling check inside the approved
+            // 250x250 world-sized test domain. A 32x32 fixed-zero grid lets
+            // the disturbance reach its computational edge during this run,
+            // causing artificial energy loss unrelated to ambient coupling.
             simulation.resonance_field = crate::live_resonance_field::LiveResonanceField::new(
-                32.0,
-                32.0,
+                250.0,
+                250.0,
                 simulation
                     .ambient_energy
                     .sample_midpoint_before_current()
@@ -3464,8 +3464,8 @@ mod live_ambient_energy_contract_tests {
             simulation.resonance_field.set_initial_cell_state_for_test(
                 crate::adaptive_spatial_grid::CellKey {
                     level: 0,
-                    x: 16,
-                    y: 16,
+                    x: 125,
+                    y: 125,
                 },
                 0.0,
                 0.5,
