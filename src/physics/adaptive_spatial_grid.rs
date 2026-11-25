@@ -570,7 +570,11 @@ impl AdaptiveSpatialGrid {
             .ok_or(AdaptiveGridError::InvalidDimensions)?;
         let new_height = self
             .height
-            .checked_add(padding.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?)
+            .checked_add(
+                padding
+                    .checked_mul(2)
+                    .ok_or(AdaptiveGridError::InvalidDimensions)?,
+            )
             .ok_or(AdaptiveGridError::InvalidDimensions)?;
         let finest_scale = 1_u32
             .checked_shl(self.max_refinement_level as u32)
@@ -613,7 +617,11 @@ impl AdaptiveSpatialGrid {
                     .ok_or(AdaptiveGridError::InvalidDimensions)?,
                 y: key
                     .y
-                    .checked_add(padding.checked_mul(scale).ok_or(AdaptiveGridError::InvalidDimensions)?)
+                    .checked_add(
+                        padding
+                            .checked_mul(scale)
+                            .ok_or(AdaptiveGridError::InvalidDimensions)?,
+                    )
                     .ok_or(AdaptiveGridError::InvalidDimensions)?,
             };
             expanded.insert(shifted, *state);
