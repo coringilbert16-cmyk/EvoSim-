@@ -307,5 +307,7 @@ The tested identity is
 
 Across the 125 checks, the maximum absolute residual was approximately `1.66×10⁻¹⁰` in double precision. The auxiliary identity from Lemma 12 and the energy decomposition identities were also checked independently; their residuals were at floating-point roundoff.
 
+A separate normalization check used `c=2.5`, physical `Δt=0.04`, and normalized `Δs=0.1`, with normalized damping `(ζx',ζy')=(0.7,1.1)). Mapping the normalized solution back to physical variables gave maximum recurrence residuals of approximately `5.7×10⁻¹²` for the wave equation and `3.4×10⁻¹³` for the auxiliary equations; the normalized energy identity residual was approximately `5.0×10⁻¹¹`. This verifies the stated variable/time rescaling numerically for that case.
+
 This validates the **constant-coefficient periodic finite-difference realization** of the published explicit energy identity, provided the operator pair is exactly adjoint-compatible and the startup fields are initialized consistently. It does not validate non-periodic outer boundary closures, spatially varying damping profiles, PML interface reflection, corners, or adaptive-grid coupling.
 
