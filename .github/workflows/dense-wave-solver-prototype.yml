@@ -1,6 +1,9 @@
 name: Dense Wave Solver Prototype
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - 'movement/dense-wave-solver-prototype'
