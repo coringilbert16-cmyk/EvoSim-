@@ -12,9 +12,6 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(test)]
-#[derive(Clone, Copy, Debug)]
-
-#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct SolverSubstepProfile {
     pub(crate) matrix_apply_ms: f64,
@@ -56,6 +53,7 @@ pub(crate) fn solver_substep_profile() -> SolverSubstepProfile {
 }
 
 #[cfg(test)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct DomainExpansionProfile {
     pub(crate) expansion_check_ms: f64,
     pub(crate) regrid_ms: f64,
