@@ -361,7 +361,7 @@ A small profile/thickness sensitivity screen at peak damping 0.5 gave:
 
 The sampled solution norms remained bounded throughout these runs; this is only a finite-duration empirical check, not a stability proof. The cubic profile was not uniformly optimal at every thickness, and these results do not establish a universal damping choice.
 
-**Interpretation:** the PML recurrence is now supported by (1) a roundoff-level constant-coefficient energy identity audit for periodic, Dirichlet, and Neumann compatible operators, and (2) a promising preliminary variable-profile 2D packet test at three angles. The next experiment should broaden frequency and angle coverage, compare profile families at matched integrated damping, and inspect full-field energy/flux across the physical/PML interface and corner regions. Do not select production profile parameters from this single packet screen.
+**Interpretation:** the PML recurrence is now supported by (1) a roundoff-level constant-coefficient energy identity audit for periodic, Dirichlet, and Neumann compatible operators, and (2) a preliminary variable-profile 2D packet screen spanning multiple frequencies, angles, thicknesses, and profile powers. The next experiment should compare profile families at matched integrated damping and inspect full-field energy/flux across the physical/PML interface and corner regions. Do not select production profile parameters from these monitor-based screens.
 
 No production solver code changed. No PR #446 changes were made.
 
