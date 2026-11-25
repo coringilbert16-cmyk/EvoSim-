@@ -139,6 +139,8 @@ For the approved scalar reference model, introduce a positive field normalizatio
 
 The units of `K` must be chosen so `e` is energy per physical area and `J` has units of energy per length per physics-time. The integral of `e` over the plane is field energy. For finite-energy localized states, global conservation is evaluated over the full plane; any finite computational window must account for flux crossing its numerical boundary without treating that boundary as a physical wall.
 
+The approved production-reference normalization is `K = 1.0` after changing to the normalized field variable `φ = √K u`. In that variable the same relations are `e = 1/2 [φ_t² + c² |∇φ|²]` and `J = -c² φ_t ∇φ`; the wave equation retains its form because K is constant. The normalized variable carries units `√E·tick/L`, so this is not a claim that a dimensionful coefficient has disappeared without changing units. All initial conditions, ambient carrier amplitudes, source couplings, and cross terms must use `φ` consistently. In code, a stored `field_normalization` of `1.0` means the normalized representation; it must not be combined with unscaled `u` amplitudes from a different K convention.
+
 This relationship is essential: field amplitude or spectral magnitude alone is not an energy inventory. The coefficient and units must be fixed together with the simulation's energy unit and source calibration.
 
 ### 4.3 Damping and heat
@@ -320,7 +322,7 @@ These measurements are instrumented baseline observations, not a universal cost 
 | Frequency representation | One time-domain field carries simultaneous frequencies and phases | Phase 2 tests superposition, interference, and frequency-resolved behavior |
 | Material emission/response | Powered oscillators with owned internal energy; passive absorption/reflection/transmission/scattering | Numeric coefficients are Phase 3 calibration values; ownership and atomic transfer rules are specified |
 | Empty-space propagation speed | Universal constant in homogeneous empty space, expressed L/tick | **Initial reference: `c = 1.0 L/tick`, user-approved 2026-11-24; provisional scale convention, revisable only through documented physical evidence** |
-| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | **Initial normalization: `K = 1.0` with consistently normalized field amplitude; preserve exact ambient energy envelope and cross terms** |
+| Energy density and flux | Approved scalar-reference formulas in Section 4.2 | **Initial normalization: `K = 1.0` after transforming to `φ = √K u`; preserve exact ambient energy envelope and cross terms** |
 | Dimensional basis | Project-native L, tick, E approved | Keep all equations in project-native L, tick, and E; no SI or wall-clock conversion is required |
 | Scalar field dimensions | Dimensionless u is the initial reference convention | Preserve the documented project-native dimensions for K and forcing in the solver |
 | Spatial unit and propagation speed | Project-native L/tick basis; initial `c = 1.0 L/tick` approved 2026-11-24 | Keep `c` explicit/versioned; solver substeps remain fractions of logical ticks and independent of runtime pacing |
@@ -390,15 +392,15 @@ The following initial production-reference values are user-approved:
 | Parameter | Initial value | Meaning / constraint |
 |---|---:|---|
 | Propagation speed `c` | `1.0 L/tick` | One world-distance unit per logical tick in homogeneous empty space; project-native and provisional |
-| Energy normalization `K` | `1.0` | Use the normalized field amplitude consistently; no independent scale factor remains in the initial reference configuration |
+| Energy normalization `K` | `1.0` | Store the normalized field variable `φ = √K u` (units `√E·tick/L`); preserve all amplitude and energy relationships |
 | Adaptive base spacing `Δx` | `1.0 L` | Base-cell width |
 | Maximum refinement | `2` | Finest cell width is `0.25 L` |
 | Solver substeps | Automatic | Choose the smallest integer substep count satisfying the conservative adaptive CFL bound; do not hardcode a count |
 
-`K = 1` is a normalization convention, not a reduction of the ambient energy inventory. The ambient carrier amplitude must be expressed in the same normalized variable, and the ambient/disturbance cross-energy, cross-flux, and world-drive terms must remain complete. If a later change rescales the field variable, transform every field state, source coupling, and amplitude-dependent quantity consistently so physical energy remains unchanged.
+`K = 1` is a normalization convention, not a reduction of the ambient energy inventory. The stored field variable is `φ = √K u`, with units `√E·tick/L`; the normalized energy and flux expressions have coefficient 1. The ambient carrier amplitude must be expressed in the same normalized variable, and the ambient/disturbance cross-energy, cross-flux, and world-drive terms must remain complete. If a later change rescales the field variable, transform every field state, source coupling, and amplitude-dependent quantity consistently so physical energy remains unchanged.
 
 These settings do not establish a finite physical world boundary. Any finite adaptive-grid extent is a computational window and must use validated outgoing treatment or controlled expansion with explicit computational-outflow accounting. The 250 × 250 ambient inventory footprint is not automatically the propagation domain.
 
 ### 12.3 Phase 1 decision status
 
-The architecture and modeling-default decisions, source/material contracts, project-native clock and units, energy-transfer rules, numerical stability bound, and convergence/tolerance policy are specified. Phase 1 is complete at the specification level. Phase 2 will select numerical parameters and validate the reference solver; no production solver or chemistry/movement behavior is authorized by this completion.
+The architecture and modeling-default decisions, source/material contracts, project-native clock and units, energy-transfer rules, numerical stability bound, and convergence/tolerance policy are specified. Phase 1 and the independent Phase 2 reference-solver validation are complete. Phase 3C now uses the user-approved provisional numerical scales recorded in Section 12.2; production live integration remains a separate gate. No chemistry or organism behavior is authorized by this completion.
