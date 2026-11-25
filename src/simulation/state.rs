@@ -254,6 +254,9 @@ pub(crate) struct EnergyLedger {
     /// Cumulative signed computational outflow from the composed spatial field.
     #[serde(default)]
     pub(crate) total_spatial_field_computational_outflow: f64,
+    /// Current spatial-field balance residual after initial inventory, world work, and outflow.
+    #[serde(default)]
+    pub(crate) total_spatial_field_accounting_residual: f64,
     /// Opening ambient inventory; excluded from generated-energy totals.
     #[serde(default)]
     pub(crate) initial_ambient_energy_held: f64,
