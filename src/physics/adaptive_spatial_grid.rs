@@ -1773,6 +1773,89 @@ mod tests {
     }
 
     #[test]
+    fn regridding_preserves_energy_and_outflow_ledger_during_absorbing_evolution() {
+        let mut grid = AdaptiveSpatialGrid::new(9, 9, 1.0, 2).unwrap();
+        for y in 1..8 {
+            for x in 1..8 {
+                let dx = x as f64 - 2.0;
+                let dy = y as f64 - 4.0;
+                let profile = (-((dx * dx + dy * dy) / 3.0)).exp();
+                grid.set_state(
+                    CellKey { level: 0, x, y },
+                    AdaptiveCell {
+                        previous: 0.04 * profile,
+                        current: profile,
+                    },
+                )
+                .unwrap();
+            }
+        }
+
+        let parent = CellKey {
+            level: 0,
+            x: 2,
+            y: 4,
+        };
+        let mut field = AdaptiveWaveField::new(grid, 0.2, 1.1).unwrap();
+        field.configure_absorbing_boundary(3.0, 0.08).unwrap();
+        field.advance_ticks(5).unwrap();
+        assert!(field.absorbed_energy() > 0.0);
+
+        for _ in 0..3 {
+            let energy_before = field.energy();
+            let outflow_before = field.absorbed_energy();
+            let total_accounted_before = energy_before + outflow_before;
+            let integrals_before = field.grid().integrated_state();
+            let ticks_before = field.logical_time_ticks();
+
+            field.refine_grid(parent).unwrap();
+
+            close(field.energy(), energy_before);
+            close(field.absorbed_energy(), outflow_before);
+            close(field.energy() + field.absorbed_energy(), total_accounted_before);
+            close(
+                field.grid().integrated_state().current_displacement,
+                integrals_before.current_displacement,
+            );
+            close(
+                field.grid().integrated_state().previous_displacement,
+                integrals_before.previous_displacement,
+            );
+            close(field.logical_time_ticks(), ticks_before);
+
+            field.advance_ticks(2).unwrap();
+            let evolved_total = field.energy() + field.absorbed_energy();
+            close(evolved_total, total_accounted_before);
+
+            let energy_before_coarsen = field.energy();
+            let outflow_before_coarsen = field.absorbed_energy();
+            let integrals_before_coarsen = field.grid().integrated_state();
+            let ticks_before_coarsen = field.logical_time_ticks();
+
+            field.coarsen_grid(parent).unwrap();
+
+            close(field.energy(), energy_before_coarsen);
+            close(field.absorbed_energy(), outflow_before_coarsen);
+            close(
+                field.energy() + field.absorbed_energy(),
+                evolved_total,
+            );
+            close(
+                field.grid().integrated_state().current_displacement,
+                integrals_before_coarsen.current_displacement,
+            );
+            close(
+                field.grid().integrated_state().previous_displacement,
+                integrals_before_coarsen.previous_displacement,
+            );
+            close(field.logical_time_ticks(), ticks_before_coarsen);
+
+            field.advance_ticks(2).unwrap();
+            close(field.energy() + field.absorbed_energy(), evolved_total);
+        }
+    }
+
+    #[test]
     fn uniformly_refined_adaptive_wave_converges_to_continuum_mode() {
         fn relative_error(refinement_level: u8) -> f64 {
             let cells = 17_u32;
