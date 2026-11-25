@@ -2895,3 +2895,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "domain_storage_benchmark.rs"]
+mod domain_storage_benchmark;
