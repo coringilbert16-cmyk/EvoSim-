@@ -522,7 +522,7 @@ mod tests {
         let half_substep = 0.5 * field.substep_time_step();
         let initial_sample = ambient.sample_at_offset(-half_substep).unwrap();
         field.set_initial_ambient_sample(initial_sample).unwrap();
-        field.set_initial_standing_mode_for_test(0.5);
+        field.set_initial_cell_state_for_test(\n            crate::adaptive_spatial_grid::CellKey { level: 0, x: 16, y: 16 },\n            0.0,\n            0.5,\n        );
 
         let initial_energy = field.energy_state().total_energy;
         let start = Instant::now();
