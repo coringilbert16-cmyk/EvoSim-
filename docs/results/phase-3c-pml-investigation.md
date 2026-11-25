@@ -14,15 +14,24 @@ A classical PML is not obtained by merely increasing the existing damping coeffi
 
 ## Candidate formulation
 
-Prototype a first-order acoustic-style split-field PML in an isolated solver, rather than modifying the existing scalar leapfrog solver in place. In the undamped interior use pressure-like scalar p and directional velocity/flux fields vx, vy:
+The first candidate should be a **second-order scalar-wave PML**, not a rewrite into a first-order acoustic system. This is a closer mathematical match to the existing reference solver and avoids changing the physical wave variable solely to accommodate the boundary.
 
-- p_t = -K (d_x vx + d_y vy)
-- vx_t = -(1/rho) d_x p
-- vy_t = -(1/rho) d_y p
+A particularly relevant formulation is the 2D second-order PML analyzed by Baffet, Grote, Imperiale, and Kachanovska (2018). In compact form:
 
-In the absorbing layer, introduce directional stretch/damping profiles and split pressure components (px, py) with auxiliary state. Derive the exact discrete equations from a standard split-field or unsplit PML formulation and verify stability/matching before accepting implementation. Do not assume independent damping of all state variables is a valid PML.
+- u_tt + tr(Γ1) u_t + det(Γ1) u - Δu - div(φ) = 0
+- φ_t + Γ1 φ = Γ2 grad(u)
+- Γ1 = diag(σx, σy)
+- Γ2 = diag(σy - σx, σx - σy)
 
-Use a uniform grid initially, with a staggered spatial arrangement if needed by the energy derivation. Keep physical-interior coefficients matched to the reference wave speed and normalization.
+Here φ has two auxiliary components. The damping functions are zero in the physical interior and positive in the PML. The paper derives a PML-specific energy and proves continuous and discrete energy decay/stability results for its discretization. This is materially stronger than inventing an ad hoc damping recurrence.
+
+Implementation must use the paper's exact sign convention and complete discrete scheme; the compact equations above are a model identification, not sufficient implementation instructions. In particular, the energy functional has nontrivial auxiliary-field terms and cannot be replaced by the existing scalar solver's energy formula.
+
+Use a uniform grid initially. Begin with piecewise-constant damping regions so the published energy analysis applies directly; only then investigate smooth grading and variable-coefficient extensions. Preserve the current scalar wave speed and normalization in the physical interior. Compare the PML's physical-interior propagation against the reference solver before measuring absorption.
+
+Primary references:
+- Baffet et al., *Energy decay and stability of a perfectly matched layer for the wave equation* (2018), especially the 2D second-order formulation and its fully discrete energy identity: https://edoc.unibas.ch/70078/1/2018-13-pml-final.pdf
+- Steven G. Johnson, *Notes on Perfectly Matched Layers* (MIT, 2007), for complex-coordinate stretching, derivation, and discretization limitations: https://math.mit.edu/~stevenj/18.369/spring07/pml.pdf
 
 ## Required validation
 
@@ -41,4 +50,4 @@ Reject formulations with growing modes, non-finite state, unexplained energy cre
 
 ## Known limitations
 
-The reference solver's scalar second-order energy identity does not automatically apply to a first-order split-field PML. The live-field composed-energy ledger also includes ambient oscillator energy and ambient/disturbance cross-energy; those terms will eventually need explicit PML treatment. This investigation does not validate the live-field ambient-work correction staged on PR #446.
+The reference solver's existing scalar leapfrog energy identity does not automatically apply to the PML auxiliary fields. The second-order formulation above has its own published energy functional and discrete stability analysis, which must be reproduced for the actual finite-difference implementation. The live-field composed-energy ledger also includes ambient oscillator energy and ambient/disturbance cross-energy; those terms will eventually need explicit PML treatment. This investigation does not validate the live-field ambient-work correction staged on PR #446.
