@@ -13,6 +13,49 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(test)]
 #[derive(Clone, Copy, Debug)]
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SolverSubstepProfile {
+    pub(crate) matrix_apply_ms: f64,
+    pub(crate) previous_energy_ms: f64,
+    pub(crate) state_update_ms: f64,
+    pub(crate) next_energy_ms: f64,
+    pub(crate) commit_ms: f64,
+}
+#[cfg(test)]
+static MATRIX_APPLY_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static PREVIOUS_ENERGY_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static STATE_UPDATE_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static NEXT_ENERGY_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static SUBSTEP_COMMIT_NANOS: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+pub(crate) fn reset_solver_substep_profile() {
+    MATRIX_APPLY_NANOS.store(0, Ordering::Relaxed);
+    PREVIOUS_ENERGY_NANOS.store(0, Ordering::Relaxed);
+    STATE_UPDATE_NANOS.store(0, Ordering::Relaxed);
+    NEXT_ENERGY_NANOS.store(0, Ordering::Relaxed);
+    SUBSTEP_COMMIT_NANOS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+pub(crate) fn solver_substep_profile() -> SolverSubstepProfile {
+    const NANOS_PER_MILLISECOND: f64 = 1_000_000.0;
+    SolverSubstepProfile {
+        matrix_apply_ms: MATRIX_APPLY_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        previous_energy_ms: PREVIOUS_ENERGY_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        state_update_ms: STATE_UPDATE_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        next_energy_ms: NEXT_ENERGY_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+        commit_ms: SUBSTEP_COMMIT_NANOS.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND,
+    }
+}
+
+#[cfg(test)]
 pub(crate) struct DomainExpansionProfile {
     pub(crate) expansion_check_ms: f64,
     pub(crate) regrid_ms: f64,
@@ -1180,6 +1223,8 @@ impl AdaptiveWaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), AdaptiveGridError> {
+        #[cfg(test)]
+        let phase_start = std::time::Instant::now();
         let mut face_sums: BTreeMap<CellKey, f64> =
             self.grid.leaves.keys().map(|key| (*key, 0.0)).collect();
         for (row, columns) in &self.stiffness {
@@ -1189,13 +1234,21 @@ impl AdaptiveWaveField {
                 .sum::<f64>();
             face_sums.insert(*row, -applied);
         }
+        #[cfg(test)]
+        MATRIX_APPLY_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
 
         let dt = self.time_step;
         let speed_squared = self.propagation_speed.powi(2);
+        #[cfg(test)]
+        let phase_start = std::time::Instant::now();
         let old_energy = self.energy();
+        #[cfg(test)]
+        PREVIOUS_ENERGY_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
         let mut next_current = BTreeMap::new();
         let mut absorbed_this_step = 0.0;
 
+        #[cfg(test)]
+        let phase_start = std::time::Instant::now();
         for (key, state) in self.grid.leaves.iter() {
             if is_computational_boundary(&self.grid, *key) {
                 next_current.insert(*key, 0.0);
@@ -1217,8 +1270,12 @@ impl AdaptiveWaveField {
             absorbed_this_step += area * damping * dt * midpoint_velocity.powi(2);
             next_current.insert(*key, next);
         }
+        #[cfg(test)]
+        STATE_UPDATE_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
 
         absorbed_this_step *= self.energy_normalization;
+        #[cfg(test)]
+        let phase_start = std::time::Instant::now();
         let next_energy = self.discrete_energy(
             &self
                 .grid
@@ -1228,6 +1285,10 @@ impl AdaptiveWaveField {
                 .collect(),
             &next_current,
         );
+        #[cfg(test)]
+        NEXT_ENERGY_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
+        #[cfg(test)]
+        let phase_start = std::time::Instant::now();
         let measured_loss = old_energy - next_energy;
         let tolerance = 1.0e-10
             * old_energy
@@ -1259,6 +1320,8 @@ impl AdaptiveWaveField {
         }
         self.absorbed_energy = next_absorbed_energy;
         self.substeps_elapsed = next_substeps_elapsed;
+        #[cfg(test)]
+        SUBSTEP_COMMIT_NANOS.fetch_add(elapsed_nanos(phase_start), Ordering::Relaxed);
         Ok(())
     }
 
