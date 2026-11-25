@@ -181,22 +181,28 @@ Reference: Baffet et al. (2019), Sections 2.1 and 3.2, especially equations (62)
 
 An independently indexed full-text copy of Baffet et al. (2019) exposes the complete explicit-energy definition in equation (3.38), corresponding to equation (68) in the other manuscript numbering. The correction is
 
-`E_add,h^(n+1/2) = (Δt²/8) ( || [Λ_h^n]_Δt ||²_(Γ1) + || Γ1 [Λ_h^n]_Δt + Γ1² Λ_h^(n+1/2) ||² )`
+`E_add,h^(n+1/2) = (Δt²/8) ( || [Λ_h^n]_Δt ||²_(Γ1) + || Γ1 [Λ_h^n]_Δt + Γ1² {Λ_h^n}_{1/4} ||² )`
 
 where
 
 - `[Λ_h^n]_Δt = (Λ_h^(n+1) - Λ_h^n)/Δt`;
-- `Λ_h^(n+1/2) = (Λ_h^(n+1) + Λ_h^n)/2`;
+- `{Λ_h^n}_{1/4} = (Λ_h^(n+1)+2Λ_h^n+Λ_h^(n-1))/4`;
 - `||w||²_(Γ1) = <Γ1 w,w>` in the paper's compatible discrete auxiliary-space inner product;
 - the second norm is the ordinary compatible discrete L² norm;
 - `Γ1²` means matrix composition `Γ1 Γ1`.
 
-The second norm contains a **sum inside the norm**. It is not the sum of separate norms, and the first term is a `Γ1)-weighted norm of the difference rather than an ordinary norm of `Γ1) times the difference.
+The second norm contains a **sum inside the norm**. It is not the sum of separate norms, and the first term is a `Γ1`-weighted norm of the difference rather than an ordinary norm of `Γ1` times the difference. The quarter-weighted average reaches back to `n-1`; it is not the simple midpoint `(Λ^n+Λ^(n+1))/2`.
+
+The potential contribution from equation (3.37) must be kept distinct from this correction. Its 2D specialization is
+
+`E_p^(n+1/2) = 1/2 ( ||G_h u_h^(n+1/2)+φ_h^(n+1/2)||² + ||Γ1 G_h ψ_h^(n+1/2)+Φ_h^(n+1/2)||² )`.
+
+In particular, the second potential term is **not** `||Γ1 Λ_h||²`: the paper defines `Λ_h=G_h ψ_h+Φ_h` for the auxiliary identity, but equation (3.37) uses `Γ1 G_h ψ_h+Φ_h`.
 
 For the invariant 2D reduction, `Γ1=diag(ζx,ζy)`, and
 `Λ_h^n=G_h ψ_h^n+Φ_h^n`. The correction is therefore
 
-`E_add,2D^(n+1/2) = (Δt²/8) ( ζx ||[Λx]_Δt||² + ζy ||[Λy]_Δt||² + ||ζx[Λx]_Δt + ζx²Λx^(n+1/2)||² + ||ζy[Λy]_Δt + ζy²Λy^(n+1/2)||² )`.
+`E_add,2D^(n+1/2) = (Δt²/8) [ ζx ||[Λx]_Δt||² + ζy ||[Λy]_Δt||² + ||ζx[Λx]_Δt + ζx²{Λx}_{1/4}||² + ||ζy[Λy]_Δt + ζy²{Λy}_{1/4}||² ]`.
 
 Both terms are nonnegative for nonnegative damping. They are analysis-energy corrections; they do not add physical PML state variables.
 
