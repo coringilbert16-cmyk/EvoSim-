@@ -3475,17 +3475,24 @@ mod live_ambient_energy_contract_tests {
             .ambient_energy
             .sample_at_offset(-0.5 * simulation.resonance_field.substep_time_step())
             .expect("test ambient sample must align with leapfrog velocity time");
-        simulation.resonance_field
+        simulation
+            .resonance_field
             .set_initial_ambient_sample(initial_ambient_sample)
             .expect("test ambient sample must reconcile with the live field");
         simulation.resonance_field.set_initial_cell_state_for_test(
-            crate::adaptive_spatial_grid::CellKey { level: 0, x: 16, y: 16 },
+            crate::adaptive_spatial_grid::CellKey {
+                level: 0,
+                x: 16,
+                y: 16,
+            },
             0.0,
             0.5,
         );
         let opening_field = simulation.resonance_field.energy_state();
         simulation.energy_ledger.initial_spatial_field_energy_held = opening_field.total_energy;
-        simulation.energy_ledger.total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
+        simulation
+            .energy_ledger
+            .total_spatial_disturbance_energy_held = opening_field.disturbance_energy;
         simulation.energy_ledger.total_spatial_cross_energy_held = opening_field.cross_energy;
         simulation.energy_ledger.total_spatial_field_energy_held = opening_field.total_energy;
 
