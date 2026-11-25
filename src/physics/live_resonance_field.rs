@@ -187,6 +187,24 @@ impl LiveResonanceField {
         ambient_before: AmbientModeSample,
         ambient_midpoint: AmbientModeSample,
     ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
+        self.advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, true)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn advance_one_tick_without_domain_expansion(
+        &mut self,
+        ambient_before: AmbientModeSample,
+        ambient_midpoint: AmbientModeSample,
+    ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
+        self.advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, false)
+    }
+
+    fn advance_one_tick_with_domain_policy(
+        &mut self,
+        ambient_before: AmbientModeSample,
+        ambient_midpoint: AmbientModeSample,
+        expand_domain: bool,
+    ) -> Result<LiveFieldEnergyState, LiveResonanceFieldError> {
         if ambient_before.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
             || ambient_midpoint.field_normalization.to_bits() != FIELD_NORMALIZATION.to_bits()
         {
@@ -199,11 +217,15 @@ impl LiveResonanceField {
             - before_integrals.previous_displacement)
             / time_step;
 
-        self.wave.advance_ticks_with_domain_expansion(
-            1,
-            EXPANSION_TRIGGER_MARGIN,
-            EXPANSION_PADDING_BASE_CELLS,
-        )?;
+        if expand_domain {
+            self.wave.advance_ticks_with_domain_expansion(
+                1,
+                EXPANSION_TRIGGER_MARGIN,
+                EXPANSION_PADDING_BASE_CELLS,
+            )?;
+        } else {
+            self.wave.advance_ticks(1)?;
+        }
 
         let after_integrals = self.wave.grid().integrated_state();
         let after_disturbance_velocity = (after_integrals.current_displacement
