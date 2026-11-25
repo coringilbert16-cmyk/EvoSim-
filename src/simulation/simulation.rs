@@ -973,11 +973,7 @@ impl Simulation {
 
         let spatial_state = self
             .resonance_field
-            .advance_one_tick_with_domain_policy(
-                ambient_before,
-                ambient_midpoint,
-                expand_domain,
-            )
+            .advance_one_tick_with_domain_policy(ambient_before, ambient_midpoint, expand_domain)
             .expect("spatial resonance field must advance and account deterministically");
         self.energy_ledger.total_spatial_disturbance_energy_held = spatial_state.disturbance_energy;
         self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
