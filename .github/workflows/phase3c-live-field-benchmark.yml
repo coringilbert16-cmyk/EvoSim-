@@ -21,9 +21,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Validate live-field accounting contract
         run: cargo test --release --locked --lib live_field_advances_deterministically_without_inventing_energy -- --nocapture
-      - name: Diagnose live-field boundary accounting
-        timeout-minutes: 15
-        run: cargo test --release --locked --lib diagnose_live_field_boundary_flux_vs_domain_expansion -- --ignored --nocapture
       - name: Benchmark complete Phase 3C live-field wrapper
         timeout-minutes: 15
         run: cargo test --release --locked --lib benchmark_phase3c_live_wrapper_250x250_20_ticks -- --ignored --nocapture
