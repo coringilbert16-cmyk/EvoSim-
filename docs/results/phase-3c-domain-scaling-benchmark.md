@@ -39,6 +39,37 @@ The benchmark passed: 1 test passed, 0 failed. The dedicated CI job completed su
 4. **Numerical energy behavior is strong in this bounded test.** Localized-wave relative drift is between approximately 3.2e-15 and 7.6e-15 over 20 ticks. This is not evidence of correct open-boundary export: the benchmark's outer computational boundary is still fixed-zero, and no wave is required to leave a finite world.
 5. **This benchmark does not measure memory.** Leaf count is reported, but no allocator/RSS measurement or reliable per-node memory accounting was performed.
 
+## Storage-layout prototype comparison
+
+**Source commit:** `91267aca60832d914aa6060c4c31084c9fa03832`  
+**Workflow:** Rust run `45628518871`, benchmark job `139255090421`  
+**Command:** the same release benchmark script; it now runs both ignored benchmark tests.
+
+A second, isolated microbenchmark compared three storage layouts using the same uniform five-point leapfrog update, fixed-zero boundary, deterministic row-major iteration, propagation speed (c=1), time step (dt=0.5), and 40 substeps (20 logical ticks). The localized initial condition has exact compact support; the active-region implementation expands its rectangle by one cell per substep. It does not drop values by amplitude threshold. Every final cell state matched the dense implementation with maximum absolute difference **0**.
+
+### Localized-wave results
+
+| Domain | Dense advance | Ordered-map advance | Active-region advance | Dense state payload | Active-region payload | Active-region cells |
+|---|---:|---:|---:|---:|---:|---:|
+| 32 × 32 | 0.089 ms | 5.172 ms | 0.116 ms | 16,384 B | 14,400 B | 900 |
+| 64 × 64 | 0.414 ms | 29.910 ms | 0.399 ms | 65,536 B | 61,504 B | 3,844 |
+| 128 × 128 | 1.102 ms | 118.423 ms | 0.552 ms | 262,144 B | 132,496 B | 8,281 |
+| 250 × 250 | 3.723 ms | 498.899 ms | 0.471 ms | 1,000,000 B | 132,496 B | 8,281 |
+
+At 250 × 250, the compact active region used about 7.5× fewer stored cells and state-payload bytes than the dense array, and advanced about 7.9× faster in this microbenchmark. The ordered-map kernel was roughly 1,060× slower than the active-region kernel at that size. The active-region approach was slightly slower than dense at 32 × 32, near parity at 64 × 64, and faster at 128 × 128 and 250 × 250.
+
+For the empty 250 × 250 case, dense storage advanced in 3.952 ms and the ordered map in 493.006 ms; the empty active region had no cells to update and completed below the timer's displayed precision.
+
+### Interpretation and limits
+
+- This supports two separate conclusions: contiguous storage is substantially preferable to per-cell ordered-map lookup for a uniform mesh, and exact active-region tracking can avoid work outside the finite stencil support for compactly supported disturbances.
+- The reported vector payload is based on vector capacity. The ordered-map number is only a lower bound of key plus state bytes; BTreeMap node links and allocator overhead are excluded. These are not process-RSS measurements.
+- This is a uniform-grid kernel prototype, not a benchmark of the production adaptive variational stiffness operator. It does not measure adaptive refinement/coarsening, stiffness assembly, ambient/disturbance cross-energy, world-drive accounting, material sampling, or finite-world boundary export.
+- Compact active-region tracking is exact for the tested compact-support initial condition because the stencil has finite propagation support. It is not a license to clip Gaussian tails, tiny nonzero values, or any other nonzero field state.
+- The prototype uses a fixed-zero numerical boundary. It does not validate the approved open boundary into the void.
+
+**Result:** The active-region candidate merits a production-shaped prototype, but no production storage choice is made from this microbenchmark alone. The next step is to test dense base-level storage and exact active-region bookkeeping against the actual adaptive solver's variational operator and energy invariants, retaining the dense reference as the oracle. No production solver changes, absorber changes, or Phase 3D work are included.
+
 ## Engineering conclusion
 
 Keep the approved finite 250 × 250 physical-world target. Do not shrink the physical domain, introduce an amplitude cutoff, or weaken propagation physics to improve benchmark numbers.
