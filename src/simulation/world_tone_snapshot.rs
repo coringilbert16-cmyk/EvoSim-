@@ -2152,6 +2152,7 @@ mod tests {
             other_energy_released: 0.0,
             work_expended: 0.0,
             heat_dissipated: ledger.total_heat_dissipated,
+            ..crate::energy_ledger::EnergyInventorySnapshot::default()
         };
         assert!(
             inventory.is_balanced_without_creation(1e-9),
