@@ -952,14 +952,17 @@ impl Simulation {
             .ambient_energy
             .advance_one_tick()
             .expect("ambient energy must advance deterministically by one tick");
-        let ambient_after = self.ambient_energy.sample();
+        let ambient_midpoint = self
+            .ambient_energy
+            .sample_midpoint_before_current()
+            .expect("ambient carrier midpoint must be available after advancing");
         self.energy_ledger.total_ambient_energy_generated += transfer.generated_energy;
         self.energy_ledger.total_ambient_energy_withdrawn += transfer.withdrawn_energy;
         self.energy_ledger.total_ambient_energy_held = transfer.energy_after;
 
         let spatial_state = self
             .resonance_field
-            .advance_one_tick(ambient_before, ambient_after)
+            .advance_one_tick(ambient_before, ambient_midpoint)
             .expect("spatial resonance field must advance and account deterministically");
         self.energy_ledger.total_spatial_disturbance_energy_held = spatial_state.disturbance_energy;
         self.energy_ledger.total_spatial_cross_energy_held = spatial_state.cross_energy;
