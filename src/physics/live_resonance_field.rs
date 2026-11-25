@@ -147,7 +147,8 @@ impl LiveResonanceField {
             - integrals.previous_displacement)
             / self.wave.time_step();
         let disturbance_energy = self.wave.energy();
-        let cross_energy = FIELD_NORMALIZATION * ambient_sample.carrier_velocity * disturbance_velocity;
+        let cross_energy =
+            FIELD_NORMALIZATION * ambient_sample.carrier_velocity * disturbance_velocity;
         let total_energy = disturbance_energy + cross_energy;
         if !total_energy.is_finite() || disturbance_energy < 0.0 {
             return Err(LiveResonanceFieldError::InvalidAccountingState);
@@ -523,7 +524,11 @@ mod tests {
         let initial_sample = ambient.sample_at_offset(-half_substep).unwrap();
         field.set_initial_ambient_sample(initial_sample).unwrap();
         field.set_initial_cell_state_for_test(
-            crate::adaptive_spatial_grid::CellKey { level: 0, x: 16, y: 16 },
+            crate::adaptive_spatial_grid::CellKey {
+                level: 0,
+                x: 16,
+                y: 16,
+            },
             0.0,
             0.5,
         );
@@ -554,6 +559,7 @@ mod tests {
 
             maximum_leaf_count = maximum_leaf_count.max(field.wave.grid().leaf_count());
             assert!(state.total_energy.is_finite());
+            eprintln!("phase3c_live_wrapper_tick,tick={tick},residual={:.12e},field_energy={:.12e},world_work={:.12e}", state.accounting_residual, state.total_energy, state.cumulative_world_work);
             assert!(state.accounting_residual.abs() < 1.0e-7);
             black_box(state);
             if tick % 5 == 0 {
@@ -585,5 +591,4 @@ mod tests {
         assert!(final_state.disturbance_energy > 0.0);
         assert!(final_state.accounting_residual.abs() < 1.0e-7);
     }
-
 }
