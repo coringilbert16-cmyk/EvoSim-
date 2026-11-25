@@ -23,6 +23,8 @@ jobs:
         run: cargo test --release --locked --lib contiguous_uniform_solver_matches_reference_state_and_energy -- --nocapture
       - name: Validate production sponge and absorbed-energy parity
         run: cargo test --release --locked --lib contiguous_solver_matches_production_sponge_and_absorbed_energy_ledger -- --nocapture
+      - name: Validate adaptive refinement and coarsening with outflow accounting
+        run: cargo test --release --locked --lib regridding_preserves_energy_and_outflow_ledger_during_absorbing_evolution -- --nocapture
       - name: Benchmark contiguous solver against adaptive reference
         timeout-minutes: 15
         run: cargo test --release --locked --lib benchmark_contiguous_uniform_solver_against_adaptive_reference -- --ignored --nocapture
