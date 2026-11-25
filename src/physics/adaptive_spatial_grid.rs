@@ -839,6 +839,64 @@ impl AdaptiveWaveField {
         Ok(result)
     }
 
+    /// Expands before a nonzero disturbance reaches the computational guard
+    /// band. The old two-cell guard must still be exactly zero, so no outgoing
+    /// disturbance is clipped or absorbed at a numerical boundary.
+    pub(crate) fn expand_if_disturbance_near_boundary(
+        &mut self,
+        trigger_margin_base_cells: f64,
+        padding_base_cells: u32,
+    ) -> Result<bool, AdaptiveGridError> {
+        if !trigger_margin_base_cells.is_finite()
+            || trigger_margin_base_cells <= 2.0
+            || padding_base_cells == 0
+        {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
+        let margin = trigger_margin_base_cells * self.grid.base_spacing;
+        let max_x = self.grid.origin_x + self.grid.width as f64 * self.grid.base_spacing;
+        let max_y = self.grid.origin_y + self.grid.height as f64 * self.grid.base_spacing;
+        let near_boundary = self.grid.leaves().any(|(key, state)| {
+            if state.previous == 0.0 && state.current == 0.0 {
+                return false;
+            }
+            let Some(bounds) = self.grid.cell_bounds(key) else {
+                return true;
+            };
+            let distance = (bounds.min_x - self.grid.origin_x)
+                .min(bounds.min_y - self.grid.origin_y)
+                .min(max_x - bounds.max_x)
+                .min(max_y - bounds.max_y);
+            distance <= margin
+        });
+        if near_boundary {
+            self.expand_domain(padding_base_cells)?;
+        }
+        Ok(near_boundary)
+    }
+
+    /// Advances ticks while keeping the finite computational window ahead of
+    /// every nonzero disturbance. Unlike a sponge, this does not dissipate or
+    /// reclassify field energy as outflow.
+    pub(crate) fn advance_ticks_with_domain_expansion(
+        &mut self,
+        ticks: u64,
+        trigger_margin_base_cells: f64,
+        padding_base_cells: u32,
+    ) -> Result<(), AdaptiveGridError> {
+        let count = ticks
+            .checked_mul(self.substeps_per_tick as u64)
+            .ok_or(AdaptiveGridError::CounterOverflow)?;
+        for _ in 0..count {
+            self.expand_if_disturbance_near_boundary(
+                trigger_margin_base_cells,
+                padding_base_cells,
+            )?;
+            self.advance_one_substep()?;
+        }
+        Ok(())
+    }
+
     /// Expands the computational window without changing physical coordinates,
     /// the leapfrog time step, or stored field energy.
     pub(crate) fn expand_domain(
@@ -1669,6 +1727,31 @@ mod tests {
         close(
             integral_after.previous_displacement,
             integral_before.previous_displacement,
+        );
+    }
+
+    #[test]
+    fn expanding_tick_runner_moves_window_before_disturbance_reaches_boundary() {
+        let mut grid = AdaptiveSpatialGrid::new(12, 12, 1.0, 2).unwrap();
+        grid.set_state(
+            CellKey { level: 0, x: 4, y: 5 },
+            AdaptiveCell {
+                previous: 0.0,
+                current: 0.5,
+            },
+        )
+        .unwrap();
+        let mut field = AdaptiveWaveField::new(grid, 1.0, 1.0).unwrap();
+        let before_energy = field.energy();
+        field
+            .advance_ticks_with_domain_expansion(1, 4.0, 8)
+            .unwrap();
+        assert_eq!(field.grid().width(), 28);
+        assert_eq!(field.grid().height(), 28);
+        assert_eq!(field.grid().origin(), (-8.0, -8.0));
+        assert!(
+            (field.energy() - before_energy).abs() < 1.0e-9,
+            "an undamped free-field step should conserve its discrete energy"
         );
     }
 
