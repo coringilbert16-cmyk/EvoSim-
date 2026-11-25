@@ -384,7 +384,11 @@ impl Simulation {
         energy_ledger.total_ambient_energy_held = opening_ambient_energy;
         energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
         let resonance_field =
-            crate::live_resonance_field::LiveResonanceField::new(environment.width, environment.height)
+            crate::live_resonance_field::LiveResonanceField::new(
+                environment.width,
+                environment.height,
+                ambient_energy.sample(),
+            )
                 .expect("live spatial resonance field must initialize");
         let initial_spatial_field_energy = resonance_field.initial_total_energy();
         energy_ledger.total_spatial_disturbance_energy_held =
@@ -965,6 +969,8 @@ impl Simulation {
         self.energy_ledger.total_spatial_field_world_work = spatial_state.cumulative_world_work;
         self.energy_ledger.total_spatial_field_computational_outflow =
             spatial_state.cumulative_computational_outflow;
+        self.energy_ledger.total_spatial_field_accounting_residual =
+            spatial_state.accounting_residual;
     }
 
     pub(crate) fn step(&mut self) {
