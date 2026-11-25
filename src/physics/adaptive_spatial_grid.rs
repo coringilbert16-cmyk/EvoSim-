@@ -81,6 +81,9 @@ pub(crate) struct AdaptiveSpatialGrid {
     height: u32,
     base_spacing: f64,
     max_refinement_level: u8,
+    /// Physical position of the lower-left corner; the computational window may expand.
+    origin_x: f64,
+    origin_y: f64,
     leaves: BTreeMap<CellKey, AdaptiveCell>,
 }
 
@@ -91,10 +94,26 @@ impl AdaptiveSpatialGrid {
         base_spacing: f64,
         max_refinement_level: u8,
     ) -> Result<Self, AdaptiveGridError> {
+        Self::new_at_origin(width, height, base_spacing, max_refinement_level, 0.0, 0.0)
+    }
+
+    pub(crate) fn new_at_origin(
+        width: u32,
+        height: u32,
+        base_spacing: f64,
+        max_refinement_level: u8,
+        origin_x: f64,
+        origin_y: f64,
+    ) -> Result<Self, AdaptiveGridError> {
         if width == 0 || height == 0 {
             return Err(AdaptiveGridError::InvalidDimensions);
         }
-        if !base_spacing.is_finite() || base_spacing <= 0.0 || max_refinement_level > 20 {
+        if !base_spacing.is_finite()
+            || base_spacing <= 0.0
+            || max_refinement_level > 20
+            || !origin_x.is_finite()
+            || !origin_y.is_finite()
+        {
             return Err(AdaptiveGridError::InvalidParameter);
         }
         let finest_scale = 1_u32
@@ -137,6 +156,8 @@ impl AdaptiveSpatialGrid {
             height,
             base_spacing,
             max_refinement_level,
+            origin_x,
+            origin_y,
             leaves,
         })
     }
@@ -151,6 +172,10 @@ impl AdaptiveSpatialGrid {
 
     pub(crate) fn base_spacing(&self) -> f64 {
         self.base_spacing
+    }
+
+    pub(crate) fn origin(&self) -> (f64, f64) {
+        (self.origin_x, self.origin_y)
     }
 
     pub(crate) fn max_refinement_level(&self) -> u8 {
@@ -171,8 +196,8 @@ impl AdaptiveSpatialGrid {
         }
         let scale = 2_u32.checked_pow(key.level as u32)? as f64;
         let spacing = self.base_spacing / scale;
-        let min_x = key.x as f64 * spacing;
-        let min_y = key.y as f64 * spacing;
+        let min_x = self.origin_x + key.x as f64 * spacing;
+        let min_y = self.origin_y + key.y as f64 * spacing;
         Some(CellBounds {
             min_x,
             min_y,
@@ -450,19 +475,21 @@ impl AdaptiveSpatialGrid {
     fn locate_cell(&self, x: f64, y: f64) -> Option<CellKey> {
         if !x.is_finite()
             || !y.is_finite()
-            || x < 0.0
-            || y < 0.0
-            || x >= self.width as f64 * self.base_spacing
-            || y >= self.height as f64 * self.base_spacing
+            || x < self.origin_x
+            || y < self.origin_y
+            || x >= self.origin_x + self.width as f64 * self.base_spacing
+            || y >= self.origin_y + self.height as f64 * self.base_spacing
         {
             return None;
         }
+        let local_x = x - self.origin_x;
+        let local_y = y - self.origin_y;
         for level in (0..=self.max_refinement_level).rev() {
             let spacing = self.base_spacing / 2_u32.checked_pow(level as u32)? as f64;
             let key = CellKey {
                 level,
-                x: (x / spacing).floor() as u32,
-                y: (y / spacing).floor() as u32,
+                x: (local_x / spacing).floor() as u32,
+                y: (local_y / spacing).floor() as u32,
             };
             if self.leaves.contains_key(&key) {
                 return Some(key);
@@ -527,6 +554,91 @@ impl AdaptiveSpatialGrid {
         faces
     }
 
+    /// Adds a zero-valued ring of base cells around the computational window.
+    /// Existing physical coordinates and both leapfrog levels are preserved.
+    /// The operation is valid only while a two-cell guard band at the old
+    /// boundary is exactly undisturbed, so the old fixed-zero boundary has not
+    /// truncated an outgoing signal.
+    pub(crate) fn expand_by_base_cells(
+        &mut self,
+        padding: u32,
+    ) -> Result<(), AdaptiveGridError> {
+        if padding == 0 {
+            return Err(AdaptiveGridError::InvalidParameter);
+        }
+        let new_width = self
+            .width
+            .checked_add(padding.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?)
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
+        let new_height = self
+            .height
+            .checked_add(padding.checked_mul(2).ok_or(AdaptiveGridError::InvalidDimensions)?)
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
+        let finest_scale = 1_u32
+            .checked_shl(self.max_refinement_level as u32)
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
+        new_width
+            .checked_mul(finest_scale)
+            .and_then(|_| new_height.checked_mul(finest_scale))
+            .ok_or(AdaptiveGridError::InvalidDimensions)?;
+
+        let guard_width = 2.0 * self.base_spacing;
+        let old_max_x = self.origin_x + self.width as f64 * self.base_spacing;
+        let old_max_y = self.origin_y + self.height as f64 * self.base_spacing;
+        for (key, state) in self.leaves() {
+            let bounds = self.cell_bounds(key).ok_or(AdaptiveGridError::MissingCell)?;
+            let in_guard = bounds.min_x < self.origin_x + guard_width
+                || bounds.min_y < self.origin_y + guard_width
+                || bounds.max_x > old_max_x - guard_width
+                || bounds.max_y > old_max_y - guard_width;
+            if in_guard && (state.previous != 0.0 || state.current != 0.0) {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+        }
+
+        let mut expanded = BTreeMap::new();
+        for (key, state) in &self.leaves {
+            let scale = 1_u32
+                .checked_shl(key.level as u32)
+                .ok_or(AdaptiveGridError::InvalidDimensions)?;
+            let shifted = CellKey {
+                level: key.level,
+                x: key
+                    .x
+                    .checked_add(padding.checked_mul(scale).ok_or(AdaptiveGridError::InvalidDimensions)?)
+                    .ok_or(AdaptiveGridError::InvalidDimensions)?,
+                y: key
+                    .y
+                    .checked_add(padding.checked_mul(scale).ok_or(AdaptiveGridError::InvalidDimensions)?)
+                    .ok_or(AdaptiveGridError::InvalidDimensions)?,
+            };
+            expanded.insert(shifted, *state);
+        }
+        for y in 0..new_height {
+            for x in 0..new_width {
+                let in_new_ring = x < padding
+                    || x >= padding + self.width
+                    || y < padding
+                    || y >= padding + self.height;
+                if in_new_ring {
+                    expanded.insert(
+                        CellKey { level: 0, x, y },
+                        AdaptiveCell {
+                            previous: 0.0,
+                            current: 0.0,
+                        },
+                    );
+                }
+            }
+        }
+        self.width = new_width;
+        self.height = new_height;
+        self.origin_x -= padding as f64 * self.base_spacing;
+        self.origin_y -= padding as f64 * self.base_spacing;
+        self.leaves = expanded;
+        Ok(())
+    }
+
     /// Area integrals of the two persistent leapfrog displacement levels.
     /// Refinement and coarsening preserve these quantities to roundoff.
     pub(crate) fn integrated_state(&self) -> IntegratedState {
@@ -541,8 +653,8 @@ impl AdaptiveSpatialGrid {
 
     fn bounds_for_key(&self, key: CellKey) -> CellBounds {
         let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
-        let min_x = key.x as f64 * spacing;
-        let min_y = key.y as f64 * spacing;
+        let min_x = self.origin_x + key.x as f64 * spacing;
+        let min_y = self.origin_y + key.y as f64 * spacing;
         CellBounds {
             min_x,
             min_y,
@@ -713,6 +825,48 @@ impl AdaptiveWaveField {
         self.grid = candidate;
         self.stiffness = candidate_stiffness;
         Ok(result)
+    }
+
+    /// Expands the computational window without changing physical coordinates,
+    /// the leapfrog time step, or stored field energy.
+    pub(crate) fn expand_domain(
+        &mut self,
+        padding_base_cells: u32,
+    ) -> Result<(), AdaptiveGridError> {
+        let target_energy = self.energy();
+        let mut candidate = self.grid.clone();
+        candidate.expand_by_base_cells(padding_base_cells)?;
+        let candidate_stiffness = stiffness_matrix(&candidate);
+        let maximum_row_sum = maximum_stiffness_row_sum(&candidate, &candidate_stiffness);
+        let stability_measure =
+            self.propagation_speed * self.time_step * maximum_row_sum.sqrt();
+        if !stability_measure.is_finite() || stability_measure > 2.0 + 1.0e-12 {
+            return Err(AdaptiveGridError::UnstableTimeStep);
+        }
+        let previous: BTreeMap<_, _> = candidate
+            .leaves()
+            .map(|(key, state)| (key, state.previous))
+            .collect();
+        let current: BTreeMap<_, _> = candidate
+            .leaves()
+            .map(|(key, state)| (key, state.current))
+            .collect();
+        let candidate_energy = discrete_energy_with_stiffness(
+            &candidate,
+            &candidate_stiffness,
+            &previous,
+            &current,
+            self.time_step,
+            self.propagation_speed,
+            self.energy_normalization,
+        );
+        let tolerance = 1.0e-11 * target_energy.abs().max(candidate_energy.abs()).max(1.0);
+        if !candidate_energy.is_finite() || (candidate_energy - target_energy).abs() > tolerance {
+            return Err(AdaptiveGridError::UnrepresentableEnergyTransfer);
+        }
+        self.grid = candidate;
+        self.stiffness = candidate_stiffness;
+        Ok(())
     }
 
     pub(crate) fn time_step(&self) -> f64 {
@@ -892,9 +1046,14 @@ impl AdaptiveWaveField {
         let Some((layer_width, maximum_damping)) = self.absorbing_layer else {
             return 0.0;
         };
+        let local_x = x - self.grid.origin_x;
+        let local_y = y - self.grid.origin_y;
         let world_width = self.grid.width as f64 * self.grid.base_spacing;
         let world_height = self.grid.height as f64 * self.grid.base_spacing;
-        let distance = x.min(world_width - x).min(y).min(world_height - y);
+        let distance = local_x
+            .min(world_width - local_x)
+            .min(local_y)
+            .min(world_height - local_y);
         if distance >= layer_width {
             0.0
         } else {
@@ -1356,10 +1515,10 @@ fn is_computational_boundary(grid: &AdaptiveSpatialGrid, key: CellKey) -> bool {
     let world_width = grid.width as f64 * grid.base_spacing;
     let world_height = grid.height as f64 * grid.base_spacing;
     let tolerance = 1.0e-12 * world_width.max(world_height).max(1.0);
-    bounds.min_x <= tolerance
-        || bounds.min_y <= tolerance
-        || (bounds.max_x - world_width).abs() <= tolerance
-        || (bounds.max_y - world_height).abs() <= tolerance
+    bounds.min_x <= grid.origin_x + tolerance
+        || bounds.min_y <= grid.origin_y + tolerance
+        || (bounds.max_x - (grid.origin_x + world_width)).abs() <= tolerance
+        || (bounds.max_y - (grid.origin_y + world_height)).abs() <= tolerance
 }
 
 fn maximum_stiffness_row_sum(grid: &AdaptiveSpatialGrid, stiffness: &StiffnessMatrix) -> f64 {
@@ -1469,6 +1628,58 @@ mod tests {
             (a - b).abs() <= 1.0e-12 * a.abs().max(b.abs()).max(1.0),
             "{a} != {b}"
         );
+    }
+
+    #[test]
+    fn grid_expansion_preserves_physical_coordinates_and_integrated_state() {
+        let mut grid = AdaptiveSpatialGrid::new_at_origin(6, 6, 1.0, 2, 10.0, 20.0).unwrap();
+        let key = CellKey { level: 0, x: 2, y: 3 };
+        let state = AdaptiveCell {
+            previous: -0.25,
+            current: 0.75,
+        };
+        grid.set_state(key, state).unwrap();
+        let position = (12.5, 23.5);
+        let before = grid.sample(position.0, position.1).unwrap();
+        let integral_before = grid.integrated_state();
+
+        grid.expand_by_base_cells(3).unwrap();
+
+        assert_eq!(grid.origin(), (7.0, 17.0));
+        assert_eq!(grid.width(), 12);
+        assert_eq!(grid.height(), 12);
+        assert_eq!(grid.sample(position.0, position.1), Some(before));
+        let integral_after = grid.integrated_state();
+        close(
+            integral_after.current_displacement,
+            integral_before.current_displacement,
+        );
+        close(
+            integral_after.previous_displacement,
+            integral_before.previous_displacement,
+        );
+    }
+
+    #[test]
+    fn wave_domain_expansion_preserves_energy_and_sampled_state() {
+        let mut grid = AdaptiveSpatialGrid::new(8, 8, 1.0, 2).unwrap();
+        grid.set_state(
+            CellKey { level: 0, x: 3, y: 3 },
+            AdaptiveCell {
+                previous: 0.2,
+                current: 0.4,
+            },
+        )
+        .unwrap();
+        let mut field = AdaptiveWaveField::new(grid, 1.0, 1.0).unwrap();
+        let before_energy = field.energy();
+        let before_sample = field.sample(3.5, 3.5);
+
+        field.expand_domain(4).unwrap();
+
+        close(field.energy(), before_energy);
+        assert_eq!(field.sample(3.5, 3.5), before_sample);
+        assert_eq!(field.grid().origin(), (-4.0, -4.0));
     }
 
     #[test]
