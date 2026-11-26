@@ -754,6 +754,28 @@ impl WaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), WaveFieldError> {
+        self.advance_one_substep_with_boundary_work(false).map(|_| ())
+    }
+
+    #[cfg(test)]
+    fn advance_substeps_with_boundary_work_for_test(
+        &mut self,
+        count: u64,
+    ) -> Result<f64, WaveFieldError> {
+        self.substeps_elapsed
+            .checked_add(count)
+            .ok_or(WaveFieldError::CounterOverflow)?;
+        let mut signed_boundary_export = 0.0;
+        for _ in 0..count {
+            signed_boundary_export += self.advance_one_substep_with_boundary_work(true)?;
+        }
+        Ok(signed_boundary_export)
+    }
+
+    fn advance_one_substep_with_boundary_work(
+        &mut self,
+        allow_boundary_work_for_test: bool,
+    ) -> Result<f64, WaveFieldError> {
         let wave_step_squared = self.propagation_speed.powi(2) * self.time_step.powi(2);
         let old_energy = self.energy();
         let mut next = vec![0.0; self.current.len()];
@@ -806,8 +828,9 @@ impl WaveField {
             || !absorbed_this_step.is_finite()
             || absorbed_this_step < 0.0
             || !measured_loss.is_finite()
-            || measured_loss < -accounting_tolerance
-            || (measured_loss - absorbed_this_step).abs() > accounting_tolerance
+            || (!allow_boundary_work_for_test
+                && (measured_loss < -accounting_tolerance
+                    || (measured_loss - absorbed_this_step).abs() > accounting_tolerance))
             || !next_absorbed_energy.is_finite()
         {
             return Err(WaveFieldError::InvalidState);
@@ -817,7 +840,7 @@ impl WaveField {
         self.current = next;
         self.boundary_absorbed_energy = next_absorbed_energy;
         self.substeps_elapsed += 1;
-        Ok(())
+        Ok(measured_loss - absorbed_this_step)
     }
 
     fn laplacian(&self, values: &[f64], x: usize, y: usize) -> f64 {
@@ -3044,13 +3067,17 @@ mod tests {
                     let mut signed_boundary_export = 0.0_f64;
 
                     while field.logical_time_ticks() < final_time {
-                        field
-                            .advance_substeps(1)
-                            .expect("stable packet evolution");
                         if use_mur {
+                            signed_boundary_export += field
+                                .advance_substeps_with_boundary_work_for_test(1)
+                                .expect("stable packet evolution with measured boundary work");
                             signed_boundary_export += field
                                 .apply_mur_boundaries_for_test()
                                 .expect("finite Mur boundary update");
+                        } else {
+                            field
+                                .advance_substeps(1)
+                                .expect("stable packet evolution");
                         }
                         let time = field.logical_time_ticks();
                         let value = field
