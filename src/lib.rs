@@ -40,6 +40,11 @@ mod closed_boundary_wave_solver;
 #[allow(dead_code)]
 mod closed_wave_field_funding;
 
+// Isolated passive chemical-boundary energy partition; no geometry or chemistry connection.
+#[path = "physics/chemical_structure_coupling.rs"]
+#[allow(dead_code)]
+mod chemical_structure_coupling;
+
 // Isolated Phase 3B Candidate B reciprocal source/field comparator.
 #[path = "physics/reciprocal_source_field.rs"]
 #[allow(dead_code)]
