@@ -523,7 +523,7 @@ mod tests {
                 let radius_squared =
                     (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
                 let current = (-radius_squared / 8.0).exp();
-                let previous = current - 0.04 * current;
+                let previous = current - 0.1 * current;
                 field.set_initial_state(x, y, previous, current).unwrap();
             }
         }
