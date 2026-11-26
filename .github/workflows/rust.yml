@@ -132,3 +132,5 @@ jobs:
           cache-on-failure: true
       - name: Benchmark bounded resonance-domain sizes
         run: bash scripts/benchmark_resonance_domain_scaling.sh
+      - name: Characterize outgoing Mur boundary candidate
+        run: cargo test --locked diagnostic_outgoing_characteristic_against_fixed_and_sponge_controls -- --ignored --nocapture
