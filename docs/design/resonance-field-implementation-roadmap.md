@@ -500,31 +500,35 @@ This decision is later and more specific than the Phase 1 infinite-plane assumpt
 
 ### Physical model
 
-- The active chemistry simulation occupies a finite two-dimensional world domain, using the actual environment width, height, and world-coordinate origin. The initial target is the existing 250 × 250 chemistry environment, but implementation must read the runtime dimensions rather than hardcode them.
-- The domain is a property of the simulated world, not the camera viewport or current zoom level. Changing the camera must not change the field domain.
-- The outer world boundary is open to the void. A wave crossing it leaves the modeled world permanently. It has no subsequent effect, cannot return, and must not reflect back into the domain.
-- Energy crossing the boundary is recorded as exported-to-void energy in the existing single conservation authority. It is removed from the active field and is not deposited into materials, heat, or an artificial reservoir.
+- The active chemistry simulation occupies a finite two-dimensional world domain, using the runtime Environment width, height, and world-coordinate origin. The initial target is the existing 250 × 250 environment; read actual dimensions rather than hardcoding them.
+- The domain is a property of the simulated world, not the camera viewport or zoom. It does not expand when waves approach its edges.
+- The outer world boundary is a closed reflecting boundary. The preferred candidate is a zero-normal-flux (homogeneous Neumann) condition on the disturbance, consistent with the spatially uniform ambient carrier. This must be validated for the complete composed field; it is not equivalent to the current fixed-zero (Dirichlet) disturbance edge.
+- No energy leaves the modeled world through its outer boundary. The boundary must have zero net composed normal flux; internal energy remains in the field and may reflect/interfere. Do not add a void-export sink or artificial reservoir for this closed model.
 - Interior wave physics remain unchanged. No arbitrary propagation-radius cutoff, amplitude threshold, or dropping of low-amplitude waves is permitted inside the domain.
-- The adaptive mesh retains the approved base spacing and maximum refinement level unless controlled validation justifies a separately approved change. Maximum refinement is a hard numerical ceiling; the physical domain itself does not grow.
+- The adaptive mesh retains approved base spacing and maximum refinement unless separately approved. The physical domain is fixed to the current world size.
 
 ### Required Phase 3C implementation sequence
 
-1. **Confirm domain mapping.** Trace the runtime Environment dimensions, coordinate origin, and field-query coordinate convention. Initialize the field over the complete finite chemistry-world domain. Do not use camera bounds or the old centered 32 × 32 initial window as the physical domain.
-2. **Remove unbounded expansion from the live path.** The live simulation must not call automatic domain expansion when a disturbance approaches an edge. Retain generic expansion helpers only if another isolated reference/test use still requires them; they must not affect the active world.
-3. **Select the outgoing boundary treatment.** Audit the existing fixed-zero boundary and absorbing-layer implementation. The existing disturbance-only sponge is not automatically acceptable: it must not create reflections, and its energy loss must account for the complete ambient-plus-disturbance field, including cross-energy and cross-flux terms. Select/derive the appropriate open-boundary method before implementation; do not assume damping is equivalent to waves leaving the domain.
-4. **Implement void export accounting.** Measure the outgoing total-field energy flux across the finite world boundary, remove that energy from the active field exactly once, and record cumulative exported-to-void energy in the existing ledger. No parallel ledger or silent energy deletion.
-5. **Validate boundary behavior.** Test normal and oblique wave incidence, multiple frequencies, phase/interference near the edge, and waves crossing each side/corner. Verify no meaningful reflected wave returns to the interior, deterministic behavior, and conservation of initial field energy plus ambient world work against current field energy plus exported energy.
-6. **Validate interior invariance.** Before a wave reaches the boundary, compare the bounded-domain solution with the established reference solver over the shared interior region and the previously validated numerical envelope. Boundary treatment must not change interior propagation prematurely.
-7. **Measure bounded cost.** Record cell/leaf count, solver substeps per logical tick, runtime, and peak memory for the full active domain at the approved refinement ceiling. Compare with the current 32 × 32 expandable implementation; do not assume a larger fixed domain is automatically faster. Keep performance tuning separate from physics changes.
-8. **Complete live-field integration gates.** Extend nonzero composed-field energy reconciliation across multiple ticks and at least one boundary-crossing event. Require exact-head CI green before Phase 3C can advance.
-
-### Phase boundaries and downstream work
-
-- These domain and boundary changes belong in **Phase 3C**, because they define the active spatial field's domain, propagation termination, and energy lifecycle. They are prerequisites to declaring live-field integration complete.
-- **Phase 3D remains on hold** until Phase 3C passes full validation. Do not add passive material absorption/reflection/transmission/scattering while implementing the void boundary.
-- **Phase 4 chemistry integration** uses the finite active domain. No field interaction outside the modeled world is required until the chemistry world itself expands in a separately approved change.
-- Any future increase in world dimensions is an explicit world-model change, not automatic wave-following expansion. The boundary moves only when the modeled chemistry world is deliberately resized; waves previously exported to the void do not re-enter.
+1. **Confirm domain mapping.** Trace runtime Environment dimensions, origin, and field-query coordinates. Initialize the field over the complete finite chemistry-world domain.
+2. **Remove live expansion.** The active simulation must not expand its domain when a disturbance approaches an edge. Keep generic expansion helpers only for isolated references/tests if needed.
+3. **Implement an isolated reflecting candidate.** Evaluate a discrete zero-normal-flux boundary using the validated interior operator. Preserve fixed-zero behavior as a control; do not silently treat Dirichlet and Neumann boundaries as interchangeable.
+4. **Validate the boundary and energy contract.** Test all four edges, both signs of oblique incidence, near-grazing cases, multiple resolved wavelengths, corners, interference, and repeated reflections. Measure incident/reflected energy and deterministic replay. Demonstrate zero composed normal flux and stable/reconciled field energy. Do not weaken tolerances.
+5. **Resolve live composed-energy accounting.** Independently close the existing ambient-plus-disturbance energy/work identity over multiple ticks. The closed boundary must not be used to hide an unrelated ambient-work mismatch.
+6. **Validate interior invariance.** Before reaching the wall, compare against the established reference solver over the previously validated numerical envelope.
+7. **Measure bounded cost.** Record cell/leaf count, substeps, runtime, and peak memory for the full domain. Keep performance optimization separate from boundary physics.
+8. **Complete integration gates.** Require exact-head full CI green before Phase 3C advances.
 
 ### Current disposition
 
-PR #446 currently implements a 32 × 32 expandable computational window, zero-extension before edge contact, and no live-path absorber/outflow (reported computational outflow remains zero). That implementation does not yet satisfy this approved finite-domain model. Keep PR #446 unmerged while its scope is reconciled with this decision. The next code work is a focused Phase 3C redesign of domain initialization, expansion removal from the live path, open-boundary physics, and total-field void-export accounting. Do not proceed to Phase 3D or make performance-only shortcuts.
+PR #446 still uses a 32 × 32 expandable computational window with fixed-zero numerical edges. That is neither the final fixed-world domain nor a validated reflecting boundary. Keep the PR unmerged while this closed-boundary investigation is completed. Do not continue tuning Mur/sponge open-boundary absorption under the current decision, and do not proceed to Phase 3D or introduce chemistry/material coupling prematurely.
+
+### Phase boundaries and downstream work
+
+- These domain and reflecting-boundary changes belong in **Phase 3C**, because they define the active spatial field's domain and energy lifecycle. They are prerequisites to declaring live-field integration complete.
+- **Phase 3D remains on hold** until Phase 3C passes full validation. Do not add passive material absorption/reflection/transmission/scattering while implementing the void boundary.
+- **Phase 4 chemistry integration** uses the finite active domain and its reflecting outer boundary.
+- Any future increase in world dimensions is an explicit world-model change, not automatic wave-following expansion.
+
+### Current disposition
+
+PR #446 currently implements a 32 × 32 expandable computational window, zero-extension before edge contact, and no live-path absorber/outflow (reported computational outflow remains zero). That implementation does not yet satisfy this approved finite-domain model. Keep PR #446 unmerged while its scope is reconciled with this decision. The next code work is a focused Phase 3C redesign of fixed-domain initialization, expansion removal from the live path, a validated reflecting boundary, and closed-world energy reconciliation. Do not proceed to Phase 3D or make performance-only shortcuts.
