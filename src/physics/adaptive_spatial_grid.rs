@@ -665,9 +665,26 @@ impl AdaptiveWaveField {
     }
 
     pub(crate) fn advance_substeps(&mut self, count: u64) -> Result<(), AdaptiveGridError> {
-        self.substeps_elapsed
+        let next_substeps_elapsed = self
+            .substeps_elapsed
             .checked_add(count)
             .ok_or(AdaptiveGridError::CounterOverflow)?;
+
+        // A source-free wave field initialized to exact zero is an exact
+        // stationary solution. Preserve elapsed simulation time without
+        // allocating solver workspaces or evaluating the energy ledger.
+        // This is deliberately an exact-zero check: no wave amplitude is
+        // thresholded or discarded.
+        if self
+            .grid
+            .leaves
+            .values()
+            .all(|state| state.previous == 0.0 && state.current == 0.0)
+        {
+            self.substeps_elapsed = next_substeps_elapsed;
+            return Ok(());
+        }
+
         for _ in 0..count {
             self.advance_one_substep()?;
         }
@@ -1770,6 +1787,25 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn exact_zero_field_advances_clock_without_changing_state_or_energy() {
+        let grid = AdaptiveSpatialGrid::new(12, 10, 1.0, 1).unwrap();
+        let mut field = AdaptiveWaveField::new(grid, 0.2, 1.0).unwrap();
+        let initial_energy = field.energy();
+        let initial_absorbed = field.absorbed_energy();
+        let initial_substeps = field.substeps_elapsed;
+
+        field.advance_ticks(25).unwrap();
+
+        assert_eq!(field.substeps_elapsed, initial_substeps + 25 * field.substeps_per_tick as u64);
+        assert_eq!(field.logical_time_ticks(), 25.0);
+        assert_eq!(field.energy(), initial_energy);
+        assert_eq!(field.absorbed_energy(), initial_absorbed);
+        assert!(field.grid().leaves().all(|(_, state)| {
+            state.previous == 0.0 && state.current == 0.0
+        }));
     }
 
     #[test]
