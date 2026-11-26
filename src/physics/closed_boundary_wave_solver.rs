@@ -107,26 +107,38 @@ impl ClosedBoundaryWaveField {
     /// Query the field at grid coordinates measured in cell-spacing units.
     /// Coordinates outside the finite domain or non-finite positions fail closed.
     pub(crate) fn query(&self, x: f64, y: f64) -> Result<ClosedWaveSample, ClosedWaveError> {
-        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0
-            || x > (self.width - 1) as f64 || y > (self.height - 1) as f64 {
+        if !x.is_finite()
+            || !y.is_finite()
+            || x < 0.0
+            || y < 0.0
+            || x > (self.width - 1) as f64
+            || y > (self.height - 1) as f64
+        {
             return Err(ClosedWaveError::InvalidState);
         }
         let gradients = self.node_gradients();
         let displacement = self.interpolate(&self.current, x, y);
-        let velocity_nodes: Vec<f64> = self.current.iter().zip(&self.previous)
-            .map(|(now, before)| (now - before) / self.time_step).collect();
+        let velocity_nodes: Vec<f64> = self
+            .current
+            .iter()
+            .zip(&self.previous)
+            .map(|(now, before)| (now - before) / self.time_step)
+            .collect();
         let time_derivative = self.interpolate(&velocity_nodes, x, y);
         let gradient_x = self.interpolate(&gradients.0, x, y);
         let gradient_y = self.interpolate(&gradients.1, x, y);
-        let energy_density = 0.5 * self.normalization * (time_derivative.powi(2)
-            + self.propagation_speed.powi(2) * (gradient_x.powi(2) + gradient_y.powi(2)));
+        let energy_density = 0.5
+            * self.normalization
+            * (time_derivative.powi(2)
+                + self.propagation_speed.powi(2) * (gradient_x.powi(2) + gradient_y.powi(2)));
         let flux_scale = -self.normalization * self.propagation_speed.powi(2) * time_derivative;
         Ok(ClosedWaveSample {
             position_x: x * self.spacing,
             position_y: y * self.spacing,
             // Leapfrog velocity is centred between the previous/current states.
             displacement_time_ticks: self.substeps_elapsed as f64 / self.substeps_per_tick as f64,
-            velocity_time_ticks: (self.substeps_elapsed as f64 - 0.5) / self.substeps_per_tick as f64,
+            velocity_time_ticks: (self.substeps_elapsed as f64 - 0.5)
+                / self.substeps_per_tick as f64,
             displacement,
             time_derivative,
             gradient_x,
@@ -353,13 +365,20 @@ mod tests {
         close(sample.gradient_x, 1.0, 1.0e-12);
         close(sample.gradient_y, 0.5, 1.0e-12);
         close(sample.time_derivative, 0.4, 1.0e-12);
-        close(sample.energy_density, 0.5 * 3.0 * (0.16 + 0.0625 * 1.25), 1.0e-12);
+        close(
+            sample.energy_density,
+            0.5 * 3.0 * (0.16 + 0.0625 * 1.25),
+            1.0e-12,
+        );
         close(sample.flux_x, -3.0 * 0.0625 * 0.4, 1.0e-12);
         let edge = field.query(0.0, 3.0).unwrap();
         close(edge.gradient_x, 0.0, 1.0e-12);
         assert!(edge.flux_x.abs() < 1.0e-12);
         assert_eq!(field.query(-0.01, 2.0), Err(ClosedWaveError::InvalidState));
-        assert_eq!(field.query(f64::NAN, 2.0), Err(ClosedWaveError::InvalidState));
+        assert_eq!(
+            field.query(f64::NAN, 2.0),
+            Err(ClosedWaveError::InvalidState)
+        );
     }
 
     #[test]
