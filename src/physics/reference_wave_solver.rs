@@ -849,6 +849,65 @@ impl WaveField {
         Ok(measured_loss - absorbed_this_step)
     }
 
+    /// Test-only finite-volume-style graph Laplacian with a natural zero-flux
+    /// (reflecting/Neumann) outer boundary. Boundary cells evolve normally;
+    /// missing exterior faces contribute no flux. The symmetric interior-edge
+    /// operator is paired with the existing discrete energy for an isolated
+    /// conservation check. This does not change the production Dirichlet solver.
+    #[cfg(test)]
+    fn advance_neumann_substeps_for_test(&mut self, count: u64) -> Result<(), WaveFieldError> {
+        self.substeps_elapsed
+            .checked_add(count)
+            .ok_or(WaveFieldError::CounterOverflow)?;
+        let wave_step_squared = self.propagation_speed.powi(2) * self.time_step.powi(2);
+        for _ in 0..count {
+            let old_energy = self.energy();
+            let mut next = vec![0.0; self.current.len()];
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = self.index(x, y);
+                    let mut laplacian_sum = 0.0;
+                    let mut neighbors = 0_u8;
+                    if x > 0 {
+                        laplacian_sum += self.current[index - 1] - self.current[index];
+                        neighbors += 1;
+                    }
+                    if x + 1 < self.width {
+                        laplacian_sum += self.current[index + 1] - self.current[index];
+                        neighbors += 1;
+                    }
+                    if y > 0 {
+                        laplacian_sum += self.current[index - self.width] - self.current[index];
+                        neighbors += 1;
+                    }
+                    if y + 1 < self.height {
+                        laplacian_sum += self.current[index + self.width] - self.current[index];
+                        neighbors += 1;
+                    }
+                    debug_assert!(neighbors > 0);
+                    let laplacian = laplacian_sum / self.spacing.powi(2);
+                    next[index] = 2.0 * self.current[index] - self.previous[index]
+                        + wave_step_squared * laplacian;
+                }
+            }
+            if next.iter().any(|value| !value.is_finite()) {
+                return Err(WaveFieldError::InvalidState);
+            }
+            let next_energy = self.discrete_energy(&self.current, &next);
+            let tolerance = 1.0e-10 * old_energy.abs().max(next_energy.abs()).max(1.0);
+            if !next_energy.is_finite()
+                || next_energy < 0.0
+                || (next_energy - old_energy).abs() > tolerance
+            {
+                return Err(WaveFieldError::InvalidState);
+            }
+            self.previous.clone_from(&self.current);
+            self.current = next;
+            self.substeps_elapsed += 1;
+        }
+        Ok(())
+    }
+
     fn laplacian(&self, values: &[f64], x: usize, y: usize) -> f64 {
         let index = self.index(x, y);
         (values[index - 1]
@@ -3105,4 +3164,33 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn reflecting_neumann_reference_boundary_conserves_energy_through_repeated_returns() {
+        let mut field = WaveField::new(80, 64, 1.0, 1.0, 2, 1.0)
+            .expect("valid closed reference domain");
+        let wave_number = 2.0 * std::f64::consts::PI / 10.0;
+        for y in 0..field.height {
+            for x in 0..field.width {
+                let dx = x as f64 - 18.0;
+                let dy = y as f64 - 31.5;
+                let envelope = (-0.5 * ((dx / 7.0).powi(2) + (dy / 9.0).powi(2))).exp();
+                let phase = wave_number * dx;
+                let index = field.index(x, y);
+                field.current[index] = envelope * phase.cos();
+                field.previous[index] = envelope * (phase + wave_number * field.time_step()).cos();
+            }
+        }
+        let initial_energy = field.energy();
+        field
+            .advance_neumann_substeps_for_test(1_200)
+            .expect("stable Neumann evolution with multiple wall reflections");
+        let final_energy = field.energy();
+        let relative_drift = (final_energy - initial_energy).abs() / initial_energy.max(1.0);
+        assert!(
+            relative_drift <= 1.0e-10,
+            "reflecting boundary energy drift {relative_drift:.3e}"
+        );
+    }
+
+
 }
