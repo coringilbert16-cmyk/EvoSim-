@@ -255,11 +255,9 @@ impl WaveField {
         ] {
             let corner = self.index(x, y);
             let from_x = self.previous[self.index(x_inner, y)]
-                + coefficient
-                    * (self.current[self.index(x_inner, y)] - self.previous[corner]);
+                + coefficient * (self.current[self.index(x_inner, y)] - self.previous[corner]);
             let from_y = self.previous[self.index(x, y_inner)]
-                + coefficient
-                    * (self.current[self.index(x, y_inner)] - self.previous[corner]);
+                + coefficient * (self.current[self.index(x, y_inner)] - self.previous[corner]);
             next_boundary[corner] = 0.5 * (from_x + from_y);
         }
 
@@ -2930,7 +2928,7 @@ mod tests {
             }
 
             let incident_center = (probe_x - source_x) / 1.0;
-            let reflected_center = ((width - 1) as f64 - source_x + (width - 1) as f64 - probe_x);
+            let reflected_center = (width - 1) as f64 - source_x + (width - 1) as f64 - probe_x;
             let incident_window = (incident_center - 12.0)..=(incident_center + 12.0);
             let reflected_window = (reflected_center - 15.0)..=(reflected_center + 15.0);
             let final_tick = reflected_center + 17.0;
@@ -2992,7 +2990,8 @@ mod tests {
                 for (name, use_sponge, use_mur) in configurations {
                     let mut field = solver(width, height, 1.0, 2);
                     if use_sponge {
-                        field.configure_absorbing_boundary(12, 0.15)
+                        field
+                            .configure_absorbing_boundary(12, 0.15)
                             .expect("valid sponge control");
                     }
                     let angle = angle_degrees.to_radians();
@@ -3000,8 +2999,8 @@ mod tests {
                     let probe_normal = 15.0_f64;
                     let source_normal = 30.0_f64;
                     let tangent_center = 50.0_f64;
-                    let probe_tangent = tangent_center
-                        + (source_normal - probe_normal) * angle.tan();
+                    let probe_tangent =
+                        tangent_center + (source_normal - probe_normal) * angle.tan();
 
                     for y in 1..height - 1 {
                         for x in 1..width - 1 {
@@ -3013,10 +3012,8 @@ mod tests {
                             };
                             let dn = source_normal - normal;
                             let dt = tangent - tangent_center;
-                            let longitudinal =
-                                dn * normal_direction + dt * tangent_direction;
-                            let transverse =
-                                -dn * tangent_direction + dt * normal_direction;
+                            let longitudinal = dn * normal_direction + dt * tangent_direction;
+                            let transverse = -dn * tangent_direction + dt * normal_direction;
                             let envelope = (-0.5
                                 * ((longitudinal / 7.0).powi(2)
                                     + (transverse / 14.0).powi(2)))
@@ -3047,15 +3044,19 @@ mod tests {
                     let mut signed_boundary_export = 0.0_f64;
 
                     while field.logical_time_ticks() < final_time {
-                        field.advance_substeps(1).expect("stable packet evolution");
+                        field
+                            .advance_substeps(1)
+                            .expect("stable packet evolution");
                         if use_mur {
                             signed_boundary_export += field
                                 .apply_mur_boundaries_for_test()
                                 .expect("finite Mur boundary update");
                         }
                         let time = field.logical_time_ticks();
-                        let value = field.sample(probe_x, probe_y)
-                            .expect("probe remains inside domain").abs();
+                        let value = field
+                            .sample(probe_x, probe_y)
+                            .expect("probe remains inside domain")
+                            .abs();
                         if incident_window.contains(&time) {
                             incident_peak = incident_peak.max(value);
                         }
