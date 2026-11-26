@@ -100,11 +100,7 @@ impl ClosedBoundaryWaveField {
         if self.substeps_elapsed != 0 {
             return Err(ClosedWaveError::InvalidState);
         }
-        if x >= self.width
-            || y >= self.height
-            || !previous.is_finite()
-            || !current.is_finite()
-        {
+        if x >= self.width || y >= self.height || !previous.is_finite() || !current.is_finite() {
             return Err(ClosedWaveError::InvalidState);
         }
         let index = self.index(x, y);
@@ -140,8 +136,7 @@ impl ClosedBoundaryWaveField {
         }
 
         0.5 * self.normalization
-            * (kinetic * self.spacing.powi(2)
-                + self.propagation_speed.powi(2) * gradient_cross)
+            * (kinetic * self.spacing.powi(2) + self.propagation_speed.powi(2) * gradient_cross)
     }
 
     pub(crate) fn advance_ticks(&mut self, ticks: u64) -> Result<(), ClosedWaveError> {
@@ -181,8 +176,7 @@ impl ClosedBoundaryWaveField {
                 if y + 1 < self.height {
                     laplacian_numerator += self.current[index + self.width] - center;
                 }
-                next[index] = 2.0 * center - self.previous[index]
-                    + scale * laplacian_numerator;
+                next[index] = 2.0 * center - self.previous[index] + scale * laplacian_numerator;
             }
         }
         if next.iter().any(|value| !value.is_finite()) {
@@ -237,8 +231,7 @@ mod tests {
             for y in 0..11 {
                 for x in 0..17 {
                     let radius_squared =
-                        (x as f64 - source_x as f64).powi(2)
-                            + (y as f64 - source_y as f64).powi(2);
+                        (x as f64 - source_x as f64).powi(2) + (y as f64 - source_y as f64).powi(2);
                     let displacement = (-radius_squared / 5.0).exp();
                     field
                         .set_initial_state(x, y, displacement * 0.98, displacement)
