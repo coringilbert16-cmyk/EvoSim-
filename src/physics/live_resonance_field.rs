@@ -147,7 +147,8 @@ impl LiveResonanceField {
             - integrals.previous_displacement)
             / self.wave.time_step();
         let disturbance_energy = self.wave.energy();
-        let cross_energy = FIELD_NORMALIZATION * ambient_sample.carrier_velocity * disturbance_velocity;
+        let cross_energy =
+            FIELD_NORMALIZATION * ambient_sample.carrier_velocity * disturbance_velocity;
         let total_energy = disturbance_energy + cross_energy;
         if !total_energy.is_finite() || disturbance_energy < 0.0 {
             return Err(LiveResonanceFieldError::InvalidAccountingState);
