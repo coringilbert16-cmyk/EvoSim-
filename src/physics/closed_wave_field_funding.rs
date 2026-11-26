@@ -107,13 +107,10 @@ mod tests {
         let mut field = ClosedBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
         for y in 0..9 {
             for x in 0..9 {
-                let radius_squared =
-                    (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
+                let radius_squared = (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
                 let current = (-radius_squared / 8.0).exp();
                 let previous = current - 0.1 * current;
-                field
-                    .set_initial_state(x, y, previous, current)
-                    .unwrap();
+                field.set_initial_state(x, y, previous, current).unwrap();
             }
         }
         field
