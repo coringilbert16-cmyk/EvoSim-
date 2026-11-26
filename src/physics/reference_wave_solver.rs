@@ -3166,8 +3166,8 @@ mod tests {
     }
     #[test]
     fn reflecting_neumann_reference_boundary_conserves_energy_through_repeated_returns() {
-        let mut field = WaveField::new(80, 64, 1.0, 1.0, 2, 1.0)
-            .expect("valid closed reference domain");
+        let mut field =
+            WaveField::new(80, 64, 1.0, 1.0, 2, 1.0).expect("valid closed reference domain");
         let wave_number = 2.0 * std::f64::consts::PI / 10.0;
         for y in 0..field.height {
             for x in 0..field.width {
@@ -3191,6 +3191,4 @@ mod tests {
             "reflecting boundary energy drift {relative_drift:.3e}"
         );
     }
-
-
 }
