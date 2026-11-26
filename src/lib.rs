@@ -35,6 +35,11 @@ mod reference_wave_solver;
 #[allow(dead_code)]
 mod closed_boundary_wave_solver;
 
+// Staged local field-energy funding adapter; remains isolated from live chemistry.
+#[path = "physics/closed_wave_field_funding.rs"]
+#[allow(dead_code)]
+mod closed_wave_field_funding;
+
 // Isolated Phase 3B Candidate B reciprocal source/field comparator.
 #[path = "physics/reciprocal_source_field.rs"]
 #[allow(dead_code)]
