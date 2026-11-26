@@ -251,7 +251,12 @@ impl WaveField {
             (0, 0, 1, 1),
             (self.width - 1, 0, self.width - 2, 1),
             (0, self.height - 1, 1, self.height - 2),
-            (self.width - 1, self.height - 1, self.width - 2, self.height - 2),
+            (
+                self.width - 1,
+                self.height - 1,
+                self.width - 2,
+                self.height - 2,
+            ),
         ] {
             let corner = self.index(x, y);
             let from_x = self.previous[self.index(x_inner, y)]
@@ -3037,10 +3042,9 @@ mod tests {
                             let dt = tangent - tangent_center;
                             let longitudinal = dn * normal_direction + dt * tangent_direction;
                             let transverse = -dn * tangent_direction + dt * normal_direction;
-                            let envelope = (-0.5
-                                * ((longitudinal / 7.0).powi(2)
-                                    + (transverse / 14.0).powi(2)))
-                            .exp();
+                            let envelope =
+                                (-0.5 * ((longitudinal / 7.0).powi(2) + (transverse / 14.0).powi(2)))
+                                    .exp();
                             let phase = wave_number * longitudinal;
                             let index = field.index(x, y);
                             field.current[index] = envelope * phase.cos();
