@@ -23,7 +23,7 @@ pub(crate) struct ClosedWaveFieldFundingSource {
     pending: bool,
 }
 
-struct StagedClosedWaveField {
+pub(crate) struct StagedClosedWaveField {
     field: ClosedBoundaryWaveField,
 }
 
