@@ -1,3 +1,40 @@
+
+
+## Next candidate — outgoing characteristic with discrete flux accounting
+
+The next candidate is an outgoing-characteristic boundary condition applied to the disturbance, with export measured from the **composed** field flux. This is an isolated numerical candidate only; it is not selected for production.
+
+For an edge with outward unit normal \(\mathbf n\), the normal-incidence continuum characteristic is
+
+\[
+\partial_t u + c\,\partial_n u = 0.
+\]
+
+This is the Sommerfeld one-way condition for a wave leaving the domain. It is a useful baseline, but it is not an exact condition for oblique waves: a first-order normal characteristic can reflect grazing and oblique components. Corners also need a separately defined treatment; applying two independent edge updates at a corner is not automatically energy-consistent.
+
+The physical outward flux to be accounted is the normal component of the already implemented composed flux,
+
+\[
+q_n = -Kc^2(a_t+u_t)\,\partial_n u.
+\]
+
+The sign convention is positive for energy leaving the finite world. The ambient oscillator inventory remains owned by the ambient mode. The boundary export is not an additional sink inferred from damping: it must be obtained from the discrete boundary work/flux of the actual solver update, and the same amount must be booked once in the existing world inventory.
+
+### Candidate evaluation order
+
+1. Implement the characteristic condition only in the isolated uniform reference solver, retaining the fixed-zero solver as a control.
+2. Measure incident and returning **energy**, not just pointwise peak amplitude. Use directional/time-window separation and a probe region sufficiently far inside the edge.
+3. Sweep all four edge orientations, both signs of oblique angle, near-grazing incidence, at least three well-resolved wavelengths, and corner-directed packets. Include two-packet interference with both aligned and opposing phase.
+4. Repeat the same cases with the graded sponge as a control. Do not assume that adding a sponge improves the characteristic condition.
+5. Independently check the solver's discrete energy change against integrated boundary work. Reject any case where the numerical boundary creates energy or where the flux ledger does not close.
+6. Only if the first-order characteristic fails the declared reflection tolerance should a higher-order nonreflecting treatment or PML be investigated. Do not add PML complexity pre-emptively.
+
+### Required measurements per case
+
+Record solver resolution and timestep, boundary side/corner, incidence angle, wavelength, packet phase, incident energy, reflected energy, reflected/incident energy ratio, net outward boundary work, total field-energy change, and conservation residual. Record the same case twice to verify deterministic replay.
+
+No acceptance threshold is chosen by this note. It must be declared before comparing candidate configurations, rather than adjusted after seeing the sweep. No production boundary code, live energy-ledger behavior, or Phase 3D coupling is authorized by this candidate description.
+
 # Phase 3C — Open-Boundary Investigation
 
 **Status:** Investigation in progress; no open-boundary method approved yet.
