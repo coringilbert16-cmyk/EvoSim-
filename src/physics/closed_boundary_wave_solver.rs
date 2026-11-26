@@ -33,6 +33,9 @@ pub(crate) enum ClosedWaveError {
     UnstableTimeStep,
     InvalidState,
     CounterOverflow,
+    InsufficientLocalFieldEnergy,
+    InsufficientMatterEnergy,
+    EnergySettlementFailed,
 }
 
 #[derive(Clone, Debug)]
@@ -301,9 +304,203 @@ impl ClosedBoundaryWaveField {
         Ok(())
     }
 
+
+    /// Transfer a requested amount from the local field interaction into matter.
+    ///
+    /// The coupling is a bilinear, position-local velocity impulse. Its amplitude
+    /// is solved against the exact discrete leapfrog invariant; pointwise energy
+    /// density is deliberately not treated as a withdrawable balance.
+    pub(crate) fn transfer_to_matter(
+        &mut self,
+        x_l: f64,
+        y_l: f64,
+        amount: f64,
+        matter: &mut MatterEnergyAccount,
+    ) -> Result<(), ClosedWaveError> {
+        validate_transfer_amount(amount)?;
+        if !matter.stored_energy.is_finite() || matter.stored_energy < 0.0 {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        if amount == 0.0 {
+            return Ok(());
+        }
+        let credited = matter.stored_energy + amount;
+        if !credited.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let (quadratic, linear) = self.local_impulse_energy_coefficients(x_l, y_l)?;
+        let discriminant = linear * linear - 4.0 * quadratic * amount;
+        if !discriminant.is_finite() || discriminant < 0.0 || linear == 0.0 {
+            return Err(ClosedWaveError::InsufficientLocalFieldEnergy);
+        }
+        let root = discriminant.sqrt();
+        // Stable form of the smaller-magnitude root of
+        // A*a^2 + B*a + amount = 0.
+        let impulse = -2.0 * amount / (linear + linear.signum() * root);
+        self.apply_and_verify_local_impulse(x_l, y_l, impulse, -amount)?;
+        matter.stored_energy = credited;
+        Ok(())
+    }
+
+    /// Release matter energy into the field through the reciprocal local impulse.
+    /// The receiver is debited only after the exact field-energy increase is verified.
+    pub(crate) fn release_from_matter(
+        &mut self,
+        x_l: f64,
+        y_l: f64,
+        amount: f64,
+        matter: &mut MatterEnergyAccount,
+    ) -> Result<(), ClosedWaveError> {
+        validate_transfer_amount(amount)?;
+        if !matter.stored_energy.is_finite() || matter.stored_energy < amount {
+            return Err(ClosedWaveError::InsufficientMatterEnergy);
+        }
+        if amount == 0.0 {
+            return Ok(());
+        }
+        let debited = matter.stored_energy - amount;
+        let (quadratic, linear) = self.local_impulse_energy_coefficients(x_l, y_l)?;
+        let discriminant = linear * linear + 4.0 * quadratic * amount;
+        if !discriminant.is_finite() || quadratic <= 0.0 {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let root = discriminant.sqrt();
+        // Select the smaller-magnitude root, with a deterministic positive
+        // branch when the local phase slope is exactly zero.
+        let impulse = if linear > 0.0 {
+            2.0 * amount / (linear + root)
+        } else if linear < 0.0 {
+            -2.0 * amount / (-linear + root)
+        } else {
+            (amount / quadratic).sqrt()
+        };
+        self.apply_and_verify_local_impulse(x_l, y_l, impulse, amount)?;
+        matter.stored_energy = debited;
+        Ok(())
+    }
+
+    fn local_impulse_energy_coefficients(
+        &self,
+        x_l: f64,
+        y_l: f64,
+    ) -> Result<(f64, f64), ClosedWaveError> {
+        let nodes = self.local_interaction_nodes(x_l, y_l)?;
+        let baseline = self.energy();
+        let mut plus = self.clone();
+        let mut minus = self.clone();
+        plus.apply_local_impulse_nodes(&nodes, 1.0)?;
+        minus.apply_local_impulse_nodes(&nodes, -1.0)?;
+        let plus_delta = plus.energy() - baseline;
+        let minus_delta = minus.energy() - baseline;
+        let quadratic = 0.5 * (plus_delta + minus_delta);
+        let linear = 0.5 * (plus_delta - minus_delta);
+        if !quadratic.is_finite() || quadratic <= 0.0 || !linear.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        Ok((quadratic, linear))
+    }
+
+    fn apply_and_verify_local_impulse(
+        &mut self,
+        x_l: f64,
+        y_l: f64,
+        impulse: f64,
+        expected_delta: f64,
+    ) -> Result<(), ClosedWaveError> {
+        if !impulse.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let nodes = self.local_interaction_nodes(x_l, y_l)?;
+        let before = self.clone();
+        self.apply_local_impulse_nodes(&nodes, impulse)?;
+        let actual_delta = self.energy() - before.energy();
+        let tolerance = 2.0e-10 * expected_delta.abs().max(1.0);
+        if !actual_delta.is_finite() || (actual_delta - expected_delta).abs() > tolerance {
+            *self = before;
+            return Err(ClosedWaveError::EnergySettlementFailed);
+        }
+        Ok(())
+    }
+
+    fn local_interaction_nodes(
+        &self,
+        x_l: f64,
+        y_l: f64,
+    ) -> Result<[(usize, f64); 4], ClosedWaveError> {
+        if !x_l.is_finite() || !y_l.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let x = x_l / self.spacing;
+        let y = y_l / self.spacing;
+        if x < 0.0 || y < 0.0 || x > (self.width - 1) as f64 || y > (self.height - 1) as f64 {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let x0 = x.floor() as usize;
+        let y0 = y.floor() as usize;
+        let x1 = (x0 + 1).min(self.width - 1);
+        let y1 = (y0 + 1).min(self.height - 1);
+        let tx = x - x0 as f64;
+        let ty = y - y0 as f64;
+        Ok([
+            (self.index(x0, y0), (1.0 - tx) * (1.0 - ty)),
+            (self.index(x1, y0), tx * (1.0 - ty)),
+            (self.index(x0, y1), (1.0 - tx) * ty),
+            (self.index(x1, y1), tx * ty),
+        ])
+    }
+
+    fn apply_local_impulse_nodes(
+        &mut self,
+        nodes: &[(usize, f64); 4],
+        impulse: f64,
+    ) -> Result<(), ClosedWaveError> {
+        let mut updates = Vec::with_capacity(4);
+        for (index, weight) in nodes {
+            let current = self.current[*index] + impulse * weight;
+            let previous = self.previous[*index] - impulse * weight;
+            if !current.is_finite() || !previous.is_finite() {
+                return Err(ClosedWaveError::InvalidState);
+            }
+            updates.push((*index, previous, current));
+        }
+        for (index, previous, current) in updates {
+            self.previous[index] = previous;
+            self.current[index] = current;
+        }
+        Ok(())
+    }
+
     fn index(&self, x: usize, y: usize) -> usize {
         y * self.width + x
     }
+}
+
+
+/// Minimal isolated matter-side energy account used to prove reciprocal settlement.
+/// It is not a replacement for chemistry's structural-energy accounting.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MatterEnergyAccount {
+    stored_energy: f64,
+}
+
+impl MatterEnergyAccount {
+    pub(crate) fn new(stored_energy: f64) -> Result<Self, ClosedWaveError> {
+        if !stored_energy.is_finite() || stored_energy < 0.0 {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        Ok(Self { stored_energy })
+    }
+
+    pub(crate) fn stored_energy(&self) -> f64 {
+        self.stored_energy
+    }
+}
+
+fn validate_transfer_amount(amount: f64) -> Result<(), ClosedWaveError> {
+    if !amount.is_finite() || amount < 0.0 {
+        return Err(ClosedWaveError::InvalidState);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -315,6 +512,111 @@ mod tests {
         assert!(
             (actual - expected).abs() <= tolerance * scale,
             "{actual} != {expected} (tolerance {tolerance})"
+        );
+    }
+
+
+    fn energized_field() -> ClosedBoundaryWaveField {
+        let mut field = ClosedBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
+        for y in 0..9 {
+            for x in 0..9 {
+                let radius_squared =
+                    (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
+                let current = (-radius_squared / 8.0).exp();
+                let previous = current - 0.04 * current;
+                field.set_initial_state(x, y, previous, current).unwrap();
+            }
+        }
+        field
+    }
+
+    #[test]
+    fn field_to_matter_transfer_debits_exactly_what_matter_receives() {
+        let mut field = energized_field();
+        let mut matter = MatterEnergyAccount::new(1.25).unwrap();
+        let field_before = field.energy();
+        let matter_before = matter.stored_energy();
+
+        field.transfer_to_matter(4.0, 4.0, 0.01, &mut matter).unwrap();
+
+        close(field_before - field.energy(), 0.01, 2.0e-10);
+        close(matter.stored_energy() - matter_before, 0.01, 1.0e-12);
+        close(
+            field.energy() + matter.stored_energy(),
+            field_before + matter_before,
+            2.0e-10,
+        );
+    }
+
+    #[test]
+    fn matter_to_field_release_is_reciprocal_and_conservative() {
+        let mut field = energized_field();
+        let mut matter = MatterEnergyAccount::new(0.75).unwrap();
+        let field_before = field.energy();
+        let matter_before = matter.stored_energy();
+
+        field.release_from_matter(4.0, 4.0, 0.02, &mut matter).unwrap();
+
+        close(field.energy() - field_before, 0.02, 2.0e-10);
+        close(matter_before - matter.stored_energy(), 0.02, 1.0e-12);
+        close(
+            field.energy() + matter.stored_energy(),
+            field_before + matter_before,
+            2.0e-10,
+        );
+    }
+
+    #[test]
+    fn failed_or_overlapping_transfers_cannot_double_spend_field_energy() {
+        let mut field = energized_field();
+        let mut first = MatterEnergyAccount::new(0.0).unwrap();
+        let mut second = MatterEnergyAccount::new(0.0).unwrap();
+        field.transfer_to_matter(4.0, 4.0, 0.01, &mut first).unwrap();
+
+        let field_after_first = field.energy();
+        let second_before = second.stored_energy();
+        let first_before = first.stored_energy();
+        let result = field.transfer_to_matter(
+            4.0,
+            4.0,
+            1.0e6,
+            &mut second,
+        );
+        assert_eq!(result, Err(ClosedWaveError::InsufficientLocalFieldEnergy));
+        close(field.energy(), field_after_first, 1.0e-12);
+        close(second.stored_energy(), second_before, 1.0e-12);
+        close(first.stored_energy(), first_before, 1.0e-12);
+
+        // A second receiver at the same interaction site can only draw from
+        // the field state that remains after the first committed transaction.
+        let total_before = field.energy() + first.stored_energy() + second.stored_energy();
+        field.transfer_to_matter(4.0, 4.0, 0.005, &mut second).unwrap();
+        close(
+            field.energy() + first.stored_energy() + second.stored_energy(),
+            total_before,
+            2.0e-10,
+        );
+    }
+
+    #[test]
+    fn invalid_transfer_and_insufficient_matter_leave_both_sides_unchanged() {
+        let mut field = energized_field();
+        let mut matter = MatterEnergyAccount::new(0.01).unwrap();
+        let field_before = field.energy();
+        let matter_before = matter.stored_energy();
+        assert_eq!(
+            field.transfer_to_matter(f64::NAN, 4.0, 0.1, &mut matter),
+            Err(ClosedWaveError::InvalidState)
+        );
+        assert_eq!(
+            field.release_from_matter(4.0, 4.0, 0.02, &mut matter),
+            Err(ClosedWaveError::InsufficientMatterEnergy)
+        );
+        assert_eq!(field.energy(), field_before);
+        assert_eq!(matter.stored_energy(), matter_before);
+        assert_eq!(
+            MatterEnergyAccount::new(f64::NAN),
+            Err(ClosedWaveError::InvalidState)
         );
     }
 
