@@ -3006,12 +3006,12 @@ mod tests {
                     for y in 1..height - 1 {
                         for x in 1..width - 1 {
                             let (normal, tangent) = match edge {
-                                "right" => (x as f64, y as f64),
-                                "left" => ((width - 1 - x) as f64, y as f64),
-                                "bottom" => (y as f64, x as f64),
-                                _ => ((height - 1 - y) as f64, x as f64),
+                                "right" => ((width - 1 - x) as f64, y as f64),
+                                "left" => (x as f64, y as f64),
+                                "bottom" => ((height - 1 - y) as f64, x as f64),
+                                _ => (y as f64, x as f64),
                             };
-                            let dn = normal - source_normal;
+                            let dn = source_normal - normal;
                             let dt = tangent - tangent_center;
                             let longitudinal =
                                 dn * normal_direction + dt * tangent_direction;
