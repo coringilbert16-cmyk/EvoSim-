@@ -2273,7 +2273,6 @@ mod tests {
     }
 }
 
-
 /// The amount of external environmental energy a validated reaction needs
 /// before its physical state can be committed. Activation is intentionally not
 /// part of this request: it is an eligibility condition, not an energy source.
@@ -2284,8 +2283,9 @@ pub(crate) struct EnvironmentalEnergyRequest {
 
 impl EnvironmentalEnergyRequest {
     pub(crate) fn new(required_external_input: f64) -> Option<Self> {
-        (required_external_input.is_finite() && required_external_input >= 0.0)
-            .then_some(Self { required_external_input })
+        (required_external_input.is_finite() && required_external_input >= 0.0).then_some(Self {
+            required_external_input,
+        })
     }
 }
 
@@ -2378,7 +2378,10 @@ mod environmental_funding_contract_tests {
 
     #[test]
     fn staging_does_not_mutate_source_and_commit_applies_exact_debit() {
-        let mut source = TestSource { available: 8.0, committed: 0.0 };
+        let mut source = TestSource {
+            available: 8.0,
+            committed: 0.0,
+        };
         let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
         let staged = source.stage_funding(request).unwrap();
 
@@ -2394,7 +2397,10 @@ mod environmental_funding_contract_tests {
 
     #[test]
     fn insufficient_staged_transfer_cannot_authorize_reaction_commit() {
-        let source = TestSource { available: 2.0, committed: 0.0 };
+        let source = TestSource {
+            available: 2.0,
+            committed: 0.0,
+        };
         let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
         let staged = source.stage_funding(request).unwrap();
 
@@ -2405,7 +2411,10 @@ mod environmental_funding_contract_tests {
 
     #[test]
     fn zero_deficit_requires_no_environmental_transfer() {
-        let source = TestSource { available: 0.0, committed: 0.0 };
+        let source = TestSource {
+            available: 0.0,
+            committed: 0.0,
+        };
         let request = EnvironmentalEnergyRequest::new(0.0).unwrap();
         let staged = source.stage_funding(request).unwrap();
 
