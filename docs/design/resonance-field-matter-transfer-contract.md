@@ -32,6 +32,18 @@ within the documented floating-point settlement tolerance.
 
 The matter account in the isolated tests is only a minimal receiver/releaser used to prove the interface. It does not replace chemistry's structural-energy accounting or staged environmental funding contract.
 
+## Staged chemistry funding adapter
+
+The isolated adapter in `src/physics/closed_wave_field_funding.rs` implements the existing environmental funding contract without connecting the field to chemistry:
+
+- Staging applies the requested local transfer to a private copy of the field and reports the exact amount it can supply. The live field energy remains unchanged.
+- The adapter allows only one outstanding stage. A reservation prevents a second pending request from promising the same field energy.
+- Once the reaction has independently passed validation and is ready to commit, `commit_funding` installs the staged field state. If the reaction is rejected, `cancel_funding` discards the staged state and releases the reservation.
+- The field adapter is all-or-nothing for the requested amount. If the local field phase cannot supply the full amount, staging fails without changing the live field.
+- Every successful stage must be followed by exactly one commit or cancellation.
+
+The generic chemistry funding contract now explicitly supports this reservation lifecycle. This is contract alignment and isolated adapter validation only; no reaction path calls the adapter yet, and no chemistry structural-energy account is replaced.
+
 ## Scope and limitations
 
 - The field remains detached from the production simulation tick.
