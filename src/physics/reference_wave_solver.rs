@@ -759,7 +759,8 @@ impl WaveField {
     }
 
     fn advance_one_substep(&mut self) -> Result<(), WaveFieldError> {
-        self.advance_one_substep_with_boundary_work(false).map(|_| ())
+        self.advance_one_substep_with_boundary_work(false)
+            .map(|_| ())
     }
 
     #[cfg(test)]
@@ -3042,9 +3043,9 @@ mod tests {
                             let dt = tangent - tangent_center;
                             let longitudinal = dn * normal_direction + dt * tangent_direction;
                             let transverse = -dn * tangent_direction + dt * normal_direction;
-                            let envelope =
-                                (-0.5 * ((longitudinal / 7.0).powi(2) + (transverse / 14.0).powi(2)))
-                                    .exp();
+                            let envelope = (-0.5
+                                * ((longitudinal / 7.0).powi(2) + (transverse / 14.0).powi(2)))
+                            .exp();
                             let phase = wave_number * longitudinal;
                             let index = field.index(x, y);
                             field.current[index] = envelope * phase.cos();
@@ -3079,9 +3080,7 @@ mod tests {
                                 .apply_mur_boundaries_for_test()
                                 .expect("finite Mur boundary update");
                         } else {
-                            field
-                                .advance_substeps(1)
-                                .expect("stable packet evolution");
+                            field.advance_substeps(1).expect("stable packet evolution");
                         }
                         let time = field.logical_time_ticks();
                         let value = field
@@ -3106,5 +3105,4 @@ mod tests {
             }
         }
     }
-
 }
