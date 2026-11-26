@@ -104,8 +104,26 @@ impl ClosedBoundaryWaveField {
         self.substeps_elapsed as f64 / self.substeps_per_tick as f64
     }
 
+    /// Query the field at a world-space position, in L, at its latest
+    /// completed displacement time. The returned sample labels displacement
+    /// and leapfrog velocity with their distinct time centres.
+    ///
+    /// This is a diagnostic snapshot, not an arbitrary-time query and not
+    /// authorization to withdraw the reported pointwise energy density.
+    pub(crate) fn query_world_at_current_time(
+        &self,
+        x_l: f64,
+        y_l: f64,
+    ) -> Result<ClosedWaveSample, ClosedWaveError> {
+        if !x_l.is_finite() || !y_l.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        self.query(x_l / self.spacing, y_l / self.spacing)
+    }
+
     /// Query the field at grid coordinates measured in cell-spacing units.
     /// Coordinates outside the finite domain or non-finite positions fail closed.
+    /// Prefer query_world_at_current_time for chemistry-facing callers.
     pub(crate) fn query(&self, x: f64, y: f64) -> Result<ClosedWaveSample, ClosedWaveError> {
         if !x.is_finite()
             || !y.is_finite()
@@ -377,6 +395,36 @@ mod tests {
         assert_eq!(field.query(-0.01, 2.0), Err(ClosedWaveError::InvalidState));
         assert_eq!(
             field.query(f64::NAN, 2.0),
+            Err(ClosedWaveError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn world_space_query_uses_length_units_and_reports_both_time_centres() {
+        let mut field = ClosedBoundaryWaveField::new(7, 7, 0.5, 0.25, 2, 3.0).unwrap();
+        for y in 0..7 {
+            for x in 0..7 {
+                let value = x as f64 * 0.5 + y as f64 * 0.25;
+                field.set_initial_state(x, y, value - 0.1, value).unwrap();
+            }
+        }
+
+        let initial = field.query_world_at_current_time(1.5, 1.5).unwrap();
+        close(initial.position_x, 1.5, 1.0e-12);
+        close(initial.position_y, 1.5, 1.0e-12);
+        close(initial.displacement_time_ticks, 0.0, 1.0e-12);
+        close(initial.velocity_time_ticks, -0.25, 1.0e-12);
+
+        field.advance_ticks(3).unwrap();
+        let later = field.query_world_at_current_time(1.5, 1.5).unwrap();
+        close(later.displacement_time_ticks, 3.0, 1.0e-12);
+        close(later.velocity_time_ticks, 2.75, 1.0e-12);
+        assert_eq!(
+            field.query_world_at_current_time(-0.01, 1.5),
+            Err(ClosedWaveError::InvalidState)
+        );
+        assert_eq!(
+            field.query_world_at_current_time(f64::INFINITY, 1.5),
             Err(ClosedWaveError::InvalidState)
         );
     }
