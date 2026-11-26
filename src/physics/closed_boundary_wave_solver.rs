@@ -15,7 +15,8 @@
 pub(crate) struct ClosedWaveSample {
     pub(crate) position_x: f64,
     pub(crate) position_y: f64,
-    pub(crate) sample_time_ticks: f64,
+    pub(crate) displacement_time_ticks: f64,
+    pub(crate) velocity_time_ticks: f64,
     pub(crate) displacement: f64,
     pub(crate) time_derivative: f64,
     pub(crate) gradient_x: f64,
@@ -124,7 +125,8 @@ impl ClosedBoundaryWaveField {
             position_x: x * self.spacing,
             position_y: y * self.spacing,
             // Leapfrog velocity is centred between the previous/current states.
-            sample_time_ticks: (self.substeps_elapsed as f64 - 0.5) / self.substeps_per_tick as f64,
+            displacement_time_ticks: self.substeps_elapsed as f64 / self.substeps_per_tick as f64,
+            velocity_time_ticks: (self.substeps_elapsed as f64 - 0.5) / self.substeps_per_tick as f64,
             displacement,
             time_derivative,
             gradient_x,
