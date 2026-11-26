@@ -10,6 +10,19 @@
 
 **Performance decision:** Correct wave physics and auditable energy accounting take precedence over an artificial benchmark win. The initial correct implementation may be slower. The engineering target is to optimize until performance at least breaks even with the existing resonance implementation on the standard workload. A temporary prototype regression is acceptable; silently weakening the physics to hide the cost is not.
 
+
+> **Current approved direction — 2026-11-26 (supersedes older Phase 3C integration wording below)**
+>
+> The resonance field remains detached from production simulation ticks while chemistry proceeds independently. The immediate field work is an isolated, independently validated finite closed-world reference field. The approved physical boundary is reflecting with zero normal energy flux. Older infinite-plane computational-outflow, Mur/Sommerfeld, and sponge-boundary proposals are not the current target.
+>
+> Use the contiguous dense uniform-grid solver as the initial reference candidate because the parity/performance prototype (#447) passed focused Actions validation and measured roughly 158–196× faster than the adaptive reference on the reported 250 × 250 workload. This is a storage/performance result, not proof that its existing fixed-zero edge is the approved reflecting boundary. Implement and validate the reflecting boundary separately. Keep adaptive refinement as a comparison/possible later optimization, not the first implementation.
+>
+> The isolated field must expose deterministic position-resolved displacement, time derivative, spatial gradient, local energy density, and energy flux. Then validate reciprocal staged field↔matter transfers: field debit equals receiver credit; released energy enters the field through a physically defined interaction. No global usable-energy pool or frequency-indexed reservoir substitutes for local field energy. Chemistry remains detached until these transfer contracts are validated.
+>
+> **Approved sequence:** (1) consolidate the dense uniform solver as an isolated reference; (2) implement and validate the finite reflecting boundary and closed-world energy accounting; (3) expose validated local field queries; (4) establish reciprocal atomic energy transfer; (5) connect chemistry only after the transfer interface is proven. Optimize/adapt only after correctness and matched-workload measurements.
+>
+> **PR disposition:** #446 and #448 are superseded and must not be merged. #447 remains isolated prototype evidence; do not merge it as-is because it is test-only and includes absorbing-boundary validation that is no longer the approved physical boundary.
+
 ## 1. Purpose and authority
 
 This roadmap takes the repository from the existing resonance/aura implementation and the merged shape-aware geometry foundation to the intended independent wave-field architecture.
