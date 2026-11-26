@@ -364,13 +364,13 @@ mod tests {
         close(sample.displacement, 2.25, 1.0e-12);
         close(sample.gradient_x, 1.0, 1.0e-12);
         close(sample.gradient_y, 0.5, 1.0e-12);
-        close(sample.time_derivative, 0.4, 1.0e-12);
+        close(sample.time_derivative, 0.2, 1.0e-12);
         close(
             sample.energy_density,
-            0.5 * 3.0 * (0.16 + 0.0625 * 1.25),
+            0.5 * 3.0 * (0.04 + 0.0625 * 1.25),
             1.0e-12,
         );
-        close(sample.flux_x, -3.0 * 0.0625 * 0.4, 1.0e-12);
+        close(sample.flux_x, -3.0 * 0.0625 * 0.2, 1.0e-12);
         let edge = field.query(0.0, 3.0).unwrap();
         close(edge.gradient_x, 0.0, 1.0e-12);
         assert!(edge.flux_x.abs() < 1.0e-12);
