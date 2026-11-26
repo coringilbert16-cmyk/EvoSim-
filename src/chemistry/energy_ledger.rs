@@ -2272,3 +2272,165 @@ mod tests {
         assert_eq!(a + b, 12.0);
     }
 }
+
+/// The amount of external environmental energy a validated reaction needs
+/// before its physical state can be committed. Activation is intentionally not
+/// part of this request: it is an eligibility condition, not an energy source.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EnvironmentalEnergyRequest {
+    pub(crate) required_external_input: f64,
+}
+
+impl EnvironmentalEnergyRequest {
+    pub(crate) fn new(required_external_input: f64) -> Option<Self> {
+        (required_external_input.is_finite() && required_external_input >= 0.0).then_some(Self {
+            required_external_input,
+        })
+    }
+}
+
+/// A source's staged response to a reaction request. The source implementation
+/// must stage its own debit alongside this amount; live source state is not
+/// changed until the caller has validated and staged the reaction itself.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StagedEnvironmentalFunding<S> {
+    pub(crate) requested: f64,
+    pub(crate) transferred: f64,
+    pub(crate) staged_source: S,
+}
+
+impl<S> StagedEnvironmentalFunding<S> {
+    pub(crate) fn new(
+        request: EnvironmentalEnergyRequest,
+        transferred: f64,
+        staged_source: S,
+    ) -> Option<Self> {
+        (transferred.is_finite() && transferred >= 0.0).then_some(Self {
+            requested: request.required_external_input,
+            transferred,
+            staged_source,
+        })
+    }
+
+    /// A reaction may commit only when the real staged transfer covers its
+    /// complete deficit. Excess energy is not silently absorbed by the reaction.
+    pub(crate) fn satisfies_request(&self) -> bool {
+        self.transferred.is_finite()
+            && self.transferred >= 0.0
+            && self.transferred >= self.requested
+            && self.requested.is_finite()
+            && self.requested >= 0.0
+            && (self.transferred - self.requested).is_finite()
+    }
+}
+
+/// Contract for a physical environmental energy source used by nonliving
+/// chemistry. Implementations must:
+/// - return a staged source state that reflects exactly the reported transfer;
+/// - debit the source, not mint a generic usable-energy balance;
+/// - leave live source state unchanged during staging; and
+/// - make commit infallible after a successful stage, so reaction and source
+///   state can be committed together after all other validation succeeds.
+///
+/// The contract deliberately says nothing about the source's physical model.
+/// A future resonance-field adapter can implement it using a local field
+/// transfer; tests may use a controlled source without asserting that it is
+/// the final world-energy model.
+pub(crate) trait EnvironmentalEnergyProvider {
+    type StagedSource;
+
+    fn stage_funding(
+        &self,
+        request: EnvironmentalEnergyRequest,
+    ) -> Option<StagedEnvironmentalFunding<Self::StagedSource>>;
+
+    fn commit_funding(&mut self, staged_source: Self::StagedSource);
+}
+
+#[cfg(test)]
+mod environmental_funding_contract_tests {
+    use super::*;
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct TestSource {
+        available: f64,
+        committed: f64,
+    }
+
+    impl EnvironmentalEnergyProvider for TestSource {
+        type StagedSource = TestSource;
+
+        fn stage_funding(
+            &self,
+            request: EnvironmentalEnergyRequest,
+        ) -> Option<StagedEnvironmentalFunding<Self::StagedSource>> {
+            let transferred = request.required_external_input.min(self.available);
+            let mut staged = self.clone();
+            staged.available -= transferred;
+            staged.committed += transferred;
+            StagedEnvironmentalFunding::new(request, transferred, staged)
+        }
+
+        fn commit_funding(&mut self, staged_source: Self::StagedSource) {
+            *self = staged_source;
+        }
+    }
+
+    #[test]
+    fn staging_does_not_mutate_source_and_commit_applies_exact_debit() {
+        let mut source = TestSource {
+            available: 8.0,
+            committed: 0.0,
+        };
+        let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
+        let staged = source.stage_funding(request).unwrap();
+
+        assert!(staged.satisfies_request());
+        assert_eq!(staged.transferred, 3.5);
+        assert_eq!(source.available, 8.0);
+        assert_eq!(source.committed, 0.0);
+
+        source.commit_funding(staged.staged_source);
+        assert_eq!(source.available, 4.5);
+        assert_eq!(source.committed, 3.5);
+    }
+
+    #[test]
+    fn insufficient_staged_transfer_cannot_authorize_reaction_commit() {
+        let source = TestSource {
+            available: 2.0,
+            committed: 0.0,
+        };
+        let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
+        let staged = source.stage_funding(request).unwrap();
+
+        assert!(!staged.satisfies_request());
+        assert_eq!(source.available, 2.0);
+        assert_eq!(source.committed, 0.0);
+    }
+
+    #[test]
+    fn zero_deficit_requires_no_environmental_transfer() {
+        let source = TestSource {
+            available: 0.0,
+            committed: 0.0,
+        };
+        let request = EnvironmentalEnergyRequest::new(0.0).unwrap();
+        let staged = source.stage_funding(request).unwrap();
+
+        assert!(staged.satisfies_request());
+        assert_eq!(staged.transferred, 0.0);
+    }
+
+    #[test]
+    fn invalid_requests_and_transfers_are_rejected() {
+        assert!(EnvironmentalEnergyRequest::new(f64::NAN).is_none());
+        assert!(EnvironmentalEnergyRequest::new(f64::INFINITY).is_none());
+        assert!(EnvironmentalEnergyRequest::new(-1.0).is_none());
+
+        let request = EnvironmentalEnergyRequest::new(1.0).unwrap();
+        assert!(StagedEnvironmentalFunding::new(request, f64::NAN, ()).is_none());
+        assert!(StagedEnvironmentalFunding::new(request, f64::INFINITY, ()).is_none());
+        assert!(StagedEnvironmentalFunding::new(request, -0.1, ()).is_none());
+    }
+}
