@@ -6,6 +6,25 @@
 //! or outflow account are present. This is deliberately independent of the
 //! production simulation tick, chemistry, materials, and energy ledger.
 
+/// Deterministic local reconstruction of the discrete field at a world position.
+/// Spatial derivatives are node-centred finite differences, interpolated with
+/// the same bilinear weights as displacement and velocity. Reflecting faces
+/// impose zero normal gradient. Energy and flux are pointwise continuum
+/// diagnostics; their spatial sum is not the leapfrog invariant returned by energy().
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ClosedWaveSample {
+    pub(crate) position_x: f64,
+    pub(crate) position_y: f64,
+    pub(crate) sample_time_ticks: f64,
+    pub(crate) displacement: f64,
+    pub(crate) time_derivative: f64,
+    pub(crate) gradient_x: f64,
+    pub(crate) gradient_y: f64,
+    pub(crate) energy_density: f64,
+    pub(crate) flux_x: f64,
+    pub(crate) flux_y: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ClosedWaveError {
     InvalidDimensions,
@@ -82,6 +101,68 @@ impl ClosedBoundaryWaveField {
 
     pub(crate) fn logical_time_ticks(&self) -> f64 {
         self.substeps_elapsed as f64 / self.substeps_per_tick as f64
+    }
+
+    /// Query the field at grid coordinates measured in cell-spacing units.
+    /// Coordinates outside the finite domain or non-finite positions fail closed.
+    pub(crate) fn query(&self, x: f64, y: f64) -> Result<ClosedWaveSample, ClosedWaveError> {
+        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0
+            || x > (self.width - 1) as f64 || y > (self.height - 1) as f64 {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let gradients = self.node_gradients();
+        let displacement = self.interpolate(&self.current, x, y);
+        let velocity_nodes: Vec<f64> = self.current.iter().zip(&self.previous)
+            .map(|(now, before)| (now - before) / self.time_step).collect();
+        let time_derivative = self.interpolate(&velocity_nodes, x, y);
+        let gradient_x = self.interpolate(&gradients.0, x, y);
+        let gradient_y = self.interpolate(&gradients.1, x, y);
+        let energy_density = 0.5 * self.normalization * (time_derivative.powi(2)
+            + self.propagation_speed.powi(2) * (gradient_x.powi(2) + gradient_y.powi(2)));
+        let flux_scale = -self.normalization * self.propagation_speed.powi(2) * time_derivative;
+        Ok(ClosedWaveSample {
+            position_x: x * self.spacing,
+            position_y: y * self.spacing,
+            // Leapfrog velocity is centred between the previous/current states.
+            sample_time_ticks: (self.substeps_elapsed as f64 - 0.5) / self.substeps_per_tick as f64,
+            displacement,
+            time_derivative,
+            gradient_x,
+            gradient_y,
+            energy_density,
+            flux_x: flux_scale * gradient_x,
+            flux_y: flux_scale * gradient_y,
+        })
+    }
+
+    fn node_gradients(&self) -> (Vec<f64>, Vec<f64>) {
+        let mut gx = vec![0.0; self.current.len()];
+        let mut gy = vec![0.0; self.current.len()];
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let i = self.index(x, y);
+                if x > 0 && x + 1 < self.width {
+                    gx[i] = (self.current[i + 1] - self.current[i - 1]) / (2.0 * self.spacing);
+                }
+                if y > 0 && y + 1 < self.height {
+                    gy[i] = (self.current[i + self.width] - self.current[i - self.width])
+                        / (2.0 * self.spacing);
+                }
+            }
+        }
+        (gx, gy)
+    }
+
+    fn interpolate(&self, values: &[f64], x: f64, y: f64) -> f64 {
+        let x0 = x.floor() as usize;
+        let y0 = y.floor() as usize;
+        let x1 = (x0 + 1).min(self.width - 1);
+        let y1 = (y0 + 1).min(self.height - 1);
+        let tx = x - x0 as f64;
+        let ty = y - y0 as f64;
+        let a = values[self.index(x0, y0)] * (1.0 - tx) + values[self.index(x1, y0)] * tx;
+        let b = values[self.index(x0, y1)] * (1.0 - tx) + values[self.index(x1, y1)] * tx;
+        a * (1.0 - ty) + b * ty
     }
 
     pub(crate) fn sample(&self, x: usize, y: usize) -> Option<f64> {
@@ -254,6 +335,29 @@ mod tests {
         field.advance_ticks(1).unwrap();
         assert_ne!(field.sample(0, 4).unwrap(), initial_edge);
         assert!(field.sample(0, 4).unwrap().is_finite());
+    }
+
+    #[test]
+    fn query_reconstructs_local_energy_flux_and_reflecting_gradient() {
+        let mut field = ClosedBoundaryWaveField::new(7, 7, 0.5, 0.25, 2, 3.0).unwrap();
+        for y in 0..7 {
+            for x in 0..7 {
+                let value = x as f64 * 0.5 + y as f64 * 0.25;
+                field.set_initial_state(x, y, value - 0.1, value).unwrap();
+            }
+        }
+        let sample = field.query(3.0, 3.0).unwrap();
+        close(sample.displacement, 2.25, 1.0e-12);
+        close(sample.gradient_x, 1.0, 1.0e-12);
+        close(sample.gradient_y, 0.5, 1.0e-12);
+        close(sample.time_derivative, 0.4, 1.0e-12);
+        close(sample.energy_density, 0.5 * 3.0 * (0.16 + 0.0625 * 1.25), 1.0e-12);
+        close(sample.flux_x, -3.0 * 0.0625 * 0.4, 1.0e-12);
+        let edge = field.query(0.0, 3.0).unwrap();
+        close(edge.gradient_x, 0.0, 1.0e-12);
+        assert!(edge.flux_x.abs() < 1.0e-12);
+        assert_eq!(field.query(-0.01, 2.0), Err(ClosedWaveError::InvalidState));
+        assert_eq!(field.query(f64::NAN, 2.0), Err(ClosedWaveError::InvalidState));
     }
 
     #[test]
