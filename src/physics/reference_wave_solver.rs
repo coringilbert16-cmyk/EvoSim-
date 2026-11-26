@@ -203,6 +203,78 @@ impl WaveField {
         Ok(())
     }
 
+    /// Applies first-order Mur/Sommerfeld outgoing characteristics to the
+    /// four outer edges after an interior leapfrog update. Test-only: this
+    /// candidate has no production energy-ledger integration.
+    ///
+    /// The boundary update is evaluated from the old boundary/interior state
+    /// in `previous` and the newly advanced interior state in `current`.
+    /// Its signed discrete energy change is returned as a diagnostic; it must
+    /// not be assumed positive or booked as physical export without validation.
+    #[cfg(test)]
+    fn apply_mur_boundaries_for_test(&mut self) -> Result<f64, WaveFieldError> {
+        let ratio = self.propagation_speed * self.time_step / self.spacing;
+        let coefficient = (ratio - 1.0) / (ratio + 1.0);
+        if !coefficient.is_finite() {
+            return Err(WaveFieldError::InvalidState);
+        }
+        let energy_before = self.energy();
+        let mut next_boundary = self.current.clone();
+
+        for y in 1..self.height - 1 {
+            let left = self.index(0, y);
+            let left_inner = self.index(1, y);
+            next_boundary[left] = self.previous[left_inner]
+                + coefficient * (self.current[left_inner] - self.previous[left]);
+
+            let right = self.index(self.width - 1, y);
+            let right_inner = self.index(self.width - 2, y);
+            next_boundary[right] = self.previous[right_inner]
+                + coefficient * (self.current[right_inner] - self.previous[right]);
+        }
+        for x in 1..self.width - 1 {
+            let top = self.index(x, 0);
+            let top_inner = self.index(x, 1);
+            next_boundary[top] = self.previous[top_inner]
+                + coefficient * (self.current[top_inner] - self.previous[top]);
+
+            let bottom = self.index(x, self.height - 1);
+            let bottom_inner = self.index(x, self.height - 2);
+            next_boundary[bottom] = self.previous[bottom_inner]
+                + coefficient * (self.current[bottom_inner] - self.previous[bottom]);
+        }
+
+        // At a corner, average the two edge-characteristic predictions.
+        // This is deliberately a simple candidate, not a claimed exact
+        // corner condition; corner-directed packet tests must assess it.
+        for (x, y, x_inner, y_inner) in [
+            (0, 0, 1, 1),
+            (self.width - 1, 0, self.width - 2, 1),
+            (0, self.height - 1, 1, self.height - 2),
+            (self.width - 1, self.height - 1, self.width - 2, self.height - 2),
+        ] {
+            let corner = self.index(x, y);
+            let from_x = self.previous[self.index(x_inner, y)]
+                + coefficient
+                    * (self.current[self.index(x_inner, y)] - self.previous[corner]);
+            let from_y = self.previous[self.index(x, y_inner)]
+                + coefficient
+                    * (self.current[self.index(x, y_inner)] - self.previous[corner]);
+            next_boundary[corner] = 0.5 * (from_x + from_y);
+        }
+
+        if next_boundary.iter().any(|value| !value.is_finite()) {
+            return Err(WaveFieldError::InvalidState);
+        }
+        self.current = next_boundary;
+        let energy_after = self.energy();
+        let signed_export = energy_before - energy_after;
+        if !energy_after.is_finite() || energy_after < 0.0 || !signed_export.is_finite() {
+            return Err(WaveFieldError::InvalidState);
+        }
+        Ok(signed_export)
+    }
+
     #[cfg(test)]
     fn hard_remove_right_strip_for_test(
         &mut self,
@@ -2894,4 +2966,113 @@ mod tests {
             );
         }
     }
+
+    /// Isolated comparison of fixed-zero, graded-sponge, and first-order
+    /// outgoing-characteristic boundaries. Reports amplitude reflection and
+    /// the signed discrete energy change caused by the characteristic update.
+    /// This is characterization only; it does not establish total composed-
+    /// field flux accounting or select an acceptable boundary.
+    #[test]
+    #[ignore = "manual Phase 3C outgoing-characteristic boundary characterization"]
+    fn diagnostic_outgoing_characteristic_against_fixed_and_sponge_controls() {
+        let width = 101_usize;
+        let height = 101_usize;
+        let wave_number = 2.0 * std::f64::consts::PI / 12.0;
+        let angles = [0.0_f64, 25.0, 45.0, 65.0];
+        let edges = ["right", "left", "bottom", "top"];
+        let configurations = [
+            ("fixed_zero", false, false),
+            ("sponge", true, false),
+            ("mur", false, true),
+            ("mur_plus_sponge", true, true),
+        ];
+
+        for edge in edges {
+            for angle_degrees in angles {
+                for (name, use_sponge, use_mur) in configurations {
+                    let mut field = solver(width, height, 1.0, 2);
+                    if use_sponge {
+                        field.configure_absorbing_boundary(12, 0.15)
+                            .expect("valid sponge control");
+                    }
+                    let angle = angle_degrees.to_radians();
+                    let (normal_direction, tangent_direction) = (angle.cos(), angle.sin());
+                    let probe_normal = 15.0_f64;
+                    let source_normal = 30.0_f64;
+                    let tangent_center = 50.0_f64;
+                    let probe_tangent = tangent_center
+                        + (source_normal - probe_normal) * angle.tan();
+
+                    for y in 1..height - 1 {
+                        for x in 1..width - 1 {
+                            let (normal, tangent) = match edge {
+                                "right" => (x as f64, y as f64),
+                                "left" => ((width - 1 - x) as f64, y as f64),
+                                "bottom" => (y as f64, x as f64),
+                                _ => ((height - 1 - y) as f64, x as f64),
+                            };
+                            let dn = normal - source_normal;
+                            let dt = tangent - tangent_center;
+                            let longitudinal =
+                                dn * normal_direction + dt * tangent_direction;
+                            let transverse =
+                                -dn * tangent_direction + dt * normal_direction;
+                            let envelope = (-0.5
+                                * ((longitudinal / 7.0).powi(2)
+                                    + (transverse / 14.0).powi(2)))
+                            .exp();
+                            let phase = wave_number * longitudinal;
+                            let index = field.index(x, y);
+                            field.current[index] = envelope * phase.cos();
+                            field.previous[index] =
+                                envelope * (phase + wave_number * field.time_step()).cos();
+                        }
+                    }
+
+                    let probe_normal_index = probe_normal.round() as usize;
+                    let probe_tangent_index = probe_tangent.round() as usize;
+                    let (probe_x, probe_y) = match edge {
+                        "right" => (width - 1 - probe_normal_index, probe_tangent_index),
+                        "left" => (probe_normal_index, probe_tangent_index),
+                        "bottom" => (probe_tangent_index, height - 1 - probe_normal_index),
+                        _ => (probe_tangent_index, probe_normal_index),
+                    };
+                    let incident_center = (source_normal - probe_normal) / normal_direction;
+                    let reflected_center = (source_normal + probe_normal) / normal_direction;
+                    let incident_window = (incident_center - 9.0)..=(incident_center + 9.0);
+                    let reflected_window = (reflected_center - 12.0)..=(reflected_center + 12.0);
+                    let final_time = reflected_center + 14.0;
+                    let mut incident_peak: f64 = 0.0;
+                    let mut reflected_peak: f64 = 0.0;
+                    let mut signed_boundary_export = 0.0_f64;
+
+                    while field.logical_time_ticks() < final_time {
+                        field.advance_substeps(1).expect("stable packet evolution");
+                        if use_mur {
+                            signed_boundary_export += field
+                                .apply_mur_boundaries_for_test()
+                                .expect("finite Mur boundary update");
+                        }
+                        let time = field.logical_time_ticks();
+                        let value = field.sample(probe_x, probe_y)
+                            .expect("probe remains inside domain").abs();
+                        if incident_window.contains(&time) {
+                            incident_peak = incident_peak.max(value);
+                        }
+                        if reflected_window.contains(&time) {
+                            reflected_peak = reflected_peak.max(value);
+                        }
+                    }
+
+                    println!(
+                        "outgoing_boundary,edge={edge},angle_degrees={angle_degrees:.1},configuration={name},incident_peak={incident_peak:.8e},reflected_peak={reflected_peak:.8e},reflected_amplitude_ratio={:.8e},sponge_absorbed_energy={:.8e},mur_signed_discrete_export={signed_boundary_export:.8e},remaining_energy={:.8e}",
+                        reflected_peak / incident_peak.max(f64::MIN_POSITIVE),
+                        field.boundary_absorbed_energy(),
+                        field.energy()
+                    );
+                }
+            }
+        }
+    }
+
 }
