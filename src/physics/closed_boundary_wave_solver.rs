@@ -304,7 +304,6 @@ impl ClosedBoundaryWaveField {
         Ok(())
     }
 
-
     /// Transfer a requested amount from the local field interaction into matter.
     ///
     /// The coupling is a bilinear, position-local velocity impulse. Its amplitude
@@ -475,7 +474,6 @@ impl ClosedBoundaryWaveField {
     }
 }
 
-
 /// Minimal isolated matter-side energy account used to prove reciprocal settlement.
 /// It is not a replacement for chemistry's structural-energy accounting.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -515,13 +513,11 @@ mod tests {
         );
     }
 
-
     fn energized_field() -> ClosedBoundaryWaveField {
         let mut field = ClosedBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
         for y in 0..9 {
             for x in 0..9 {
-                let radius_squared =
-                    (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
+                let radius_squared = (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
                 let current = (-radius_squared / 8.0).exp();
                 let previous = current - 0.1 * current;
                 field.set_initial_state(x, y, previous, current).unwrap();
@@ -537,7 +533,9 @@ mod tests {
         let field_before = field.energy();
         let matter_before = matter.stored_energy();
 
-        field.transfer_to_matter(4.0, 4.0, 0.01, &mut matter).unwrap();
+        field
+            .transfer_to_matter(4.0, 4.0, 0.01, &mut matter)
+            .unwrap();
 
         close(field_before - field.energy(), 0.01, 2.0e-10);
         close(matter.stored_energy() - matter_before, 0.01, 1.0e-12);
@@ -555,7 +553,9 @@ mod tests {
         let field_before = field.energy();
         let matter_before = matter.stored_energy();
 
-        field.release_from_matter(4.0, 4.0, 0.02, &mut matter).unwrap();
+        field
+            .release_from_matter(4.0, 4.0, 0.02, &mut matter)
+            .unwrap();
 
         close(field.energy() - field_before, 0.02, 2.0e-10);
         close(matter_before - matter.stored_energy(), 0.02, 1.0e-12);
@@ -571,17 +571,14 @@ mod tests {
         let mut field = energized_field();
         let mut first = MatterEnergyAccount::new(0.0).unwrap();
         let mut second = MatterEnergyAccount::new(0.0).unwrap();
-        field.transfer_to_matter(4.0, 4.0, 0.01, &mut first).unwrap();
+        field
+            .transfer_to_matter(4.0, 4.0, 0.01, &mut first)
+            .unwrap();
 
         let field_after_first = field.energy();
         let second_before = second.stored_energy();
         let first_before = first.stored_energy();
-        let result = field.transfer_to_matter(
-            4.0,
-            4.0,
-            1.0e6,
-            &mut second,
-        );
+        let result = field.transfer_to_matter(4.0, 4.0, 1.0e6, &mut second);
         assert_eq!(result, Err(ClosedWaveError::InsufficientLocalFieldEnergy));
         close(field.energy(), field_after_first, 1.0e-12);
         close(second.stored_energy(), second_before, 1.0e-12);
@@ -590,7 +587,9 @@ mod tests {
         // A second receiver at the same interaction site can only draw from
         // the field state that remains after the first committed transaction.
         let total_before = field.energy() + first.stored_energy() + second.stored_energy();
-        field.transfer_to_matter(4.0, 4.0, 0.005, &mut second).unwrap();
+        field
+            .transfer_to_matter(4.0, 4.0, 0.005, &mut second)
+            .unwrap();
         close(
             field.energy() + first.stored_energy() + second.stored_energy(),
             total_before,
