@@ -248,6 +248,8 @@ impl EnvironmentalEnergyProvider for ClosedWaveBoundaryFundingSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::energy_ledger::{settle_field_funded_reaction, EnergyReason, ReactionEnergyBalance};
+    use crate::state::EnergyLedger;
 
     fn energized_field() -> ClosedBoundaryWaveField {
         let mut field = ClosedBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
@@ -260,6 +262,40 @@ mod tests {
             }
         }
         field
+    }
+
+    #[test]
+    fn real_field_debit_and_reaction_ledger_commit_as_one_transaction() {
+        let field = energized_field();
+        let initial_energy = field.energy();
+        let mut source = ClosedWaveFieldFundingSource::new(field, 4.0, 4.0).unwrap();
+        let mut ledger = EnergyLedger::default();
+        let balance = ReactionEnergyBalance::calculate_conservative(1.0, 1.01, 0.002, 0.003)
+            .expect("valid reaction balance");
+        let requested = balance.required_external_input;
+
+        assert!(settle_field_funded_reaction(
+            &mut ledger,
+            &mut source,
+            balance,
+            EnergyReason::Combine,
+        ));
+
+        let field_debit = initial_energy - source.field().energy();
+        assert!((field_debit - requested).abs() <= 2.0e-10);
+        assert_eq!(
+            ledger.total_field_energy_transferred_to_chemistry,
+            requested
+        );
+        assert_eq!(
+            ledger.total_structural_energy_delta,
+            balance.net_reaction_change
+        );
+        assert_eq!(ledger.total_work_expended, balance.physical_work);
+        assert_eq!(ledger.total_heat_dissipated, balance.dissipated_heat);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+        assert!(!source.has_pending_funding());
     }
 
     #[test]

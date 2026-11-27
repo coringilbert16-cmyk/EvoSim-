@@ -714,6 +714,14 @@ pub(crate) fn settle_pair_potential_change(
 /// not contain subsystem-specific rules.
 pub(crate) trait EnergyLedgerAuthority {
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool;
+    /// Settle a reaction deficit paid directly from a staged environmental
+    /// field transfer. This is an internal transfer, not new external input
+    /// and not energy credited to a usable-energy holder.
+    fn settle_field_funded_reaction(
+        &mut self,
+        transaction: EnergyTransaction,
+        field_energy_transferred: f64,
+    ) -> bool;
     fn settle_external_input(
         &mut self,
         holder: &mut f64,
@@ -735,7 +743,120 @@ pub(crate) trait EnergyLedgerAuthority {
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
 }
 
+/// Atomically connect a staged environmental field debit to one reaction
+/// energy balance. The source is committed only after a staged ledger accepts
+/// the exact deficit; every rejected path cancels the source reservation.
+pub(crate) fn settle_field_funded_reaction<P: EnvironmentalEnergyProvider>(
+    ledger: &mut EnergyLedger,
+    provider: &mut P,
+    balance: ReactionEnergyBalance,
+    reason: EnergyReason,
+) -> bool {
+    let Some(transaction) = balance.settlement_transaction_conservative(reason) else {
+        return false;
+    };
+    // This path is only for a reaction deficit. A favorable reaction's surplus
+    // needs a separately modeled destination and must not be credited to a
+    // nonliving usable-energy holder here.
+    if transaction.usable_delta > 0.0
+        || transaction.usable_delta != -balance.required_external_input
+    {
+        return false;
+    }
+    let Some(request) = EnvironmentalEnergyRequest::new(balance.required_external_input) else {
+        return false;
+    };
+    let Some(staged_funding) = provider.stage_funding(request) else {
+        return false;
+    };
+    if !staged_funding.satisfies_request()
+        || staged_funding.transferred != request.required_external_input
+        || !balance
+            .residual(staged_funding.transferred)
+            .is_some_and(|residual| residual.abs() <= EPSILON)
+    {
+        provider.cancel_funding(staged_funding.staged_source);
+        return false;
+    }
+
+    let mut staged_ledger = *ledger;
+    if !staged_ledger.settle_field_funded_reaction(transaction, staged_funding.transferred) {
+        provider.cancel_funding(staged_funding.staged_source);
+        return false;
+    }
+
+    *ledger = staged_ledger;
+    provider.commit_funding(staged_funding.staged_source);
+    true
+}
+
 impl EnergyLedgerAuthority for EnergyLedger {
+    fn settle_field_funded_reaction(
+        &mut self,
+        transaction: EnergyTransaction,
+        field_energy_transferred: f64,
+    ) -> bool {
+        if !transaction.balanced()
+            || !field_energy_transferred.is_finite()
+            || field_energy_transferred < 0.0
+            || transaction.usable_delta > 0.0
+            || transaction.usable_delta != -field_energy_transferred
+        {
+            return false;
+        }
+
+        let next_field_transfer =
+            self.total_field_energy_transferred_to_chemistry + field_energy_transferred;
+        let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
+        let mut next_work = self.total_work_expended + transaction.work_expended;
+        let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        if next_work.is_finite() && next_work - self.total_work_expended > transaction.work_expended
+        {
+            next_work = f64::from_bits(next_work.to_bits() - 1);
+        }
+        if next_heat.is_finite()
+            && next_heat - self.total_heat_dissipated > transaction.heat_dissipated
+        {
+            next_heat = f64::from_bits(next_heat.to_bits() - 1);
+        }
+        if !next_field_transfer.is_finite()
+            || !next_structural.is_finite()
+            || !next_work.is_finite()
+            || !next_heat.is_finite()
+        {
+            return false;
+        }
+
+        // Reconcile the increments the cumulative counters can actually
+        // represent. A rounded-up field debit or rounded-down reaction sink
+        // must not make this transaction appear to create energy.
+        let actual_field_transfer =
+            next_field_transfer - self.total_field_energy_transferred_to_chemistry;
+        let actual_structural = next_structural - self.total_structural_energy_delta;
+        let actual_work = next_work - self.total_work_expended;
+        let actual_heat = next_heat - self.total_heat_dissipated;
+        let residual = -actual_field_transfer + actual_structural + actual_work + actual_heat;
+        if !actual_field_transfer.is_finite()
+            || actual_field_transfer < 0.0
+            || !actual_structural.is_finite()
+            || !actual_work.is_finite()
+            || actual_work < 0.0
+            || !actual_heat.is_finite()
+            || actual_heat < 0.0
+            || !residual.is_finite()
+            || residual > 0.0
+            || residual.abs() > EPSILON
+        {
+            return false;
+        }
+
+        self.total_field_energy_transferred_to_chemistry = next_field_transfer;
+        self.total_structural_energy_delta = next_structural;
+        self.total_work_expended = next_work;
+        self.total_heat_dissipated = next_heat;
+        true
+    }
+
     fn settle_external_input_from_budget(
         &mut self,
         holder: &mut f64,
@@ -2459,6 +2580,111 @@ mod environmental_funding_contract_tests {
         assert!(staged.satisfies_request());
         assert_eq!(staged.transferred, 0.0);
         source.commit_funding(staged.staged_source);
+    }
+
+    #[test]
+    fn field_funded_reaction_commits_exact_field_debit_and_ledger_sinks() {
+        let mut source = TestSource {
+            available: 8.0,
+            committed: 0.0,
+            pending: false,
+        };
+        let mut ledger = EnergyLedger::default();
+        let balance = ReactionEnergyBalance::calculate_conservative(1.0, 3.0, 0.5, 0.5)
+            .expect("valid reaction balance");
+
+        assert!(settle_field_funded_reaction(
+            &mut ledger,
+            &mut source,
+            balance,
+            EnergyReason::Combine,
+        ));
+        assert_eq!(source.available, 5.0);
+        assert_eq!(source.committed, balance.required_external_input);
+        assert!(!source.pending);
+        assert_eq!(
+            ledger.total_field_energy_transferred_to_chemistry,
+            balance.required_external_input
+        );
+        assert_eq!(ledger.total_structural_energy_delta, 2.0);
+        assert_eq!(ledger.total_work_expended, 0.5);
+        assert_eq!(ledger.total_heat_dissipated, 0.5);
+        assert_eq!(ledger.total_external_energy_input, 0.0);
+        assert_eq!(ledger.total_usable_energy_gained, 0.0);
+    }
+
+    #[test]
+    fn insufficient_field_funding_cancels_without_mutating_ledger_or_source() {
+        let mut source = TestSource {
+            available: 2.0,
+            committed: 0.0,
+            pending: false,
+        };
+        let mut ledger = EnergyLedger::default();
+        let before = ledger;
+        let balance = ReactionEnergyBalance::calculate_conservative(1.0, 3.0, 0.5, 0.5)
+            .expect("valid reaction balance");
+
+        assert!(!settle_field_funded_reaction(
+            &mut ledger,
+            &mut source,
+            balance,
+            EnergyReason::Combine,
+        ));
+        assert_eq!(source.available, 2.0);
+        assert_eq!(source.committed, 0.0);
+        assert!(!source.pending);
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn ledger_rejection_cancels_staged_field_debit_atomically() {
+        let mut source = TestSource {
+            available: 8.0,
+            committed: 0.0,
+            pending: false,
+        };
+        let mut ledger = EnergyLedger {
+            total_field_energy_transferred_to_chemistry: f64::MAX,
+            ..EnergyLedger::default()
+        };
+        let before = ledger;
+        let balance = ReactionEnergyBalance::calculate_conservative(1.0, 3.0, 0.5, 0.5)
+            .expect("valid reaction balance");
+
+        assert!(!settle_field_funded_reaction(
+            &mut ledger,
+            &mut source,
+            balance,
+            EnergyReason::Combine,
+        ));
+        assert_eq!(source.available, 8.0);
+        assert_eq!(source.committed, 0.0);
+        assert!(!source.pending);
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn field_funding_path_rejects_reaction_surplus_without_claiming_source() {
+        let mut source = TestSource {
+            available: 8.0,
+            committed: 0.0,
+            pending: false,
+        };
+        let mut ledger = EnergyLedger::default();
+        let balance = ReactionEnergyBalance::calculate_conservative(3.0, 1.0, 0.5, 0.5)
+            .expect("valid favorable reaction");
+
+        assert!(!settle_field_funded_reaction(
+            &mut ledger,
+            &mut source,
+            balance,
+            EnergyReason::Combine,
+        ));
+        assert_eq!(source.available, 8.0);
+        assert_eq!(source.committed, 0.0);
+        assert!(!source.pending);
+        assert_eq!(ledger, EnergyLedger::default());
     }
 
     #[test]
