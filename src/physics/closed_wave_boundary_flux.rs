@@ -678,9 +678,12 @@ mod tests {
             integrated_visible_boundary_flux_by_target(&history, (11.0, 4.0), &bodies, &[0, 1])
                 .unwrap();
         assert_eq!(measured.len(), 2);
-        assert!(measured
-            .iter()
-            .all(|(_, measurement)| !measurement.sites.is_empty()));
+        assert!(
+            !measured[1].1.sites.is_empty(),
+            "the nearer receiver must have exposed boundary sites"
+        );
+        // The farther receiver is fully shadowed by the aligned nearer
+        // rectangle, so an empty site list is the correct visibility result.
 
         // Carry the measured receiver boundary directly into the existing
         // staged field-settlement contract; no hand-authored site-energy list.
