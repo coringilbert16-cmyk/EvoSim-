@@ -635,7 +635,7 @@ mod tests {
         // are included in the target set.
         let farther_with_near_body = by_body[0].1;
         let farther_without_near_body =
-            incoming_power_for_visible_polygonal_targets(&field, (11.0, 4.0), &[bodies[0]], &[0])
+            incoming_power_for_visible_polygonal_targets(&field, (11.0, 4.0), std::slice::from_ref(&bodies[0]), &[0])
                 .unwrap();
         assert!(farther_with_near_body < farther_without_near_body);
     }
