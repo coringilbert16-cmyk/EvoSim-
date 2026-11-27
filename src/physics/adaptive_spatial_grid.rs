@@ -1773,6 +1773,89 @@ mod tests {
     }
 
     #[test]
+    fn regridding_preserves_energy_and_outflow_ledger_during_absorbing_evolution() {
+        let mut grid = AdaptiveSpatialGrid::new(9, 9, 1.0, 2).unwrap();
+        for y in 1..8 {
+            for x in 1..8 {
+                let dx = x as f64 - 2.0;
+                let dy = y as f64 - 4.0;
+                let profile = (-((dx * dx + dy * dy) / 3.0)).exp();
+                grid.set_state(
+                    CellKey { level: 0, x, y },
+                    AdaptiveCell {
+                        previous: 0.04 * profile,
+                        current: profile,
+                    },
+                )
+                .unwrap();
+            }
+        }
+
+        let parent = CellKey {
+            level: 0,
+            x: 2,
+            y: 4,
+        };
+        let mut field = AdaptiveWaveField::new(grid, 0.2, 1.1).unwrap();
+        field.configure_absorbing_boundary(3.0, 0.08).unwrap();
+        field.advance_ticks(5).unwrap();
+        assert!(field.absorbed_energy() > 0.0);
+
+        for _ in 0..3 {
+            let energy_before = field.energy();
+            let outflow_before = field.absorbed_energy();
+            let total_accounted_before = energy_before + outflow_before;
+            let integrals_before = field.grid().integrated_state();
+            let ticks_before = field.logical_time_ticks();
+
+            field.refine_grid(parent).unwrap();
+
+            close(field.energy(), energy_before);
+            close(field.absorbed_energy(), outflow_before);
+            close(
+                field.energy() + field.absorbed_energy(),
+                total_accounted_before,
+            );
+            close(
+                field.grid().integrated_state().current_displacement,
+                integrals_before.current_displacement,
+            );
+            close(
+                field.grid().integrated_state().previous_displacement,
+                integrals_before.previous_displacement,
+            );
+            close(field.logical_time_ticks(), ticks_before);
+
+            field.advance_ticks(2).unwrap();
+            let evolved_total = field.energy() + field.absorbed_energy();
+            close(evolved_total, total_accounted_before);
+
+            let energy_before_coarsen = field.energy();
+            let outflow_before_coarsen = field.absorbed_energy();
+            let integrals_before_coarsen = field.grid().integrated_state();
+            let ticks_before_coarsen = field.logical_time_ticks();
+
+            field.coarsen_grid(parent).unwrap();
+
+            close(field.energy(), energy_before_coarsen);
+            close(field.absorbed_energy(), outflow_before_coarsen);
+            close(field.energy() + field.absorbed_energy(), evolved_total);
+            close(
+                field.grid().integrated_state().current_displacement,
+                integrals_before_coarsen.current_displacement,
+            );
+            close(
+                field.grid().integrated_state().previous_displacement,
+                integrals_before_coarsen.previous_displacement,
+            );
+            close(field.logical_time_ticks(), ticks_before_coarsen);
+
+            field.advance_ticks(2).unwrap();
+            close(field.energy() + field.absorbed_energy(), evolved_total);
+        }
+    }
+
+    #[test]
     fn uniformly_refined_adaptive_wave_converges_to_continuum_mode() {
         fn relative_error(refinement_level: u8) -> f64 {
             let cells = 17_u32;
@@ -2212,5 +2295,800 @@ mod tests {
                 .leaves()
                 .all(|(_, state)| { state.current.is_finite() && state.previous.is_finite() }));
         }
+    }
+}
+
+/// Test-only contiguous uniform-grid solver used to validate a storage-layout
+/// prototype against the adaptive solver. It deliberately shares the same
+/// finite-volume stencil, fixed-zero boundary, leapfrog update, and energy
+/// invariant; it is not connected to production simulation paths.
+#[cfg(test)]
+mod dense_uniform_solver_prototype_tests {
+    use super::*;
+
+    fn close(actual: f64, expected: f64) {
+        let scale = actual.abs().max(expected.abs()).max(1.0);
+        assert!(
+            (actual - expected).abs() <= 1.0e-12 * scale,
+            "{actual} != {expected}"
+        );
+    }
+
+    #[derive(Clone)]
+    struct DenseUniformWave {
+        width: usize,
+        height: usize,
+        previous: Vec<f64>,
+        current: Vec<f64>,
+        time_step: f64,
+        propagation_speed: f64,
+        energy_normalization: f64,
+        cell_area: f64,
+    }
+
+    impl DenseUniformWave {
+        fn from_reference(field: &AdaptiveWaveField) -> Self {
+            let grid = field.grid();
+            assert!(grid.leaves.keys().all(|key| key.level == 0));
+            let width = grid.width as usize;
+            let height = grid.height as usize;
+            let mut previous = vec![0.0; width * height];
+            let mut current = vec![0.0; width * height];
+            for (key, state) in grid.leaves() {
+                let index = key.y as usize * width + key.x as usize;
+                previous[index] = state.previous;
+                current[index] = state.current;
+            }
+            Self {
+                width,
+                height,
+                previous,
+                current,
+                time_step: field.time_step,
+                propagation_speed: field.propagation_speed,
+                energy_normalization: field.energy_normalization,
+                cell_area: grid.base_spacing.powi(2),
+            }
+        }
+
+        fn apply_stiffness(&self, values: &[f64], output: &mut [f64]) {
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = y * self.width + x;
+                    let mut value = 0.0;
+                    if x > 0 {
+                        value += values[index] - values[index - 1];
+                    }
+                    if x + 1 < self.width {
+                        value += values[index] - values[index + 1];
+                    }
+                    if y > 0 {
+                        value += values[index] - values[index - self.width];
+                    }
+                    if y + 1 < self.height {
+                        value += values[index] - values[index + self.width];
+                    }
+                    output[index] = value;
+                }
+            }
+        }
+
+        fn energy(&self) -> f64 {
+            let mut kinetic_sum = 0.0;
+            for index in 0..self.current.len() {
+                let velocity = (self.current[index] - self.previous[index]) / self.time_step;
+                kinetic_sum += self.cell_area * velocity.powi(2);
+            }
+            let mut applied_previous = vec![0.0; self.current.len()];
+            self.apply_stiffness(&self.previous, &mut applied_previous);
+            let gradient_cross_sum = self
+                .current
+                .iter()
+                .zip(applied_previous.iter())
+                .map(|(current, applied)| current * applied)
+                .sum::<f64>();
+            0.5 * self.energy_normalization
+                * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+        }
+
+        fn advance_one_substep(&mut self) {
+            let mut applied = vec![0.0; self.current.len()];
+            self.apply_stiffness(&self.current, &mut applied);
+            let dt = self.time_step;
+            let speed_squared = self.propagation_speed.powi(2);
+            let mut next = vec![0.0; self.current.len()];
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let index = y * self.width + x;
+                    if x == 0 || y == 0 || x + 1 == self.width || y + 1 == self.height {
+                        continue;
+                    }
+                    next[index] = 2.0 * self.current[index]
+                        - self.previous[index]
+                        - dt.powi(2) * speed_squared * applied[index] / self.cell_area;
+                    assert!(next[index].is_finite());
+                }
+            }
+            self.previous.copy_from_slice(&self.current);
+            self.current = next;
+        }
+    }
+
+    fn initialized_pair(size: u32, condition: &str) -> (AdaptiveWaveField, DenseUniformWave) {
+        let mut grid = AdaptiveSpatialGrid::new(size, size, 1.0, 2).unwrap();
+        let center = (size as f64 - 1.0) * 0.5;
+        for y in 0..size {
+            for x in 0..size {
+                let key = CellKey { level: 0, x, y };
+                if is_computational_boundary(&grid, key) || condition == "exact_zero" {
+                    continue;
+                }
+                let dx = x as f64 - center;
+                let dy = y as f64 - center;
+                let radius_squared = dx * dx + dy * dy;
+                if condition == "compact_support" && radius_squared > 36.0 {
+                    continue;
+                }
+                let envelope = (-radius_squared / 18.0).exp();
+                let phase = 0.7 * dx;
+                grid.set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: envelope * (phase + 0.08).cos(),
+                        current: envelope * phase.cos(),
+                    },
+                )
+                .unwrap();
+            }
+        }
+        let reference = AdaptiveWaveField::new(grid, 1.0, 1.0).unwrap();
+        let dense = DenseUniformWave::from_reference(&reference);
+        (reference, dense)
+    }
+
+    fn assert_state_close(reference: &AdaptiveWaveField, dense: &DenseUniformWave, tolerance: f64) {
+        for (key, state) in reference.grid().leaves() {
+            let index = key.y as usize * dense.width + key.x as usize;
+            let scale = state.current.abs().max(state.previous.abs()).max(1.0);
+            assert!(
+                (state.current - dense.current[index]).abs() <= tolerance * scale,
+                "current mismatch at {key:?}: adaptive={}, dense={}",
+                state.current,
+                dense.current[index]
+            );
+            assert!(
+                (state.previous - dense.previous[index]).abs() <= tolerance * scale,
+                "previous mismatch at {key:?}: adaptive={}, dense={}",
+                state.previous,
+                dense.previous[index]
+            );
+        }
+    }
+
+    #[test]
+    fn contiguous_uniform_solver_matches_reference_state_and_energy() {
+        for size in [32, 64, 128] {
+            for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
+                let (mut reference, mut dense) = initialized_pair(size, condition);
+                let initial_energy = reference.energy();
+                assert!(
+                    (initial_energy - dense.energy()).abs()
+                        <= 1.0e-11 * initial_energy.abs().max(1.0)
+                );
+                for step in 0..80 {
+                    reference.advance_substeps(1).unwrap();
+                    dense.advance_one_substep();
+                    assert_state_close(&reference, &dense, 2.0e-11);
+                    let reference_energy = reference.energy();
+                    let dense_energy = dense.energy();
+                    let scale = reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                    assert!(
+                        (reference_energy - dense_energy).abs() <= 2.0e-10 * scale,
+                        "energy mismatch size={size}, condition={condition}, step={step}: adaptive={reference_energy}, dense={dense_energy}"
+                    );
+                }
+                let final_energy = reference.energy();
+                let drift =
+                    (final_energy - initial_energy).abs() / initial_energy.abs().max(1.0e-15);
+                assert!(
+                    drift < 2.0e-9,
+                    "reference energy drift size={size}, condition={condition}: {drift}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual release-mode dense solver performance comparison"]
+    fn benchmark_contiguous_uniform_solver_against_adaptive_reference() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        const TICKS: u64 = 20;
+        eprintln!("case,size,solver,steps,elapsed_ms,final_energy");
+        for size in [32, 64, 128, 250] {
+            for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
+                let (mut reference, mut dense) = initialized_pair(size, condition);
+                let steps = TICKS * reference.substeps_per_tick() as u64;
+
+                let start = Instant::now();
+                reference.advance_substeps(steps).unwrap();
+                let reference_elapsed = start.elapsed();
+                let reference_energy = reference.energy();
+                black_box(&reference);
+
+                let start = Instant::now();
+                for _ in 0..steps {
+                    let old_energy = dense.energy();
+                    dense.advance_one_substep();
+                    let next_energy = dense.energy();
+                    let energy_scale = old_energy.abs().max(next_energy.abs()).max(1.0);
+                    assert!(
+                        next_energy >= 0.0
+                            && (next_energy - old_energy).abs() <= 2.0e-9 * energy_scale,
+                        "dense energy-accounting mismatch: before={old_energy}, after={next_energy}"
+                    );
+                }
+                let dense_elapsed = start.elapsed();
+                let dense_energy = dense.energy();
+                let scale = reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                assert!((reference_energy - dense_energy).abs() <= 2.0e-9 * scale);
+                assert_state_close(&reference, &dense, 2.0e-9);
+
+                eprintln!(
+                    "{condition},{size},adaptive_reference,{steps},{:.3},{reference_energy:.12e}",
+                    reference_elapsed.as_secs_f64() * 1000.0
+                );
+                eprintln!(
+                    "{condition},{size},contiguous_dense,{steps},{:.3},{dense_energy:.12e}",
+                    dense_elapsed.as_secs_f64() * 1000.0
+                );
+                black_box(&dense);
+            }
+        }
+    }
+
+    /// Stage-two validation: exercise the production uniform-grid stencil,
+    /// sponge update, and absorbed-energy ledger against contiguous storage.
+    /// The reference remains the production AdaptiveWaveField implementation.
+    fn advance_dense_with_sponge(
+        dense: &mut DenseUniformWave,
+        layer_width: f64,
+        maximum_damping: f64,
+    ) -> f64 {
+        let mut applied = vec![0.0; dense.current.len()];
+        dense.apply_stiffness(&dense.current, &mut applied);
+        let dt = dense.time_step;
+        let speed_squared = dense.propagation_speed.powi(2);
+        let world_width = dense.width as f64;
+        let world_height = dense.height as f64;
+        let mut next = vec![0.0; dense.current.len()];
+        let mut absorbed = 0.0;
+
+        for y in 0..dense.height {
+            for x in 0..dense.width {
+                let index = y * dense.width + x;
+                if x == 0 || y == 0 || x + 1 == dense.width || y + 1 == dense.height {
+                    continue;
+                }
+                let center_x = x as f64 + 0.5;
+                let center_y = y as f64 + 0.5;
+                let distance = center_x
+                    .min(world_width - center_x)
+                    .min(center_y)
+                    .min(world_height - center_y);
+                let damping = if distance >= layer_width {
+                    0.0
+                } else {
+                    let depth = (layer_width - distance) / layer_width;
+                    maximum_damping * depth * depth
+                };
+                let damping_step = 0.5 * damping * dt;
+                next[index] = (2.0 * dense.current[index]
+                    - (1.0 - damping_step) * dense.previous[index]
+                    - dt.powi(2) * speed_squared * applied[index] / dense.cell_area)
+                    / (1.0 + damping_step);
+                let midpoint_velocity = (next[index] - dense.previous[index]) / (2.0 * dt);
+                absorbed += dense.cell_area * damping * dt * midpoint_velocity.powi(2);
+            }
+        }
+
+        dense.previous.copy_from_slice(&dense.current);
+        dense.current = next;
+        absorbed * dense.energy_normalization
+    }
+
+    #[test]
+    fn contiguous_solver_matches_production_sponge_and_absorbed_energy_ledger() {
+        for size in [32, 64, 128] {
+            for condition in ["exact_zero", "compact_support", "gaussian_tails"] {
+                let (mut reference, mut dense) = initialized_pair(size, condition);
+                let layer_width = 8.0;
+                let maximum_damping = 0.05;
+                reference
+                    .configure_absorbing_boundary(layer_width, maximum_damping)
+                    .unwrap();
+
+                let mut dense_absorbed_total = 0.0;
+                for step in 0..80 {
+                    let dense_absorbed =
+                        advance_dense_with_sponge(&mut dense, layer_width, maximum_damping);
+                    dense_absorbed_total += dense_absorbed;
+                    reference.advance_substeps(1).unwrap();
+                    assert_state_close(&reference, &dense, 3.0e-10);
+
+                    let reference_energy = reference.energy();
+                    let dense_energy = dense.energy();
+                    let energy_scale = reference_energy.abs().max(dense_energy.abs()).max(1.0);
+                    assert!(
+                        (reference_energy - dense_energy).abs() <= 3.0e-9 * energy_scale,
+                        "sponge energy mismatch size={size}, condition={condition}, step={step}: production={reference_energy}, dense={dense_energy}"
+                    );
+
+                    let expected_absorbed = reference.absorbed_energy() - dense_absorbed_total;
+                    assert!(
+                        expected_absorbed.abs()
+                            <= 3.0e-9 * reference.absorbed_energy().abs().max(1.0),
+                        "absorbed-energy mismatch size={size}, condition={condition}, step={step}: production={}, dense increment={dense_absorbed}",
+                        reference.absorbed_energy()
+                    );
+                }
+            }
+        }
+    }
+
+    /// Test-only adaptive leaf store with contiguous state storage. Topology
+    /// keys are kept in a compact sorted vector; state values live inline
+    /// rather than in a tree node allocation per leaf.
+    #[derive(Clone)]
+    struct ContiguousAdaptiveStore {
+        width: u32,
+        height: u32,
+        base_spacing: f64,
+        max_refinement_level: u8,
+        leaves: Vec<(CellKey, AdaptiveCell)>,
+        indices: std::collections::HashMap<CellKey, usize>,
+    }
+
+    impl ContiguousAdaptiveStore {
+        fn from_reference(grid: &AdaptiveSpatialGrid) -> Self {
+            let mut store = Self {
+                width: grid.width,
+                height: grid.height,
+                base_spacing: grid.base_spacing,
+                max_refinement_level: grid.max_refinement_level,
+                leaves: grid.leaves().collect(),
+                indices: std::collections::HashMap::new(),
+            };
+            store.rebuild_indices();
+            store
+        }
+
+        fn rebuild_indices(&mut self) {
+            self.leaves.sort_unstable_by_key(|(key, _)| *key);
+            self.indices.clear();
+            self.indices.reserve(self.leaves.len());
+            for (index, (key, _)) in self.leaves.iter().enumerate() {
+                self.indices.insert(*key, index);
+            }
+        }
+
+        fn state(&self, key: CellKey) -> Option<AdaptiveCell> {
+            self.indices.get(&key).map(|index| self.leaves[*index].1)
+        }
+
+        fn bounds(&self, key: CellKey) -> CellBounds {
+            let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
+            let min_x = key.x as f64 * spacing;
+            let min_y = key.y as f64 * spacing;
+            CellBounds {
+                min_x,
+                min_y,
+                max_x: min_x + spacing,
+                max_y: min_y + spacing,
+            }
+        }
+
+        fn refine(&mut self, key: CellKey) -> Result<[CellKey; 4], AdaptiveGridError> {
+            let index = *self
+                .indices
+                .get(&key)
+                .ok_or(AdaptiveGridError::MissingCell)?;
+            let parent_state = self.leaves[index].1;
+            if key.level >= self.max_refinement_level {
+                return Err(AdaptiveGridError::MaximumRefinementReached);
+            }
+            let child_level = key.level + 1;
+            let child_x = key
+                .x
+                .checked_mul(2)
+                .ok_or(AdaptiveGridError::InvalidDimensions)?;
+            let child_y = key
+                .y
+                .checked_mul(2)
+                .ok_or(AdaptiveGridError::InvalidDimensions)?;
+            let children = [
+                CellKey {
+                    level: child_level,
+                    x: child_x,
+                    y: child_y,
+                },
+                CellKey {
+                    level: child_level,
+                    x: child_x + 1,
+                    y: child_y,
+                },
+                CellKey {
+                    level: child_level,
+                    x: child_x,
+                    y: child_y + 1,
+                },
+                CellKey {
+                    level: child_level,
+                    x: child_x + 1,
+                    y: child_y + 1,
+                },
+            ];
+            let parent_bounds = self.bounds(key);
+            for (neighbor_key, _) in &self.leaves {
+                if *neighbor_key != key
+                    && cells_share_face(parent_bounds, self.bounds(*neighbor_key))
+                    && neighbor_key.level + 1 < child_level
+                {
+                    return Err(AdaptiveGridError::UnbalancedRefinement);
+                }
+            }
+            self.leaves.swap_remove(index);
+            self.leaves
+                .extend(children.iter().map(|child| (*child, parent_state)));
+            self.rebuild_indices();
+            Ok(children)
+        }
+
+        fn coarsen(&mut self, parent: CellKey) -> Result<AdaptiveCell, AdaptiveGridError> {
+            let child_level = parent
+                .level
+                .checked_add(1)
+                .ok_or(AdaptiveGridError::IncompleteChildren)?;
+            let child_x = parent
+                .x
+                .checked_mul(2)
+                .ok_or(AdaptiveGridError::IncompleteChildren)?;
+            let child_y = parent
+                .y
+                .checked_mul(2)
+                .ok_or(AdaptiveGridError::IncompleteChildren)?;
+            let children = [
+                CellKey {
+                    level: child_level,
+                    x: child_x,
+                    y: child_y,
+                },
+                CellKey {
+                    level: child_level,
+                    x: child_x + 1,
+                    y: child_y,
+                },
+                CellKey {
+                    level: child_level,
+                    x: child_x,
+                    y: child_y + 1,
+                },
+                CellKey {
+                    level: child_level,
+                    x: child_x + 1,
+                    y: child_y + 1,
+                },
+            ];
+            let states =
+                children.map(|key| self.state(key).ok_or(AdaptiveGridError::IncompleteChildren));
+            let [a, b, c, d] = states;
+            let states = [a?, b?, c?, d?];
+            let parent_state = AdaptiveCell {
+                previous: states.iter().map(|state| state.previous).sum::<f64>() * 0.25,
+                current: states.iter().map(|state| state.current).sum::<f64>() * 0.25,
+            };
+            if !parent_state.previous.is_finite() || !parent_state.current.is_finite() {
+                return Err(AdaptiveGridError::InvalidState);
+            }
+            let parent_bounds = self.bounds(parent);
+            for (neighbor_key, _) in &self.leaves {
+                if children.contains(neighbor_key) {
+                    continue;
+                }
+                if cells_share_face(parent_bounds, self.bounds(*neighbor_key))
+                    && neighbor_key.level > parent.level + 1
+                {
+                    return Err(AdaptiveGridError::UnbalancedRefinement);
+                }
+            }
+            self.leaves.retain(|(key, _)| !children.contains(key));
+            self.leaves.push((parent, parent_state));
+            self.rebuild_indices();
+            Ok(parent_state)
+        }
+
+        fn integrated_state(&self) -> IntegratedState {
+            let mut total = IntegratedState::default();
+            for (key, state) in &self.leaves {
+                let spacing = self.base_spacing / 2_u32.pow(key.level as u32) as f64;
+                let area = spacing * spacing;
+                total.current_displacement += area * state.current;
+                total.previous_displacement += area * state.previous;
+            }
+            total
+        }
+
+        fn matches_reference(&self, grid: &AdaptiveSpatialGrid) {
+            assert_eq!(self.width, grid.width);
+            assert_eq!(self.height, grid.height);
+            assert_eq!(self.leaves.len(), grid.leaf_count());
+            for (key, state) in grid.leaves() {
+                assert_eq!(self.state(key), Some(state), "state mismatch at {key:?}");
+            }
+            let contiguous_integrals = self.integrated_state();
+            let reference_integrals = grid.integrated_state();
+            close(
+                contiguous_integrals.current_displacement,
+                reference_integrals.current_displacement,
+            );
+            close(
+                contiguous_integrals.previous_displacement,
+                reference_integrals.previous_displacement,
+            );
+        }
+    }
+
+    /// Test-only adaptive wave solver. It consumes the production adaptive
+    /// stiffness operator once, then stores its sparse rows and all evolving
+    /// state in contiguous vectors. This validates the actual mixed-level
+    /// stencil and discrete energy, not only the mesh topology.
+    struct ContiguousAdaptiveWave {
+        keys: Vec<CellKey>,
+        indices: std::collections::HashMap<CellKey, usize>,
+        rows: Vec<Vec<(usize, f64)>>,
+        areas: Vec<f64>,
+        boundaries: Vec<bool>,
+        previous: Vec<f64>,
+        current: Vec<f64>,
+        time_step: f64,
+        propagation_speed: f64,
+        energy_normalization: f64,
+    }
+
+    impl ContiguousAdaptiveWave {
+        fn from_reference(field: &AdaptiveWaveField) -> Self {
+            let keys: Vec<_> = field.grid.leaves.keys().copied().collect();
+            let indices: std::collections::HashMap<_, _> = keys
+                .iter()
+                .enumerate()
+                .map(|(index, key)| (*key, index))
+                .collect();
+            let rows = keys
+                .iter()
+                .map(|key| {
+                    field.stiffness[key]
+                        .iter()
+                        .map(|(column, coefficient)| (indices[column], *coefficient))
+                        .collect()
+                })
+                .collect();
+            let areas = keys.iter().map(|key| field.grid.cell_area(*key)).collect();
+            let boundaries = keys
+                .iter()
+                .map(|key| is_computational_boundary(&field.grid, *key))
+                .collect();
+            let previous = keys
+                .iter()
+                .map(|key| field.grid.leaves[key].previous)
+                .collect();
+            let current = keys
+                .iter()
+                .map(|key| field.grid.leaves[key].current)
+                .collect();
+            Self {
+                keys,
+                indices,
+                rows,
+                areas,
+                boundaries,
+                previous,
+                current,
+                time_step: field.time_step,
+                propagation_speed: field.propagation_speed,
+                energy_normalization: field.energy_normalization,
+            }
+        }
+
+        fn apply_stiffness(&self, values: &[f64], output: &mut [f64]) {
+            for (row_index, row) in self.rows.iter().enumerate() {
+                output[row_index] = row
+                    .iter()
+                    .map(|(column, coefficient)| coefficient * values[*column])
+                    .sum();
+            }
+        }
+
+        fn energy(&self) -> f64 {
+            let mut kinetic_sum = 0.0;
+            for index in 0..self.keys.len() {
+                let velocity = (self.current[index] - self.previous[index]) / self.time_step;
+                kinetic_sum += self.areas[index] * velocity.powi(2);
+            }
+            let mut applied_previous = vec![0.0; self.keys.len()];
+            self.apply_stiffness(&self.previous, &mut applied_previous);
+            let gradient_cross_sum = self
+                .current
+                .iter()
+                .zip(applied_previous.iter())
+                .map(|(current, applied)| current * applied)
+                .sum::<f64>();
+            0.5 * self.energy_normalization
+                * (kinetic_sum + self.propagation_speed.powi(2) * gradient_cross_sum)
+        }
+
+        fn advance_one_substep(&mut self) {
+            let mut applied = vec![0.0; self.keys.len()];
+            self.apply_stiffness(&self.current, &mut applied);
+            let dt_squared = self.time_step.powi(2);
+            let speed_squared = self.propagation_speed.powi(2);
+            let mut next = vec![0.0; self.keys.len()];
+            for index in 0..self.keys.len() {
+                if !self.boundaries[index] {
+                    next[index] = 2.0 * self.current[index]
+                        - self.previous[index]
+                        - dt_squared * speed_squared * applied[index] / self.areas[index];
+                    assert!(next[index].is_finite());
+                }
+            }
+            self.previous.copy_from_slice(&self.current);
+            self.current = next;
+        }
+
+        fn matches_reference(&self, field: &AdaptiveWaveField) {
+            assert_eq!(self.keys.len(), field.grid.leaf_count());
+            for (key, state) in field.grid.leaves() {
+                let index = self.indices[&key];
+                close(self.previous[index], state.previous);
+                close(self.current[index], state.current);
+            }
+            close(self.energy(), field.energy());
+        }
+    }
+
+    #[test]
+    fn contiguous_adaptive_solver_matches_mixed_level_stencil_state_and_energy() {
+        let mut grid = AdaptiveSpatialGrid::new(8, 8, 1.0, 3).unwrap();
+        grid.refine(CellKey {
+            level: 0,
+            x: 3,
+            y: 3,
+        })
+        .unwrap();
+        // Refine the four face-neighboring base cells as well, so the
+        // nested refinement remains 2:1 balanced at every coarse/fine face.
+        for (x, y) in [(2, 3), (4, 3), (3, 2), (3, 4)] {
+            grid.refine(CellKey { level: 0, x, y }).unwrap();
+        }
+        grid.refine(CellKey {
+            level: 1,
+            x: 6,
+            y: 6,
+        })
+        .unwrap();
+        for (key, _) in grid.leaves().collect::<Vec<_>>() {
+            let bounds = grid.cell_bounds(key).unwrap();
+            let center_x = 0.5 * (bounds.min_x + bounds.max_x);
+            let center_y = 0.5 * (bounds.min_y + bounds.max_y);
+            let boundary = is_computational_boundary(&grid, key);
+            let phase = 0.43 * center_x - 0.29 * center_y;
+            let envelope = (-((center_x - 4.0).powi(2) + (center_y - 4.0).powi(2)) / 8.0).exp();
+            grid.set_state(
+                key,
+                AdaptiveCell {
+                    previous: if boundary {
+                        0.0
+                    } else {
+                        envelope * (phase + 0.11).cos()
+                    },
+                    current: if boundary {
+                        0.0
+                    } else {
+                        envelope * phase.cos()
+                    },
+                },
+            )
+            .unwrap();
+        }
+
+        let mut reference = AdaptiveWaveField::new(grid, 0.3, 1.7).unwrap();
+        let mut contiguous = ContiguousAdaptiveWave::from_reference(&reference);
+        assert!(reference.grid.leaves.keys().any(|key| key.level == 0));
+        assert!(reference.grid.leaves.keys().any(|key| key.level == 1));
+        assert!(reference.grid.leaves.keys().any(|key| key.level == 2));
+        contiguous.matches_reference(&reference);
+
+        for step in 0..120 {
+            contiguous.advance_one_substep();
+            reference.advance_substeps(1).unwrap();
+            contiguous.matches_reference(&reference);
+            assert!(
+                contiguous.energy().is_finite(),
+                "non-finite energy after mixed-level step {step}"
+            );
+        }
+    }
+
+    #[test]
+    fn contiguous_adaptive_store_matches_reference_refinement_and_coarsening() {
+        let mut reference = AdaptiveSpatialGrid::new(8, 8, 1.0, 3).unwrap();
+        for (key, _) in reference.leaves().collect::<Vec<_>>() {
+            let value = (key.x as f64 * 0.17 + key.y as f64 * 0.31).sin();
+            reference
+                .set_state(
+                    key,
+                    AdaptiveCell {
+                        previous: value * 0.7,
+                        current: value,
+                    },
+                )
+                .unwrap();
+        }
+        let mut contiguous = ContiguousAdaptiveStore::from_reference(&reference);
+        contiguous.matches_reference(&reference);
+
+        let root = CellKey {
+            level: 0,
+            x: 3,
+            y: 3,
+        };
+        assert_eq!(contiguous.refine(root), reference.refine(root));
+        contiguous.matches_reference(&reference);
+
+        let nested_parent = CellKey {
+            level: 1,
+            x: 6,
+            y: 6,
+        };
+        assert_eq!(
+            contiguous.refine(nested_parent),
+            reference.refine(nested_parent)
+        );
+        contiguous.matches_reference(&reference);
+
+        let sibling_parent = CellKey {
+            level: 1,
+            x: 7,
+            y: 6,
+        };
+        assert_eq!(
+            contiguous.refine(sibling_parent),
+            reference.refine(sibling_parent)
+        );
+        contiguous.matches_reference(&reference);
+
+        let invalid_parent = CellKey {
+            level: 0,
+            x: 3,
+            y: 3,
+        };
+        assert_eq!(
+            contiguous.coarsen(invalid_parent),
+            reference.coarsen(invalid_parent)
+        );
+        contiguous.matches_reference(&reference);
+
+        assert_eq!(
+            contiguous.coarsen(nested_parent),
+            reference.coarsen(nested_parent)
+        );
+        contiguous.matches_reference(&reference);
+        assert_eq!(
+            contiguous.coarsen(sibling_parent),
+            reference.coarsen(sibling_parent)
+        );
+        contiguous.matches_reference(&reference);
+        assert_eq!(contiguous.coarsen(root), reference.coarsen(root));
+        contiguous.matches_reference(&reference);
     }
 }

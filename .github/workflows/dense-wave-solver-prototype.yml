@@ -1,0 +1,34 @@
+name: Dense Wave Solver Prototype
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - 'movement/dense-wave-solver-prototype'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate contiguous solver state and energy parity
+        run: cargo test --release --locked --lib contiguous_uniform_solver_matches_reference_state_and_energy -- --nocapture
+      - name: Validate production sponge and absorbed-energy parity
+        run: cargo test --release --locked --lib contiguous_solver_matches_production_sponge_and_absorbed_energy_ledger -- --nocapture
+      - name: Validate adaptive refinement and coarsening with outflow accounting
+        run: cargo test --release --locked --lib regridding_preserves_energy_and_outflow_ledger_during_absorbing_evolution -- --nocapture
+      - name: Validate contiguous adaptive stencil, state, and energy parity
+        run: cargo test --release --locked --lib contiguous_adaptive_solver_matches_mixed_level_stencil_state_and_energy -- --nocapture
+      - name: Validate contiguous adaptive leaf storage and topology transitions
+        run: cargo test --release --locked --lib contiguous_adaptive_store_matches_reference_refinement_and_coarsening -- --nocapture
+      - name: Benchmark contiguous solver against adaptive reference
+        timeout-minutes: 15
+        run: cargo test --release --locked --lib benchmark_contiguous_uniform_solver_against_adaptive_reference -- --ignored --nocapture
