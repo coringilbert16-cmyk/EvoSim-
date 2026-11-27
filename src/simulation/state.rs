@@ -224,6 +224,11 @@ pub(crate) struct EnergyLedger {
     /// Energy received from explicit external sources, distinct from bond release.
     #[serde(default)]
     pub(crate) total_external_energy_input: f64,
+    /// Cumulative energy transferred from an already-modeled environmental
+    /// field directly into chemical reaction settlement. This is an internal
+    /// transfer, not external input or a usable-energy store.
+    #[serde(default)]
+    pub(crate) total_field_energy_transferred_to_chemistry: f64,
     /// Guards the simulation's one-time initial-condition energy grant.
     #[serde(default)]
     pub(crate) initial_condition_energy_settled: bool,
