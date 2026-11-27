@@ -248,7 +248,9 @@ impl EnvironmentalEnergyProvider for ClosedWaveBoundaryFundingSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::energy_ledger::{settle_field_funded_reaction, EnergyReason, ReactionEnergyBalance};
+    use crate::energy_ledger::{
+        settle_field_funded_reaction, EnergyReason, ReactionEnergyBalance,
+    };
     use crate::state::EnergyLedger;
 
     fn energized_field() -> ClosedBoundaryWaveField {
