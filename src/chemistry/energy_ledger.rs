@@ -2600,9 +2600,12 @@ mod environmental_funding_contract_tests {
             EnergyReason::Combine,
         ));
         assert_eq!(source.available, 5.0);
-        assert_eq!(source.committed, 3.0);
+        assert_eq!(source.committed, balance.required_external_input);
         assert!(!source.pending);
-        assert_eq!(ledger.total_field_energy_transferred_to_chemistry, 3.0);
+        assert_eq!(
+            ledger.total_field_energy_transferred_to_chemistry,
+            balance.required_external_input
+        );
         assert_eq!(ledger.total_structural_energy_delta, 2.0);
         assert_eq!(ledger.total_work_expended, 0.5);
         assert_eq!(ledger.total_heat_dissipated, 0.5);
