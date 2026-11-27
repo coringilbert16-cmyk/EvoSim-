@@ -810,7 +810,8 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
         let mut next_work = self.total_work_expended + transaction.work_expended;
         let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
-        if next_work.is_finite() && next_work - self.total_work_expended > transaction.work_expended {
+        if next_work.is_finite() && next_work - self.total_work_expended > transaction.work_expended
+        {
             next_work = f64::from_bits(next_work.to_bits() - 1);
         }
         if next_heat.is_finite()
