@@ -287,7 +287,10 @@ mod tests {
             ledger.total_field_energy_transferred_to_chemistry,
             requested
         );
-        assert_eq!(ledger.total_structural_energy_delta, balance.net_reaction_change);
+        assert_eq!(
+            ledger.total_structural_energy_delta,
+            balance.net_reaction_change
+        );
         assert_eq!(ledger.total_work_expended, balance.physical_work);
         assert_eq!(ledger.total_heat_dissipated, balance.dissipated_heat);
         assert_eq!(ledger.total_external_energy_input, 0.0);
