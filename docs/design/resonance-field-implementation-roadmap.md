@@ -1,3 +1,27 @@
+# Current implementation status — 2026-11-27 (authoritative update)
+
+This status block supersedes older phase sequencing and integration directions later in this document wherever they conflict. The original sections remain historical design/validation records; follow this current order rather than reviving stale gates.
+
+- **Phase 0 — baseline:** complete.
+- **Phase 1 — physical equations and energy contracts:** complete.
+- **Phase 2 — independent wave solver foundations:** complete and formally closed. Do not repeat propagation, stability, interference, or broad convergence work.
+- **Phase 3C — ambient and numerical foundations:** completed/accepted. Ambient energy schedule and accounting, adaptive numerical operator, and dense-solver performance comparison are established. The dense finite closed-world reference uses the approved reflecting, zero-normal-flux boundary. PR #451 was merged after exact-head CI passed (run 45857973001).
+- **Phase 3D — field-to-material transfer:** active, isolated from production ticks. PR #452 consolidates deterministic local field queries, exposed-boundary incoming-flux measurement with multi-body occlusion, and staged conservative funding/settlement. Its latest formatting correction is being checked by exact-head CI. No production chemistry call site or live-tick lifecycle is connected.
+- **Chemistry:** continues independently under existing rules and energy contracts. Do not hold unrelated chemistry work for resonance coefficient research.
+- **Production integration:** only after the isolated field-to-material transfer contract is accepted. Keep the resonance field detached until measured energy, receiver accounting, commit, and cancel/reject behavior are all demonstrated through one conservative path.
+- **Optimization/migration:** after integration correctness, using the measured dense/reference performance result; no adaptive live path, PML/outflow exploration, or repeated numerical validation without a demonstrated failure.
+
+## Remaining Phase 3D work (focused, not a new validation program)
+
+1. Finish exact-head CI for #452 and review its consolidated diff against the already-approved physics and accounting contracts.
+2. Close any real interface gaps that block a supported material from receiving measured incident energy conservatively. Existing chemistry funding/transaction infrastructure is the integration target; do not add a parallel ledger.
+3. Keep fixture response coefficients explicitly non-empirical. Do not invent material calibration values. Calibration is required only for a material response that actually needs those coefficients—not as a blanket blocker to chemistry progress.
+4. Update this roadmap and README once #452 is accepted; then make the narrowest supported chemistry integration, with production-tick integration separately gated by demonstrated ownership/lifecycle needs.
+
+The target is completion of the existing Phase 3 transfer milestone, not expansion into another solver or exploratory research phase.
+
+---
+
 # Resonance Field — Formal Implementation Roadmap
 
 **Status:** Approved architectural direction; implementation roadmap. The continuous, time-propagating wave field is the target architecture. This document is the required reference for every future resonance-field investigation, issue, branch, pull request, implementation, and validation run.
