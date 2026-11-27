@@ -1,24 +1,27 @@
-# Current implementation status — 2026-11-27 (authoritative update)
+# Current implementation status — 2026-11-28 (authoritative update)
 
-This status block supersedes older phase sequencing and integration directions later in this document wherever they conflict. The original sections remain historical design/validation records; follow this current order rather than reviving stale gates.
+This status block supersedes older phase sequencing and integration directions later in this document wherever they conflict. Older sections remain design/history records; follow this current status and sequence rather than reviving superseded implementation paths.
 
 - **Phase 0 — baseline:** complete.
 - **Phase 1 — physical equations and energy contracts:** complete.
 - **Phase 2 — independent wave solver foundations:** complete and formally closed. Do not repeat propagation, stability, interference, or broad convergence work.
-- **Phase 3C — ambient and numerical foundations:** completed/accepted. Ambient energy schedule and accounting, adaptive numerical operator, and dense-solver performance comparison are established. The dense finite closed-world reference uses the approved reflecting, zero-normal-flux boundary. PR #451 was merged after exact-head CI passed (run 45857973001).
-- **Phase 3D — field-to-material transfer:** active, isolated from production ticks. PR #452 consolidates deterministic local field queries, exposed-boundary incoming-flux measurement with multi-body occlusion, and staged conservative funding/settlement. Its latest formatting correction is being checked by exact-head CI. No production chemistry call site or live-tick lifecycle is connected.
+- **Phase 3C — ambient and numerical foundations:** complete/accepted. The approved ambient energy schedule and accounting, dense finite solver, reflecting zero-normal-flux boundary, and matched-workload performance evidence are established. PR #451 is merged; the dense solver is the reference candidate. Adaptive live-field expansion and PML/outflow exploration are not active work.
+- **Phase 3D — field-to-material transfer foundations:** PR #452 is merged at `77dff1a`. Deterministic local field queries, exposed-boundary incoming-flux measurement with multi-body occlusion, local field↔matter transfer, and staged funding commit/cancel through the existing chemistry funding contract are implemented and covered by isolated tests.
 - **Chemistry:** continues independently under existing rules and energy contracts. Do not hold unrelated chemistry work for resonance coefficient research.
-- **Production integration:** only after the isolated field-to-material transfer contract is accepted. Keep the resonance field detached until measured energy, receiver accounting, commit, and cancel/reject behavior are all demonstrated through one conservative path.
-- **Optimization/migration:** after integration correctness, using the measured dense/reference performance result; no adaptive live path, PML/outflow exploration, or repeated numerical validation without a demonstrated failure.
+- **Production boundary:** the resonance field is still detached from production simulation ticks and chemistry call sites. The merged transfer adapter is an isolated reference; it is not yet a live chemical reaction integration.
+- **Next Phase 3D milestone:** exercise one existing chemistry reaction-energy transaction through the staged field funding adapter in an isolated end-to-end contract test. Prove that measured incident energy bounds the request, the exact field debit equals the accepted reaction input, and rejection/cancellation leaves both field and chemistry state unchanged. Reuse existing reaction and funding machinery; do not add a parallel ledger.
+- **Material response:** no real material coefficients are inferred from test fixtures. A test-only response may prove transaction plumbing, but production material response requires justified calibration for the particular material/state/frequency range. This is not a blanket blocker to the isolated transaction bridge.
+- **After the isolated reaction bridge:** complete a justified reciprocal matter-to-field interaction if required by the material mechanism; then review whether any persistent field/tick ownership is needed. Production tick integration remains a separate, explicit gate.
+- **Optimization/migration:** only after a demonstrated correctness need and measured workload. Do not reopen completed solver validation or revive the superseded adaptive live path.
 
-## Remaining Phase 3D work (focused, not a new validation program)
+## Remaining Phase 3D work (focused)
 
-1. Finish exact-head CI for #452 and review its consolidated diff against the already-approved physics and accounting contracts.
-2. Close any real interface gaps that block a supported material from receiving measured incident energy conservatively. Existing chemistry funding/transaction infrastructure is the integration target; do not add a parallel ledger.
-3. Keep fixture response coefficients explicitly non-empirical. Do not invent material calibration values. Calibration is required only for a material response that actually needs those coefficients—not as a blanket blocker to chemistry progress.
-4. Update this roadmap and README once #452 is accepted; then make the narrowest supported chemistry integration, with production-tick integration separately gated by demonstrated ownership/lifecycle needs.
+1. Add one isolated end-to-end chemistry transaction test using the existing `ReactionEnergyBalance`, `EnvironmentalEnergyProvider`, and merged closed-wave funding adapter. Keep it detached from production ticks.
+2. Verify exact conservation and atomic behavior across successful commit, insufficient local field energy, stale/rejected reaction, and cancellation. No new energy holder or ledger.
+3. Keep physical material response separate from transaction plumbing. Do not promote idealized test coefficients into material definitions; obtain justified calibration only for a material response that is actually being enabled.
+4. Reassess reciprocal matter-to-field coupling and persistent field lifecycle only after the one-way chemistry transaction path is proven. Update this roadmap and README when that milestone lands.
 
-The target is completion of the existing Phase 3 transfer milestone, not expansion into another solver or exploratory research phase.
+The target remains completion of the existing Phase 3 transfer milestone, not expansion into another solver or exploratory research phase.
 
 ---
 
