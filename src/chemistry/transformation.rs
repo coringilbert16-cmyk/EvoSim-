@@ -869,6 +869,9 @@ impl Simulation {
                     - original_ledger.total_structural_energy_delta,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
+                total_field_energy_transferred_to_chemistry:
+                    trial_ledger.total_field_energy_transferred_to_chemistry
+                        - original_ledger.total_field_energy_transferred_to_chemistry,
                 total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
                     - original_ledger.total_world_tone_energy_unabsorbed,
                 total_world_tone_energy_escaped: trial_ledger.total_world_tone_energy_escaped
@@ -1473,6 +1476,7 @@ mod tests {
             total_potential_energy_released: 1.25,
             total_structural_energy_delta: 2.5,
             total_external_energy_input: 3.75,
+            total_field_energy_transferred_to_chemistry: 17.125,
             initial_condition_energy_settled: true,
             total_ambient_energy_generated: 0.0,
             total_ambient_energy_withdrawn: 0.0,
@@ -1497,6 +1501,8 @@ mod tests {
             total_potential_energy_released: before_ledger.total_potential_energy_released + 0.2,
             total_structural_energy_delta: before_ledger.total_structural_energy_delta - 0.3,
             total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
+            total_field_energy_transferred_to_chemistry:
+                before_ledger.total_field_energy_transferred_to_chemistry + 1.4,
             initial_condition_energy_settled: false,
             total_ambient_energy_generated: 0.0,
             total_ambient_energy_withdrawn: 0.0,
