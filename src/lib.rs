@@ -30,6 +30,11 @@ mod source;
 #[allow(dead_code)]
 mod reference_wave_solver;
 
+// Isolated dense uniform-grid wave solver with finite reflecting boundaries.
+#[path = "physics/closed_boundary_wave_solver.rs"]
+#[allow(dead_code)]
+mod closed_boundary_wave_solver;
+
 // Isolated Phase 3B Candidate B reciprocal source/field comparator.
 #[path = "physics/reciprocal_source_field.rs"]
 #[allow(dead_code)]
