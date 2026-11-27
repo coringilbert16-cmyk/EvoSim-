@@ -718,4 +718,5 @@ mod tests {
                     .sum::<f64>(),
             "the nearer receiver should occlude part of the farther receiver's measured boundary"
         );
-    }}
+     }
+}
