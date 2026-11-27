@@ -780,9 +780,7 @@ pub(crate) fn settle_field_funded_reaction<P: EnvironmentalEnergyProvider>(
     }
 
     let mut staged_ledger = *ledger;
-    if !staged_ledger
-        .settle_field_funded_reaction(transaction, staged_funding.transferred)
-    {
+    if !staged_ledger.settle_field_funded_reaction(transaction, staged_funding.transferred) {
         provider.cancel_funding(staged_funding.staged_source);
         return false;
     }
@@ -812,9 +810,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
         let mut next_work = self.total_work_expended + transaction.work_expended;
         let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
-        if next_work.is_finite()
-            && next_work - self.total_work_expended > transaction.work_expended
-        {
+        if next_work.is_finite() && next_work - self.total_work_expended > transaction.work_expended {
             next_work = f64::from_bits(next_work.to_bits() - 1);
         }
         if next_heat.is_finite()
