@@ -8,10 +8,8 @@ use crate::closed_boundary_wave_solver::{
     ClosedBoundaryWaveField, ClosedWaveError, MatterEnergyAccount,
 };
 use crate::energy_ledger::{
-    settle_field_funded_reaction, EnergyReason, EnvironmentalEnergyProvider,
-    EnvironmentalEnergyRequest, ReactionEnergyBalance, StagedEnvironmentalFunding,
+    EnvironmentalEnergyProvider, EnvironmentalEnergyRequest, StagedEnvironmentalFunding,
 };
-use crate::state::EnergyLedger;
 
 /// A local field-energy source positioned at one interaction point.
 ///
@@ -250,6 +248,8 @@ impl EnvironmentalEnergyProvider for ClosedWaveBoundaryFundingSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::energy_ledger::{settle_field_funded_reaction, EnergyReason, ReactionEnergyBalance};
+    use crate::state::EnergyLedger;
 
     fn energized_field() -> ClosedBoundaryWaveField {
         let mut field = ClosedBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
