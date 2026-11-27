@@ -2326,25 +2326,27 @@ impl<S> StagedEnvironmentalFunding<S> {
 
 /// Contract for a physical environmental energy source used by nonliving
 /// chemistry. Implementations must:
-/// - return a staged source state that reflects exactly the reported transfer;
-/// - debit the source, not mint a generic usable-energy balance;
-/// - leave live source state unchanged during staging; and
-/// - make commit infallible after a successful stage, so reaction and source
-///   state can be committed together after all other validation succeeds.
+/// - stage an exact source debit without changing the live energy state;
+/// - reserve the source so a second pending stage cannot promise the same energy;
+/// - commit the staged debit infallibly after the reaction is ready; and
+/// - support cancellation when reaction validation or staging fails.
 ///
-/// The contract deliberately says nothing about the source's physical model.
-/// A future resonance-field adapter can implement it using a local field
-/// transfer; tests may use a controlled source without asserting that it is
-/// the final world-energy model.
+/// A successful stage must be followed by exactly one commit or cancellation.
+/// Reservation bookkeeping may change during staging, but the live source energy
+/// must not change. The contract deliberately says nothing about the source's
+/// physical model; a resonance-field adapter can implement it using local field
+/// energy, without introducing a generic usable-energy pool.
 pub(crate) trait EnvironmentalEnergyProvider {
     type StagedSource;
 
     fn stage_funding(
-        &self,
+        &mut self,
         request: EnvironmentalEnergyRequest,
     ) -> Option<StagedEnvironmentalFunding<Self::StagedSource>>;
 
     fn commit_funding(&mut self, staged_source: Self::StagedSource);
+
+    fn cancel_funding(&mut self, staged_source: Self::StagedSource);
 }
 
 #[cfg(test)]
@@ -2355,24 +2357,35 @@ mod environmental_funding_contract_tests {
     struct TestSource {
         available: f64,
         committed: f64,
+        pending: bool,
     }
 
     impl EnvironmentalEnergyProvider for TestSource {
         type StagedSource = TestSource;
 
         fn stage_funding(
-            &self,
+            &mut self,
             request: EnvironmentalEnergyRequest,
         ) -> Option<StagedEnvironmentalFunding<Self::StagedSource>> {
+            if self.pending {
+                return None;
+            }
             let transferred = request.required_external_input.min(self.available);
             let mut staged = self.clone();
             staged.available -= transferred;
             staged.committed += transferred;
-            StagedEnvironmentalFunding::new(request, transferred, staged)
+            staged.pending = false;
+            let funding = StagedEnvironmentalFunding::new(request, transferred, staged)?;
+            self.pending = true;
+            Some(funding)
         }
 
         fn commit_funding(&mut self, staged_source: Self::StagedSource) {
             *self = staged_source;
+        }
+
+        fn cancel_funding(&mut self, _staged_source: Self::StagedSource) {
+            self.pending = false;
         }
     }
 
@@ -2381,6 +2394,7 @@ mod environmental_funding_contract_tests {
         let mut source = TestSource {
             available: 8.0,
             committed: 0.0,
+            pending: false,
         };
         let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
         let staged = source.stage_funding(request).unwrap();
@@ -2389,17 +2403,20 @@ mod environmental_funding_contract_tests {
         assert_eq!(staged.transferred, 3.5);
         assert_eq!(source.available, 8.0);
         assert_eq!(source.committed, 0.0);
+        assert!(source.pending);
 
         source.commit_funding(staged.staged_source);
         assert_eq!(source.available, 4.5);
         assert_eq!(source.committed, 3.5);
+        assert!(!source.pending);
     }
 
     #[test]
     fn insufficient_staged_transfer_cannot_authorize_reaction_commit() {
-        let source = TestSource {
+        let mut source = TestSource {
             available: 2.0,
             committed: 0.0,
+            pending: false,
         };
         let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
         let staged = source.stage_funding(request).unwrap();
@@ -2407,19 +2424,41 @@ mod environmental_funding_contract_tests {
         assert!(!staged.satisfies_request());
         assert_eq!(source.available, 2.0);
         assert_eq!(source.committed, 0.0);
+        source.cancel_funding(staged.staged_source);
+        assert!(!source.pending);
+    }
+
+    #[test]
+    fn a_pending_stage_reserves_the_source_until_commit_or_cancel() {
+        let mut source = TestSource {
+            available: 8.0,
+            committed: 0.0,
+            pending: false,
+        };
+        let request = EnvironmentalEnergyRequest::new(3.5).unwrap();
+        let staged = source.stage_funding(request).unwrap();
+
+        assert!(source.stage_funding(request).is_none());
+        source.cancel_funding(staged.staged_source);
+        let retry = source.stage_funding(request).unwrap();
+        assert!(retry.satisfies_request());
+        source.commit_funding(retry.staged_source);
+        assert_eq!(source.available, 4.5);
     }
 
     #[test]
     fn zero_deficit_requires_no_environmental_transfer() {
-        let source = TestSource {
+        let mut source = TestSource {
             available: 0.0,
             committed: 0.0,
+            pending: false,
         };
         let request = EnvironmentalEnergyRequest::new(0.0).unwrap();
         let staged = source.stage_funding(request).unwrap();
 
         assert!(staged.satisfies_request());
         assert_eq!(staged.transferred, 0.0);
+        source.commit_funding(staged.staged_source);
     }
 
     #[test]

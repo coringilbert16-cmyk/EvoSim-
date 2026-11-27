@@ -35,6 +35,26 @@ mod reference_wave_solver;
 #[allow(dead_code)]
 mod closed_boundary_wave_solver;
 
+// Boundary flux integration over geometry-provided exposed intervals.
+#[path = "physics/closed_wave_boundary_flux.rs"]
+#[allow(dead_code)]
+mod closed_wave_boundary_flux;
+
+// Isolated phase-preserving spectral reconstruction of incident boundary flux.
+#[path = "physics/closed_wave_spectral_estimator.rs"]
+#[allow(dead_code)]
+mod closed_wave_spectral_estimator;
+
+// Staged local field-energy funding adapter; remains isolated from live chemistry.
+#[path = "physics/closed_wave_field_funding.rs"]
+#[allow(dead_code)]
+mod closed_wave_field_funding;
+
+// Isolated passive chemical-boundary energy partition; no geometry or chemistry connection.
+#[path = "physics/chemical_structure_coupling.rs"]
+#[allow(dead_code)]
+mod chemical_structure_coupling;
+
 // Isolated Phase 3B Candidate B reciprocal source/field comparator.
 #[path = "physics/reciprocal_source_field.rs"]
 #[allow(dead_code)]
