@@ -1310,8 +1310,8 @@ impl OpenBoundaryWaveField {
 
     /// Advance while reconciling the ambient carrier, spatial disturbance,
     /// cross-energy, and radiating-boundary transfer at every leapfrog step.
-    /// The signed world-drive term is the residual required by the discrete
-    /// combined balance; it is retained separately from the boundary outflow.
+    /// The signed world-drive term is integrated from K * u_ambient,tt *
+    /// (u_ambient,t + u_disturbance,t) over the accounting area and substep.
     pub(crate) fn advance_substeps_with_ambient(
         &mut self,
         steps: u64,
