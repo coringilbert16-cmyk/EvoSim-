@@ -902,6 +902,9 @@ impl Simulation {
                 total_ambient_energy_withdrawn: 0.0,
                 total_ambient_energy_held: 0.0,
                 initial_ambient_energy_held: 0.0,
+                initial_combined_field_energy_held: 0.0,
+                initial_combined_field_outflow_energy: 0.0,
+                initial_combined_field_world_drive_work: 0.0,
             };
             if let Some((cell_index, source)) = _attempt.environmental_source.as_ref() {
                 let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
@@ -1483,6 +1486,9 @@ mod tests {
             total_ambient_energy_withdrawn: 0.0,
             total_ambient_energy_held: 0.0,
             initial_ambient_energy_held: 0.0,
+            initial_combined_field_energy_held: 0.0,
+            initial_combined_field_outflow_energy: 0.0,
+            initial_combined_field_world_drive_work: 0.0,
             total_world_tone_energy_unabsorbed: 4.125,
             total_world_tone_energy_escaped: 5.25,
             total_usable_energy_gained: 6.5,
@@ -1510,6 +1516,9 @@ mod tests {
             total_ambient_energy_withdrawn: 0.0,
             total_ambient_energy_held: 0.0,
             initial_ambient_energy_held: 0.0,
+            initial_combined_field_energy_held: 0.0,
+            initial_combined_field_outflow_energy: 0.0,
+            initial_combined_field_world_drive_work: 0.0,
             total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed
                 + 0.5,
             total_world_tone_energy_escaped: before_ledger.total_world_tone_energy_escaped + 0.6,
