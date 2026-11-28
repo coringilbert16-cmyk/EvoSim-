@@ -3585,11 +3585,8 @@ mod combined_world_energy_inventory_tests {
         simulation.ambient_energy =
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
                 .expect("test ambient mode must initialize");
-        simulation.environment.field = ActiveMaterialField::new(
-            17.0,
-            13.0,
-            crate::environment::DEFAULT_CELL_SIZE,
-        );
+        simulation.environment.field =
+            ActiveMaterialField::new(17.0, 13.0, crate::environment::DEFAULT_CELL_SIZE);
         let opening_ambient_energy = simulation.ambient_energy.sample().total_energy;
         simulation.energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
         simulation.energy_ledger.total_ambient_energy_held = opening_ambient_energy;
