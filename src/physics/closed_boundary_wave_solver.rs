@@ -1325,7 +1325,6 @@ impl OpenBoundaryWaveField {
         let mut world_drive_work = 0.0;
 
         for _ in 0..steps {
-            let before = self.combined_energy(ambient)?;
             let energy_before = self.inner.energy();
             let next_velocity_time =
                 (self.inner.substeps_elapsed as f64 + 0.5)
@@ -1335,7 +1334,6 @@ impl OpenBoundaryWaveField {
                 .map_err(|_| ClosedWaveError::InvalidState)?;
             let cross_outflow =
                 self.inner.advance_one_substep_open(ambient_after.carrier_velocity)?;
-            let after = self.combined_energy(ambient)?;
             let step_disturbance_outflow = energy_before - self.inner.energy();
             let step_combined_outflow = step_disturbance_outflow + cross_outflow;
             let disturbance_velocity_integral = self
