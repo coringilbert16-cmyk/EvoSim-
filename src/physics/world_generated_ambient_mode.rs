@@ -135,6 +135,7 @@ impl AmbientModeConfig {
             total_energy,
             amplitude,
             amplitude_velocity,
+            amplitude_acceleration,
             field_normalization: self.field_normalization,
             angular_frequency,
             carrier_phase_radians,
@@ -267,6 +268,8 @@ pub(crate) struct AmbientModeSample {
     pub(crate) total_energy: f64,
     pub(crate) amplitude: f64,
     pub(crate) amplitude_velocity: f64,
+    /// Second derivative of the slowly varying envelope amplitude.
+    pub(crate) amplitude_acceleration: f64,
     pub(crate) field_normalization: f64,
     pub(crate) angular_frequency: f64,
     pub(crate) carrier_phase_radians: f64,
@@ -345,7 +348,6 @@ impl WorldGeneratedAmbientMode {
 
         let day_tick = logical_time_ticks.rem_euclid(AMBIENT_DAY_TICKS as f64);
         let lower_index = day_tick.floor() as usize;
-        let upper_index = (lower_index + 1) % AMBIENT_DAY_TICKS as usize;
         let fraction = day_tick - lower_index as f64;
         let (amplitude, amplitude_velocity, amplitude_acceleration) =
             self.trajectory.sample_at_fraction(lower_index, fraction);
