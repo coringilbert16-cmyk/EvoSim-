@@ -38,7 +38,7 @@ impl AmbientModeConfig {
     /// Creates the reference ambient mode for a finite world-accounting area.
     ///
     /// world_area is an accounting footprint only, not a propagation boundary.
-    /// field_normalization is the positive K in the oscillator relation
+    /// field_normalization is the positive K in the wave-energy relation
     /// e = K * omega^2 * amplitude^2 / 2.
     pub(crate) fn new(
         world_area: f64,
