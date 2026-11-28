@@ -3392,3 +3392,64 @@ mod live_ambient_energy_contract_tests {
         );
     }
 }
+
+
+#[cfg(test)]
+mod persistent_wave_field_ownership_tests {
+    use super::*;
+
+    #[test]
+    fn environment_owned_wave_field_survives_clone_and_serialization() {
+        let mut simulation = Simulation::new(45801, 10.0);
+        let mut field =
+            crate::closed_boundary_wave_solver::ClosedBoundaryWaveField::new(
+                5, 5, 1.0, 0.2, 2, 2.0,
+            )
+            .expect("test wave field configuration must be valid");
+        field
+            .advance_ticks(3)
+            .expect("test field must advance deterministically");
+        simulation.environment.closed_wave_field = Some(field);
+
+        let cloned = simulation.clone();
+        let cloned_time = cloned
+            .environment
+            .closed_wave_field
+            .as_ref()
+            .expect("cloned environment must retain its wave field")
+            .logical_time_ticks();
+        assert_eq!(cloned_time, 3.0);
+
+        let encoded = serde_json::to_string(&simulation.environment)
+            .expect("environment with wave state must serialize");
+        let restored: crate::state::Environment = serde_json::from_str(&encoded)
+            .expect("environment with wave state must deserialize");
+        let restored_time = restored
+            .closed_wave_field
+            .as_ref()
+            .expect("restored environment must retain its wave field")
+            .logical_time_ticks();
+        assert_eq!(restored_time, 3.0);
+    }
+
+    #[test]
+    fn installed_wave_field_advances_one_logical_tick_with_environment_tick() {
+        let mut simulation = Simulation::new(45802, 10.0);
+        simulation.environment.closed_wave_field = Some(
+            crate::closed_boundary_wave_solver::ClosedBoundaryWaveField::new(
+                5, 5, 1.0, 0.2, 2, 2.0,
+            )
+            .expect("test wave field configuration must be valid"),
+        );
+
+        simulation.step_environmental_chemistry_with_transport_reuse::<true>();
+
+        let field_time = simulation
+            .environment
+            .closed_wave_field
+            .as_ref()
+            .expect("installed wave field must remain owned")
+            .logical_time_ticks();
+        assert_eq!(field_time, 1.0);
+    }
+}
