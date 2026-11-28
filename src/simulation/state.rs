@@ -244,6 +244,15 @@ pub(crate) struct EnergyLedger {
     /// Opening ambient inventory; excluded from generated-energy totals.
     #[serde(default)]
     pub(crate) initial_ambient_energy_held: f64,
+    /// Combined field inventory at the moment the spatial field joins this world.
+    #[serde(default)]
+    pub(crate) initial_combined_field_energy_held: f64,
+    /// Cumulative combined outflow at field installation; later snapshots use the delta.
+    #[serde(default)]
+    pub(crate) initial_combined_field_outflow_energy: f64,
+    /// Cumulative world-drive work at field installation; later snapshots use the delta.
+    #[serde(default)]
+    pub(crate) initial_combined_field_world_drive_work: f64,
     /// Cumulative world-tone energy that was incident on exposed material but
     /// not absorbed. This is throughput telemetry, not stored energy or an
     /// inventory term; the remainder still needs explicit propagation/escape handling.

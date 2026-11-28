@@ -1291,6 +1291,25 @@ impl OpenBoundaryWaveField {
         self.advance_substeps(steps)
     }
 
+    /// Physical area represented by this field grid. It must match the
+    /// finite environment accounting area before the field is installed.
+    pub(crate) fn accounting_area(&self) -> f64 {
+        self.inner.width as f64 * self.inner.height as f64 * self.inner.spacing.powi(2)
+    }
+
+    /// Advance whole logical ticks with ambient carrier, combined cross-energy
+    /// outflow, and discrete world-drive work accounted at each leapfrog step.
+    pub(crate) fn advance_ticks_with_ambient(
+        &mut self,
+        ticks: u64,
+        ambient: &crate::world_generated_ambient_mode::WorldGeneratedAmbientMode,
+    ) -> Result<(), ClosedWaveError> {
+        let steps = ticks
+            .checked_mul(self.inner.substeps_per_tick as u64)
+            .ok_or(ClosedWaveError::CounterOverflow)?;
+        self.advance_substeps_with_ambient(steps, ambient)
+    }
+
     pub(crate) fn advance_substeps(&mut self, steps: u64) -> Result<(), ClosedWaveError> {
         self.inner
             .substeps_elapsed
