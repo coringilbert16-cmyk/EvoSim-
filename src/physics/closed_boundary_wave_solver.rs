@@ -1118,7 +1118,7 @@ impl OpenBoundaryWaveField {
     ///
     /// The ambient carrier velocity and kinetic energy density must be
     /// sampled at velocity_time_ticks(). The ambient mode is uniform, so its
-    /// oscillator energy is multiplied by the finite accounting area.
+    /// wave kinetic energy is multiplied by the finite accounting area.
     /// The cross term is integrated against the discrete disturbance velocity
     /// using the same cell-area quadrature as the solver's kinetic invariant.
     pub(crate) fn combined_energy_at_velocity_center(
@@ -1128,8 +1128,8 @@ impl OpenBoundaryWaveField {
         ambient_field_normalization: f64,
     ) -> Result<CombinedFieldEnergy, ClosedWaveError> {
         if !ambient_carrier_velocity.is_finite()
-            || !ambient_oscillator_energy_density.is_finite()
-            || ambient_oscillator_energy_density < 0.0
+            || !ambient_energy_density.is_finite()
+            || ambient_energy_density < 0.0
             || !ambient_field_normalization.is_finite()
             || ambient_field_normalization.to_bits() != self.inner.normalization.to_bits()
         {
@@ -1147,16 +1147,16 @@ impl OpenBoundaryWaveField {
             .sum::<f64>()
             * cell_area;
         let disturbance_energy = self.inner.energy();
-        let ambient_oscillator_energy = ambient_oscillator_energy_density * accounting_area;
+        let ambient_energy = ambient_energy_density * accounting_area;
         let cross_energy =
             ambient_field_normalization * ambient_carrier_velocity * disturbance_velocity_integral;
-        let total_energy = disturbance_energy + ambient_oscillator_energy + cross_energy;
+        let total_energy = disturbance_energy + ambient_energy + cross_energy;
 
         if [
             accounting_area,
             disturbance_velocity_integral,
             disturbance_energy,
-            ambient_oscillator_energy,
+            ambient_energy,
             cross_energy,
             total_energy,
         ]
@@ -1170,7 +1170,7 @@ impl OpenBoundaryWaveField {
 
         Ok(CombinedFieldEnergy {
             disturbance_energy,
-            ambient_oscillator_energy,
+            ambient_energy,
             cross_energy,
             total_energy,
         })
@@ -1706,7 +1706,7 @@ mod tests {
     }
 
     #[test]
-    fn combined_inventory_includes_ambient_oscillator_and_leapfrog_cross_energy() {
+    fn combined_inventory_includes_ambient_kinetic_and_leapfrog_cross_energy() {
         let mut open = OpenBoundaryWaveField::new(2, 2, 1.0, 0.2, 2, 2.0).unwrap();
         for y in 0..2 {
             for x in 0..2 {
@@ -1719,7 +1719,7 @@ mod tests {
             .unwrap();
 
         assert!((combined.disturbance_energy - 4.0).abs() < 1.0e-12);
-        assert!((combined.ambient_oscillator_energy - 12.0).abs() < 1.0e-12);
+        assert!((combined.ambient_energy - 12.0).abs() < 1.0e-12);
         assert!((combined.cross_energy - 2.0).abs() < 1.0e-12);
         assert!((combined.total_energy - 18.0).abs() < 1.0e-12);
         assert_eq!(open.velocity_time_ticks(), -0.25);
@@ -1737,7 +1737,7 @@ mod tests {
         let combined = open.combined_energy(&ambient).unwrap();
 
         assert!(
-            (combined.ambient_oscillator_energy
+            (combined.ambient_energy
                 - expected.instantaneous_oscillator_energy_density * 9.0)
                 .abs()
                 < 1.0e-12
