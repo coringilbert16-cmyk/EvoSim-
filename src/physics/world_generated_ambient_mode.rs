@@ -104,7 +104,7 @@ impl AmbientModeConfig {
         let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
-        let instantaneous_oscillator_energy_density = 0.5
+        let instantaneous_field_energy_density = 0.5
             * self.field_normalization
             * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
         if [
@@ -147,8 +147,9 @@ impl AmbientModeConfig {
     }
 }
 
-/// Periodic amplitude trajectory whose carrier-averaged total oscillator energy
-/// (including the slow-envelope kinetic term) matches the approved 1–10 schedule.
+/// Periodic amplitude trajectory whose carrier-averaged wave kinetic energy
+/// matches the approved 1–10 schedule. The uniform carrier has no spatial
+/// gradient, so no harmonic-potential term is added.
 #[derive(Clone, Debug)]
 struct AmbientModeTrajectory {
     amplitude: Vec<f64>,
@@ -163,11 +164,11 @@ impl AmbientModeTrajectory {
             TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
         let denominator = config.field_normalization * angular_frequency.powi(2);
         let mut amplitude: Vec<f64> = (0..count)
-            .map(|tick| (2.0 * config.energy_density_at(tick as u64) / denominator).sqrt())
+            .map(|tick| (4.0 * config.energy_density_at(tick as u64) / denominator).sqrt())
             .collect();
 
-        // Four periodic fixed-point corrections reproduce the reference
-        // calculation: E = K*Omega^2*a^2/2 + K*(a')^2/4.
+        // Four periodic fixed-point corrections enforce the wave-energy identity:
+        // <E> = K*(Omega^2*a^2 + (a')^2)/4.
         for _ in 0..4 {
             let mut corrected = Vec::with_capacity(count);
             for tick in 0..count {
@@ -178,7 +179,7 @@ impl AmbientModeTrajectory {
                 if !remaining.is_finite() || remaining <= 0.0 {
                     return Err(AmbientModeError::InvalidState);
                 }
-                corrected.push((2.0 * remaining / denominator).sqrt());
+                corrected.push((4.0 * remaining / denominator).sqrt());
             }
             amplitude = corrected;
         }
@@ -504,9 +505,10 @@ mod tests {
         let mut mode = mode_at(0, 3.0);
         for tick in 0..AMBIENT_DAY_TICKS {
             let sample = mode.sample();
-            let reconstructed =
-                0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
-                    + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
+            let reconstructed = 0.25
+                * 2.5
+                * (sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
+                    + sample.amplitude_velocity.powi(2));
             assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
             assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
             if tick + 1 < AMBIENT_DAY_TICKS {
