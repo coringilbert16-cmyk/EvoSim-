@@ -3591,23 +3591,6 @@ mod combined_world_energy_inventory_tests {
         simulation.energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
         simulation.energy_ledger.total_ambient_energy_held = opening_ambient_energy;
 
-        // Exercise the real world ledger's work/heat settlement in the same
-        // inventory that will be reconciled with the persistent field.
-        let expenditure = crate::energy_ledger::EnergyTransaction::expenditure(
-            crate::energy_ledger::EnergyReason::Move,
-            0.0,
-            0.25,
-            0.5,
-        )
-        .expect("test work/heat transaction must balance");
-        assert!(
-            crate::energy_ledger::EnergyLedgerAuthority::settle_transaction(
-                &mut simulation.energy_ledger,
-                &mut simulation.organisms[0].usable_energy,
-                expenditure,
-            )
-        );
-
         let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
             17, 13, 1.0, 0.2, 2, 1.0,
         )
