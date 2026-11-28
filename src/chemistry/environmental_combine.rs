@@ -1653,6 +1653,20 @@ mod tests {
     #[test]
     fn field_funded_combine_rejects_stale_source_before_field_or_ledger_settlement() {
         let mut simulation = crate::state::Simulation::new(45701, 10.0);
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("test source must be physically realizable");
+        let cell = &mut simulation.environment.field.cells[0];
+        cell.physical_materials.push(source.clone());
+        cell.physical_materials.push(source.clone());
+        let field_before = simulation.environment.field.cells[0].physical_materials.clone();
         let ledger_before = simulation.energy_ledger;
         let mut provider = RejectingFieldProvider { stage_attempts: 0 };
         let candidate = ConnectionPairCandidate {
@@ -1666,13 +1680,13 @@ mod tests {
             available_b: true,
         };
         let operation = EnvironmentalCombineOperation {
-            cell_a: usize::MAX,
+            cell_a: 0,
             material_a: 0,
-            source_a: PhysicalMaterial::default(),
-            cell_b: usize::MAX,
-            material_b: 0,
-            source_b: PhysicalMaterial::default(),
-            unit_a: 0,
+            source_a: source.clone(),
+            cell_b: 0,
+            material_b: 1,
+            source_b: source,
+            unit_a: usize::MAX,
             unit_b: 0,
             candidate,
             investment: 0.0,
@@ -1688,6 +1702,10 @@ mod tests {
         )
         .is_none());
         assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(
+            simulation.environment.field.cells[0].physical_materials,
+            field_before
+        );
         assert_eq!(provider.stage_attempts, 0);
     }
 
