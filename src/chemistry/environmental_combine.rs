@@ -2627,8 +2627,7 @@ mod tests {
                 }
                 totals
             };
-        let initial_constituents =
-            field_constituent_inventory(&simulation.environment.field);
+        let initial_constituents = field_constituent_inventory(&simulation.environment.field);
 
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
@@ -2880,8 +2879,7 @@ mod tests {
             "four-part BREAK must conserve total material mass"
         );
 
-        let after_break_constituents =
-            field_constituent_inventory(&simulation.environment.field);
+        let after_break_constituents = field_constituent_inventory(&simulation.environment.field);
         assert_eq!(
             after_break_constituents, initial_constituents,
             "environmental BREAK must conserve every elemental constituent across the entire field"
@@ -3310,8 +3308,7 @@ mod tests {
                 }
                 totals
             };
-        let initial_constituents =
-            field_constituent_inventory(&simulation.environment.field);
+        let initial_constituents = field_constituent_inventory(&simulation.environment.field);
 
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
@@ -3762,8 +3759,7 @@ mod tests {
             &mut simulation.energy_ledger,
         ));
 
-        let after_combine_constituents =
-            field_constituent_inventory(&simulation.environment.field);
+        let after_combine_constituents = field_constituent_inventory(&simulation.environment.field);
         assert_eq!(
             after_combine_constituents, initial_constituents,
             "environmental COMBINE must conserve every elemental constituent across the entire field"
