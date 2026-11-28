@@ -491,7 +491,10 @@ impl ClosedBoundaryWaveField {
     /// Advance with first-order Mur radiation conditions on all four outer
     /// faces. The net energy change of the leapfrog invariant is accumulated as
     /// signed boundary transfer: positive is energy delivered to the void.
-    fn advance_one_substep_open(&mut self) -> Result<(), ClosedWaveError> {
+    fn advance_one_substep_open(
+        &mut self,
+        ambient_velocity_after: f64,
+    ) -> Result<f64, ClosedWaveError> {
         self.substeps_elapsed
             .checked_add(1)
             .ok_or(ClosedWaveError::CounterOverflow)?;
@@ -527,6 +530,10 @@ impl ClosedBoundaryWaveField {
                 next[index] = 2.0 * center - self.previous[index] + scale * laplacian_numerator;
             }
         }
+
+        // Retain the closed stencil prediction so the cross-energy carried out
+        // by the boundary condition can be measured independently.
+        let closed_next = next.clone();
 
         // Apply the one-way characteristic condition to open faces. Corners
         // combine the two independent face predictions symmetrically.
@@ -577,13 +584,37 @@ impl ClosedBoundaryWaveField {
             next[corner] = 0.5 * (horizontal_prediction + vertical_prediction);
         }
 
-        if next.iter().any(|value| !value.is_finite()) {
+        if !ambient_velocity_after.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        let mut boundary_velocity_difference = 0.0;
+        for y in 1..self.height - 1 {
+            boundary_velocity_difference +=
+                closed_next[self.index(0, y)] - next[self.index(0, y)];
+            boundary_velocity_difference += closed_next[self.index(self.width - 1, y)]
+                - next[self.index(self.width - 1, y)];
+        }
+        for x in 1..self.width - 1 {
+            boundary_velocity_difference +=
+                closed_next[self.index(x, 0)] - next[self.index(x, 0)];
+            boundary_velocity_difference += closed_next[self.index(x, self.height - 1)]
+                - next[self.index(x, self.height - 1)];
+        }
+        for (corner, _, _) in corners {
+            boundary_velocity_difference += closed_next[corner] - next[corner];
+        }
+        let cross_outflow = self.normalization
+            * ambient_velocity_after
+            * self.spacing.powi(2)
+            * boundary_velocity_difference
+            / self.time_step;
+        if next.iter().any(|value| !value.is_finite()) || !cross_outflow.is_finite() {
             return Err(ClosedWaveError::InvalidState);
         }
         self.previous.clone_from(&self.current);
         self.current = next;
         self.substeps_elapsed += 1;
-        Ok(())
+        Ok(cross_outflow)
     }
 
     fn advance_one_substep(&mut self) -> Result<(), ClosedWaveError> {
@@ -1031,12 +1062,16 @@ fn validate_transfer_amount(amount: f64) -> Result<(), ClosedWaveError> {
 pub(crate) struct OpenBoundaryWaveField {
     inner: ClosedBoundaryWaveField,
     cumulative_outflow_energy: f64,
+    cumulative_combined_outflow_energy: f64,
+    cumulative_world_drive_work: f64,
 }
 
 #[derive(Deserialize)]
 struct OpenBoundaryWaveFieldState {
     inner: ClosedBoundaryWaveField,
     cumulative_outflow_energy: f64,
+    cumulative_combined_outflow_energy: f64,
+    cumulative_world_drive_work: f64,
 }
 
 impl<'de> Deserialize<'de> for OpenBoundaryWaveField {
@@ -1046,12 +1081,17 @@ impl<'de> Deserialize<'de> for OpenBoundaryWaveField {
     {
         use serde::de::Error as _;
         let state = OpenBoundaryWaveFieldState::deserialize(deserializer)?;
-        if !state.cumulative_outflow_energy.is_finite() {
-            return Err(D::Error::custom("invalid serialized open wave outflow"));
+        if !state.cumulative_outflow_energy.is_finite()
+            || !state.cumulative_combined_outflow_energy.is_finite()
+            || !state.cumulative_world_drive_work.is_finite()
+        {
+            return Err(D::Error::custom("invalid serialized open wave accounting"));
         }
         Ok(Self {
             inner: state.inner,
             cumulative_outflow_energy: state.cumulative_outflow_energy,
+            cumulative_combined_outflow_energy: state.cumulative_combined_outflow_energy,
+            cumulative_world_drive_work: state.cumulative_world_drive_work,
         })
     }
 }
@@ -1079,6 +1119,8 @@ impl OpenBoundaryWaveField {
                 normalization,
             )?,
             cumulative_outflow_energy: 0.0,
+            cumulative_combined_outflow_energy: 0.0,
+            cumulative_world_drive_work: 0.0,
         })
     }
 
@@ -1184,6 +1226,18 @@ impl OpenBoundaryWaveField {
         self.cumulative_outflow_energy
     }
 
+    /// Signed net energy delivered to the void by the composed ambient and
+    /// disturbance field, including their cross-energy contribution.
+    pub(crate) fn cumulative_combined_outflow_energy(&self) -> f64 {
+        self.cumulative_combined_outflow_energy
+    }
+
+    /// Signed world work inferred from the combined discrete balance:
+    /// field-energy change plus combined boundary outflow.
+    pub(crate) fn cumulative_world_drive_work(&self) -> f64 {
+        self.cumulative_world_drive_work
+    }
+
     pub(crate) fn sample(&self, x: usize, y: usize) -> Option<f64> {
         self.inner.sample(x, y)
     }
@@ -1240,7 +1294,7 @@ impl OpenBoundaryWaveField {
             .ok_or(ClosedWaveError::CounterOverflow)?;
         let energy_before = self.inner.energy();
         for _ in 0..steps {
-            self.inner.advance_one_substep_open()?;
+            self.inner.advance_one_substep_open(0.0)?;
         }
         let energy_after = self.inner.energy();
         let net_outflow = energy_before - energy_after;
@@ -1249,6 +1303,75 @@ impl OpenBoundaryWaveField {
             return Err(ClosedWaveError::InvalidState);
         }
         self.cumulative_outflow_energy = next_outflow;
+        Ok(())
+    }
+
+    /// Advance while reconciling the ambient carrier, spatial disturbance,
+    /// cross-energy, and radiating-boundary transfer at every leapfrog step.
+    /// The signed world-drive term is the residual required by the discrete
+    /// combined balance; it is retained separately from the boundary outflow.
+    pub(crate) fn advance_substeps_with_ambient(
+        &mut self,
+        steps: u64,
+        ambient: &crate::world_generated_ambient_mode::WorldGeneratedAmbientMode,
+    ) -> Result<(), ClosedWaveError> {
+        self.inner
+            .substeps_elapsed
+            .checked_add(steps)
+            .ok_or(ClosedWaveError::CounterOverflow)?;
+        let mut disturbance_outflow = 0.0;
+        let mut combined_outflow = 0.0;
+        let mut world_drive_work = 0.0;
+
+        for _ in 0..steps {
+            let before = self.combined_energy(ambient)?;
+            let energy_before = self.inner.energy();
+            let next_velocity_time =
+                (self.inner.substeps_elapsed as f64 + 0.5)
+                    / self.inner.substeps_per_tick as f64;
+            let ambient_after = ambient
+                .sample_at_time(next_velocity_time)
+                .map_err(|_| ClosedWaveError::InvalidState)?;
+            let cross_outflow =
+                self.inner.advance_one_substep_open(ambient_after.carrier_velocity)?;
+            let after = self.combined_energy(ambient)?;
+            let step_disturbance_outflow = energy_before - self.inner.energy();
+            let step_combined_outflow = step_disturbance_outflow + cross_outflow;
+            let step_world_drive_work =
+                after.total_energy - before.total_energy + step_combined_outflow;
+
+            if [
+                step_disturbance_outflow,
+                step_combined_outflow,
+                step_world_drive_work,
+            ]
+            .iter()
+            .any(|value| !value.is_finite())
+            {
+                return Err(ClosedWaveError::InvalidState);
+            }
+            disturbance_outflow += step_disturbance_outflow;
+            combined_outflow += step_combined_outflow;
+            world_drive_work += step_world_drive_work;
+        }
+
+        let next_disturbance_outflow = self.cumulative_outflow_energy + disturbance_outflow;
+        let next_combined_outflow =
+            self.cumulative_combined_outflow_energy + combined_outflow;
+        let next_world_drive_work = self.cumulative_world_drive_work + world_drive_work;
+        if [
+            next_disturbance_outflow,
+            next_combined_outflow,
+            next_world_drive_work,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+        {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        self.cumulative_outflow_energy = next_disturbance_outflow;
+        self.cumulative_combined_outflow_energy = next_combined_outflow;
+        self.cumulative_world_drive_work = next_world_drive_work;
         Ok(())
     }
 }
