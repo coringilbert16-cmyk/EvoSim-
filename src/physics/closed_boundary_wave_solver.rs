@@ -1737,9 +1737,7 @@ mod tests {
         let combined = open.combined_energy(&ambient).unwrap();
 
         assert!(
-            (combined.ambient_energy
-                - expected.instantaneous_field_energy_density * 9.0)
-                .abs()
+            (combined.ambient_energy - expected.instantaneous_field_energy_density * 9.0).abs()
                 < 1.0e-12
         );
         assert_eq!(open.velocity_time_ticks(), -0.125);
