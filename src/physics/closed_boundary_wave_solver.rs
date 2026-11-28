@@ -32,6 +32,17 @@ pub(crate) struct ClosedWaveSample {
     pub(crate) flux_gradient_y: f64,
 }
 
+/// Combined finite-domain field inventory evaluated at the disturbance's
+/// leapfrog velocity time centre. The ambient oscillator and cross terms use
+/// values sampled at that same time centre.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CombinedFieldEnergy {
+    pub(crate) disturbance_energy: f64,
+    pub(crate) ambient_oscillator_energy: f64,
+    pub(crate) cross_energy: f64,
+    pub(crate) total_energy: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ClosedWaveError {
     InvalidDimensions,
@@ -1079,6 +1090,92 @@ impl OpenBoundaryWaveField {
         self.inner.logical_time_ticks()
     }
 
+    /// The leapfrog velocity is centred half a substep before the latest
+    /// displacement state. Ambient carrier inputs for combined inventory must
+    /// be sampled at this exact logical time.
+    pub(crate) fn velocity_time_ticks(&self) -> f64 {
+        (self.inner.substeps_elapsed as f64 - 0.5) / self.inner.substeps_per_tick as f64
+    }
+
+    /// Compose using the live ambient mode sampled at the exact leapfrog
+    /// velocity time centre. This is the safe entry point for callers.
+    pub(crate) fn combined_energy(
+        &self,
+        ambient: &crate::world_generated_ambient_mode::WorldGeneratedAmbientMode,
+    ) -> Result<CombinedFieldEnergy, ClosedWaveError> {
+        let sample = ambient
+            .sample_at_time(self.velocity_time_ticks())
+            .map_err(|_| ClosedWaveError::InvalidState)?;
+        self.combined_energy_at_velocity_center(
+            sample.carrier_velocity,
+            sample.instantaneous_oscillator_energy_density,
+            sample.field_normalization,
+        )
+    }
+
+    /// Compose the discrete disturbance invariant with the ambient oscillator
+    /// and cross-energy at the same leapfrog velocity time centre.
+    ///
+    /// The ambient carrier velocity and oscillator energy density must be
+    /// sampled at velocity_time_ticks(). The ambient mode is uniform, so its
+    /// oscillator energy is multiplied by the finite accounting area.
+    /// The cross term is integrated against the discrete disturbance velocity
+    /// using the same cell-area quadrature as the solver's kinetic invariant.
+    pub(crate) fn combined_energy_at_velocity_center(
+        &self,
+        ambient_carrier_velocity: f64,
+        ambient_oscillator_energy_density: f64,
+        ambient_field_normalization: f64,
+    ) -> Result<CombinedFieldEnergy, ClosedWaveError> {
+        if !ambient_carrier_velocity.is_finite()
+            || !ambient_oscillator_energy_density.is_finite()
+            || ambient_oscillator_energy_density < 0.0
+            || !ambient_field_normalization.is_finite()
+            || ambient_field_normalization.to_bits() != self.inner.normalization.to_bits()
+        {
+            return Err(ClosedWaveError::InvalidState);
+        }
+
+        let cell_area = self.inner.spacing.powi(2);
+        let accounting_area = self.inner.width as f64 * self.inner.height as f64 * cell_area;
+        let disturbance_velocity_integral = self
+            .inner
+            .current
+            .iter()
+            .zip(&self.inner.previous)
+            .map(|(current, previous)| (current - previous) / self.inner.time_step)
+            .sum::<f64>()
+            * cell_area;
+        let disturbance_energy = self.inner.energy();
+        let ambient_oscillator_energy = ambient_oscillator_energy_density * accounting_area;
+        let cross_energy =
+            ambient_field_normalization * ambient_carrier_velocity * disturbance_velocity_integral;
+        let total_energy = disturbance_energy + ambient_oscillator_energy + cross_energy;
+
+        if [
+            accounting_area,
+            disturbance_velocity_integral,
+            disturbance_energy,
+            ambient_oscillator_energy,
+            cross_energy,
+            total_energy,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+            || disturbance_energy < 0.0
+            || total_energy < 0.0
+        {
+            return Err(ClosedWaveError::InvalidState);
+        }
+
+        Ok(CombinedFieldEnergy {
+            disturbance_energy,
+            ambient_oscillator_energy,
+            cross_energy,
+            total_energy,
+        })
+    }
+
     pub(crate) fn energy(&self) -> f64 {
         self.inner.energy()
     }
@@ -1606,6 +1703,55 @@ mod tests {
                 "closed reference did not retain its reflected wave at angle {angle}"
             );
         }
+    }
+
+    #[test]
+    fn combined_inventory_includes_ambient_oscillator_and_leapfrog_cross_energy() {
+        let mut open = OpenBoundaryWaveField::new(2, 2, 1.0, 0.2, 2, 2.0).unwrap();
+        for y in 0..2 {
+            for x in 0..2 {
+                open.set_initial_state(x, y, 0.0, 0.5).unwrap();
+            }
+        }
+
+        let combined = open
+            .combined_energy_at_velocity_center(0.25, 3.0, 2.0)
+            .unwrap();
+
+        assert!((combined.disturbance_energy - 4.0).abs() < 1.0e-12);
+        assert!((combined.ambient_oscillator_energy - 12.0).abs() < 1.0e-12);
+        assert!((combined.cross_energy - 2.0).abs() < 1.0e-12);
+        assert!((combined.total_energy - 18.0).abs() < 1.0e-12);
+        assert_eq!(open.velocity_time_ticks(), -0.25);
+    }
+
+    #[test]
+    fn combined_inventory_samples_ambient_at_leapfrog_velocity_time() {
+        let open = OpenBoundaryWaveField::new(3, 3, 1.0, 0.2, 4, 2.0).unwrap();
+        let config =
+            crate::world_generated_ambient_mode::AmbientModeConfig::new(9.0, 2.0, 0.0, 0.0)
+                .unwrap();
+        let ambient =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0).unwrap();
+        let expected = ambient.sample_at_time(open.velocity_time_ticks()).unwrap();
+        let combined = open.combined_energy(&ambient).unwrap();
+
+        assert!(
+            (combined.ambient_oscillator_energy
+                - expected.instantaneous_oscillator_energy_density * 9.0)
+                .abs()
+                < 1.0e-12
+        );
+        assert_eq!(open.velocity_time_ticks(), -0.125);
+    }
+
+    #[test]
+    fn combined_inventory_rejects_mismatched_ambient_normalization() {
+        let open = OpenBoundaryWaveField::new(2, 2, 1.0, 0.2, 2, 2.0).unwrap();
+        assert_eq!(
+            open.combined_energy_at_velocity_center(0.0, 1.0, 3.0),
+            Err(ClosedWaveError::InvalidState)
+        );
     }
 
     #[test]

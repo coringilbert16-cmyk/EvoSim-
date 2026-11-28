@@ -304,6 +304,84 @@ impl WorldGeneratedAmbientMode {
         self.current
     }
 
+    /// Evaluate the ambient carrier at an arbitrary logical time. This is
+    /// required to align its velocity and instantaneous oscillator energy with
+    /// the spatial solver's leapfrog half-step rather than using the integer
+    /// displacement timestamp.
+    pub(crate) fn sample_at_time(
+        &self,
+        logical_time_ticks: f64,
+    ) -> Result<AmbientModeSample, AmbientModeError> {
+        if !logical_time_ticks.is_finite() {
+            return Err(AmbientModeError::InvalidState);
+        }
+
+        let day_tick = logical_time_ticks.rem_euclid(AMBIENT_DAY_TICKS as f64);
+        let lower_index = day_tick.floor() as usize;
+        let upper_index = (lower_index + 1) % AMBIENT_DAY_TICKS as usize;
+        let fraction = day_tick - lower_index as f64;
+        let interpolate = |values: &[f64]| {
+            values[lower_index] * (1.0 - fraction) + values[upper_index] * fraction
+        };
+        let amplitude = interpolate(&self.trajectory.amplitude);
+        let amplitude_velocity = interpolate(&self.trajectory.amplitude_velocity);
+        let amplitude_acceleration = interpolate(&self.trajectory.amplitude_acceleration);
+        let energy_density = self.config.energy_density_at(lower_index as u64) * (1.0 - fraction)
+            + self.config.energy_density_at(upper_index as u64) * fraction;
+        let total_energy = energy_density * self.config.world_area;
+        let angular_frequency =
+            TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
+        let carrier_cycles = day_tick * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
+            / AMBIENT_DAY_TICKS as f64
+            + self.config.carrier_phase_offset_cycles;
+        let carrier_phase_radians = TAU * carrier_cycles.rem_euclid(1.0);
+        let cosine = carrier_phase_radians.cos();
+        let sine = carrier_phase_radians.sin();
+        let carrier_value = amplitude * cosine;
+        let carrier_velocity = amplitude_velocity * cosine - amplitude * angular_frequency * sine;
+        let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
+            * cosine
+            - 2.0 * amplitude_velocity * angular_frequency * sine;
+        let instantaneous_oscillator_energy_density = 0.5
+            * self.config.field_normalization
+            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
+
+        if [
+            amplitude,
+            amplitude_velocity,
+            amplitude_acceleration,
+            energy_density,
+            total_energy,
+            carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_oscillator_energy_density,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+            || amplitude <= 0.0
+            || energy_density < AMBIENT_MIN_ENERGY_DENSITY
+            || energy_density > AMBIENT_MAX_ENERGY_DENSITY
+        {
+            return Err(AmbientModeError::InvalidState);
+        }
+
+        Ok(AmbientModeSample {
+            tick: lower_index as u64,
+            energy_density,
+            total_energy,
+            amplitude,
+            amplitude_velocity,
+            field_normalization: self.config.field_normalization,
+            angular_frequency,
+            carrier_phase_radians,
+            carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_oscillator_energy_density,
+        })
+    }
+
     /// Total world generation since this mode's opening inventory.
     #[cfg(test)]
     pub(crate) fn cumulative_generated_energy(&self) -> f64 {
@@ -368,6 +446,19 @@ mod tests {
     fn mode_at(tick: u64, area: f64) -> WorldGeneratedAmbientMode {
         let config = AmbientModeConfig::new(area, 2.5, 0.0, 0.0).unwrap();
         WorldGeneratedAmbientMode::new(config, tick).unwrap()
+    }
+
+    #[test]
+    fn fractional_time_sample_matches_integer_samples_and_tracks_half_ticks() {
+        let mode = mode_at(317, 12.0);
+        let integer = mode.sample_at_time(317.0).unwrap();
+        assert_eq!(integer, mode.sample());
+
+        let half = mode.sample_at_time(317.5).unwrap();
+        assert_eq!(half.tick, 317);
+        assert_ne!(half.carrier_phase_radians, integer.carrier_phase_radians);
+        assert!(half.carrier_velocity.is_finite());
+        assert!(half.instantaneous_oscillator_energy_density.is_finite());
     }
 
     #[test]
