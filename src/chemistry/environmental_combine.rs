@@ -997,8 +997,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     &source_structure,
                 )
             else {
-                continue;            };
-            // Bound the spatial query itself, not just the subsequent loop:
+                continue;            };            // Bound the spatial query itself, not just the subsequent loop:
             // very large source bounds must not allocate or traverse an unbounded
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
@@ -1997,8 +1996,7 @@ mod tests {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
                     let base = PhysicalMaterial::realized(                        Material::free_base(resource.name.clone(), 1.0),
-                        vec![Placement {
-                            x: 10.0 + distance,
+                        vec![Placement {                            x: 10.0 + distance,
                             y: 10.0,
                             rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
                         }],
@@ -2612,21 +2610,6 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
-        // Snapshot the complete environmental elemental inventory before
-        // reaction resolution. COMBINE and BREAK may change molecular grouping
-        // and bond topology, but must not create, destroy, or rename constituents.
-        let field_constituent_inventory =
-            |field: &crate::environment::ActiveMaterialField| -> BTreeMap<String, f64> {
-                let mut totals = BTreeMap::new();
-                for cell in &field.cells {
-                    for (name, amount) in cell.total_material() {
-                        *totals.entry(name).or_insert(0.0) += amount;
-                    }
-                }
-                totals
-            };
-        let initial_constituents = field_constituent_inventory(&simulation.environment.field);
-
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
@@ -2997,8 +2980,7 @@ mod tests {
             };
             bonded_compounds += 1;            let relative = compound_b
                 .placements
-                .as_ref()
-                .expect("realized compound must retain placements");
+                .as_ref()                .expect("realized compound must retain placements");
             let origin_b = relative[0];
             let second_b = relative[1];
             let local_x = second_b.x - origin_b.x;
@@ -3997,8 +3979,7 @@ mod tests {
 
     #[test]
     fn heterogeneous_compound_contacts_retain_constituent_chemical_identity() {
-        let simulation = crate::state::Simulation::new(23729, 10.0);
-        let catalog = simulation.environment.catalog.clone();
+        let simulation = crate::state::Simulation::new(23729, 10.0);        let catalog = simulation.environment.catalog.clone();
         let mut compound_fixture = None;
 
         'constituents: for resource_a in &catalog {
