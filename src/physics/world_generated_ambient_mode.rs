@@ -353,9 +353,7 @@ impl WorldGeneratedAmbientMode {
         // Hermite polynomial at t=0 is mathematically equivalent, but its
         // arithmetic order can introduce tiny rounding differences.
         if fraction == 0.0 {
-            return self
-                .config
-                .sample_at(lower_index as u64, &self.trajectory);
+            return self.config.sample_at(lower_index as u64, &self.trajectory);
         }
         let (amplitude, amplitude_velocity, amplitude_acceleration) =
             self.trajectory.sample_at_fraction(lower_index, fraction);
