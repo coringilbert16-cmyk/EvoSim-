@@ -985,11 +985,7 @@ impl Simulation {
         self.environmental_local_resonance_samples.clear();
         self.tick += 1;
         self.advance_ambient_energy();
-        if let Some(field) = self.environment.spatial_wave_field.as_mut() {
-            field
-                .advance_ticks(1)
-                .expect("persistent spatial wave field must advance exactly one logical tick");
-        }
+        self.advance_spatial_wave_field_one_tick();
         self.environmental_chemistry_diagnostics.tick = self.tick;
 
         // Whole-tick profiling is opt-in and samples one tick in ten. The
@@ -1786,6 +1782,74 @@ impl Simulation {
             work_expended: self.energy_ledger.total_work_expended,
             heat_dissipated: self.energy_ledger.total_heat_dissipated,
         }
+    }
+
+    /// Install the optional open field only when its logical clock and physical
+    /// accounting area match this environment. The current combined inventory
+    /// becomes the opening field inventory; detached solver history is not
+    /// retroactively charged to this world.
+    pub(crate) fn install_spatial_wave_field(
+        &mut self,
+        field: crate::closed_boundary_wave_solver::OpenBoundaryWaveField,
+    ) -> Result<(), crate::closed_boundary_wave_solver::ClosedWaveError> {
+        if self.environment.spatial_wave_field.is_some()
+            || field.logical_time_ticks() != self.tick as f64
+        {
+            return Err(crate::closed_boundary_wave_solver::ClosedWaveError::InvalidState);
+        }
+        let expected_area = self.environment.width * self.environment.height;
+        let actual_area = field.accounting_area();
+        let tolerance = 1.0e-9 * expected_area.abs().max(actual_area.abs()).max(1.0);
+        if !expected_area.is_finite()
+            || expected_area <= 0.0
+            || !actual_area.is_finite()
+            || (actual_area - expected_area).abs() > tolerance
+        {
+            return Err(crate::closed_boundary_wave_solver::ClosedWaveError::InvalidState);
+        }
+        let initial_energy = field.combined_energy(&self.ambient_energy)?.total_energy;
+        self.energy_ledger.initial_combined_field_energy_held = initial_energy;
+        self.energy_ledger.initial_combined_field_outflow_energy =
+            field.cumulative_combined_outflow_energy();
+        self.energy_ledger.initial_combined_field_world_drive_work =
+            field.cumulative_world_drive_work();
+        self.environment.spatial_wave_field = Some(field);
+        Ok(())
+    }
+
+    /// Advance the installed field once per logical tick with its live ambient carrier.
+    fn advance_spatial_wave_field_one_tick(&mut self) {
+        if let Some(field) = self.environment.spatial_wave_field.as_mut() {
+            field
+                .advance_ticks_with_ambient(1, &self.ambient_energy)
+                .expect("persistent ambient-coupled wave field must advance exactly one logical tick");
+        }
+    }
+
+    /// Independent whole-world oracle for runs with an installed spatial field.
+    /// The ambient envelope is checked separately to avoid counting its
+    /// average-energy schedule a second time alongside instantaneous carrier energy.
+    pub(crate) fn combined_world_energy_inventory_snapshot(
+        &self,
+    ) -> Option<crate::energy_ledger::CombinedWorldEnergyInventorySnapshot> {
+        let field = self.environment.spatial_wave_field.as_ref()?;
+        if field.logical_time_ticks() != self.tick as f64 {
+            return None;
+        }
+        let combined_energy = field.combined_energy(&self.ambient_energy).ok()?.total_energy;
+        Some(crate::energy_ledger::CombinedWorldEnergyInventorySnapshot {
+            material_inventory: self.energy_inventory_snapshot(),
+            initial_combined_field_energy: self.energy_ledger.initial_combined_field_energy_held,
+            current_combined_field_energy: combined_energy,
+            combined_field_world_drive_work: field.cumulative_world_drive_work()
+                - self.energy_ledger.initial_combined_field_world_drive_work,
+            combined_field_outflow_energy: field.cumulative_combined_outflow_energy()
+                - self.energy_ledger.initial_combined_field_outflow_energy,
+            initial_ambient_envelope_energy: self.energy_ledger.initial_ambient_energy_held,
+            current_ambient_envelope_energy: self.ambient_energy.sample().total_energy,
+            ambient_energy_generated: self.energy_ledger.total_ambient_energy_generated,
+            ambient_energy_withdrawn: self.energy_ledger.total_ambient_energy_withdrawn,
+        })
     }
 
     pub(crate) fn apply_survival_damage(
@@ -3498,5 +3562,79 @@ mod persistent_wave_field_ownership_tests {
         assert_eq!(installed.logical_time_ticks(), 30.0);
         assert!(installed.cumulative_outflow_energy().is_finite());
         assert!(installed.cumulative_outflow_energy() > 0.0);
+    }
+}
+
+
+#[cfg(test)]
+mod combined_world_energy_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn combined_world_inventory_reconciles_ambient_drive_and_void_outflow() {
+        let mut simulation = Simulation::new(46102, 10.0);
+        simulation.environment.width = 17.0;
+        simulation.environment.height = 13.0;
+        let config = crate::world_generated_ambient_mode::AmbientModeConfig::new(
+            17.0 * 13.0, 1.0, 0.0, 0.0,
+        )
+        .expect("test ambient configuration must be valid");
+        simulation.ambient_energy =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
+                .expect("test ambient mode must initialize");
+        let opening_ambient_energy = simulation.ambient_energy.sample().total_energy;
+        simulation.energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
+        simulation.energy_ledger.total_ambient_energy_held = opening_ambient_energy;
+
+        let mut field =
+            crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+                17, 13, 1.0, 0.2, 2, 1.0,
+            )
+            .expect("test field must initialize");
+        field
+            .set_initial_state(1, 6, 0.8, 1.0)
+            .expect("test packet must initialize");
+        simulation
+            .install_spatial_wave_field(field)
+            .expect("field area and logical time must match the world");
+
+        for _ in 0..60 {
+            simulation.tick += 1;
+            simulation.advance_ambient_energy();
+            simulation.advance_spatial_wave_field_one_tick();
+        }
+
+        let inventory = simulation
+            .combined_world_energy_inventory_snapshot()
+            .expect("installed field must produce a whole-world inventory");
+        assert!(
+            inventory.combined_field_outflow_energy.abs() > 0.0,
+            "the packet must transfer energy through the radiating boundary"
+        );
+        assert!(
+            inventory.ambient_schedule_residual().unwrap().abs() < 1.0e-8,
+            "ambient generation/withdrawal must reconcile independently"
+        );
+        assert!(
+            inventory.is_balanced(2.0e-3),
+            "whole-world inventory must reconcile: field={:?}, ambient={:?}",
+            inventory.residual(),
+            inventory.ambient_schedule_residual()
+        );
+    }
+
+    #[test]
+    fn field_installation_rejects_a_mismatched_accounting_domain() {
+        let mut simulation = Simulation::new(46103, 10.0);
+        let field =
+            crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+                17, 13, 1.0, 0.2, 2, 1.0,
+            )
+            .expect("test field must initialize");
+        assert_eq!(
+            simulation.install_spatial_wave_field(field),
+            Err(crate::closed_boundary_wave_solver::ClosedWaveError::InvalidState)
+        );
+        assert!(simulation.environment.spatial_wave_field.is_none());
     }
 }

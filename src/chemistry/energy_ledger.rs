@@ -520,6 +520,96 @@ impl EnergyInventorySnapshot {
     }
 }
 
+/// Whole-world inventory including the phase-resolved ambient + spatial field.
+///
+/// Ambient envelope generation/withdrawal is checked separately: the combined
+/// field inventory already contains instantaneous ambient carrier energy, so
+/// adding the envelope schedule as another store would double count it.
+/// Signed world-drive work is the source term; combined boundary outflow is
+/// energy delivered to the void.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CombinedWorldEnergyInventorySnapshot {
+    pub(crate) material_inventory: EnergyInventorySnapshot,
+    pub(crate) initial_combined_field_energy: f64,
+    pub(crate) current_combined_field_energy: f64,
+    pub(crate) combined_field_world_drive_work: f64,
+    pub(crate) combined_field_outflow_energy: f64,
+    pub(crate) initial_ambient_envelope_energy: f64,
+    pub(crate) current_ambient_envelope_energy: f64,
+    pub(crate) ambient_energy_generated: f64,
+    pub(crate) ambient_energy_withdrawn: f64,
+}
+
+impl CombinedWorldEnergyInventorySnapshot {
+    pub(crate) fn residual(self) -> Option<f64> {
+        let base = self.material_inventory.residual()?;
+        let ambient_values = [
+            self.initial_ambient_envelope_energy,
+            self.current_ambient_envelope_energy,
+            self.ambient_energy_generated,
+            self.ambient_energy_withdrawn,
+        ];
+        let field_values = [
+            base,
+            self.initial_combined_field_energy,
+            self.current_combined_field_energy,
+            self.combined_field_world_drive_work,
+            self.combined_field_outflow_energy,
+        ];
+        if ambient_values.iter().any(|v| !v.is_finite() || *v < 0.0)
+            || field_values.iter().any(|v| !v.is_finite())
+        {
+            return None;
+        }
+        let terms = [
+            base,
+            self.current_combined_field_energy - self.initial_combined_field_energy,
+            self.combined_field_outflow_energy,
+            -self.combined_field_world_drive_work,
+        ];
+        let mut residual = 0.0;
+        let mut compensation = 0.0;
+        for term in terms {
+            let adjusted = term - compensation;
+            let next = residual + adjusted;
+            compensation = (next - residual) - adjusted;
+            residual = next;
+        }
+        residual.is_finite().then_some(residual)
+    }
+
+    /// Independent check of the approved ambient envelope bookkeeping.
+    /// It is not added to residual because the carrier energy is already in
+    /// the phase-resolved combined field inventory.
+    pub(crate) fn ambient_schedule_residual(self) -> Option<f64> {
+        let residual = self.current_ambient_envelope_energy
+            - self.initial_ambient_envelope_energy
+            - self.ambient_energy_generated
+            + self.ambient_energy_withdrawn;
+        residual.is_finite().then_some(residual)
+    }
+
+    pub(crate) fn is_balanced(self, tolerance: f64) -> bool {
+        tolerance.is_finite()
+            && tolerance >= 0.0
+            && self.residual().is_some_and(|r| r.abs() <= tolerance)
+            && self
+                .ambient_schedule_residual()
+                .is_some_and(|r| r.abs() <= tolerance)
+    }
+
+    pub(crate) fn is_balanced_without_creation(self, tolerance: f64) -> bool {
+        tolerance.is_finite()
+            && tolerance >= 0.0
+            && self
+                .residual()
+                .is_some_and(|r| r <= 0.0 && r.abs() <= tolerance)
+            && self
+                .ambient_schedule_residual()
+                .is_some_and(|r| r.abs() <= tolerance)
+    }
+}
+
 /// Settle a signed change in the conservative resonance pair potential.
 ///
 /// Positive changes are funded only by the active mover's usable energy.
