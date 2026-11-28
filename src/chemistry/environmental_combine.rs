@@ -1557,8 +1557,7 @@ where
     if balance.required_external_input <= 0.0 {
         return None;
     }
-    let next_total_structural =
-        staged_ledger.total_structural_energy_held + structural_delta;
+    let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
     if !next_total_structural.is_finite() {
         return None;
     }
