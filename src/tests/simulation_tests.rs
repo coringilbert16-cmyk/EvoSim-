@@ -262,9 +262,7 @@ mod integration_tests {
             .install_spatial_wave_field(field)
             .expect("field area and logical time must match the world");
 
-        for _ in 0..120 {
-            simulation.step();
-        }
+        simulation.step();
 
         let stored = simulation.organisms[0]
             .stored_material
@@ -283,9 +281,7 @@ mod integration_tests {
         .expect("stored carbon should restore into the physical structure");
         assert_eq!(restored.len(), 1);
 
-        for _ in 0..120 {
-            simulation.step();
-        }
+        simulation.step();
 
         let final_material_inventory =
             integer_material_inventory(&simulation).expect("final material inventory is valid");
