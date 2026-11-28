@@ -997,8 +997,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     &source_structure,
                 )
             else {
-                continue;
-            };
+                continue;            };
             // Bound the spatial query itself, not just the subsequent loop:
             // very large source bounds must not allocate or traverse an unbounded
             // target-cell vector before the per-tick inspection budget applies.
@@ -1997,8 +1996,7 @@ mod tests {
             'poses: for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
-                    let base = PhysicalMaterial::realized(
-                        Material::free_base(resource.name.clone(), 1.0),
+                    let base = PhysicalMaterial::realized(                        Material::free_base(resource.name.clone(), 1.0),
                         vec![Placement {
                             x: 10.0 + distance,
                             y: 10.0,
@@ -2997,8 +2995,7 @@ mod tests {
                 classified += 1;
                 continue;
             };
-            bonded_compounds += 1;
-            let relative = compound_b
+            bonded_compounds += 1;            let relative = compound_b
                 .placements
                 .as_ref()
                 .expect("realized compound must retain placements");
@@ -3626,6 +3623,19 @@ mod tests {
             source_b.clone(),
             &catalog,
         ));
+        // Snapshot the whole environmental field before the COMBINE transaction.
+        // Molecular grouping and bond topology may change, but elemental totals may not.
+        let field_constituent_inventory =
+            |field: &crate::environment::ActiveMaterialField| -> BTreeMap<String, f64> {
+                let mut totals = BTreeMap::new();
+                for cell in &field.cells {
+                    for (name, amount) in cell.total_material() {
+                        *totals.entry(name).or_insert(0.0) += amount;
+                    }
+                }
+                totals
+            };
+        let initial_constituents = field_constituent_inventory(&simulation.environment.field);
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
@@ -3997,8 +4007,7 @@ mod tests {
             }
             for resource_b in &catalog {
                 if resource_b.physical_state == crate::resources::PhysicalState::Fluid
-                    || resource_a.name == resource_b.name
-                    || resource_a.properties.chemical_position
+                    || resource_a.name == resource_b.name                    || resource_a.properties.chemical_position
                         == resource_b.properties.chemical_position
                 {
                     continue;
