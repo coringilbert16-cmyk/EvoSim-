@@ -1325,6 +1325,19 @@ impl OpenBoundaryWaveField {
 
         for _ in 0..steps {
             let energy_before = self.inner.energy();
+            let old_disturbance_velocity_integral = self
+                .inner
+                .current
+                .iter()
+                .zip(&self.inner.previous)
+                .map(|(current, previous)| (current - previous) / self.inner.time_step)
+                .sum::<f64>()
+                * self.inner.spacing.powi(2);
+            let step_start_time =
+                self.inner.substeps_elapsed as f64 / self.inner.substeps_per_tick as f64;
+            let drive_sample = ambient
+                .sample_at_time(step_start_time)
+                .map_err(|_| ClosedWaveError::InvalidState)?;
             let next_velocity_time =
                 (self.inner.substeps_elapsed as f64 + 0.5) / self.inner.substeps_per_tick as f64;
             let ambient_after = ambient
@@ -1335,7 +1348,7 @@ impl OpenBoundaryWaveField {
                 .advance_one_substep_open(ambient_after.carrier_velocity)?;
             let step_disturbance_outflow = energy_before - self.inner.energy();
             let step_combined_outflow = step_disturbance_outflow + cross_outflow;
-            let disturbance_velocity_integral = self
+            let new_disturbance_velocity_integral = self
                 .inner
                 .current
                 .iter()
@@ -1343,10 +1356,12 @@ impl OpenBoundaryWaveField {
                 .map(|(current, previous)| (current - previous) / self.inner.time_step)
                 .sum::<f64>()
                 * self.inner.spacing.powi(2);
-            let ambient_world_area = ambient_after.total_energy / ambient_after.energy_density;
+            let disturbance_velocity_integral = 0.5
+                * (old_disturbance_velocity_integral + new_disturbance_velocity_integral);
+            let ambient_world_area = drive_sample.total_energy / drive_sample.energy_density;
             let step_world_drive_work = self.inner.normalization
-                * ambient_after.carrier_acceleration
-                * (ambient_after.carrier_velocity * ambient_world_area
+                * drive_sample.carrier_acceleration
+                * (drive_sample.carrier_velocity * ambient_world_area
                     + disturbance_velocity_integral)
                 * self.inner.time_step;
 
