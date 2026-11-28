@@ -4,8 +4,8 @@
 //! These identities are the production-facing form of the already validated
 //! Phase 3B.3 composition calculations. The ambient carrier is spatially
 //! uniform; the disturbance gradient is therefore the gradient of the total
-//! displacement. The restoring-energy term belongs to the ambient oscillator
-//! degree of freedom, while the cross-energy and cross-flux terms are retained.
+//! displacement. The ambient carrier is spatially uniform, so its spatial gradient is zero.
+//! Its energy is therefore kinetic only; no harmonic-potential term is added.
 
 use crate::world_generated_ambient_mode::AmbientModeSample;
 
@@ -29,7 +29,7 @@ pub(crate) struct ComposedFieldSample {
     pub(crate) velocity: f64,
     pub(crate) energy_density: f64,
     pub(crate) disturbance_energy_density: f64,
-    pub(crate) ambient_oscillator_energy_density: f64,
+    pub(crate) ambient_kinetic_energy_density: f64,
     pub(crate) cross_energy_density: f64,
     pub(crate) flux_x: f64,
     pub(crate) flux_y: f64,
@@ -71,7 +71,7 @@ impl AmbientSpatialComposition {
             ambient.carrier_velocity,
             ambient.carrier_acceleration,
             ambient.field_normalization,
-            ambient.instantaneous_oscillator_energy_density,
+            ambient.instantaneous_field_energy_density,
             ambient.angular_frequency,
             disturbance.displacement,
             disturbance.velocity,
@@ -93,26 +93,22 @@ impl AmbientSpatialComposition {
 
         let disturbance_energy_density =
             0.5 * normalization * (disturbance.velocity.powi(2) + speed_squared * gradient_squared);
-        let ambient_oscillator_energy_density = ambient.instantaneous_oscillator_energy_density;
+        let ambient_kinetic_energy_density = ambient.instantaneous_field_energy_density;
         let cross_energy_density = normalization * ambient.carrier_velocity * disturbance.velocity;
         let energy_density =
-            disturbance_energy_density + ambient_oscillator_energy_density + cross_energy_density;
+            disturbance_energy_density + ambient_kinetic_energy_density + cross_energy_density;
 
         let flux_scale = -normalization * speed_squared * velocity;
         let flux_x = flux_scale * disturbance.gradient_x;
         let flux_y = flux_scale * disturbance.gradient_y;
-        let world_drive_power_density = normalization
-            * (ambient.carrier_acceleration * velocity
-                + ambient.angular_frequency.powi(2)
-                    * ambient.carrier_value
-                    * ambient.carrier_velocity);
+        let world_drive_power_density = normalization * ambient.carrier_acceleration * velocity;
 
         if [
             displacement,
             velocity,
             gradient_squared,
             disturbance_energy_density,
-            ambient_oscillator_energy_density,
+            ambient_kinetic_energy_density,
             cross_energy_density,
             energy_density,
             flux_x,
@@ -131,7 +127,7 @@ impl AmbientSpatialComposition {
             velocity,
             energy_density,
             disturbance_energy_density,
-            ambient_oscillator_energy_density,
+            ambient_kinetic_energy_density,
             cross_energy_density,
             flux_x,
             flux_y,
@@ -170,7 +166,7 @@ mod tests {
         assert!(
             (sample.energy_density
                 - sample.disturbance_energy_density
-                - sample.ambient_oscillator_energy_density
+                - sample.ambient_kinetic_energy_density
                 - expected_cross)
                 .abs()
                 < 1.0e-12
@@ -221,10 +217,8 @@ mod tests {
             .unwrap();
 
         let expected = normalization
-            * (ambient.carrier_acceleration * (ambient.carrier_velocity + disturbance.velocity)
-                + ambient.angular_frequency.powi(2)
-                    * ambient.carrier_value
-                    * ambient.carrier_velocity);
+            * ambient.carrier_acceleration
+            * (ambient.carrier_velocity + disturbance.velocity);
         assert!((sample.world_drive_power_density - expected).abs() < 1.0e-12);
     }
 

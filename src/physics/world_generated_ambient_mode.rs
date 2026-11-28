@@ -38,7 +38,7 @@ impl AmbientModeConfig {
     /// Creates the reference ambient mode for a finite world-accounting area.
     ///
     /// world_area is an accounting footprint only, not a propagation boundary.
-    /// field_normalization is the positive K in the oscillator relation
+    /// field_normalization is the positive K in the wave-energy relation
     /// e = K * omega^2 * amplitude^2 / 2.
     pub(crate) fn new(
         world_area: f64,
@@ -104,9 +104,8 @@ impl AmbientModeConfig {
         let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
-        let instantaneous_oscillator_energy_density = 0.5
-            * self.field_normalization
-            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
+        let instantaneous_field_energy_density =
+            0.5 * self.field_normalization * carrier_velocity.powi(2);
         if [
             energy_density,
             total_energy,
@@ -124,7 +123,7 @@ impl AmbientModeConfig {
             || !amplitude_acceleration.is_finite()
             || !carrier_velocity.is_finite()
             || !carrier_acceleration.is_finite()
-            || !instantaneous_oscillator_energy_density.is_finite()
+            || !instantaneous_field_energy_density.is_finite()
             || amplitude <= 0.0
         {
             return Err(AmbientModeError::InvalidState);
@@ -136,19 +135,21 @@ impl AmbientModeConfig {
             total_energy,
             amplitude,
             amplitude_velocity,
+            amplitude_acceleration,
             field_normalization: self.field_normalization,
             angular_frequency,
             carrier_phase_radians,
             carrier_value,
             carrier_velocity,
             carrier_acceleration,
-            instantaneous_oscillator_energy_density,
+            instantaneous_field_energy_density,
         })
     }
 }
 
-/// Periodic amplitude trajectory whose carrier-averaged total oscillator energy
-/// (including the slow-envelope kinetic term) matches the approved 1–10 schedule.
+/// Periodic amplitude trajectory whose carrier-averaged wave kinetic energy
+/// matches the approved 1–10 schedule. The uniform carrier has no spatial
+/// gradient, so no harmonic-potential term is added.
 #[derive(Clone, Debug)]
 struct AmbientModeTrajectory {
     amplitude: Vec<f64>,
@@ -163,11 +164,11 @@ impl AmbientModeTrajectory {
             TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
         let denominator = config.field_normalization * angular_frequency.powi(2);
         let mut amplitude: Vec<f64> = (0..count)
-            .map(|tick| (2.0 * config.energy_density_at(tick as u64) / denominator).sqrt())
+            .map(|tick| (4.0 * config.energy_density_at(tick as u64) / denominator).sqrt())
             .collect();
 
-        // Four periodic fixed-point corrections reproduce the reference
-        // calculation: E = K*Omega^2*a^2/2 + K*(a')^2/4.
+        // Four periodic fixed-point corrections enforce the wave-energy identity:
+        // <E> = K*(Omega^2*a^2 + (a')^2)/4.
         for _ in 0..4 {
             let mut corrected = Vec::with_capacity(count);
             for tick in 0..count {
@@ -178,7 +179,7 @@ impl AmbientModeTrajectory {
                 if !remaining.is_finite() || remaining <= 0.0 {
                     return Err(AmbientModeError::InvalidState);
                 }
-                corrected.push((2.0 * remaining / denominator).sqrt());
+                corrected.push((4.0 * remaining / denominator).sqrt());
             }
             amplitude = corrected;
         }
@@ -225,11 +226,38 @@ impl AmbientModeTrajectory {
         let next_two = values[(index + 2) % count];
         (-next_two + 16.0 * next - 30.0 * current + 16.0 * previous - previous_two) / 12.0
     }
+
+    /// Cubic Hermite interpolation keeps the sampled amplitude and its first
+    /// two derivatives mutually consistent between integer logical ticks.
+    fn sample_at_fraction(&self, index: usize, fraction: f64) -> (f64, f64, f64) {
+        let next = (index + 1) % self.amplitude.len();
+        let t = fraction;
+        let t2 = t * t;
+        let t3 = t2 * t;
+        let a0 = self.amplitude[index];
+        let a1 = self.amplitude[next];
+        let v0 = self.amplitude_velocity[index];
+        let v1 = self.amplitude_velocity[next];
+
+        let value = (2.0 * t3 - 3.0 * t2 + 1.0) * a0
+            + (t3 - 2.0 * t2 + t) * v0
+            + (-2.0 * t3 + 3.0 * t2) * a1
+            + (t3 - t2) * v1;
+        let velocity = (6.0 * t2 - 6.0 * t) * a0
+            + (3.0 * t2 - 4.0 * t + 1.0) * v0
+            + (-6.0 * t2 + 6.0 * t) * a1
+            + (3.0 * t2 - 2.0 * t) * v1;
+        let acceleration = (12.0 * t - 6.0) * a0
+            + (6.0 * t - 4.0) * v0
+            + (-12.0 * t + 6.0) * a1
+            + (6.0 * t - 2.0) * v1;
+        (value, velocity, acceleration)
+    }
 }
 
 /// Read-only state of the uniform ambient mode at one logical tick.
 ///
-/// energy_density is the mode's cycle-averaged oscillator energy per area.
+/// energy_density is the mode's cycle-averaged wave kinetic energy per area.
 /// carrier_value is the signed carrier displacement. The daily envelope
 /// changes stored mode energy through explicit world exchange, not by changing
 /// the carrier frequency.
@@ -240,6 +268,8 @@ pub(crate) struct AmbientModeSample {
     pub(crate) total_energy: f64,
     pub(crate) amplitude: f64,
     pub(crate) amplitude_velocity: f64,
+    /// Second derivative of the slowly varying envelope amplitude.
+    pub(crate) amplitude_acceleration: f64,
     pub(crate) field_normalization: f64,
     pub(crate) angular_frequency: f64,
     pub(crate) carrier_phase_radians: f64,
@@ -248,9 +278,9 @@ pub(crate) struct AmbientModeSample {
     pub(crate) carrier_velocity: f64,
     /// Exact second time derivative of the ambient carrier displacement.
     pub(crate) carrier_acceleration: f64,
-    /// Instantaneous oscillator energy density; energy_density remains the
+    /// Instantaneous wave kinetic energy density; energy_density remains the
     /// carrier-averaged target schedule used by the world inventory ledger.
-    pub(crate) instantaneous_oscillator_energy_density: f64,
+    pub(crate) instantaneous_field_energy_density: f64,
 }
 
 /// One exact change in the ambient mode's stored energy.
@@ -302,6 +332,87 @@ impl WorldGeneratedAmbientMode {
 
     pub(crate) fn sample(&self) -> AmbientModeSample {
         self.current
+    }
+
+    /// Evaluate the ambient carrier at an arbitrary logical time. This is
+    /// required to align its velocity and instantaneous wave kinetic energy with
+    /// the spatial solver's leapfrog half-step rather than using the integer
+    /// displacement timestamp.
+    pub(crate) fn sample_at_time(
+        &self,
+        logical_time_ticks: f64,
+    ) -> Result<AmbientModeSample, AmbientModeError> {
+        if !logical_time_ticks.is_finite() {
+            return Err(AmbientModeError::InvalidState);
+        }
+
+        let day_tick = logical_time_ticks.rem_euclid(AMBIENT_DAY_TICKS as f64);
+        let lower_index = day_tick.floor() as usize;
+        let fraction = day_tick - lower_index as f64;
+        // Preserve the canonical integer-tick sample exactly. Evaluating the
+        // Hermite polynomial at t=0 is mathematically equivalent, but its
+        // arithmetic order can introduce tiny rounding differences.
+        if fraction == 0.0 {
+            return self.config.sample_at(lower_index as u64, &self.trajectory);
+        }
+        let (amplitude, amplitude_velocity, amplitude_acceleration) =
+            self.trajectory.sample_at_fraction(lower_index, fraction);
+        let day_cycles = day_tick / AMBIENT_DAY_TICKS as f64 + self.config.day_phase_offset_cycles;
+        let envelope = 0.5 * (1.0 + (TAU * day_cycles).cos());
+        let energy_density = AMBIENT_MIN_ENERGY_DENSITY
+            + (AMBIENT_MAX_ENERGY_DENSITY - AMBIENT_MIN_ENERGY_DENSITY) * envelope;
+        let total_energy = energy_density * self.config.world_area;
+        let angular_frequency =
+            TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
+        let carrier_cycles = day_tick * AMBIENT_CARRIER_CYCLES_PER_DAY as f64
+            / AMBIENT_DAY_TICKS as f64
+            + self.config.carrier_phase_offset_cycles;
+        let carrier_phase_radians = TAU * carrier_cycles.rem_euclid(1.0);
+        let cosine = carrier_phase_radians.cos();
+        let sine = carrier_phase_radians.sin();
+        let carrier_value = amplitude * cosine;
+        let carrier_velocity = amplitude_velocity * cosine - amplitude * angular_frequency * sine;
+        let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
+            * cosine
+            - 2.0 * amplitude_velocity * angular_frequency * sine;
+        let instantaneous_field_energy_density =
+            0.5 * self.config.field_normalization * carrier_velocity.powi(2);
+
+        if [
+            amplitude,
+            amplitude_velocity,
+            amplitude_acceleration,
+            energy_density,
+            total_energy,
+            carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_field_energy_density,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+            || amplitude <= 0.0
+            || energy_density < AMBIENT_MIN_ENERGY_DENSITY
+            || energy_density > AMBIENT_MAX_ENERGY_DENSITY
+        {
+            return Err(AmbientModeError::InvalidState);
+        }
+
+        Ok(AmbientModeSample {
+            tick: lower_index as u64,
+            energy_density,
+            total_energy,
+            amplitude,
+            amplitude_velocity,
+            amplitude_acceleration,
+            field_normalization: self.config.field_normalization,
+            angular_frequency,
+            carrier_phase_radians,
+            carrier_value,
+            carrier_velocity,
+            carrier_acceleration,
+            instantaneous_field_energy_density,
+        })
     }
 
     /// Total world generation since this mode's opening inventory.
@@ -371,6 +482,46 @@ mod tests {
     }
 
     #[test]
+    fn fractional_time_sample_matches_integer_samples_and_tracks_half_ticks() {
+        let mode = mode_at(317, 12.0);
+        let integer = mode.sample_at_time(317.0).unwrap();
+        assert_eq!(integer, mode.sample());
+
+        let half = mode.sample_at_time(317.5).unwrap();
+        assert_eq!(half.tick, 317);
+        assert_ne!(half.carrier_phase_radians, integer.carrier_phase_radians);
+        assert!(half.carrier_velocity.is_finite());
+        assert!(half.instantaneous_field_energy_density.is_finite());
+    }
+
+    #[test]
+    fn fractional_sampling_uses_consistent_cubic_hermite_derivatives() {
+        let mode = mode_at(0, 1.0);
+        let t = 317.37;
+        let sample = mode.sample_at_time(t).unwrap();
+        let epsilon = 1.0e-4;
+        let before = mode.sample_at_time(t - epsilon).unwrap();
+        let after = mode.sample_at_time(t + epsilon).unwrap();
+
+        let numerical_velocity = (after.amplitude - before.amplitude) / (2.0 * epsilon);
+        let numerical_acceleration =
+            (after.amplitude_velocity - before.amplitude_velocity) / (2.0 * epsilon);
+        assert!((sample.amplitude_velocity - numerical_velocity).abs() < 2.0e-7);
+        assert!((sample.amplitude_acceleration - numerical_acceleration).abs() < 2.0e-7);
+
+        let at_next_tick = mode.sample_at_time(318.0).unwrap();
+        let exact_next_tick = mode_at(318, 1.0).sample();
+        assert_eq!(
+            at_next_tick.amplitude.to_bits(),
+            exact_next_tick.amplitude.to_bits()
+        );
+        assert_eq!(
+            at_next_tick.amplitude_velocity.to_bits(),
+            exact_next_tick.amplitude_velocity.to_bits()
+        );
+    }
+
+    #[test]
     fn daily_cosine_envelope_spans_one_to_ten_over_24000_ticks() {
         let mut mode = mode_at(0, 12.0);
         assert_eq!(mode.sample().energy_density, 10.0);
@@ -409,14 +560,19 @@ mod tests {
     }
 
     #[test]
-    fn oscillator_amplitude_matches_the_declared_energy_density() {
+    fn wave_amplitude_matches_the_declared_energy_density() {
         let mut mode = mode_at(0, 3.0);
         for tick in 0..AMBIENT_DAY_TICKS {
             let sample = mode.sample();
-            let reconstructed =
-                0.5 * 2.5 * sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
-                    + 0.25 * 2.5 * sample.amplitude_velocity.powi(2);
+            let reconstructed = 0.25
+                * 2.5
+                * (sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
+                    + sample.amplitude_velocity.powi(2));
+            let instantaneous_kinetic = 0.5 * 2.5 * sample.carrier_velocity.powi(2);
             assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
+            assert!(
+                (instantaneous_kinetic - sample.instantaneous_field_energy_density).abs() < 1.0e-12
+            );
             assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
             if tick + 1 < AMBIENT_DAY_TICKS {
                 mode.advance_one_tick().unwrap();
