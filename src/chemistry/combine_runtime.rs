@@ -590,7 +590,6 @@ pub(crate) fn form_selected_bond_diagnostic(
     )
 }
 
-
 /// Validate and prepare the same live COMBINE bond without settling its energy.
 /// The enclosing transaction must fund and commit this bond atomically.
 pub(crate) fn prepare_selected_bond_for_field_funding(
