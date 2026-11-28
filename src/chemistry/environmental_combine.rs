@@ -1447,6 +1447,175 @@ pub(crate) fn resolve_environmental_with_settlement(
         attempt.settlement_transaction.heat_dissipated,
     ))
 }
+
+/// Detached environmental COMBINE funded directly by a staged resonance field.
+/// Production tick ownership and activation remain deliberately separate.
+#[allow(
+    dead_code,
+    reason = "Production field ownership and tick integration are intentionally gated"
+)]
+pub(crate) fn resolve_environmental_field_funded_with_provider<P>(
+    operation: EnvironmentalCombineOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+    provider: &mut P,
+) -> Option<crate::state::EnvironmentalEnergySettlement>
+where
+    P: crate::energy_ledger::EnvironmentalEnergyProvider,
+{
+    let source_a = environment
+        .field
+        .cells
+        .get(operation.cell_a)
+        .and_then(|cell| cell.physical_materials.get(operation.material_a))?;
+    let source_b = environment
+        .field
+        .cells
+        .get(operation.cell_b)
+        .and_then(|cell| cell.physical_materials.get(operation.material_b))?;
+    if source_a != &operation.source_a || source_b != &operation.source_b {
+        return None;
+    }
+
+    let (mut trial_structure, indices_a) = restored_source(&operation.source_a, environment)?;
+    let indices_b = crate::physical_material::restore_material(
+        &mut trial_structure,
+        &operation.source_b,
+        origin(),
+        &environment.catalog,
+    )?;
+    if indices_b.iter().any(|index| {
+        crate::construction_runtime::placed_unit_overlaps(
+            &trial_structure,
+            &trial_structure.units[*index],
+            &indices_b,
+            &environment.catalog,
+        )
+    }) {
+        return None;
+    }
+    let &unit_a = indices_a.get(operation.unit_a)?;
+    let &unit_b = indices_b.get(operation.unit_b)?;
+
+    // Discovery normally schedules only activated pairs, but the commit
+    // boundary must enforce that contract too: an operation may be stale or
+    // constructed by another caller. Recompute the activation barrier from
+    // the restored live materials and the operation's accumulated chemistry.
+    let (Some(properties_a), Some(properties_b)) = (
+        trial_structure.units[unit_a].properties(&environment.catalog),
+        trial_structure.units[unit_b].properties(&environment.catalog),
+    ) else {
+        return None;
+    };
+    let strength = crate::combine::bond_strength(properties_a, properties_b);
+    let barrier = crate::chemistry::activation_barrier_from_bond_strength(strength)?;
+    let activation_signal = crate::chemistry::normalized_chemistry_to_activation_signal(
+        operation.accumulated_reaction,
+    )?;
+    if !crate::chemistry::activated(activation_signal, barrier) {
+        return None;
+    }
+
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)?;
+    let mut staged_ledger = *ledger;
+    let mut staged_usable_energy = 0.0;
+    let mut cache = ConnectionCompatibilityCache::new();
+    let attempt = match crate::combine_runtime::prepare_selected_bond_for_field_funding(
+        &mut trial_structure,
+        unit_a,
+        unit_b,
+        operation.candidate,
+        operation.investment,
+        &environment.catalog,
+        &mut cache,
+        &mut staged_ledger,
+        &mut staged_usable_energy,
+    ) {
+        Ok(attempt) => attempt,
+        Err(_) => return None,
+    };
+    if !crate::combine_runtime::coalesce_fluid_pair_after_bond(
+        &mut trial_structure,
+        unit_a,
+        unit_b,
+        &environment.catalog,
+    ) {
+        return None;
+    }
+    let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)?;
+    let structural_delta = product_structural_energy - reactant_structural_energy;
+    if !structural_delta.is_finite() {
+        return None;
+    }
+    let product = physical_material_from_structure(&trial_structure, &environment.catalog)?;
+
+    // Plan the exact deficit from the post-coalescence physical product.
+    // This path is deficit-only: favorable reactions retain their existing
+    // explicitly modeled surplus destination.
+    let balance = crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
+        reactant_structural_energy,
+        product_structural_energy,
+        attempt.settlement_transaction.work_expended,
+        attempt.settlement_transaction.heat_dissipated,
+    )?;
+    if balance.required_external_input <= 0.0 {
+        return None;
+    }
+    let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
+    if !next_total_structural.is_finite() {
+        return None;
+    }
+    staged_ledger.total_structural_energy_held = next_total_structural;
+
+    // Validate removal indices before the provider is allowed to commit.
+    if operation.cell_a == operation.cell_b && operation.material_a >= operation.material_b {
+        return None;
+    }
+    if !crate::energy_ledger::settle_field_funded_reaction(
+        &mut staged_ledger,
+        provider,
+        balance,
+        crate::energy_ledger::EnergyReason::Combine,
+    ) {
+        return None;
+    }
+
+    // All fallible checks are complete. Remove in descending index order for a
+    // same-cell pair, insert the product at the first source slot, and invalidate
+    // every touched cell exactly once.
+    if operation.cell_a == operation.cell_b {
+        debug_assert!(operation.material_a < operation.material_b);
+        let cell = &mut environment.field.cells[operation.cell_a];
+        cell.physical_materials.remove(operation.material_b);
+        cell.physical_materials.remove(operation.material_a);
+        cell.physical_materials
+            .insert(operation.material_a, product);
+        environment.field.mark_changed_at_index(operation.cell_a);
+    } else {
+        environment.field.cells[operation.cell_a]
+            .physical_materials
+            .remove(operation.material_a);
+        environment.field.cells[operation.cell_b]
+            .physical_materials
+            .remove(operation.material_b);
+        environment.field.cells[operation.cell_a]
+            .physical_materials
+            .insert(operation.material_a, product);
+        environment.field.mark_changed_at_index(operation.cell_a);
+        environment.field.mark_changed_at_index(operation.cell_b);
+    }
+    // The merged physical product receives its new identity before any later
+    // environmental reaction can discover or reference it.
+    environment.field.assign_missing_material_identities();
+    *ledger = staged_ledger;
+    Some(crate::state::EnvironmentalEnergySettlement::settled(
+        -balance.required_external_input,
+        balance.required_external_input,
+        structural_delta,
+        attempt.settlement_transaction.work_expended,
+        attempt.settlement_transaction.heat_dissipated,
+    ))
+}
 pub(crate) fn resolve_environmental_preserving_accumulation_with_settlement(
     operation: EnvironmentalCombineOperation,
     environment: &mut Environment,
@@ -1464,6 +1633,87 @@ pub(crate) fn resolve_environmental_preserving_accumulation_with_settlement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct RejectingFieldProvider {
+        stage_attempts: usize,
+    }
+
+    impl crate::energy_ledger::EnvironmentalEnergyProvider for RejectingFieldProvider {
+        type StagedSource = ();
+
+        fn stage_funding(
+            &mut self,
+            _request: crate::energy_ledger::EnvironmentalEnergyRequest,
+        ) -> Option<crate::energy_ledger::StagedEnvironmentalFunding<Self::StagedSource>> {
+            self.stage_attempts += 1;
+            None
+        }
+
+        fn commit_funding(&mut self, _staged_source: Self::StagedSource) {}
+
+        fn cancel_funding(&mut self, _staged_source: Self::StagedSource) {}
+    }
+
+    #[test]
+    fn field_funded_combine_rejects_stale_source_before_field_or_ledger_settlement() {
+        let mut simulation = crate::state::Simulation::new(45701, 10.0);
+        let source = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &simulation.environment.catalog,
+        )
+        .expect("test source must be physically realizable");
+        let cell = &mut simulation.environment.field.cells[0];
+        cell.physical_materials.push(source.clone());
+        cell.physical_materials.push(source.clone());
+        let field_before = simulation.environment.field.cells[0]
+            .physical_materials
+            .clone();
+        let ledger_before = simulation.energy_ledger;
+        let mut provider = RejectingFieldProvider { stage_attempts: 0 };
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let operation = EnvironmentalCombineOperation {
+            cell_a: 0,
+            material_a: 0,
+            source_a: source.clone(),
+            cell_b: 0,
+            material_b: 1,
+            source_b: source,
+            unit_a: usize::MAX,
+            unit_b: 0,
+            candidate,
+            investment: 0.0,
+            accumulation_key: "stale-field-funded-operation".into(),
+            accumulated_reaction: 1.0,
+        };
+
+        assert!(resolve_environmental_field_funded_with_provider(
+            operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+            &mut provider,
+        )
+        .is_none());
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(
+            simulation.environment.field.cells[0].physical_materials,
+            field_before
+        );
+        assert_eq!(provider.stage_attempts, 0);
+    }
 
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
     ///

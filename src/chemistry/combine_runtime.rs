@@ -586,6 +586,81 @@ pub(crate) fn form_selected_bond_diagnostic(
         cache,
         ledger,
         energy,
+        true,
+    )
+}
+/// Validate and prepare the same live COMBINE bond without settling its energy.
+/// The enclosing transaction must fund and commit this bond atomically.
+pub(crate) fn prepare_selected_bond_for_field_funding(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<CombineAttempt, &'static str> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return Err("invalid unit indices");
+    }
+    // A selected candidate is only a proposal. Rebuild it from the live
+    // graph before committing so a small geometry change cannot reuse stale
+    // distance/facing/load values (and undercharge formation work).
+    let live_candidates = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    );
+    let live_candidate = live_candidates
+        .into_iter()
+        .find(|live| {
+            live.endpoint_a == candidate.endpoint_a
+                && live.endpoint_b == candidate.endpoint_b
+                && live.distance <= COMBINE_CONTACT_TOLERANCE
+                && live.available_a
+                && live.available_b
+        })
+        .ok_or("selected contact is no longer eligible")?;
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+        || !candidate.distance.is_finite()
+        || !candidate.facing.is_finite()
+        || !candidate.load_a.is_finite()
+        || !candidate.load_b.is_finite()
+        || (live_candidate.distance - candidate.distance).abs() > EPSILON
+        || (live_candidate.facing - candidate.facing).abs() > EPSILON
+        || (live_candidate.load_a - candidate.load_a).abs() > EPSILON
+        || (live_candidate.load_b - candidate.load_b).abs() > EPSILON
+    {
+        return Err("selected contact metrics changed before commit");
+    }
+    let point_a = live_candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)
+        .ok_or("candidate endpoint A has no world point")?;
+    let point_b = live_candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)
+        .ok_or("candidate endpoint B has no world point")?;
+    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
+        return Err("candidate endpoint world points exceed contact tolerance");
+    }
+    form_bond_from_candidate_diagnostic(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a: live_candidate.endpoint_a,
+            endpoint_b: live_candidate.endpoint_b,
+            investment,
+        },
+        live_candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+        false,
     )
 }
 
@@ -642,7 +717,7 @@ fn form_bond_from_candidate(
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
     form_bond_from_candidate_diagnostic(
-        structure, request, candidate, catalog, cache, ledger, energy,
+        structure, request, candidate, catalog, cache, ledger, energy, true,
     )
     .ok()
 }
@@ -655,6 +730,7 @@ fn form_bond_from_candidate_diagnostic(
     _cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     energy: &mut f64,
+    settle_energy: bool,
 ) -> Result<CombineAttempt, &'static str> {
     let BondFormationRequest {
         unit_a: ua,
@@ -741,25 +817,29 @@ fn form_bond_from_candidate_diagnostic(
         )
     }
     .ok_or("COMBINE energy transaction could not be constructed")?;
-    if !ledger.settle_transaction(energy, transaction) {
-        #[cfg(test)]
-        eprintln!(
-            "[combine-ledger-reject] holder={before:?} usable_delta={:?} structural_delta={:?} work={:?} heat={:?} balanced={:?} next_holder={:?} holder_ulp={:?} counters=(structural={:?},work={:?},heat={:?})",
-            transaction.usable_delta,
-            transaction.structural_delta,
-            transaction.work_expended,
-            transaction.heat_dissipated,
-            transaction.balanced(),
-            before + transaction.usable_delta,
-            (f64::from_bits(before.to_bits() + 1) - before).abs(),
-            ledger.total_structural_energy_delta,
-            ledger.total_work_expended,
-            ledger.total_heat_dissipated,
-        );
-        *energy = before;
-        return Err("energy ledger rejected COMBINE expenditure");
-    }
-    let net = *energy - before;
+    let net = if settle_energy {
+        if !ledger.settle_transaction(energy, transaction) {
+            #[cfg(test)]
+            eprintln!(
+                "[combine-ledger-reject] holder={before:?} usable_delta={:?} structural_delta={:?} work={:?} heat={:?} balanced={:?} next_holder={:?} holder_ulp={:?} counters=(structural={:?},work={:?},heat={:?})",
+                transaction.usable_delta,
+                transaction.structural_delta,
+                transaction.work_expended,
+                transaction.heat_dissipated,
+                transaction.balanced(),
+                before + transaction.usable_delta,
+                (f64::from_bits(before.to_bits() + 1) - before).abs(),
+                ledger.total_structural_energy_delta,
+                ledger.total_work_expended,
+                ledger.total_heat_dissipated,
+            );
+            *energy = before;
+            return Err("energy ledger rejected COMBINE expenditure");
+        }
+        *energy - before
+    } else {
+        transaction.usable_delta
+    };
     *structure = trial_structure;
     Ok(CombineAttempt {
         unit_a: ua,
