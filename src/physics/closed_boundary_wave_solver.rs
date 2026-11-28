@@ -1048,10 +1048,10 @@ fn validate_transfer_amount(amount: f64) -> Result<(), ClosedWaveError> {
 
 /// Finite spatial wave field with first-order radiating outer boundaries.
 ///
-/// The underlying leapfrog disturbance-energy change is accumulated as signed
-/// net transfer across the perimeter. Ambient/disturbance cross-energy is not
-/// included yet. Positive values represent energy entering the void; a small
-/// negative increment is retained so the discrete record remains auditable.
+/// The legacy advance path records disturbance-only net boundary transfer.
+/// The ambient-aware path additionally records the ambient/disturbance cross
+/// contribution and time-centred world-drive work. Positive outflow enters the
+/// void; small signed negative increments remain auditable.
 #[allow(
     dead_code,
     reason = "Validated open-boundary solver is staged for production ownership integration."
