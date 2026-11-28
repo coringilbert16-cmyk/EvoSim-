@@ -1921,7 +1921,14 @@ mod tests {
             - world_drive_work;
         assert!(
             conservation_residual.abs() < 2.0e-3,
-            "combined disturbance/ambient balance residual was {conservation_residual}"
+            "combined disturbance/ambient balance residual was {conservation_residual}; \
+             disturbance_delta={}, ambient_delta={}, cross_delta={}, combined_outflow={}, \
+             drive_work={}",
+            final_combined.disturbance_energy - initial_combined.disturbance_energy,
+            final_combined.ambient_energy - initial_combined.ambient_energy,
+            final_combined.cross_energy - initial_combined.cross_energy,
+            combined_outflow,
+            world_drive_work,
         );
         assert!(combined_outflow.abs() > 1.0e-12);
         assert!(world_drive_work.is_finite());
