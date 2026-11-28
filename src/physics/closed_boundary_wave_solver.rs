@@ -1356,8 +1356,8 @@ impl OpenBoundaryWaveField {
                 .map(|(current, previous)| (current - previous) / self.inner.time_step)
                 .sum::<f64>()
                 * self.inner.spacing.powi(2);
-            let disturbance_velocity_integral = 0.5
-                * (old_disturbance_velocity_integral + new_disturbance_velocity_integral);
+            let disturbance_velocity_integral =
+                0.5 * (old_disturbance_velocity_integral + new_disturbance_velocity_integral);
             let ambient_world_area = drive_sample.total_energy / drive_sample.energy_density;
             let step_world_drive_work = self.inner.normalization
                 * drive_sample.carrier_acceleration
