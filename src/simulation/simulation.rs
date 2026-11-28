@@ -427,7 +427,7 @@ impl Simulation {
             field,
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
-            closed_wave_field: None,
+            spatial_wave_field: None,
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -985,7 +985,7 @@ impl Simulation {
         self.environmental_local_resonance_samples.clear();
         self.tick += 1;
         self.advance_ambient_energy();
-        if let Some(field) = self.environment.closed_wave_field.as_mut() {
+        if let Some(field) = self.environment.spatial_wave_field.as_mut() {
             field
                 .advance_ticks(1)
                 .expect("persistent spatial wave field must advance exactly one logical tick");
@@ -1930,7 +1930,7 @@ mod decomposition_finalization_tests {
             field: ActiveMaterialField::new(1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE),
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
-            closed_wave_field: None,
+            spatial_wave_field: None,
         };
         let make_single = |name: &str, x: f64| {
             PhysicalMaterial::realized(
@@ -3398,66 +3398,74 @@ mod persistent_wave_field_ownership_tests {
     use super::*;
 
     #[test]
-    fn environment_owned_wave_field_survives_clone_and_serialization() {
+    fn environment_owned_open_wave_field_and_outflow_survive_clone_and_serialization() {
         let mut simulation = Simulation::new(45801, 10.0);
-        let mut field = crate::closed_boundary_wave_solver::ClosedBoundaryWaveField::new(
-            5, 5, 1.0, 0.2, 2, 2.0,
+        let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+            17, 13, 1.0, 0.2, 2, 2.0,
         )
-        .expect("test wave field configuration must be valid");
+        .expect("test open wave field configuration must be valid");
         field
-            .advance_ticks(3)
-            .expect("test field must advance deterministically");
-        simulation.environment.closed_wave_field = Some(field);
+            .set_initial_state(1, 6, 0.8, 1.0)
+            .expect("test wave packet must initialize");
+        field
+            .advance_ticks(30)
+            .expect("test open field must advance deterministically");
+        let expected_outflow = field.cumulative_outflow_energy();
+        assert!(expected_outflow > 0.0);
+        simulation.environment.spatial_wave_field = Some(field);
 
         let cloned = simulation.clone();
-        let cloned_time = cloned
+        let cloned_field = cloned
             .environment
-            .closed_wave_field
+            .spatial_wave_field
             .as_ref()
-            .expect("cloned environment must retain its wave field")
-            .logical_time_ticks();
-        assert_eq!(cloned_time, 3.0);
+            .expect("cloned environment must retain its open wave field");
+        assert_eq!(cloned_field.logical_time_ticks(), 30.0);
+        assert_eq!(cloned_field.cumulative_outflow_energy(), expected_outflow);
 
         let encoded = serde_json::to_string(&simulation.environment)
-            .expect("environment with wave state must serialize");
-        let restored: crate::state::Environment =
-            serde_json::from_str(&encoded).expect("environment with wave state must deserialize");
-        let restored_time = restored
-            .closed_wave_field
+            .expect("environment with open wave state must serialize");
+        let restored: crate::state::Environment = serde_json::from_str(&encoded)
+            .expect("environment with open wave state must deserialize");
+        let restored_field = restored
+            .spatial_wave_field
             .as_ref()
-            .expect("restored environment must retain its wave field")
-            .logical_time_ticks();
-        assert_eq!(restored_time, 3.0);
+            .expect("restored environment must retain its open wave field");
+        assert_eq!(restored_field.logical_time_ticks(), 30.0);
+        assert_eq!(restored_field.cumulative_outflow_energy(), expected_outflow);
     }
 
     #[test]
-    fn older_environment_snapshots_restore_without_a_wave_field() {
+    fn older_environment_snapshots_restore_without_a_spatial_wave_field() {
         let simulation = Simulation::new(45803, 10.0);
         let mut encoded =
             serde_json::to_value(&simulation.environment).expect("environment must serialize");
         encoded
             .as_object_mut()
             .expect("serialized environment must be an object")
-            .remove("closed_wave_field");
+            .remove("spatial_wave_field");
 
         let restored: crate::state::Environment = serde_json::from_value(encoded)
             .expect("older environment snapshots must remain compatible");
-        assert!(restored.closed_wave_field.is_none());
+        assert!(restored.spatial_wave_field.is_none());
     }
 
     #[test]
-    fn malformed_restored_wave_field_is_rejected() {
-        let field = crate::closed_boundary_wave_solver::ClosedBoundaryWaveField::new(
-            5, 5, 1.0, 0.2, 2, 2.0,
-        )
-        .expect("test wave field configuration must be valid");
-        let mut encoded = serde_json::to_value(&field).expect("test wave field must serialize");
-        encoded["current"]
+    fn malformed_restored_open_wave_field_is_rejected() {
+        let mut field =
+            crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(5, 5, 1.0, 0.2, 2, 2.0)
+                .expect("test open wave field configuration must be valid");
+        field
+            .set_initial_state(2, 2, 0.8, 1.0)
+            .expect("test wave state must initialize");
+        let mut encoded =
+            serde_json::to_value(&field).expect("test open wave field must serialize");
+        encoded["inner"]["current"]
             .as_array_mut()
             .expect("serialized current state must be an array")
             .pop();
         assert!(
-            serde_json::from_value::<crate::closed_boundary_wave_solver::ClosedBoundaryWaveField>(
+            serde_json::from_value::<crate::closed_boundary_wave_solver::OpenBoundaryWaveField>(
                 encoded
             )
             .is_err(),
@@ -3466,23 +3474,29 @@ mod persistent_wave_field_ownership_tests {
     }
 
     #[test]
-    fn installed_wave_field_advances_one_logical_tick_with_environment_tick() {
+    fn installed_open_wave_field_advances_one_logical_tick_with_environment_tick() {
         let mut simulation = Simulation::new(45802, 10.0);
-        simulation.environment.closed_wave_field = Some(
-            crate::closed_boundary_wave_solver::ClosedBoundaryWaveField::new(
-                5, 5, 1.0, 0.2, 2, 2.0,
-            )
-            .expect("test wave field configuration must be valid"),
-        );
+        let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+            17, 13, 1.0, 0.2, 2, 2.0,
+        )
+        .expect("test open wave field configuration must be valid");
+        field
+            .set_initial_state(1, 6, 0.8, 1.0)
+            .expect("test wave packet must initialize");
+        field
+            .advance_ticks(29)
+            .expect("test field must reach the tick before installation");
+        simulation.environment.spatial_wave_field = Some(field);
 
         simulation.step_environmental_chemistry_with_transport_reuse::<true>();
 
-        let field_time = simulation
+        let installed = simulation
             .environment
-            .closed_wave_field
+            .spatial_wave_field
             .as_ref()
-            .expect("installed wave field must remain owned")
-            .logical_time_ticks();
-        assert_eq!(field_time, 1.0);
+            .expect("installed open wave field must remain owned");
+        assert_eq!(installed.logical_time_ticks(), 30.0);
+        assert!(installed.cumulative_outflow_energy().is_finite());
+        assert!(installed.cumulative_outflow_energy() > 0.0);
     }
 }
