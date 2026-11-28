@@ -493,7 +493,7 @@ impl ClosedBoundaryWaveField {
     /// signed boundary transfer: positive is energy delivered to the void.
     fn advance_one_substep_open(
         &mut self,
-        ambient_velocity_after: f64,
+        ambient_velocity_at_boundary_center: f64,
     ) -> Result<f64, ClosedWaveError> {
         self.substeps_elapsed
             .checked_add(1)
@@ -584,7 +584,7 @@ impl ClosedBoundaryWaveField {
             next[corner] = 0.5 * (horizontal_prediction + vertical_prediction);
         }
 
-        if !ambient_velocity_after.is_finite() {
+        if !ambient_velocity_at_boundary_center.is_finite() {
             return Err(ClosedWaveError::InvalidState);
         }
         let mut boundary_velocity_difference = 0.0;
@@ -601,8 +601,12 @@ impl ClosedBoundaryWaveField {
         for (corner, _, _) in corners {
             boundary_velocity_difference += closed_next[corner] - next[corner];
         }
+        // The boundary-induced change in the disturbance velocity integral
+        // is centred between the old and new leapfrog velocity states. The
+        // cross-energy flux must use the ambient velocity at that same centre
+        // (the arithmetic mean of its before/after samples), not the endpoint.
         let cross_outflow = self.normalization
-            * ambient_velocity_after
+            * ambient_velocity_at_boundary_center
             * self.spacing.powi(2)
             * boundary_velocity_difference
             / self.time_step;
@@ -1341,9 +1345,11 @@ impl OpenBoundaryWaveField {
             let ambient_after = ambient
                 .sample_at_time(next_velocity_time)
                 .map_err(|_| ClosedWaveError::InvalidState)?;
+            let ambient_velocity_at_boundary_center =
+                0.5 * (ambient_before.carrier_velocity + ambient_after.carrier_velocity);
             let cross_outflow = self
                 .inner
-                .advance_one_substep_open(ambient_after.carrier_velocity)?;
+                .advance_one_substep_open(ambient_velocity_at_boundary_center)?;
             let step_disturbance_outflow = energy_before - self.inner.energy();
             let step_combined_outflow = step_disturbance_outflow + cross_outflow;
             let new_disturbance_velocity_integral = self
