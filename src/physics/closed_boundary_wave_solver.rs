@@ -1908,10 +1908,23 @@ mod tests {
                 .unwrap();
         let ambient =
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0).unwrap();
+        let initial_combined = open.combined_energy(&ambient).unwrap();
+        assert!(initial_combined.cross_energy.abs() > 1.0e-12);
+
         open.advance_substeps_with_ambient(4, &ambient).unwrap();
 
-        assert!(open.cumulative_combined_outflow_energy().is_finite());
-        assert!(open.cumulative_world_drive_work().is_finite());
+        let final_combined = open.combined_energy(&ambient).unwrap();
+        let combined_outflow = open.cumulative_combined_outflow_energy();
+        let world_drive_work = open.cumulative_world_drive_work();
+        let conservation_residual =
+            final_combined.total_energy - initial_combined.total_energy + combined_outflow
+                - world_drive_work;
+        assert!(
+            conservation_residual.abs() < 2.0e-3,
+            "combined disturbance/ambient balance residual was {conservation_residual}"
+        );
+        assert!(combined_outflow.abs() > 1.0e-12);
+        assert!(world_drive_work.is_finite());
 
         let mut ambient_only = OpenBoundaryWaveField::new(3, 3, 1.0, 0.2, 2, 2.0).unwrap();
         let ambient_only_config =
