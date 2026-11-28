@@ -1,10 +1,13 @@
-//! Isolated dense reference solver for a finite, closed 2D wave domain.
+//! Dense reference solver for a finite, closed 2D wave domain.
 //!
 //! The outer faces are reflecting (zero normal flux). The discretization is
 //! cell-centred: only edges between cells inside the domain contribute to the
-//! graph Laplacian. No exterior ghost cells, fixed-zero edge nodes, damping,
-//! or outflow account are present. This is deliberately independent of the
-//! production simulation tick, chemistry, materials, and energy ledger.
+//! graph Laplacian. No exterior ghost cells, damping, or outflow account are
+//! present. Simulation can preserve and advance this state, but this closed
+//! boundary is not the production open-world field. Production activation
+//! remains gated on validated outflow and whole-world energy reconciliation.
+
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Deterministic local reconstruction of the discrete field at a world position.
 /// Spatial derivatives are node-centred finite differences, interpolated with
@@ -41,7 +44,7 @@ pub(crate) enum ClosedWaveError {
     EnergySettlementFailed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub(crate) struct ClosedBoundaryWaveField {
     width: usize,
     height: usize,
@@ -55,6 +58,53 @@ pub(crate) struct ClosedBoundaryWaveField {
     substeps_elapsed: u64,
     horizontal_coupling: Vec<f64>,
     vertical_coupling: Vec<f64>,
+}
+
+#[derive(Deserialize)]
+struct ClosedBoundaryWaveFieldState {
+    width: usize,
+    height: usize,
+    spacing: f64,
+    propagation_speed: f64,
+    time_step: f64,
+    substeps_per_tick: usize,
+    normalization: f64,
+    previous: Vec<f64>,
+    current: Vec<f64>,
+    substeps_elapsed: u64,
+    horizontal_coupling: Vec<f64>,
+    vertical_coupling: Vec<f64>,
+}
+
+impl<'de> Deserialize<'de> for ClosedBoundaryWaveField {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+
+        let state = ClosedBoundaryWaveFieldState::deserialize(deserializer)?;
+        let field = Self {
+            width: state.width,
+            height: state.height,
+            spacing: state.spacing,
+            propagation_speed: state.propagation_speed,
+            time_step: state.time_step,
+            substeps_per_tick: state.substeps_per_tick,
+            normalization: state.normalization,
+            previous: state.previous,
+            current: state.current,
+            substeps_elapsed: state.substeps_elapsed,
+            horizontal_coupling: state.horizontal_coupling,
+            vertical_coupling: state.vertical_coupling,
+        };
+        if !field.has_valid_serialized_state() {
+            return Err(D::Error::custom(
+                "invalid serialized closed wave field state",
+            ));
+        }
+        Ok(field)
+    }
 }
 
 /// Grid edge orientation for a conservative internal material interface.
@@ -80,6 +130,60 @@ pub(crate) struct InternalBoundaryEdge {
 }
 
 impl ClosedBoundaryWaveField {
+    fn has_valid_serialized_state(&self) -> bool {
+        if self.width < 2
+            || self.height < 2
+            || !self.spacing.is_finite()
+            || self.spacing <= 0.0
+            || !self.propagation_speed.is_finite()
+            || self.propagation_speed <= 0.0
+            || self.substeps_per_tick == 0
+            || !self.normalization.is_finite()
+            || self.normalization <= 0.0
+            || !self.time_step.is_finite()
+            || self.time_step <= 0.0
+            || self.time_step.to_bits() != (1.0 / self.substeps_per_tick as f64).to_bits()
+        {
+            return false;
+        }
+
+        let Some(cell_count) = self.width.checked_mul(self.height) else {
+            return false;
+        };
+        let Some(horizontal_count) = self
+            .width
+            .checked_sub(1)
+            .and_then(|width| width.checked_mul(self.height))
+        else {
+            return false;
+        };
+        let Some(vertical_count) = self
+            .height
+            .checked_sub(1)
+            .and_then(|height| height.checked_mul(self.width))
+        else {
+            return false;
+        };
+        let courant = self.propagation_speed * self.time_step / self.spacing;
+
+        self.previous.len() == cell_count
+            && self.current.len() == cell_count
+            && self.horizontal_coupling.len() == horizontal_count
+            && self.vertical_coupling.len() == vertical_count
+            && courant.is_finite()
+            && courant <= std::f64::consts::FRAC_1_SQRT_2
+            && self
+                .previous
+                .iter()
+                .chain(&self.current)
+                .all(|value| value.is_finite())
+            && self
+                .horizontal_coupling
+                .iter()
+                .chain(&self.vertical_coupling)
+                .all(|value| value.is_finite() && (0.0..=1.0).contains(value))
+    }
+
     pub(crate) fn new(
         width: usize,
         height: usize,
@@ -487,25 +591,184 @@ impl ClosedBoundaryWaveField {
         Ok(())
     }
 
+    /// Derive the exact quadratic energy response from the four-node stencil
+    /// and its incident edges. No full-grid clone or energy scan is required.
     fn local_impulse_energy_coefficients(
         &self,
         x_l: f64,
         y_l: f64,
     ) -> Result<(f64, f64), ClosedWaveError> {
         let nodes = self.local_interaction_nodes(x_l, y_l)?;
-        let baseline = self.energy();
-        let mut plus = self.clone();
-        let mut minus = self.clone();
-        plus.apply_local_impulse_nodes(&nodes, 1.0)?;
-        minus.apply_local_impulse_nodes(&nodes, -1.0)?;
-        let plus_delta = plus.energy() - baseline;
-        let minus_delta = minus.energy() - baseline;
-        let quadratic = 0.5 * (plus_delta + minus_delta);
-        let linear = 0.5 * (plus_delta - minus_delta);
+        let kinetic_scale =
+            2.0 * self.normalization * self.spacing.powi(2) / self.time_step.powi(2);
+        let mut quadratic = 0.0;
+        let mut linear = 0.0;
+        for &(index, weight) in &nodes {
+            if weight == 0.0 {
+                continue;
+            }
+            let difference = self.current[index] - self.previous[index];
+            linear += kinetic_scale * difference * weight;
+            quadratic += kinetic_scale * weight.powi(2);
+        }
+
+        let edge_scale = 0.5 * self.normalization * self.propagation_speed.powi(2);
+        let mut visited_edges = Vec::with_capacity(16);
+        let mut visit_edge = |horizontal: bool,
+                              edge_index: usize,
+                              center_index: usize,
+                              neighbor_index: usize,
+                              coupling: f64,
+                              center_weight: f64| {
+            let edge_key = (horizontal, edge_index);
+            if visited_edges.contains(&edge_key) {
+                return;
+            }
+            visited_edges.push(edge_key);
+            let neighbor_weight = nodes
+                .iter()
+                .find(|(index, _)| *index == neighbor_index)
+                .map(|(_, weight)| *weight)
+                .unwrap_or(0.0);
+            let weight_difference = neighbor_weight - center_weight;
+            let current_difference = self.current[neighbor_index] - self.current[center_index];
+            let previous_difference = self.previous[neighbor_index] - self.previous[center_index];
+            linear += edge_scale
+                * coupling
+                * weight_difference
+                * (previous_difference - current_difference);
+            quadratic -= edge_scale * coupling * weight_difference.powi(2);
+        };
+
+        for &(index, weight) in &nodes {
+            if weight == 0.0 {
+                continue;
+            }
+            let x = index % self.width;
+            let y = index / self.width;
+            if x + 1 < self.width {
+                let edge = y * (self.width - 1) + x;
+                visit_edge(
+                    true,
+                    edge,
+                    index,
+                    index + 1,
+                    self.horizontal_coupling[edge],
+                    weight,
+                );
+            }
+            if x > 0 {
+                let edge = y * (self.width - 1) + x - 1;
+                visit_edge(
+                    true,
+                    edge,
+                    index,
+                    index - 1,
+                    self.horizontal_coupling[edge],
+                    weight,
+                );
+            }
+            if y + 1 < self.height {
+                let edge = y * self.width + x;
+                visit_edge(
+                    false,
+                    edge,
+                    index,
+                    index + self.width,
+                    self.vertical_coupling[edge],
+                    weight,
+                );
+            }
+            if y > 0 {
+                let edge = (y - 1) * self.width + x;
+                visit_edge(
+                    false,
+                    edge,
+                    index,
+                    index - self.width,
+                    self.vertical_coupling[edge],
+                    weight,
+                );
+            }
+        }
+
         if !quadratic.is_finite() || quadratic <= 0.0 || !linear.is_finite() {
             return Err(ClosedWaveError::InvalidState);
         }
         Ok((quadratic, linear))
+    }
+
+    fn local_energy_contribution(&self, nodes: &[(usize, f64); 4]) -> Result<f64, ClosedWaveError> {
+        let mut energy = 0.0;
+        for &(index, weight) in nodes {
+            if weight == 0.0 {
+                continue;
+            }
+            let velocity = (self.current[index] - self.previous[index]) / self.time_step;
+            energy += 0.5 * self.normalization * velocity.powi(2) * self.spacing.powi(2);
+        }
+
+        let mut visited_edges = Vec::with_capacity(16);
+        let mut visit_edge = |horizontal: bool,
+                              edge_index: usize,
+                              center_index: usize,
+                              neighbor_index: usize,
+                              coupling: f64| {
+            let edge_key = (horizontal, edge_index);
+            if visited_edges.contains(&edge_key) {
+                return;
+            }
+            visited_edges.push(edge_key);
+            let current_difference = self.current[neighbor_index] - self.current[center_index];
+            let previous_difference = self.previous[neighbor_index] - self.previous[center_index];
+            energy += 0.5
+                * self.normalization
+                * self.propagation_speed.powi(2)
+                * coupling
+                * current_difference
+                * previous_difference;
+        };
+
+        for &(index, weight) in nodes {
+            if weight == 0.0 {
+                continue;
+            }
+            let x = index % self.width;
+            let y = index / self.width;
+            if x + 1 < self.width {
+                let edge = y * (self.width - 1) + x;
+                visit_edge(true, edge, index, index + 1, self.horizontal_coupling[edge]);
+            }
+            if x > 0 {
+                let edge = y * (self.width - 1) + x - 1;
+                visit_edge(true, edge, index, index - 1, self.horizontal_coupling[edge]);
+            }
+            if y + 1 < self.height {
+                let edge = y * self.width + x;
+                visit_edge(
+                    false,
+                    edge,
+                    index,
+                    index + self.width,
+                    self.vertical_coupling[edge],
+                );
+            }
+            if y > 0 {
+                let edge = (y - 1) * self.width + x;
+                visit_edge(
+                    false,
+                    edge,
+                    index,
+                    index - self.width,
+                    self.vertical_coupling[edge],
+                );
+            }
+        }
+
+        energy
+            .is_finite()
+            .then_some(energy)
+            .ok_or(ClosedWaveError::InvalidState)
     }
 
     fn apply_and_verify_local_impulse(
@@ -519,12 +782,30 @@ impl ClosedBoundaryWaveField {
             return Err(ClosedWaveError::InvalidState);
         }
         let nodes = self.local_interaction_nodes(x_l, y_l)?;
-        let before = self.clone();
+        let before = self.local_energy_contribution(&nodes)?;
+        let original_values: Vec<_> = nodes
+            .iter()
+            .filter(|(_, weight)| *weight != 0.0)
+            .map(|(index, _)| (*index, self.previous[*index], self.current[*index]))
+            .collect();
         self.apply_local_impulse_nodes(&nodes, impulse)?;
-        let actual_delta = self.energy() - before.energy();
+        let after = match self.local_energy_contribution(&nodes) {
+            Ok(after) => after,
+            Err(error) => {
+                for (index, previous, current) in original_values {
+                    self.previous[index] = previous;
+                    self.current[index] = current;
+                }
+                return Err(error);
+            }
+        };
+        let actual_delta = after - before;
         let tolerance = 2.0e-10 * expected_delta.abs().max(1.0);
         if !actual_delta.is_finite() || (actual_delta - expected_delta).abs() > tolerance {
-            *self = before;
+            for (index, previous, current) in original_values {
+                self.previous[index] = previous;
+                self.current[index] = current;
+            }
             return Err(ClosedWaveError::EnergySettlementFailed);
         }
         Ok(())
@@ -549,12 +830,26 @@ impl ClosedBoundaryWaveField {
         let y1 = (y0 + 1).min(self.height - 1);
         let tx = x - x0 as f64;
         let ty = y - y0 as f64;
-        Ok([
+        let raw = [
             (self.index(x0, y0), (1.0 - tx) * (1.0 - ty)),
             (self.index(x1, y0), tx * (1.0 - ty)),
             (self.index(x0, y1), (1.0 - tx) * ty),
             (self.index(x1, y1), tx * ty),
-        ])
+        ];
+        let mut combined = [(0, 0.0); 4];
+        let mut combined_count = 0;
+        for (index, weight) in raw {
+            if let Some((_, combined_weight)) = combined[..combined_count]
+                .iter_mut()
+                .find(|(existing_index, _)| *existing_index == index)
+            {
+                *combined_weight += weight;
+            } else {
+                combined[combined_count] = (index, weight);
+                combined_count += 1;
+            }
+        }
+        Ok(combined)
     }
 
     fn apply_local_impulse_nodes(
@@ -564,6 +859,9 @@ impl ClosedBoundaryWaveField {
     ) -> Result<(), ClosedWaveError> {
         let mut updates = Vec::with_capacity(4);
         for (index, weight) in nodes {
+            if *weight == 0.0 {
+                continue;
+            }
             let current = self.current[*index] + impulse * weight;
             let previous = self.previous[*index] - impulse * weight;
             if !current.is_finite() || !previous.is_finite() {
@@ -633,6 +931,41 @@ mod tests {
             }
         }
         field
+    }
+
+    #[test]
+    fn local_impulse_coefficients_match_full_grid_energy_at_interior_and_boundaries() {
+        let field = energized_field();
+        for (x, y) in [(4.25, 4.5), (0.0, 0.0), (8.0, 8.0), (0.0, 4.5)] {
+            let nodes = field.local_interaction_nodes(x, y).unwrap();
+            let baseline = field.energy();
+            let mut plus = field.clone();
+            let mut minus = field.clone();
+            plus.apply_local_impulse_nodes(&nodes, 1.0).unwrap();
+            minus.apply_local_impulse_nodes(&nodes, -1.0).unwrap();
+            let plus_delta = plus.energy() - baseline;
+            let minus_delta = minus.energy() - baseline;
+            let local_before = field.local_energy_contribution(&nodes).unwrap();
+            let local_after = plus.local_energy_contribution(&nodes).unwrap();
+            close(local_after - local_before, plus_delta, 2.0e-12);
+            let expected_quadratic = 0.5 * (plus_delta + minus_delta);
+            let expected_linear = 0.5 * (plus_delta - minus_delta);
+            let (quadratic, linear) = field.local_impulse_energy_coefficients(x, y).unwrap();
+            close(quadratic, expected_quadratic, 2.0e-12);
+            close(linear, expected_linear, 2.0e-12);
+        }
+    }
+
+    #[test]
+    fn boundary_local_transfer_debits_the_exact_requested_energy() {
+        let mut field = energized_field();
+        let mut matter = MatterEnergyAccount::new(0.0).unwrap();
+        let before = field.energy();
+        field
+            .transfer_to_matter(0.0, 0.0, 0.000001, &mut matter)
+            .unwrap();
+        close(before - field.energy(), 0.000001, 2.0e-10);
+        close(matter.stored_energy(), 0.000001, 1.0e-12);
     }
 
     #[test]
