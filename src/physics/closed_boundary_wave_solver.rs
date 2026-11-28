@@ -33,12 +33,12 @@ pub(crate) struct ClosedWaveSample {
 }
 
 /// Combined finite-domain field inventory evaluated at the disturbance's
-/// leapfrog velocity time centre. The ambient oscillator and cross terms use
+/// leapfrog velocity time centre. The ambient kinetic and cross terms use
 /// values sampled at that same time centre.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CombinedFieldEnergy {
     pub(crate) disturbance_energy: f64,
-    pub(crate) ambient_oscillator_energy: f64,
+    pub(crate) ambient_energy: f64,
     pub(crate) cross_energy: f64,
     pub(crate) total_energy: f64,
 }
@@ -1108,15 +1108,15 @@ impl OpenBoundaryWaveField {
             .map_err(|_| ClosedWaveError::InvalidState)?;
         self.combined_energy_at_velocity_center(
             sample.carrier_velocity,
-            sample.instantaneous_oscillator_energy_density,
+            sample.instantaneous_field_energy_density,
             sample.field_normalization,
         )
     }
 
-    /// Compose the discrete disturbance invariant with the ambient oscillator
-    /// and cross-energy at the same leapfrog velocity time centre.
+    /// Compose the discrete disturbance invariant with ambient wave kinetic
+    /// energy and the cross term at the same leapfrog velocity time centre.
     ///
-    /// The ambient carrier velocity and oscillator energy density must be
+    /// The ambient carrier velocity and kinetic energy density must be
     /// sampled at velocity_time_ticks(). The ambient mode is uniform, so its
     /// oscillator energy is multiplied by the finite accounting area.
     /// The cross term is integrated against the discrete disturbance velocity
@@ -1124,7 +1124,7 @@ impl OpenBoundaryWaveField {
     pub(crate) fn combined_energy_at_velocity_center(
         &self,
         ambient_carrier_velocity: f64,
-        ambient_oscillator_energy_density: f64,
+        ambient_energy_density: f64,
         ambient_field_normalization: f64,
     ) -> Result<CombinedFieldEnergy, ClosedWaveError> {
         if !ambient_carrier_velocity.is_finite()
