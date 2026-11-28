@@ -1738,7 +1738,7 @@ mod tests {
 
         assert!(
             (combined.ambient_energy
-                - expected.instantaneous_oscillator_energy_density * 9.0)
+                - expected.instantaneous_field_energy_density * 9.0)
                 .abs()
                 < 1.0e-12
         );
