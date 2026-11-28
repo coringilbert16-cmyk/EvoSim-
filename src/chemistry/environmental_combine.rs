@@ -2613,6 +2613,17 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
+        let field_constituent_inventory =
+            |field: &crate::environment::ActiveMaterialField| -> BTreeMap<String, f64> {
+                let mut totals = BTreeMap::new();
+                for cell in &field.cells {
+                    for (name, amount) in cell.total_material() {
+                        *totals.entry(name).or_insert(0.0) += amount;
+                    }
+                }
+                totals
+            };
+        let initial_constituents = field_constituent_inventory(&simulation.environment.field);
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
@@ -3371,6 +3382,12 @@ mod tests {
         );
         assert_eq!(product.placements.as_ref().map(Vec::len), Some(3));
         assert_eq!(product.realized_shapes.as_ref().map(Vec::len), Some(3));
+        let after_combine_constituents =
+            field_constituent_inventory(&simulation.environment.field);
+        assert_eq!(
+            after_combine_constituents, initial_constituents,
+            "environmental COMBINE must conserve every elemental constituent across the entire field"
+        );
         let connections = product
             .internal_connections
             .as_ref()
