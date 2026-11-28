@@ -349,6 +349,14 @@ impl WorldGeneratedAmbientMode {
         let day_tick = logical_time_ticks.rem_euclid(AMBIENT_DAY_TICKS as f64);
         let lower_index = day_tick.floor() as usize;
         let fraction = day_tick - lower_index as f64;
+        // Preserve the canonical integer-tick sample exactly. Evaluating the
+        // Hermite polynomial at t=0 is mathematically equivalent, but its
+        // arithmetic order can introduce tiny rounding differences.
+        if fraction == 0.0 {
+            return self
+                .config
+                .sample_at(lower_index as u64, &self.trajectory);
+        }
         let (amplitude, amplitude_velocity, amplitude_acceleration) =
             self.trajectory.sample_at_fraction(lower_index, fraction);
         let day_cycles = day_tick / AMBIENT_DAY_TICKS as f64 + self.config.day_phase_offset_cycles;
