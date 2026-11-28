@@ -1062,9 +1062,10 @@ fn validate_transfer_amount(amount: f64) -> Result<(), ClosedWaveError> {
 pub(crate) struct OpenBoundaryWaveField {
     inner: ClosedBoundaryWaveField,
     cumulative_outflow_energy: f64,
+    #[serde(default)]
     cumulative_combined_outflow_energy: f64,
+    #[serde(default)]
     cumulative_world_drive_work: f64,
-}
 
 #[derive(Deserialize)]
 struct OpenBoundaryWaveFieldState {
@@ -1864,6 +1865,36 @@ mod tests {
                 < 1.0e-12
         );
         assert_eq!(open.velocity_time_ticks(), -0.125);
+    }
+
+    #[test]
+    fn ambient_advance_reconciles_combined_inventory_with_drive_and_outflow() {
+        let mut open = OpenBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
+        for y in 0..9 {
+            for x in 0..9 {
+                let radius_squared =
+                    (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
+                let current = (-radius_squared / 8.0).exp();
+                let previous = current - 0.1 * current;
+                open.set_initial_state(x, y, previous, current).unwrap();
+            }
+        }
+        let config =
+            crate::world_generated_ambient_mode::AmbientModeConfig::new(81.0, 2.0, 0.0, 0.0)
+                .unwrap();
+        let ambient =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
+                .unwrap();
+        let before = open.combined_energy(&ambient).unwrap().total_energy;
+
+        open.advance_substeps_with_ambient(4, &ambient).unwrap();
+
+        let after = open.combined_energy(&ambient).unwrap().total_energy;
+        let accounted_change = open.cumulative_world_drive_work()
+            - open.cumulative_combined_outflow_energy();
+        close(after - before, accounted_change, 2.0e-12);
+        assert!(open.cumulative_combined_outflow_energy().is_finite());
+        assert!(open.cumulative_world_drive_work().is_finite());
     }
 
     #[test]
