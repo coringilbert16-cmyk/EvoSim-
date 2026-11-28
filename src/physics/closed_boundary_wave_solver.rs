@@ -589,16 +589,14 @@ impl ClosedBoundaryWaveField {
         }
         let mut boundary_velocity_difference = 0.0;
         for y in 1..self.height - 1 {
+            boundary_velocity_difference += closed_next[self.index(0, y)] - next[self.index(0, y)];
             boundary_velocity_difference +=
-                closed_next[self.index(0, y)] - next[self.index(0, y)];
-            boundary_velocity_difference += closed_next[self.index(self.width - 1, y)]
-                - next[self.index(self.width - 1, y)];
+                closed_next[self.index(self.width - 1, y)] - next[self.index(self.width - 1, y)];
         }
         for x in 1..self.width - 1 {
+            boundary_velocity_difference += closed_next[self.index(x, 0)] - next[self.index(x, 0)];
             boundary_velocity_difference +=
-                closed_next[self.index(x, 0)] - next[self.index(x, 0)];
-            boundary_velocity_difference += closed_next[self.index(x, self.height - 1)]
-                - next[self.index(x, self.height - 1)];
+                closed_next[self.index(x, self.height - 1)] - next[self.index(x, self.height - 1)];
         }
         for (corner, _, _) in corners {
             boundary_velocity_difference += closed_next[corner] - next[corner];
@@ -1328,13 +1326,13 @@ impl OpenBoundaryWaveField {
         for _ in 0..steps {
             let energy_before = self.inner.energy();
             let next_velocity_time =
-                (self.inner.substeps_elapsed as f64 + 0.5)
-                    / self.inner.substeps_per_tick as f64;
+                (self.inner.substeps_elapsed as f64 + 0.5) / self.inner.substeps_per_tick as f64;
             let ambient_after = ambient
                 .sample_at_time(next_velocity_time)
                 .map_err(|_| ClosedWaveError::InvalidState)?;
-            let cross_outflow =
-                self.inner.advance_one_substep_open(ambient_after.carrier_velocity)?;
+            let cross_outflow = self
+                .inner
+                .advance_one_substep_open(ambient_after.carrier_velocity)?;
             let step_disturbance_outflow = energy_before - self.inner.energy();
             let step_combined_outflow = step_disturbance_outflow + cross_outflow;
             let disturbance_velocity_integral = self
@@ -1342,9 +1340,7 @@ impl OpenBoundaryWaveField {
                 .current
                 .iter()
                 .zip(&self.inner.previous)
-                .map(|(current, previous)| {
-                    (current - previous) / self.inner.time_step
-                })
+                .map(|(current, previous)| (current - previous) / self.inner.time_step)
                 .sum::<f64>()
                 * self.inner.spacing.powi(2);
             let ambient_world_area = ambient_after.total_energy / ambient_after.energy_density;
@@ -1372,8 +1368,7 @@ impl OpenBoundaryWaveField {
         }
 
         let next_disturbance_outflow = self.cumulative_outflow_energy + disturbance_outflow;
-        let next_combined_outflow =
-            self.cumulative_combined_outflow_energy + combined_outflow;
+        let next_combined_outflow = self.cumulative_combined_outflow_energy + combined_outflow;
         let next_world_drive_work = self.cumulative_world_drive_work + world_drive_work;
         if [
             next_disturbance_outflow,
@@ -1887,8 +1882,7 @@ mod tests {
         let mut open = OpenBoundaryWaveField::new(9, 9, 1.0, 0.2, 2, 2.0).unwrap();
         for y in 0..9 {
             for x in 0..9 {
-                let radius_squared =
-                    (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
+                let radius_squared = (x as f64 - 4.0).powi(2) + (y as f64 - 4.0).powi(2);
                 let current = (-radius_squared / 8.0).exp();
                 let previous = current - 0.1 * current;
                 open.set_initial_state(x, y, previous, current).unwrap();
@@ -1898,8 +1892,7 @@ mod tests {
             crate::world_generated_ambient_mode::AmbientModeConfig::new(81.0, 2.0, 0.0, 0.0)
                 .unwrap();
         let ambient =
-            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
-                .unwrap();
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0).unwrap();
         open.advance_substeps_with_ambient(4, &ambient).unwrap();
 
         assert!(open.cumulative_combined_outflow_energy().is_finite());
