@@ -1,27 +1,28 @@
-# Current implementation status — 2026-11-28 (authoritative update)
+# Current implementation status — 2026-11-27 (authoritative update)
 
-This status block supersedes older phase sequencing and integration directions later in this document wherever they conflict. The original sections remain historical design/validation records; follow this current order rather than reviving stale gates.
+This status block supersedes older dated sequencing and physical-boundary decisions later in this document wherever they conflict. The original sections remain historical design/validation records; follow this current order rather than reviving stale gates.
 
 - **Phase 0 — baseline:** complete.
 - **Phase 1 — physical equations and energy contracts:** complete.
-- **Phase 2 — independent wave solver foundations:** complete and formally closed. Do not repeat propagation, stability, interference, or broad convergence work.
-- **Phase 3C — ambient and numerical foundations:** complete. The approved ambient schedule/accounting, dense finite reference solver, reflecting zero-normal-flux boundary, and performance comparison are established. PR #451 is merged; do not reopen solver work without a demonstrated failure.
-- **Phase 3D — field-to-material transfer:** local field queries, exposed-boundary flux measurement with multi-body occlusion, staged provider funding, and atomic field-funded reaction-ledger settlement are implemented in merged PRs #452 and #455. The transfer path remains isolated from production ticks.
-- **Chemistry:** continues independently. The next integration target is environmental COMBINE, a real nonliving chemistry reaction already resolved transactionally in `src/chemistry/environmental_combine.rs`.
-- **Current integration gap:** environmental COMBINE still settles through `Environment::chemistry_usable_energy`; the closed-wave funding adapter is isolated and no persistent closed-wave field is owned by the production `Environment` or `Simulation`. Do not bridge this by temporarily crediting a usable-energy holder or treating field energy as external input.
-- **Next implementation:** add a detached field-funded environmental COMBINE path that uses the existing contact, activation, structural-potential, and product-geometry logic; fund only the exact positive reaction deficit from a staged field provider; and commit the physical product, ledger, and field source together or reject without mutation. Favorable reactions with a surplus remain on the existing explicitly modeled path; do not silently route surplus into nonliving usable energy.
-- **Production ticks:** remain gated. Persistent field ownership, world-level inventory/reconciliation, and lifecycle integration must be addressed before any production tick activation.
-- **Optimization:** use the accepted dense-solver performance result. Do not revive adaptive live execution, PML/outflow exploration, or repeated numerical validation without a demonstrated failure.
+- **Phase 2 — independent wave-solver foundations:** complete and formally closed. Do not repeat propagation, stability, interference, or broad convergence work.
+- **Phase 3C — ambient and numerical foundations:** complete. The approved 24,000-tick / 440-cycle ambient model, ambient/disturbance composition equations, dense reference solver, and performance comparison are established. The dense implementation measured roughly 158–196× faster than the adaptive reference on the reported 250 × 250 workload. Do not reopen completed solver work without a demonstrated failure.
+- **Phase 3D foundations:** merged PRs #452 and #455 provide deterministic local field queries, exposed-boundary flux measurement with multi-body occlusion, staged conservative funding, and atomic field-funded reaction-ledger settlement. These are detached contracts, not production chemistry integration.
+- **PR #457:** detached field-funded environmental COMBINE path; full CI passed on commit `a22a381`. It remains open and is not yet connected to the production chemistry tick.
+- **PR #459:** persistent optional wave-field ownership in `Environment`, serialization/clone preservation, one advance per logical tick when installed, malformed-state rejection, and local-stencil transfer-energy calculations. Full CI passed on commit `a32cdb1` against the green #457 parent branch. It remains stacked on #457 and is not merged. The owned solver is the closed-boundary reference only; no production field is installed or activated.
+- **PR #460:** isolated first-order Mur radiating boundaries with signed net-outflow accounting, serialization, energy reconciliation, and normal/oblique reflection tests. Its full CI is currently running; it is stacked on #459 and is not connected to production ticks.
+- **Current physical boundary decision:** the finite simulated chemistry/view domain is the accounting domain. Wave energy leaving its populated/viewed perimeter goes into the void and must be tallied as outflow, not reflected back into the world. This supersedes the older 2026-11-26 reflecting-boundary direction for the production field. The reflecting solver remains a reference implementation and must not be activated as the production open-world field.
+- **Current accounting gap:** the ambient oscillator, spatial disturbance, and their cross-energy must be reconciled as one combined field inventory. The current ledger keeps ambient inventory separate and does not yet include the owned spatial field or an outflow sink in the whole-world conservation oracle. Do not simply add ambient and disturbance energies while omitting the cross term.
+- **Chemistry:** continues independently. Production environmental COMBINE still uses `Environment::chemistry_usable_energy`; do not switch it to field funding until persistent field ownership, combined energy inventory, and outflow settlement are authoritative.
+- **Optimization:** retain the accepted dense-solver performance result. Avoid adaptive-live or broad PML/sponge exploration unless a focused outflow acceptance test demonstrates that it is necessary. Do not add guessed physical constants or repeat completed numerical validation.
 
 ## Remaining focused work
 
-1. Implement and test the detached field-funded environmental COMBINE transaction described above, including success, insufficient field energy, stale/invalid reaction rejection, and full rollback.
-2. Confirm that field debit equals the reaction deficit and that no nonliving usable-energy balance or external-input counter is credited.
-3. Update the roadmap and README when that reaction path is accepted.
-4. Separately design persistent production field ownership and whole-world energy reconciliation before live-tick integration.
+1. Complete the review and merge sequence for #457, #459, and #460; after the base branch lands, rerun the stacked changes against `main`.
+2. Finish validating the Mur open-boundary treatment and its signed outflow tally. Keep the boundary model minimal; do not add an unvalidated damping layer.
+3. Extend the world inventory so ambient energy, disturbance energy, their cross-energy, material/chemical stores, work, heat, and outflow reconcile without double counting. Reuse the existing `ambient_spatial_composition` identities rather than inventing a second energy formula.
+4. Connect the existing atomic field-funded COMBINE transaction to the Environment-owned open field only after those physical/accounting gates close.
 
-The goal is to complete the existing Phase 3 transfer milestone, not to restart solver research or create a second energy authority.
-
+The goal is to complete Phase 3 using the existing foundations, not restart solver research or create a second energy authority.
 ---
 
 # Resonance Field — Formal Implementation Roadmap

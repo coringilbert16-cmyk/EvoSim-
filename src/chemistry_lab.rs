@@ -163,6 +163,7 @@ impl Laboratory {
             catalog: crate::resources::default_catalog(),
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
+            closed_wave_field: None,
         };
         let ambient_config = crate::world_generated_ambient_mode::AmbientModeConfig::new(
             config.width * config.height,

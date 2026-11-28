@@ -1389,6 +1389,7 @@ mod tests {
             height: 1000.0,
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
+            closed_wave_field: None,
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
         };
@@ -1452,6 +1453,7 @@ mod tests {
             height: 1000.0,
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
+            closed_wave_field: None,
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE),
         };
@@ -1967,6 +1969,7 @@ mod tests {
             height: 1000.0,
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
+            closed_wave_field: None,
             catalog: catalog.clone(),
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
