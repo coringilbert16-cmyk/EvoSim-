@@ -225,6 +225,33 @@ impl AmbientModeTrajectory {
         let next_two = values[(index + 2) % count];
         (-next_two + 16.0 * next - 30.0 * current + 16.0 * previous - previous_two) / 12.0
     }
+
+    /// Cubic Hermite interpolation keeps the sampled amplitude and its first
+    /// two derivatives mutually consistent between integer logical ticks.
+    fn sample_at_fraction(&self, index: usize, fraction: f64) -> (f64, f64, f64) {
+        let next = (index + 1) % self.amplitude.len();
+        let t = fraction;
+        let t2 = t * t;
+        let t3 = t2 * t;
+        let a0 = self.amplitude[index];
+        let a1 = self.amplitude[next];
+        let v0 = self.amplitude_velocity[index];
+        let v1 = self.amplitude_velocity[next];
+
+        let value = (2.0 * t3 - 3.0 * t2 + 1.0) * a0
+            + (t3 - 2.0 * t2 + t) * v0
+            + (-2.0 * t3 + 3.0 * t2) * a1
+            + (t3 - t2) * v1;
+        let velocity = (6.0 * t2 - 6.0 * t) * a0
+            + (3.0 * t2 - 4.0 * t + 1.0) * v0
+            + (-6.0 * t2 + 6.0 * t) * a1
+            + (3.0 * t2 - 2.0 * t) * v1;
+        let acceleration = (12.0 * t - 6.0) * a0
+            + (6.0 * t - 4.0) * v0
+            + (-12.0 * t + 6.0) * a1
+            + (6.0 * t - 2.0) * v1;
+        (value, velocity, acceleration)
+    }
 }
 
 /// Read-only state of the uniform ambient mode at one logical tick.
@@ -320,14 +347,13 @@ impl WorldGeneratedAmbientMode {
         let lower_index = day_tick.floor() as usize;
         let upper_index = (lower_index + 1) % AMBIENT_DAY_TICKS as usize;
         let fraction = day_tick - lower_index as f64;
-        let interpolate = |values: &[f64]| {
-            values[lower_index] * (1.0 - fraction) + values[upper_index] * fraction
-        };
-        let amplitude = interpolate(&self.trajectory.amplitude);
-        let amplitude_velocity = interpolate(&self.trajectory.amplitude_velocity);
-        let amplitude_acceleration = interpolate(&self.trajectory.amplitude_acceleration);
-        let energy_density = self.config.energy_density_at(lower_index as u64) * (1.0 - fraction)
-            + self.config.energy_density_at(upper_index as u64) * fraction;
+        let (amplitude, amplitude_velocity, amplitude_acceleration) =
+            self.trajectory.sample_at_fraction(lower_index, fraction);
+        let day_cycles =
+            day_tick / AMBIENT_DAY_TICKS as f64 + self.config.day_phase_offset_cycles;
+        let envelope = 0.5 * (1.0 + (TAU * day_cycles).cos());
+        let energy_density = AMBIENT_MIN_ENERGY_DENSITY
+            + (AMBIENT_MAX_ENERGY_DENSITY - AMBIENT_MIN_ENERGY_DENSITY) * envelope;
         let total_energy = energy_density * self.config.world_area;
         let angular_frequency =
             TAU * AMBIENT_CARRIER_CYCLES_PER_DAY as f64 / AMBIENT_DAY_TICKS as f64;
@@ -458,6 +484,31 @@ mod tests {
         assert_ne!(half.carrier_phase_radians, integer.carrier_phase_radians);
         assert!(half.carrier_velocity.is_finite());
         assert!(half.instantaneous_field_energy_density.is_finite());
+    }
+
+    #[test]
+    fn fractional_sampling_uses_consistent_cubic_hermite_derivatives() {
+        let mode = mode_at(0, 1.0);
+        let t = 317.37;
+        let sample = mode.sample_at_time(t).unwrap();
+        let epsilon = 1.0e-4;
+        let before = mode.sample_at_time(t - epsilon).unwrap();
+        let after = mode.sample_at_time(t + epsilon).unwrap();
+
+        let numerical_velocity =
+            (after.amplitude - before.amplitude) / (2.0 * epsilon);
+        let numerical_acceleration =
+            (after.amplitude_velocity - before.amplitude_velocity) / (2.0 * epsilon);
+        assert!((sample.amplitude_velocity - numerical_velocity).abs() < 2.0e-7);
+        assert!((sample.amplitude_acceleration - numerical_acceleration).abs() < 2.0e-7);
+
+        let at_next_tick = mode.sample_at_time(318.0).unwrap();
+        let exact_next_tick = mode_at(318, 1.0).sample();
+        assert_eq!(at_next_tick.amplitude.to_bits(), exact_next_tick.amplitude.to_bits());
+        assert_eq!(
+            at_next_tick.amplitude_velocity.to_bits(),
+            exact_next_tick.amplitude_velocity.to_bits()
+        );
     }
 
     #[test]
