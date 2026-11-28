@@ -3585,6 +3585,8 @@ mod combined_world_energy_inventory_tests {
         simulation.ambient_energy =
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
                 .expect("test ambient mode must initialize");
+        simulation.environment.field =
+            ActiveMaterialField::new(17.0, 13.0, crate::environment::DEFAULT_CELL_SIZE);
         let opening_ambient_energy = simulation.ambient_energy.sample().total_energy;
         simulation.energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
         simulation.energy_ledger.total_ambient_energy_held = opening_ambient_energy;
@@ -3600,10 +3602,8 @@ mod combined_world_energy_inventory_tests {
             .install_spatial_wave_field(field)
             .expect("field area and logical time must match the world");
 
-        for _ in 0..60 {
-            simulation.tick += 1;
-            simulation.advance_ambient_energy();
-            simulation.advance_spatial_wave_field_one_tick();
+        for _ in 0..240 {
+            simulation.step();
         }
 
         let inventory = simulation
