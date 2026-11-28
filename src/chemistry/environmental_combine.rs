@@ -3382,8 +3382,7 @@ mod tests {
         );
         assert_eq!(product.placements.as_ref().map(Vec::len), Some(3));
         assert_eq!(product.realized_shapes.as_ref().map(Vec::len), Some(3));
-        let after_combine_constituents =
-            field_constituent_inventory(&simulation.environment.field);
+        let after_combine_constituents = field_constituent_inventory(&simulation.environment.field);
         assert_eq!(
             after_combine_constituents, initial_constituents,
             "environmental COMBINE must conserve every elemental constituent across the entire field"
