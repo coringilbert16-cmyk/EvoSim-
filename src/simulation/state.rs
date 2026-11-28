@@ -618,6 +618,12 @@ pub(crate) struct Environment {
     /// Chemistry may withdraw only frequency-compatible energy from this reservoir.
     #[serde(default)]
     pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
+    /// Persistent spatial wave state. It remains absent until an explicitly
+    /// configured runtime domain is installed; no solver constants are guessed
+    /// during world construction. Cloning and serialization retain the full
+    /// wave state once installed.
+    #[serde(default)]
+    pub(crate) closed_wave_field: Option<crate::closed_boundary_wave_solver::ClosedBoundaryWaveField>,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
