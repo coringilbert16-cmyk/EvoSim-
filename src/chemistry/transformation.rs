@@ -2110,7 +2110,7 @@ mod tests {
                 *expected_material_inventory.entry(name).or_insert(0.0) += amount;
             }
         }
-        for (name, amount) in &source.parts {
+        for (name, amount) in &source.material.parts {
             *expected_material_inventory
                 .entry(name.clone())
                 .or_insert(0.0) += amount;
