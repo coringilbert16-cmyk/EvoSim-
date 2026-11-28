@@ -181,6 +181,145 @@ mod integration_tests {
     }
 
     #[test]
+    fn combined_world_inventory_reconciles_live_ticks_and_material_transfers() {
+        let mut simulation = Simulation::new(46301, 10.0);
+        simulation.environment.width = 17.0;
+        simulation.environment.height = 13.0;
+        simulation.environment.field = crate::environment::ActiveMaterialField::new(
+            17.0,
+            13.0,
+            crate::environment::DEFAULT_CELL_SIZE,
+        );
+
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].stored_material.entries.clear();
+        simulation.environment.field.cells[0]
+            .materials
+            .push(Material::free_base("Carbon", 3.0));
+
+        let initial_material_inventory =
+            integer_material_inventory(&simulation).expect("initial material inventory is valid");
+        let catalog = simulation.environment.catalog.clone();
+        let taken = crate::material_transfer::take_whole_unstructured(
+            &mut simulation.environment.field.cells[0].materials[0],
+            1,
+            &catalog,
+        )
+        .expect("one whole carbon constituent should transfer");
+        let stored_carbon = PhysicalMaterial::realized(
+            taken,
+            vec![Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("transferred carbon should be physically realizable");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance(stored_carbon, &catalog));
+        let after_storage_transfer =
+            integer_material_inventory(&simulation).expect("stored material inventory is valid");
+        assert_eq!(after_storage_transfer, initial_material_inventory);
+
+        let ambient_config =
+            crate::world_generated_ambient_mode::AmbientModeConfig::new(
+                17.0 * 13.0,
+                1.0,
+                0.0,
+                0.0,
+            )
+            .expect("test ambient configuration must be valid");
+        simulation.ambient_energy =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(
+                ambient_config,
+                0,
+            )
+            .expect("test ambient mode must initialize");
+        let opening_ambient_energy = simulation.ambient_energy.sample().total_energy;
+        simulation.energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
+        simulation.energy_ledger.total_ambient_energy_held = opening_ambient_energy;
+
+        let expenditure = crate::energy_ledger::EnergyTransaction::expenditure(
+            crate::energy_ledger::EnergyReason::Move,
+            0.0,
+            0.25,
+            0.5,
+        )
+        .expect("test work/heat transaction must balance");
+        assert!(crate::energy_ledger::EnergyLedgerAuthority::settle_transaction(
+            &mut simulation.energy_ledger,
+            &mut simulation.organisms[0].usable_energy,
+            expenditure,
+        ));
+
+        let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+            17, 13, 1.0, 0.2, 2, 1.0,
+        )
+        .expect("test field must initialize");
+        field
+            .set_initial_state(1, 6, 0.8, 1.0)
+            .expect("test packet must initialize");
+        simulation
+            .install_spatial_wave_field(field)
+            .expect("field area and logical time must match the world");
+
+        for _ in 0..120 {
+            simulation.step();
+        }
+
+        let stored = simulation.organisms[0]
+            .stored_material
+            .take_matching_physical(&Material::free_base("Carbon", 1.0), &catalog)
+            .expect("stored carbon should be removable for restoration");
+        let restored = crate::physical_material::restore_material(
+            &mut simulation.organisms[0].structure,
+            &stored,
+            Placement {
+                x: 100.0,
+                y: 100.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .expect("stored carbon should restore into the physical structure");
+        assert_eq!(restored.len(), 1);
+
+        for _ in 0..120 {
+            simulation.step();
+        }
+
+        let final_material_inventory =
+            integer_material_inventory(&simulation).expect("final material inventory is valid");
+        assert_eq!(
+            final_material_inventory, initial_material_inventory,
+            "live ticks and ownership transfers changed constituent totals"
+        );
+
+        let inventory = simulation
+            .combined_world_energy_inventory_snapshot()
+            .expect("installed field must produce a whole-world inventory");
+        assert!(
+            inventory.combined_field_outflow_energy.abs() > 0.0,
+            "the packet must transfer energy through the radiating boundary"
+        );
+        assert!(
+            inventory.ambient_schedule_residual().unwrap().abs() < 1.0e-8,
+            "ambient generation/withdrawal must reconcile independently"
+        );
+        assert!(
+            inventory.is_balanced(2.0e-3),
+            "whole-world inventory must reconcile: field={:?}, ambient={:?}",
+            inventory.residual(),
+            inventory.ambient_schedule_residual()
+        );
+    }
+
+    #[test]
     fn integer_material_inventory_conserves_constituents_across_storage_restore() {
         let mut simulation = Simulation::new(7106, 10.0);
         for cell in &mut simulation.environment.field.cells {
