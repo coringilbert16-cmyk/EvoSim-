@@ -3603,11 +3603,13 @@ mod combined_world_energy_inventory_tests {
             0.5,
         )
         .expect("test work/heat transaction must balance");
-        assert!(crate::energy_ledger::EnergyLedgerAuthority::settle_transaction(
-            &mut simulation.energy_ledger,
-            &mut simulation.organisms[0].usable_energy,
-            expenditure,
-        ));
+        assert!(
+            crate::energy_ledger::EnergyLedgerAuthority::settle_transaction(
+                &mut simulation.energy_ledger,
+                &mut simulation.organisms[0].usable_energy,
+                expenditure,
+            )
+        );
 
         let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
             17, 13, 1.0, 0.2, 2, 1.0,
