@@ -2614,6 +2614,22 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
+        // Snapshot the complete environmental elemental inventory before
+        // reaction resolution. COMBINE and BREAK may change molecular grouping
+        // and bond topology, but must not create, destroy, or rename constituents.
+        let field_constituent_inventory =
+            |field: &crate::environment::ActiveMaterialField| -> BTreeMap<String, f64> {
+                let mut totals = BTreeMap::new();
+                for cell in &field.cells {
+                    for (name, amount) in cell.total_material() {
+                        *totals.entry(name).or_insert(0.0) += amount;
+                    }
+                }
+                totals
+            };
+        let initial_constituents =
+            field_constituent_inventory(&simulation.environment.field);
+
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
@@ -2864,6 +2880,12 @@ mod tests {
             "four-part BREAK must conserve total material mass"
         );
 
+        let after_break_constituents =
+            field_constituent_inventory(&simulation.environment.field);
+        assert_eq!(
+            after_break_constituents, initial_constituents,
+            "environmental BREAK must conserve every elemental constituent across the entire field"
+        );
         let after_break = simulation.energy_inventory_snapshot();
         assert!(
             (simulation.energy_ledger.total_usable_energy_held - after_break.current_usable_energy)
@@ -3723,6 +3745,13 @@ mod tests {
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
+
+        let after_combine_constituents =
+            field_constituent_inventory(&simulation.environment.field);
+        assert_eq!(
+            after_combine_constituents, initial_constituents,
+            "environmental COMBINE must conserve every elemental constituent across the entire field"
+        );
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
         assert_eq!(product.len(), 1);
