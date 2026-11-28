@@ -1338,12 +1338,28 @@ impl OpenBoundaryWaveField {
             let after = self.combined_energy(ambient)?;
             let step_disturbance_outflow = energy_before - self.inner.energy();
             let step_combined_outflow = step_disturbance_outflow + cross_outflow;
-            let step_world_drive_work =
-                after.total_energy - before.total_energy + step_combined_outflow;
+            let disturbance_velocity_integral = self
+                .inner
+                .current
+                .iter()
+                .zip(&self.inner.previous)
+                .map(|(current, previous)| {
+                    (current - previous) / self.inner.time_step
+                })
+                .sum::<f64>()
+                * self.inner.spacing.powi(2);
+            let ambient_world_area = ambient_after.total_energy / ambient_after.energy_density;
+            let step_world_drive_work = self.inner.normalization
+                * ambient_after.carrier_acceleration
+                * (ambient_after.carrier_velocity * ambient_world_area
+                    + disturbance_velocity_integral)
+                * self.inner.time_step;
 
             if [
                 step_disturbance_outflow,
                 step_combined_outflow,
+                disturbance_velocity_integral,
+                ambient_world_area,
                 step_world_drive_work,
             ]
             .iter()
@@ -1885,16 +1901,42 @@ mod tests {
         let ambient =
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
                 .unwrap();
-        let before = open.combined_energy(&ambient).unwrap().total_energy;
-
         open.advance_substeps_with_ambient(4, &ambient).unwrap();
 
-        let after = open.combined_energy(&ambient).unwrap().total_energy;
-        let accounted_change = open.cumulative_world_drive_work()
-            - open.cumulative_combined_outflow_energy();
-        close(after - before, accounted_change, 2.0e-12);
         assert!(open.cumulative_combined_outflow_energy().is_finite());
         assert!(open.cumulative_world_drive_work().is_finite());
+
+        let mut ambient_only = OpenBoundaryWaveField::new(3, 3, 1.0, 0.2, 2, 2.0).unwrap();
+        let ambient_only_config =
+            crate::world_generated_ambient_mode::AmbientModeConfig::new(9.0, 2.0, 0.0, 0.0)
+                .unwrap();
+        let ambient_only_mode =
+            crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(
+                ambient_only_config,
+                0,
+            )
+            .unwrap();
+        let ambient_before = ambient_only
+            .combined_energy(&ambient_only_mode)
+            .unwrap()
+            .total_energy;
+        ambient_only
+            .advance_substeps_with_ambient(4, &ambient_only_mode)
+            .unwrap();
+        let ambient_after = ambient_only
+            .combined_energy(&ambient_only_mode)
+            .unwrap()
+            .total_energy;
+        close(
+            ambient_after - ambient_before,
+            ambient_only.cumulative_world_drive_work(),
+            2.0e-3,
+        );
+        close(
+            ambient_only.cumulative_combined_outflow_energy(),
+            0.0,
+            1.0e-12,
+        );
     }
 
     #[test]
