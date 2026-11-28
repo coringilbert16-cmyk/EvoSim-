@@ -2111,7 +2111,9 @@ mod tests {
             }
         }
         for (name, amount) in &source.parts {
-            *expected_material_inventory.entry(name.clone()).or_insert(0.0) += amount;
+            *expected_material_inventory
+                .entry(name.clone())
+                .or_insert(0.0) += amount;
         }
         let transformation = ActiveTransformation {
             id: 734,
@@ -2155,8 +2157,7 @@ mod tests {
             }
         }
         assert_eq!(
-            actual_material_inventory,
-            expected_material_inventory,
+            actual_material_inventory, expected_material_inventory,
             "successful environmental BREAK must preserve whole-field C/H/O/N/P/S inventory"
         );
         assert_eq!(
