@@ -1630,6 +1630,67 @@ pub(crate) fn resolve_environmental_preserving_accumulation_with_settlement(
 mod tests {
     use super::*;
 
+    struct RejectingFieldProvider {
+        stage_attempts: usize,
+    }
+
+    impl crate::energy_ledger::EnvironmentalEnergyProvider for RejectingFieldProvider {
+        type StagedSource = ();
+
+        fn stage_funding(
+            &mut self,
+            _request: crate::energy_ledger::EnvironmentalEnergyRequest,
+        ) -> Option<crate::energy_ledger::StagedEnvironmentalFunding<Self::StagedSource>> {
+            self.stage_attempts += 1;
+            None
+        }
+
+        fn commit_funding(&mut self, _staged_source: Self::StagedSource) {}
+
+        fn cancel_funding(&mut self, _staged_source: Self::StagedSource) {}
+    }
+
+    #[test]
+    fn field_funded_combine_rejects_stale_source_before_field_or_ledger_settlement() {
+        let mut simulation = crate::state::Simulation::new(45701, 10.0);
+        let ledger_before = simulation.energy_ledger;
+        let mut provider = RejectingFieldProvider { stage_attempts: 0 };
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let operation = EnvironmentalCombineOperation {
+            cell_a: usize::MAX,
+            material_a: 0,
+            source_a: PhysicalMaterial::default(),
+            cell_b: usize::MAX,
+            material_b: 0,
+            source_b: PhysicalMaterial::default(),
+            unit_a: 0,
+            unit_b: 0,
+            candidate,
+            investment: 0.0,
+            accumulation_key: "stale-field-funded-operation".into(),
+            accumulated_reaction: 1.0,
+        };
+
+        assert!(resolve_environmental_field_funded_with_provider(
+            operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+            &mut provider,
+        )
+        .is_none());
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(provider.stage_attempts, 0);
+    }
+
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
     ///
     /// This deliberately does not force activation or alter chemistry thresholds.
