@@ -1666,7 +1666,9 @@ mod tests {
         let cell = &mut simulation.environment.field.cells[0];
         cell.physical_materials.push(source.clone());
         cell.physical_materials.push(source.clone());
-        let field_before = simulation.environment.field.cells[0].physical_materials.clone();
+        let field_before = simulation.environment.field.cells[0]
+            .physical_materials
+            .clone();
         let ledger_before = simulation.energy_ledger;
         let mut provider = RejectingFieldProvider { stage_attempts: 0 };
         let candidate = ConnectionPairCandidate {
