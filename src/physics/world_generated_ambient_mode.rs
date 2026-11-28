@@ -104,9 +104,8 @@ impl AmbientModeConfig {
         let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
-        let instantaneous_field_energy_density = 0.5
-            * self.field_normalization
-            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
+        let instantaneous_field_energy_density =
+            0.5 * self.field_normalization * carrier_velocity.powi(2);
         if [
             energy_density,
             total_energy,
@@ -124,7 +123,7 @@ impl AmbientModeConfig {
             || !amplitude_acceleration.is_finite()
             || !carrier_velocity.is_finite()
             || !carrier_acceleration.is_finite()
-            || !instantaneous_oscillator_energy_density.is_finite()
+            || !instantaneous_field_energy_density.is_finite()
             || amplitude <= 0.0
         {
             return Err(AmbientModeError::InvalidState);
@@ -142,7 +141,7 @@ impl AmbientModeConfig {
             carrier_value,
             carrier_velocity,
             carrier_acceleration,
-            instantaneous_oscillator_energy_density,
+            instantaneous_field_energy_density,
         })
     }
 }
@@ -230,7 +229,7 @@ impl AmbientModeTrajectory {
 
 /// Read-only state of the uniform ambient mode at one logical tick.
 ///
-/// energy_density is the mode's cycle-averaged oscillator energy per area.
+/// energy_density is the mode's cycle-averaged wave kinetic energy per area.
 /// carrier_value is the signed carrier displacement. The daily envelope
 /// changes stored mode energy through explicit world exchange, not by changing
 /// the carrier frequency.
@@ -249,9 +248,9 @@ pub(crate) struct AmbientModeSample {
     pub(crate) carrier_velocity: f64,
     /// Exact second time derivative of the ambient carrier displacement.
     pub(crate) carrier_acceleration: f64,
-    /// Instantaneous oscillator energy density; energy_density remains the
+    /// Instantaneous wave kinetic energy density; energy_density remains the
     /// carrier-averaged target schedule used by the world inventory ledger.
-    pub(crate) instantaneous_oscillator_energy_density: f64,
+    pub(crate) instantaneous_field_energy_density: f64,
 }
 
 /// One exact change in the ambient mode's stored energy.
@@ -306,7 +305,7 @@ impl WorldGeneratedAmbientMode {
     }
 
     /// Evaluate the ambient carrier at an arbitrary logical time. This is
-    /// required to align its velocity and instantaneous oscillator energy with
+    /// required to align its velocity and instantaneous wave kinetic energy with
     /// the spatial solver's leapfrog half-step rather than using the integer
     /// displacement timestamp.
     pub(crate) fn sample_at_time(
@@ -343,9 +342,8 @@ impl WorldGeneratedAmbientMode {
         let carrier_acceleration = (amplitude_acceleration - amplitude * angular_frequency.powi(2))
             * cosine
             - 2.0 * amplitude_velocity * angular_frequency * sine;
-        let instantaneous_oscillator_energy_density = 0.5
-            * self.config.field_normalization
-            * (carrier_velocity.powi(2) + angular_frequency.powi(2) * carrier_value.powi(2));
+        let instantaneous_field_energy_density =
+            0.5 * self.config.field_normalization * carrier_velocity.powi(2);
 
         if [
             amplitude,
@@ -356,7 +354,7 @@ impl WorldGeneratedAmbientMode {
             carrier_value,
             carrier_velocity,
             carrier_acceleration,
-            instantaneous_oscillator_energy_density,
+            instantaneous_field_energy_density,
         ]
         .iter()
         .any(|value| !value.is_finite())
@@ -379,7 +377,7 @@ impl WorldGeneratedAmbientMode {
             carrier_value,
             carrier_velocity,
             carrier_acceleration,
-            instantaneous_oscillator_energy_density,
+            instantaneous_field_energy_density,
         })
     }
 
@@ -459,7 +457,7 @@ mod tests {
         assert_eq!(half.tick, 317);
         assert_ne!(half.carrier_phase_radians, integer.carrier_phase_radians);
         assert!(half.carrier_velocity.is_finite());
-        assert!(half.instantaneous_oscillator_energy_density.is_finite());
+        assert!(half.instantaneous_field_energy_density.is_finite());
     }
 
     #[test]
@@ -501,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn oscillator_amplitude_matches_the_declared_energy_density() {
+    fn wave_amplitude_matches_the_declared_energy_density() {
         let mut mode = mode_at(0, 3.0);
         for tick in 0..AMBIENT_DAY_TICKS {
             let sample = mode.sample();
