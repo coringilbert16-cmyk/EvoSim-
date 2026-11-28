@@ -1,25 +1,27 @@
-# Current implementation status — 2026-11-27 (authoritative update)
+# Current implementation status — 2026-11-28 (authoritative update)
 
 This status block supersedes older dated sequencing and physical-boundary decisions later in this document wherever they conflict. The original sections remain historical design/validation records; follow this current order rather than reviving stale gates.
 
 - **Phase 0 — baseline:** complete.
 - **Phase 1 — physical equations and energy contracts:** complete.
 - **Phase 2 — independent wave-solver foundations:** complete and formally closed. Do not repeat propagation, stability, interference, or broad convergence work.
-- **Phase 3C — ambient and numerical foundations:** complete. The approved 24,000-tick / 440-cycle ambient model, ambient/disturbance composition equations, dense reference solver, and performance comparison are established. The dense implementation measured roughly 158–196× faster than the adaptive reference on the reported 250 × 250 workload. Do not reopen completed solver work without a demonstrated failure.
-- **Phase 3D foundations:** merged PRs #452 and #455 provide deterministic local field queries, exposed-boundary flux measurement with multi-body occlusion, staged conservative funding, and atomic field-funded reaction-ledger settlement. These are detached contracts, not production chemistry integration.
-- **PR #457:** detached field-funded environmental COMBINE path; full CI passed on commit `a22a381`. It remains open and is not yet connected to the production chemistry tick.
-- **PR #459:** intermediate persistent `Environment` ownership, serialization/clone preservation, one advance per logical tick, and local-stencil transfer primitives. Full CI passed on commit `a32cdb1` against the green #457 parent branch. It remains stacked on #457 and is not merged.
-- **PR #460:** replaces the intermediate closed field with an optional `Environment`-owned radiating field. First-order Mur boundaries, signed disturbance-only outflow tally, serialization/clone preservation, one advance per logical tick, and reflection tests through 45-degree incidence are implemented. Full CI passed on commit `8dc5be8`. It remains stacked on #459 and is not merged; no field is installed by default and no chemistry callsite is connected.
-- **Current physical boundary decision:** the finite simulated chemistry/view domain is the accounting domain. Wave energy leaving its populated/viewed perimeter goes into the void and must be tallied as outflow, not reflected back into the world. This supersedes the older 2026-11-26 reflecting-boundary direction for the production field. The reflecting solver remains a reference implementation and must not be activated as the production open-world field.
-- **Current accounting gap:** the current boundary tally accounts for spatial-disturbance energy only. The ambient oscillator, spatial disturbance, and their cross-energy must be reconciled as one combined field inventory; the cross-energy contribution to boundary outflow is not yet included. The current whole-world conservation oracle still omits the owned spatial field and its outflow. Do not simply add ambient and disturbance energies while omitting the cross term.
-- **Chemistry:** continues independently. Production environmental COMBINE still uses `Environment::chemistry_usable_energy`; do not switch it to field funding until persistent field ownership, combined energy inventory, and outflow settlement are authoritative.
+- **Phase 3C — ambient and numerical foundations:** complete. The approved 24,000-tick / 440-cycle ambient schedule, dense reference solver, and measured performance comparison are established. The dense implementation measured roughly 158–196× faster than the adaptive reference on the reported 250 × 250 workload. Do not reopen completed solver work without a demonstrated failure.
+- **Phase 3D foundations:** merged PRs #452 and #455 provide deterministic local field queries, exposed-boundary flux measurement with multi-body occlusion, staged conservative funding, and atomic field-funded reaction-ledger settlement. These are validated detached contracts, not yet the production chemistry path.
+- **PR #457:** detached field-funded environmental COMBINE path; merged after full CI passed.
+- **PR #459:** persistent optional wave-field ownership in `Environment`, serialization/clone preservation, one advance per logical tick, and local-stencil transfer calculations; merged after rebased full CI passed.
+- **PR #460:** optional `Environment`-owned radiating field with first-order Mur boundaries, signed disturbance-only outflow, lifecycle preservation, and reflection tests through 45-degree incidence; merged after all 14 CI steps passed.
+- **PR #461:** in progress. Adds fractional ambient sampling at the solver's leapfrog velocity time centre and a combined inventory of disturbance energy, ambient wave kinetic energy, and their cross term. The uniform ambient mode has no spatial gradient, so the governing wave-energy identity contains no harmonic-potential term. Its carrier amplitude is calibrated so cycle-averaged kinetic energy follows the approved 1–10 schedule. Fresh CI is running; this PR is not merged.
+- **Current physical boundary decision:** the finite simulated chemistry/view domain is the accounting domain. Wave energy leaving its populated/viewed perimeter goes into the void and must be tallied as outflow, not reflected back into the world. The reflecting solver remains a reference implementation.
+- **Current accounting gap:** #460 tallies disturbance-only outflow. The combined inventory must include ambient energy, disturbance energy, and cross-energy at consistent leapfrog time-centering. The ambient world-generation/withdrawal ledger currently tracks the cycle-averaged envelope; the phase-resolved combined inventory additionally requires explicit time-centred world-drive work. The cross-energy contribution to boundary outflow and the complete world balance are not yet reconciled.
+- **Chemistry:** continues independently. Production environmental COMBINE still uses `Environment::chemistry_usable_energy`; do not switch it to field funding until combined inventory, world-drive work, and combined outflow settlement are authoritative.
 - **Optimization:** retain the accepted dense-solver performance result. Avoid adaptive-live or broad PML/sponge exploration unless a focused outflow acceptance test demonstrates that it is necessary. Do not add guessed physical constants or repeat completed numerical validation.
 
 ## Remaining focused work
 
-1. Complete the review and merge sequence for #457, #459, and #460; after the base branch lands, rerun the stacked changes against `main`.
-2. Extend the outflow and world inventory to account for ambient energy, disturbance energy, their cross-energy, material/chemical stores, work, heat, and void outflow without double counting. Reuse the existing `ambient_spatial_composition` identities and align the ambient carrier with the solver's leapfrog time centre.
-3. Connect the existing atomic field-funded COMBINE transaction to the Environment-owned open field only after the combined-field inventory and outflow settlement close.
+1. Complete the review and merge sequence for #461 after exact-head CI passes and its kinetic-only energy identity is verified.
+2. Add time-centred world-drive work and extend signed boundary outflow to the combined ambient-plus-disturbance inventory, including the cross term.
+3. Reconcile ambient generation/withdrawal, field inventory, void outflow, material/chemical stores, work, and heat under one whole-world conservation oracle.
+4. Connect the existing atomic field-funded COMBINE transaction to the Environment-owned open field only after those accounting gates close.
 
 The goal is to complete Phase 3 using the existing foundations, not restart solver research or create a second energy authority.
 ---
