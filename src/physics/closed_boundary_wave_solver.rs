@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 //! Isolated dense reference solver for a finite, closed 2D wave domain.
 //!
 //! The outer faces are reflecting (zero normal flux). The discretization is
@@ -7,6 +5,8 @@ use serde::{Deserialize, Serialize};
 //! graph Laplacian. No exterior ghost cells, fixed-zero edge nodes, damping,
 //! or outflow account are present. This is deliberately independent of the
 //! production simulation tick, chemistry, materials, and energy ledger.
+
+use serde::{Deserialize, Serialize};
 
 /// Deterministic local reconstruction of the discrete field at a world position.
 /// Spatial derivatives are node-centred finite differences, interpolated with
@@ -324,13 +324,13 @@ impl ClosedBoundaryWaveField {
         Ok(())
     }
 
-    /// Discrete leapfrog invariant: kinetic energy plus energy on internal
-    /// cell-to-cell edges. There are no edges crossing the physical boundary.
     /// Number of completed logical simulation ticks represented by this field.
     pub(crate) fn logical_time_ticks(&self) -> f64 {
         self.substeps_elapsed as f64 / self.substeps_per_tick as f64
     }
 
+    /// Discrete leapfrog invariant: kinetic energy plus energy on internal
+    /// cell-to-cell edges. There are no edges crossing the physical boundary.
     pub(crate) fn energy(&self) -> f64 {
         let mut kinetic = 0.0;
         for index in 0..self.current.len() {
