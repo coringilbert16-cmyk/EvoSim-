@@ -2653,6 +2653,8 @@ mod tests {
         assert!(operation.activation_signal > 0.0);
 
         let environment_before = simulation.environment.clone();
+        let material_inventory_before =
+            std::collections::BTreeMap::from(simulation.environment.field.total_material());
         let ledger_before = simulation.energy_ledger;
         assert_eq!(
             resolve_environmental_diagnosed(
@@ -2668,6 +2670,11 @@ mod tests {
                 .physical_materials
                 .len(),
             2
+        );
+        assert_eq!(
+            std::collections::BTreeMap::from(simulation.environment.field.total_material()),
+            material_inventory_before,
+            "rejected displacement must preserve every environmental element"
         );
         assert_eq!(simulation.energy_ledger, ledger_before);
         assert_eq!(
@@ -2695,6 +2702,11 @@ mod tests {
             "environmental displacement commit failed: {committed:?}"
         );
 
+        assert_eq!(
+            std::collections::BTreeMap::from(simulation.environment.field.total_material()),
+            material_inventory_before,
+            "successful displacement must preserve whole-field C/H/O/N/P/S inventory"
+        );
         let products = &simulation.environment.field.cells[field_cell].physical_materials;
         assert_eq!(products.len(), 2);
         assert!(products.iter().any(|product| {
