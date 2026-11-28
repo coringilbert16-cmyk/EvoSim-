@@ -1062,16 +1062,17 @@ fn validate_transfer_amount(amount: f64) -> Result<(), ClosedWaveError> {
 pub(crate) struct OpenBoundaryWaveField {
     inner: ClosedBoundaryWaveField,
     cumulative_outflow_energy: f64,
-    #[serde(default)]
     cumulative_combined_outflow_energy: f64,
-    #[serde(default)]
     cumulative_world_drive_work: f64,
+}
 
 #[derive(Deserialize)]
 struct OpenBoundaryWaveFieldState {
     inner: ClosedBoundaryWaveField,
     cumulative_outflow_energy: f64,
+    #[serde(default)]
     cumulative_combined_outflow_energy: f64,
+    #[serde(default)]
     cumulative_world_drive_work: f64,
 }
 
