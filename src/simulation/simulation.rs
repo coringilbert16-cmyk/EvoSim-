@@ -1822,7 +1822,9 @@ impl Simulation {
         if let Some(field) = self.environment.spatial_wave_field.as_mut() {
             field
                 .advance_ticks_with_ambient(1, &self.ambient_energy)
-                .expect("persistent ambient-coupled wave field must advance exactly one logical tick");
+                .expect(
+                    "persistent ambient-coupled wave field must advance exactly one logical tick",
+                );
         }
     }
 
@@ -1836,7 +1838,10 @@ impl Simulation {
         if field.logical_time_ticks() != self.tick as f64 {
             return None;
         }
-        let combined_energy = field.combined_energy(&self.ambient_energy).ok()?.total_energy;
+        let combined_energy = field
+            .combined_energy(&self.ambient_energy)
+            .ok()?
+            .total_energy;
         Some(crate::energy_ledger::CombinedWorldEnergyInventorySnapshot {
             material_inventory: self.energy_inventory_snapshot(),
             initial_combined_field_energy: self.energy_ledger.initial_combined_field_energy_held,
@@ -3564,7 +3569,6 @@ mod persistent_wave_field_ownership_tests {
     }
 }
 
-
 #[cfg(test)]
 mod combined_world_energy_inventory_tests {
     use super::*;
@@ -3574,10 +3578,9 @@ mod combined_world_energy_inventory_tests {
         let mut simulation = Simulation::new(46102, 10.0);
         simulation.environment.width = 17.0;
         simulation.environment.height = 13.0;
-        let config = crate::world_generated_ambient_mode::AmbientModeConfig::new(
-            17.0 * 13.0, 1.0, 0.0, 0.0,
-        )
-        .expect("test ambient configuration must be valid");
+        let config =
+            crate::world_generated_ambient_mode::AmbientModeConfig::new(17.0 * 13.0, 1.0, 0.0, 0.0)
+                .expect("test ambient configuration must be valid");
         simulation.ambient_energy =
             crate::world_generated_ambient_mode::WorldGeneratedAmbientMode::new(config, 0)
                 .expect("test ambient mode must initialize");
@@ -3585,11 +3588,10 @@ mod combined_world_energy_inventory_tests {
         simulation.energy_ledger.initial_ambient_energy_held = opening_ambient_energy;
         simulation.energy_ledger.total_ambient_energy_held = opening_ambient_energy;
 
-        let mut field =
-            crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
-                17, 13, 1.0, 0.2, 2, 1.0,
-            )
-            .expect("test field must initialize");
+        let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+            17, 13, 1.0, 0.2, 2, 1.0,
+        )
+        .expect("test field must initialize");
         field
             .set_initial_state(1, 6, 0.8, 1.0)
             .expect("test packet must initialize");
@@ -3625,11 +3627,10 @@ mod combined_world_energy_inventory_tests {
     #[test]
     fn field_installation_rejects_a_mismatched_accounting_domain() {
         let mut simulation = Simulation::new(46103, 10.0);
-        let field =
-            crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
-                17, 13, 1.0, 0.2, 2, 1.0,
-            )
-            .expect("test field must initialize");
+        let field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+            17, 13, 1.0, 0.2, 2, 1.0,
+        )
+        .expect("test field must initialize");
         assert_eq!(
             simulation.install_spatial_wave_field(field),
             Err(crate::closed_boundary_wave_solver::ClosedWaveError::InvalidState)
