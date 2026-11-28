@@ -2099,9 +2099,20 @@ mod tests {
         let (mut environment, cell_index, before, source, after) =
             environmental_break_test_inventory(&catalog);
         let target = source.internal_connections.as_ref().unwrap()[0].clone();
-        environment.field.cells[cell_index].physical_materials =
-            vec![before, source.clone(), after];
-        let material_inventory_before = environment.field.total_material();
+        // A reserved environmental BREAK source is escrowed by the
+        // transformation and is no longer present in the field. Include that
+        // escrow explicitly in the expected whole-field inventory so the
+        // post-commit field can be compared against the complete input.
+        environment.field.cells[cell_index].physical_materials = vec![before, after];
+        let mut expected_material_inventory = std::collections::BTreeMap::new();
+        for cell in &environment.field.cells {
+            for (name, amount) in cell.total_material() {
+                *expected_material_inventory.entry(name).or_insert(0.0) += amount;
+            }
+        }
+        for (name, amount) in &source.parts {
+            *expected_material_inventory.entry(name.clone()).or_insert(0.0) += amount;
+        }
         let transformation = ActiveTransformation {
             id: 734,
             organism_id: organism.id.clone(),
@@ -2137,9 +2148,15 @@ mod tests {
             &mut EnergyLedger::default(),
         );
 
+        let mut actual_material_inventory = std::collections::BTreeMap::new();
+        for cell in &environment.field.cells {
+            for (name, amount) in cell.total_material() {
+                *actual_material_inventory.entry(name).or_insert(0.0) += amount;
+            }
+        }
         assert_eq!(
-            environment.field.total_material(),
-            material_inventory_before,
+            actual_material_inventory,
+            expected_material_inventory,
             "successful environmental BREAK must preserve whole-field C/H/O/N/P/S inventory"
         );
         assert_eq!(
