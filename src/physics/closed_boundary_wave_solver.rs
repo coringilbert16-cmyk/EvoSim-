@@ -326,6 +326,11 @@ impl ClosedBoundaryWaveField {
 
     /// Discrete leapfrog invariant: kinetic energy plus energy on internal
     /// cell-to-cell edges. There are no edges crossing the physical boundary.
+    /// Number of completed logical simulation ticks represented by this field.
+    pub(crate) fn logical_time_ticks(&self) -> f64 {
+        self.substeps_elapsed as f64 / self.substeps_per_tick as f64
+    }
+
     pub(crate) fn energy(&self) -> f64 {
         let mut kinetic = 0.0;
         for index in 0..self.current.len() {
