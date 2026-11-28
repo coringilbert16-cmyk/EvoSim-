@@ -2116,9 +2116,7 @@ mod tests {
             remaining_ticks: 0,
             prepared_energy: Some((organism.usable_energy, 0.0, 0.0)),
             pending_experience: None,
-            decision_context_key: Some(format!(
-                "environment:cell:{cell_index}:material:1:bond:0"
-            )),
+            decision_context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
             prepared_structure: None,
             prepared_stored_material: None,
             prepared_usable_energy: None,
