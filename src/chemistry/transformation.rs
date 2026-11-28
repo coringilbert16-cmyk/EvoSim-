@@ -2092,6 +2092,84 @@ mod tests {
     }
 
     #[test]
+    fn successful_environmental_break_preserves_whole_field_elemental_inventory() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism =
+            environmental_break_test_organism("environmental-break-conservation-test", Some(734));
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        let target = source.internal_connections.as_ref().unwrap()[0].clone();
+        // A reserved environmental BREAK source is escrowed by the
+        // transformation and is no longer present in the field. Include that
+        // escrow explicitly in the expected whole-field inventory so the
+        // post-commit field can be compared against the complete input.
+        environment.field.cells[cell_index].physical_materials = vec![before, after];
+        let mut expected_material_inventory = std::collections::BTreeMap::new();
+        for cell in &environment.field.cells {
+            for (name, amount) in cell.total_material() {
+                *expected_material_inventory.entry(name).or_insert(0.0) += amount;
+            }
+        }
+        for (name, amount) in &source.material.parts {
+            *expected_material_inventory
+                .entry(name.clone())
+                .or_insert(0.0) += amount;
+        }
+        let transformation = ActiveTransformation {
+            id: 734,
+            organism_id: organism.id.clone(),
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(source),
+            stored_bond: Some(target),
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: Some((organism.usable_energy, 0.0, 0.0)),
+            pending_experience: None,
+            decision_context_key: Some(format!("environment:cell:{cell_index}:material:1:bond:0")),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
+            combine_environmental_source: None,
+            stored_source_index: None,
+            environmental_source_location: Some((cell_index, 1)),
+            combine_environmental_source_index: None,
+        };
+
+        resolve_transformation(
+            &transformation,
+            &mut organism,
+            &mut environment,
+            &mut EnergyLedger::default(),
+        );
+
+        let mut actual_material_inventory = std::collections::BTreeMap::new();
+        for cell in &environment.field.cells {
+            for (name, amount) in cell.total_material() {
+                *actual_material_inventory.entry(name).or_insert(0.0) += amount;
+            }
+        }
+        assert_eq!(
+            actual_material_inventory, expected_material_inventory,
+            "successful environmental BREAK must preserve whole-field C/H/O/N/P/S inventory"
+        );
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials.len(),
+            4,
+            "the broken environmental source must be replaced by its two physical pieces"
+        );
+        assert!(organism.stored_material.is_empty());
+        assert_eq!(organism.active_transformation_id, None);
+    }
+
+    #[test]
     fn failed_combine_restores_environmental_source_at_original_list_index() {
         let catalog = crate::resources::default_catalog();
         let (mut environment, cell_index, before, source, after) =
