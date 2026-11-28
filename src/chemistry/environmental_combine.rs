@@ -3297,6 +3297,22 @@ mod tests {
             base.clone(),
             &catalog,
         ));
+        // Snapshot the complete environmental elemental inventory before
+        // reaction resolution. COMBINE and BREAK may change molecular grouping
+        // and bond topology, but must not create, destroy, or rename constituents.
+        let field_constituent_inventory =
+            |field: &crate::environment::ActiveMaterialField| -> BTreeMap<String, f64> {
+                let mut totals = BTreeMap::new();
+                for cell in &field.cells {
+                    for (name, amount) in cell.total_material() {
+                        *totals.entry(name).or_insert(0.0) += amount;
+                    }
+                }
+                totals
+            };
+        let initial_constituents =
+            field_constituent_inventory(&simulation.environment.field);
+
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
