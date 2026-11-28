@@ -1450,7 +1450,7 @@ pub(crate) fn resolve_environmental_with_settlement(
 
 /// Detached environmental COMBINE funded directly by a staged resonance field.
 /// Production tick ownership and activation remain deliberately separate.
-#[expect(
+#[allow(
     dead_code,
     reason = "Production field ownership and tick integration are intentionally gated"
 )]
