@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 //! Isolated dense reference solver for a finite, closed 2D wave domain.
 //!
 //! The outer faces are reflecting (zero normal flux). The discretization is
@@ -41,7 +43,7 @@ pub(crate) enum ClosedWaveError {
     EnergySettlementFailed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct ClosedBoundaryWaveField {
     width: usize,
     height: usize,
