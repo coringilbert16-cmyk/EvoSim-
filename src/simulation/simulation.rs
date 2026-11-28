@@ -1792,8 +1792,9 @@ impl Simulation {
         &mut self,
         field: crate::closed_boundary_wave_solver::OpenBoundaryWaveField,
     ) -> Result<(), crate::closed_boundary_wave_solver::ClosedWaveError> {
-        if self.environment.spatial_wave_field.is_some()
-            || field.logical_time_ticks() != self.tick as f64
+        if self.tick != 0
+            || self.environment.spatial_wave_field.is_some()
+            || field.logical_time_ticks() != 0.0
         {
             return Err(crate::closed_boundary_wave_solver::ClosedWaveError::InvalidState);
         }
@@ -3622,6 +3623,21 @@ mod combined_world_energy_inventory_tests {
             inventory.residual(),
             inventory.ambient_schedule_residual()
         );
+    }
+
+    #[test]
+    fn field_installation_after_simulation_start_is_rejected() {
+        let mut simulation = Simulation::new(46104, 10.0);
+        simulation.tick = 1;
+        let field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
+            250, 250, 1.0, 0.2, 2, 1.0,
+        )
+        .expect("test field must initialize");
+        assert_eq!(
+            simulation.install_spatial_wave_field(field),
+            Err(crate::closed_boundary_wave_solver::ClosedWaveError::InvalidState)
+        );
+        assert!(simulation.environment.spatial_wave_field.is_none());
     }
 
     #[test]
