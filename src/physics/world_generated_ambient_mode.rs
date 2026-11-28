@@ -349,8 +349,7 @@ impl WorldGeneratedAmbientMode {
         let fraction = day_tick - lower_index as f64;
         let (amplitude, amplitude_velocity, amplitude_acceleration) =
             self.trajectory.sample_at_fraction(lower_index, fraction);
-        let day_cycles =
-            day_tick / AMBIENT_DAY_TICKS as f64 + self.config.day_phase_offset_cycles;
+        let day_cycles = day_tick / AMBIENT_DAY_TICKS as f64 + self.config.day_phase_offset_cycles;
         let envelope = 0.5 * (1.0 + (TAU * day_cycles).cos());
         let energy_density = AMBIENT_MIN_ENERGY_DENSITY
             + (AMBIENT_MAX_ENERGY_DENSITY - AMBIENT_MIN_ENERGY_DENSITY) * envelope;
@@ -495,8 +494,7 @@ mod tests {
         let before = mode.sample_at_time(t - epsilon).unwrap();
         let after = mode.sample_at_time(t + epsilon).unwrap();
 
-        let numerical_velocity =
-            (after.amplitude - before.amplitude) / (2.0 * epsilon);
+        let numerical_velocity = (after.amplitude - before.amplitude) / (2.0 * epsilon);
         let numerical_acceleration =
             (after.amplitude_velocity - before.amplitude_velocity) / (2.0 * epsilon);
         assert!((sample.amplitude_velocity - numerical_velocity).abs() < 2.0e-7);
@@ -504,7 +502,10 @@ mod tests {
 
         let at_next_tick = mode.sample_at_time(318.0).unwrap();
         let exact_next_tick = mode_at(318, 1.0).sample();
-        assert_eq!(at_next_tick.amplitude.to_bits(), exact_next_tick.amplitude.to_bits());
+        assert_eq!(
+            at_next_tick.amplitude.to_bits(),
+            exact_next_tick.amplitude.to_bits()
+        );
         assert_eq!(
             at_next_tick.amplitude_velocity.to_bits(),
             exact_next_tick.amplitude_velocity.to_bits()
