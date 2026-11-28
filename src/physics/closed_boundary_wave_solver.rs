@@ -1916,9 +1916,9 @@ mod tests {
         let final_combined = open.combined_energy(&ambient).unwrap();
         let combined_outflow = open.cumulative_combined_outflow_energy();
         let world_drive_work = open.cumulative_world_drive_work();
-        let conservation_residual =
-            final_combined.total_energy - initial_combined.total_energy + combined_outflow
-                - world_drive_work;
+        let conservation_residual = final_combined.total_energy - initial_combined.total_energy
+            + combined_outflow
+            - world_drive_work;
         assert!(
             conservation_residual.abs() < 2.0e-3,
             "combined disturbance/ambient balance residual was {conservation_residual}"
