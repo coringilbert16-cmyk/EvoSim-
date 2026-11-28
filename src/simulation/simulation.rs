@@ -427,6 +427,7 @@ impl Simulation {
             field,
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
+            closed_wave_field: None,
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -984,6 +985,11 @@ impl Simulation {
         self.environmental_local_resonance_samples.clear();
         self.tick += 1;
         self.advance_ambient_energy();
+        if let Some(field) = self.environment.closed_wave_field.as_mut() {
+            field
+                .advance_ticks(1)
+                .expect("persistent spatial wave field must advance exactly one logical tick");
+        }
         self.environmental_chemistry_diagnostics.tick = self.tick;
 
         // Whole-tick profiling is opt-in and samples one tick in ten. The
@@ -1924,6 +1930,7 @@ mod decomposition_finalization_tests {
             field: ActiveMaterialField::new(1000.0, 1000.0, crate::environment::DEFAULT_CELL_SIZE),
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
+            closed_wave_field: None,
         };
         let make_single = |name: &str, x: f64| {
             PhysicalMaterial::realized(
