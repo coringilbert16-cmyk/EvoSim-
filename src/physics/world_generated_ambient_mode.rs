@@ -507,12 +507,10 @@ mod tests {
                 * 2.5
                 * (sample.angular_frequency.powi(2) * sample.amplitude.powi(2)
                     + sample.amplitude_velocity.powi(2));
-            let instantaneous_kinetic =
-                0.5 * 2.5 * sample.carrier_velocity.powi(2);
+            let instantaneous_kinetic = 0.5 * 2.5 * sample.carrier_velocity.powi(2);
             assert!((reconstructed - sample.energy_density).abs() < 1.0e-12);
             assert!(
-                (instantaneous_kinetic - sample.instantaneous_field_energy_density).abs()
-                    < 1.0e-12
+                (instantaneous_kinetic - sample.instantaneous_field_energy_density).abs() < 1.0e-12
             );
             assert!((sample.total_energy - sample.energy_density * 3.0).abs() < 1.0e-12);
             if tick + 1 < AMBIENT_DAY_TICKS {
