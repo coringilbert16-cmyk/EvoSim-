@@ -477,6 +477,104 @@ impl ClosedBoundaryWaveField {
         Ok(())
     }
 
+    /// Advance with first-order Mur radiation conditions on all four outer
+    /// faces. The net energy change of the leapfrog invariant is accumulated as
+    /// signed boundary transfer: positive is energy delivered to the void.
+    fn advance_one_substep_open(&mut self) -> Result<(), ClosedWaveError> {
+        self.substeps_elapsed
+            .checked_add(1)
+            .ok_or(ClosedWaveError::CounterOverflow)?;
+        let courant = self.propagation_speed * self.time_step / self.spacing;
+        let scale = courant.powi(2);
+        let mur = (courant - 1.0) / (courant + 1.0);
+        let mut next = vec![0.0; self.current.len()];
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let index = self.index(x, y);
+                let center = self.current[index];
+                let mut laplacian_numerator = 0.0;
+                if x > 0 {
+                    let edge = y * (self.width - 1) + (x - 1);
+                    laplacian_numerator +=
+                        self.horizontal_coupling[edge] * (self.current[index - 1] - center);
+                }
+                if x + 1 < self.width {
+                    let edge = y * (self.width - 1) + x;
+                    laplacian_numerator +=
+                        self.horizontal_coupling[edge] * (self.current[index + 1] - center);
+                }
+                if y > 0 {
+                    let edge = (y - 1) * self.width + x;
+                    laplacian_numerator +=
+                        self.vertical_coupling[edge] * (self.current[index - self.width] - center);
+                }
+                if y + 1 < self.height {
+                    let edge = y * self.width + x;
+                    laplacian_numerator +=
+                        self.vertical_coupling[edge] * (self.current[index + self.width] - center);
+                }
+                next[index] = 2.0 * center - self.previous[index] + scale * laplacian_numerator;
+            }
+        }
+
+        // Apply the one-way characteristic condition to open faces. Corners
+        // combine the two independent face predictions symmetrically.
+        for y in 1..self.height - 1 {
+            let left = self.index(0, y);
+            let left_inner = self.index(1, y);
+            next[left] = self.current[left_inner] + mur * (next[left_inner] - self.current[left]);
+
+            let right = self.index(self.width - 1, y);
+            let right_inner = self.index(self.width - 2, y);
+            next[right] =
+                self.current[right_inner] + mur * (next[right_inner] - self.current[right]);
+        }
+        for x in 1..self.width - 1 {
+            let top = self.index(x, 0);
+            let top_inner = self.index(x, 1);
+            next[top] = self.current[top_inner] + mur * (next[top_inner] - self.current[top]);
+
+            let bottom = self.index(x, self.height - 1);
+            let bottom_inner = self.index(x, self.height - 2);
+            next[bottom] =
+                self.current[bottom_inner] + mur * (next[bottom_inner] - self.current[bottom]);
+        }
+
+        let corners = [
+            (self.index(0, 0), self.index(1, 0), self.index(0, 1)),
+            (
+                self.index(self.width - 1, 0),
+                self.index(self.width - 2, 0),
+                self.index(self.width - 1, 1),
+            ),
+            (
+                self.index(0, self.height - 1),
+                self.index(1, self.height - 1),
+                self.index(0, self.height - 2),
+            ),
+            (
+                self.index(self.width - 1, self.height - 1),
+                self.index(self.width - 2, self.height - 1),
+                self.index(self.width - 1, self.height - 2),
+            ),
+        ];
+        for (corner, horizontal_inner, vertical_inner) in corners {
+            let horizontal_prediction = self.current[horizontal_inner]
+                + mur * (next[horizontal_inner] - self.current[corner]);
+            let vertical_prediction =
+                self.current[vertical_inner] + mur * (next[vertical_inner] - self.current[corner]);
+            next[corner] = 0.5 * (horizontal_prediction + vertical_prediction);
+        }
+
+        if next.iter().any(|value| !value.is_finite()) {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        self.previous.clone_from(&self.current);
+        self.current = next;
+        self.substeps_elapsed += 1;
+        Ok(())
+    }
+
     fn advance_one_substep(&mut self) -> Result<(), ClosedWaveError> {
         let scale = (self.propagation_speed * self.time_step / self.spacing).powi(2);
         let mut next = vec![0.0; self.current.len()];
@@ -908,6 +1006,156 @@ fn validate_transfer_amount(amount: f64) -> Result<(), ClosedWaveError> {
     Ok(())
 }
 
+/// Finite spatial wave field with first-order radiating outer boundaries.
+///
+/// The underlying leapfrog disturbance-energy change is accumulated as signed
+/// net transfer across the perimeter. Ambient/disturbance cross-energy is not
+/// included yet. Positive values represent energy entering the void; a small
+/// negative increment is retained so the discrete record remains auditable.
+#[allow(
+    dead_code,
+    reason = "Validated open-boundary solver is staged for production ownership integration."
+)]
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct OpenBoundaryWaveField {
+    inner: ClosedBoundaryWaveField,
+    cumulative_outflow_energy: f64,
+}
+
+#[derive(Deserialize)]
+struct OpenBoundaryWaveFieldState {
+    inner: ClosedBoundaryWaveField,
+    cumulative_outflow_energy: f64,
+}
+
+impl<'de> Deserialize<'de> for OpenBoundaryWaveField {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+        let state = OpenBoundaryWaveFieldState::deserialize(deserializer)?;
+        if !state.cumulative_outflow_energy.is_finite() {
+            return Err(D::Error::custom("invalid serialized open wave outflow"));
+        }
+        Ok(Self {
+            inner: state.inner,
+            cumulative_outflow_energy: state.cumulative_outflow_energy,
+        })
+    }
+}
+
+#[allow(
+    dead_code,
+    reason = "Validated open-boundary solver is staged for production ownership integration."
+)]
+impl OpenBoundaryWaveField {
+    pub(crate) fn new(
+        width: usize,
+        height: usize,
+        spacing: f64,
+        propagation_speed: f64,
+        substeps_per_tick: usize,
+        normalization: f64,
+    ) -> Result<Self, ClosedWaveError> {
+        Ok(Self {
+            inner: ClosedBoundaryWaveField::new(
+                width,
+                height,
+                spacing,
+                propagation_speed,
+                substeps_per_tick,
+                normalization,
+            )?,
+            cumulative_outflow_energy: 0.0,
+        })
+    }
+
+    pub(crate) fn dimensions(&self) -> (usize, usize) {
+        self.inner.dimensions()
+    }
+
+    pub(crate) fn logical_time_ticks(&self) -> f64 {
+        self.inner.logical_time_ticks()
+    }
+
+    pub(crate) fn energy(&self) -> f64 {
+        self.inner.energy()
+    }
+
+    pub(crate) fn cumulative_outflow_energy(&self) -> f64 {
+        self.cumulative_outflow_energy
+    }
+
+    pub(crate) fn sample(&self, x: usize, y: usize) -> Option<f64> {
+        self.inner.sample(x, y)
+    }
+
+    pub(crate) fn set_initial_state(
+        &mut self,
+        x: usize,
+        y: usize,
+        previous: f64,
+        current: f64,
+    ) -> Result<(), ClosedWaveError> {
+        self.inner.set_initial_state(x, y, previous, current)
+    }
+
+    pub(crate) fn query_world_at_current_time(
+        &self,
+        x_l: f64,
+        y_l: f64,
+    ) -> Result<ClosedWaveSample, ClosedWaveError> {
+        self.inner.query_world_at_current_time(x_l, y_l)
+    }
+
+    pub(crate) fn transfer_to_matter(
+        &mut self,
+        x_l: f64,
+        y_l: f64,
+        amount: f64,
+        matter: &mut MatterEnergyAccount,
+    ) -> Result<(), ClosedWaveError> {
+        self.inner.transfer_to_matter(x_l, y_l, amount, matter)
+    }
+
+    pub(crate) fn release_from_matter(
+        &mut self,
+        x_l: f64,
+        y_l: f64,
+        amount: f64,
+        matter: &mut MatterEnergyAccount,
+    ) -> Result<(), ClosedWaveError> {
+        self.inner.release_from_matter(x_l, y_l, amount, matter)
+    }
+
+    pub(crate) fn advance_ticks(&mut self, ticks: u64) -> Result<(), ClosedWaveError> {
+        let steps = ticks
+            .checked_mul(self.inner.substeps_per_tick as u64)
+            .ok_or(ClosedWaveError::CounterOverflow)?;
+        self.advance_substeps(steps)
+    }
+
+    pub(crate) fn advance_substeps(&mut self, steps: u64) -> Result<(), ClosedWaveError> {
+        self.inner
+            .substeps_elapsed
+            .checked_add(steps)
+            .ok_or(ClosedWaveError::CounterOverflow)?;
+        let energy_before = self.inner.energy();
+        for _ in 0..steps {
+            self.inner.advance_one_substep_open()?;
+        }
+        let energy_after = self.inner.energy();
+        let net_outflow = energy_before - energy_after;
+        let next_outflow = self.cumulative_outflow_energy + net_outflow;
+        if !net_outflow.is_finite() || !next_outflow.is_finite() {
+            return Err(ClosedWaveError::InvalidState);
+        }
+        self.cumulative_outflow_energy = next_outflow;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1265,5 +1513,115 @@ mod tests {
             field.set_initial_state(0, 0, f64::NAN, 0.0),
             Err(ClosedWaveError::InvalidState)
         );
+    }
+    fn initialize_outgoing_packet(
+        open: &mut OpenBoundaryWaveField,
+        closed: &mut ClosedBoundaryWaveField,
+        angle: f64,
+    ) {
+        let (width, height) = open.dimensions();
+        let c = 0.2;
+        let dt = 0.5;
+        let source_x = 20.0;
+        let source_y = 50.0;
+        let (sin_angle, cos_angle) = angle.sin_cos();
+        for y in 0..height {
+            for x in 0..width {
+                let dx = x as f64 - source_x;
+                let dy = y as f64 - source_y;
+                let along = dx * cos_angle + dy * sin_angle;
+                let across = -dx * sin_angle + dy * cos_angle;
+                let envelope = (-along.powi(2) / (2.0 * 8.0_f64.powi(2))
+                    - across.powi(2) / (2.0 * 18.0_f64.powi(2)))
+                .exp();
+                let displacement = envelope * (0.45 * along).cos();
+                let spatial_derivative =
+                    -along / 64.0 * displacement - 0.45 * envelope * (0.45 * along).sin();
+                let time_derivative = -c * spatial_derivative;
+                let previous = displacement - dt * time_derivative;
+                open.set_initial_state(x, y, previous, displacement)
+                    .unwrap();
+                closed
+                    .set_initial_state(x, y, previous, displacement)
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn radiating_boundary_accounts_for_energy_leaving_the_finite_domain() {
+        let mut open = OpenBoundaryWaveField::new(101, 101, 1.0, 0.2, 2, 1.0).unwrap();
+        let mut closed = ClosedBoundaryWaveField::new(101, 101, 1.0, 0.2, 2, 1.0).unwrap();
+        initialize_outgoing_packet(&mut open, &mut closed, 0.0);
+        let initial_energy = open.energy();
+        assert!(initial_energy > 0.0);
+
+        open.advance_substeps(1_500).unwrap();
+
+        assert!(open.cumulative_outflow_energy() > 0.0);
+        close(
+            initial_energy,
+            open.energy() + open.cumulative_outflow_energy(),
+            2.0e-10,
+        );
+        assert_eq!(open.logical_time_ticks(), 750.0);
+        assert_eq!(closed.logical_time_ticks(), 0.0);
+    }
+
+    #[test]
+    fn first_order_radiating_boundary_suppresses_normal_and_oblique_reflections() {
+        for angle in [0.0_f64, 0.25, 0.5, std::f64::consts::FRAC_PI_4] {
+            let mut open = OpenBoundaryWaveField::new(101, 101, 1.0, 0.2, 2, 1.0).unwrap();
+            let mut closed = ClosedBoundaryWaveField::new(101, 101, 1.0, 0.2, 2, 1.0).unwrap();
+            initialize_outgoing_packet(&mut open, &mut closed, angle);
+            let (sin_angle, cos_angle) = angle.sin_cos();
+            let probe_x = (20.0 + 48.0 * cos_angle).round() as usize;
+            let probe_y = (50.0 + 48.0 * sin_angle).round() as usize;
+            let mut open_trace = Vec::with_capacity(300);
+            let mut closed_trace = Vec::with_capacity(300);
+            for _ in 0..300 {
+                open.advance_substeps(5).unwrap();
+                closed.advance_substeps(5).unwrap();
+                open_trace.push(open.sample(probe_x, probe_y).unwrap().abs());
+                closed_trace.push(closed.sample(probe_x, probe_y).unwrap().abs());
+            }
+            let early_open = open_trace[60..130].iter().copied().fold(0.0_f64, f64::max);
+            let late_open = open_trace[180..260].iter().copied().fold(0.0_f64, f64::max);
+            let early_closed = closed_trace[60..130]
+                .iter()
+                .copied()
+                .fold(0.0_f64, f64::max);
+            let late_closed = closed_trace[180..260]
+                .iter()
+                .copied()
+                .fold(0.0_f64, f64::max);
+            assert!(early_open > 0.1, "incident packet did not reach probe");
+            assert!(
+                late_open / early_open < 0.05,
+                "open-boundary reflection exceeded 5% at angle {angle}: {}",
+                late_open / early_open
+            );
+            assert!(
+                late_closed / early_closed > 0.05,
+                "closed reference did not retain its reflected wave at angle {angle}"
+            );
+        }
+    }
+
+    #[test]
+    fn open_boundary_outflow_and_field_state_survive_serialization() {
+        let mut open = OpenBoundaryWaveField::new(17, 13, 1.0, 0.2, 2, 1.0).unwrap();
+        open.set_initial_state(1, 6, 0.8, 1.0).unwrap();
+        open.advance_ticks(30).unwrap();
+        assert!(open.cumulative_outflow_energy() > 0.0);
+        let restored: OpenBoundaryWaveField =
+            serde_json::from_str(&serde_json::to_string(&open).unwrap()).unwrap();
+        close(restored.energy(), open.energy(), 1.0e-12);
+        close(
+            restored.cumulative_outflow_energy(),
+            open.cumulative_outflow_energy(),
+            1.0e-12,
+        );
+        assert_eq!(restored.logical_time_ticks(), open.logical_time_ticks());
     }
 }

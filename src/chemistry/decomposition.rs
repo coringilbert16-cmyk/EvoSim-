@@ -311,7 +311,7 @@ mod tests {
             height: 1000.0,
             chemistry_usable_energy: 0.0,
             resonant_energy: Default::default(),
-            closed_wave_field: None,
+            spatial_wave_field: None,
             catalog,
             field: crate::environment::ActiveMaterialField::new(
                 1000.0,
