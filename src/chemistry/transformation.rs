@@ -2092,6 +2092,68 @@ mod tests {
     }
 
     #[test]
+    fn successful_environmental_break_preserves_whole_field_elemental_inventory() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism =
+            environmental_break_test_organism("environmental-break-conservation-test", Some(734));
+        let (mut environment, cell_index, before, source, after) =
+            environmental_break_test_inventory(&catalog);
+        let target = source.internal_connections.as_ref().unwrap()[0].clone();
+        environment.field.cells[cell_index].physical_materials =
+            vec![before, source.clone(), after];
+        let material_inventory_before = environment.field.total_material();
+        let transformation = ActiveTransformation {
+            id: 734,
+            organism_id: organism.id.clone(),
+            kind: crate::state::TransformationKind::Break,
+            material: crate::resources::Material::free_base("", 0.0),
+            bond: None,
+            stored_material: Some(source),
+            stored_bond: Some(target),
+            environmental_source: true,
+            complexity: 1.0,
+            duration_ticks: 1,
+            remaining_ticks: 0,
+            prepared_energy: Some((organism.usable_energy, 0.0, 0.0)),
+            pending_experience: None,
+            decision_context_key: Some(format!(
+                "environment:cell:{cell_index}:material:1:bond:0"
+            )),
+            prepared_structure: None,
+            prepared_stored_material: None,
+            prepared_usable_energy: None,
+            prepared_stress: None,
+            prepared_ledger: None,
+            prepared_ledger_before: None,
+            prepared_usable_energy_before: None,
+            combine_environmental_source: None,
+            stored_source_index: None,
+            environmental_source_location: Some((cell_index, 1)),
+            combine_environmental_source_index: None,
+        };
+
+        resolve_transformation(
+            &transformation,
+            &mut organism,
+            &mut environment,
+            &mut EnergyLedger::default(),
+        );
+
+        assert_eq!(
+            environment.field.total_material(),
+            material_inventory_before,
+            "successful environmental BREAK must preserve whole-field C/H/O/N/P/S inventory"
+        );
+        assert_eq!(
+            environment.field.cells[cell_index].physical_materials.len(),
+            4,
+            "the broken environmental source must be replaced by its two physical pieces"
+        );
+        assert!(organism.stored_material.is_empty());
+        assert_eq!(organism.active_transformation_id, None);
+    }
+
+    #[test]
     fn failed_combine_restores_environmental_source_at_original_list_index() {
         let catalog = crate::resources::default_catalog();
         let (mut environment, cell_index, before, source, after) =
