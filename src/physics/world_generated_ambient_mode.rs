@@ -398,6 +398,7 @@ impl WorldGeneratedAmbientMode {
             total_energy,
             amplitude,
             amplitude_velocity,
+            amplitude_acceleration,
             field_normalization: self.config.field_normalization,
             angular_frequency,
             carrier_phase_radians,
