@@ -1356,8 +1356,7 @@ impl OpenBoundaryWaveField {
                 * self.inner.spacing.powi(2);
             let disturbance_velocity_integral =
                 0.5 * (old_disturbance_velocity_integral + new_disturbance_velocity_integral);
-            let ambient_world_area =
-                ambient_before.total_energy / ambient_before.energy_density;
+            let ambient_world_area = ambient_before.total_energy / ambient_before.energy_density;
             let ambient_velocity_change =
                 ambient_after.carrier_velocity - ambient_before.carrier_velocity;
             let mean_ambient_velocity =
