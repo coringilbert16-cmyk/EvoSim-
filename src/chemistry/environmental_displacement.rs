@@ -2653,8 +2653,12 @@ mod tests {
         assert!(operation.activation_signal > 0.0);
 
         let environment_before = simulation.environment.clone();
-        let material_inventory_before =
-            simulation.environment.field.total_material().into_iter().collect::<std::collections::BTreeMap<_, _>>();
+        let material_inventory_before = simulation
+            .environment
+            .field
+            .total_material()
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
         let ledger_before = simulation.energy_ledger;
         assert_eq!(
             resolve_environmental_diagnosed(
@@ -2672,7 +2676,12 @@ mod tests {
             2
         );
         assert_eq!(
-            simulation.environment.field.total_material().into_iter().collect::<std::collections::BTreeMap<_, _>>(),
+            simulation
+                .environment
+                .field
+                .total_material()
+                .into_iter()
+                .collect::<std::collections::BTreeMap<_, _>>(),
             material_inventory_before,
             "rejected displacement must preserve every environmental element"
         );
@@ -2703,7 +2712,12 @@ mod tests {
         );
 
         assert_eq!(
-            simulation.environment.field.total_material().into_iter().collect::<std::collections::BTreeMap<_, _>>(),
+            simulation
+                .environment
+                .field
+                .total_material()
+                .into_iter()
+                .collect::<std::collections::BTreeMap<_, _>>(),
             material_inventory_before,
             "successful displacement must preserve whole-field C/H/O/N/P/S inventory"
         );
