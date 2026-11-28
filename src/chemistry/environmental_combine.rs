@@ -1581,9 +1581,7 @@ where
     // same-cell pair, insert the product at the first source slot, and invalidate
     // every touched cell exactly once.
     if operation.cell_a == operation.cell_b {
-        if operation.material_a >= operation.material_b {
-            return None;
-        }
+        debug_assert!(operation.material_a < operation.material_b);
         let cell = &mut environment.field.cells[operation.cell_a];
         cell.physical_materials.remove(operation.material_b);
         cell.physical_materials.remove(operation.material_a);
