@@ -997,11 +997,12 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     &source_structure,
                 )
             else {
-                continue;            };            // Bound the spatial query itself, not just the subsequent loop:
-            // very large source bounds must not allocate or traverse an unbounded
-            // target-cell vector before the per-tick inspection budget applies.
-            // Advance by one inspection window per tick so cells beyond the first
-            // window remain eligible instead of being starved by large bounds.
+                continue;
+            }; // Bound the spatial query itself, not just the subsequent loop:
+               // very large source bounds must not allocate or traverse an unbounded
+               // target-cell vector before the per-tick inspection budget applies.
+               // Advance by one inspection window per tick so cells beyond the first
+               // window remain eligible instead of being starved by large bounds.
             let target_cell_limit =
                 FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
             let target_cells = environment.field.cells_intersecting_bounds_limited(
@@ -1995,8 +1996,10 @@ mod tests {
             'poses: for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
-                    let base = PhysicalMaterial::realized(                        Material::free_base(resource.name.clone(), 1.0),
-                        vec![Placement {                            x: 10.0 + distance,
+                    let base = PhysicalMaterial::realized(
+                        Material::free_base(resource.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0 + distance,
                             y: 10.0,
                             rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
                         }],
@@ -2978,9 +2981,11 @@ mod tests {
                 classified += 1;
                 continue;
             };
-            bonded_compounds += 1;            let relative = compound_b
+            bonded_compounds += 1;
+            let relative = compound_b
                 .placements
-                .as_ref()                .expect("realized compound must retain placements");
+                .as_ref()
+                .expect("realized compound must retain placements");
             let origin_b = relative[0];
             let second_b = relative[1];
             let local_x = second_b.x - origin_b.x;
@@ -3979,7 +3984,8 @@ mod tests {
 
     #[test]
     fn heterogeneous_compound_contacts_retain_constituent_chemical_identity() {
-        let simulation = crate::state::Simulation::new(23729, 10.0);        let catalog = simulation.environment.catalog.clone();
+        let simulation = crate::state::Simulation::new(23729, 10.0);
+        let catalog = simulation.environment.catalog.clone();
         let mut compound_fixture = None;
 
         'constituents: for resource_a in &catalog {
@@ -3988,7 +3994,8 @@ mod tests {
             }
             for resource_b in &catalog {
                 if resource_b.physical_state == crate::resources::PhysicalState::Fluid
-                    || resource_a.name == resource_b.name                    || resource_a.properties.chemical_position
+                    || resource_a.name == resource_b.name
+                    || resource_a.properties.chemical_position
                         == resource_b.properties.chemical_position
                 {
                     continue;
