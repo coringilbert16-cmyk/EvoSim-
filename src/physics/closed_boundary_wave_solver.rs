@@ -1333,10 +1333,8 @@ impl OpenBoundaryWaveField {
                 .map(|(current, previous)| (current - previous) / self.inner.time_step)
                 .sum::<f64>()
                 * self.inner.spacing.powi(2);
-            let step_start_time =
-                self.inner.substeps_elapsed as f64 / self.inner.substeps_per_tick as f64;
-            let drive_sample = ambient
-                .sample_at_time(step_start_time)
+            let ambient_before = ambient
+                .sample_at_time(self.velocity_time_ticks())
                 .map_err(|_| ClosedWaveError::InvalidState)?;
             let next_velocity_time =
                 (self.inner.substeps_elapsed as f64 + 0.5) / self.inner.substeps_per_tick as f64;
@@ -1358,12 +1356,15 @@ impl OpenBoundaryWaveField {
                 * self.inner.spacing.powi(2);
             let disturbance_velocity_integral =
                 0.5 * (old_disturbance_velocity_integral + new_disturbance_velocity_integral);
-            let ambient_world_area = drive_sample.total_energy / drive_sample.energy_density;
+            let ambient_world_area =
+                ambient_before.total_energy / ambient_before.energy_density;
+            let ambient_velocity_change =
+                ambient_after.carrier_velocity - ambient_before.carrier_velocity;
+            let mean_ambient_velocity =
+                0.5 * (ambient_before.carrier_velocity + ambient_after.carrier_velocity);
             let step_world_drive_work = self.inner.normalization
-                * drive_sample.carrier_acceleration
-                * (drive_sample.carrier_velocity * ambient_world_area
-                    + disturbance_velocity_integral)
-                * self.inner.time_step;
+                * ambient_velocity_change
+                * (mean_ambient_velocity * ambient_world_area + disturbance_velocity_integral);
 
             if [
                 step_disturbance_outflow,
