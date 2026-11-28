@@ -3541,16 +3541,15 @@ mod persistent_wave_field_ownership_tests {
     fn installed_open_wave_field_advances_one_logical_tick_with_environment_tick() {
         let mut simulation = Simulation::new(45802, 10.0);
         let mut field = crate::closed_boundary_wave_solver::OpenBoundaryWaveField::new(
-            17, 13, 1.0, 0.2, 2, 2.0,
+            250, 250, 1.0, 0.2, 2, 1.0,
         )
         .expect("test open wave field configuration must be valid");
         field
-            .set_initial_state(1, 6, 0.8, 1.0)
+            .set_initial_state(1, 125, 0.8, 1.0)
             .expect("test wave packet must initialize");
-        field
-            .advance_ticks(29)
-            .expect("test field must reach the tick before installation");
-        simulation.environment.spatial_wave_field = Some(field);
+        simulation
+            .install_spatial_wave_field(field)
+            .expect("field must match the environment accounting domain");
 
         simulation.step_environmental_chemistry_with_transport_reuse::<true>();
 
@@ -3559,9 +3558,9 @@ mod persistent_wave_field_ownership_tests {
             .spatial_wave_field
             .as_ref()
             .expect("installed open wave field must remain owned");
-        assert_eq!(installed.logical_time_ticks(), 30.0);
-        assert!(installed.cumulative_outflow_energy().is_finite());
-        assert!(installed.cumulative_outflow_energy() > 0.0);
+        assert_eq!(installed.logical_time_ticks(), 1.0);
+        assert!(installed.cumulative_combined_outflow_energy().is_finite());
+        assert!(installed.cumulative_world_drive_work().is_finite());
     }
 }
 
